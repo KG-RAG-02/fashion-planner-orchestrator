@@ -1,0 +1,36 @@
+{
+  "case": "nonstandard-values",
+  "description": "Values outside the standard vocabulary: a category that does not exist (bag) goes to unsupported and is never widened into a standard one; a colour that is not in the colour list keeps raw and gets value null, so no filter is applied.",
+  "today": "2026-11-09",
+  "request_id": "synthetic-query-005",
+  "query": "가방 트렌드랑 카키베이지 니트웨어 알려줘",
+  "draft": {
+    "season": null,
+    "style_names": [],
+    "item_terms": [],
+    "include_categories": [{"raw": "니트웨어", "major": "상의", "minor": "니트웨어"}],
+    "exclude_categories": [],
+    "gender": null,
+    "attributes": [{"type": "color", "raw": "카키베이지", "value": null}],
+    "unsupported": [{"type": "category", "raw": "가방"}]
+  },
+  "expected_warnings": [],
+  "expected_trend_query": {
+    "request_id": "synthetic-query-005",
+    "original_query": "가방 트렌드랑 카키베이지 니트웨어 알려줘",
+    "trend_terms": {
+      "season": {"year": 2027, "season": "SS", "raw": null, "origin": "default_next"},
+      "style_names": [],
+      "item_terms": []
+    },
+    "requested": {
+      "categories": {"include": [{"raw": "니트웨어", "major": "상의", "minor": "니트웨어"}], "exclude": []},
+      "gender": null,
+      "attributes": [{"type": "color", "raw": "카키베이지", "value": null}]
+    },
+    "unsupported": [
+      {"type": "category", "raw": "가방", "reason": "표준 카테고리(상분류 4·하분류 21)에 없음"}
+    ],
+    "missing_fields": []
+  }
+}

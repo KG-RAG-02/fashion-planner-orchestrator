@@ -1,0 +1,34 @@
+{
+  "case": "season-without-year",
+  "description": "ASSUMPTION A-1 (not defined by the contract, needs owner confirmation): the user names a season but no year. Code picks the nearest occurrence not earlier than the default next season: today 2026-11-09 (default 2027 SS) + FW -> 2027 FW. The correction is reported as the season_year_inferred warning.",
+  "today": "2026-11-09",
+  "request_id": "synthetic-query-004",
+  "query": "가을에 여성 오버사이즈 코트 트렌드 알려줘",
+  "draft": {
+    "season": {"year": null, "season": "FW", "raw": "가을"},
+    "style_names": [],
+    "item_terms": [],
+    "include_categories": [{"raw": "코트", "major": "아우터", "minor": "코트"}],
+    "exclude_categories": [],
+    "gender": {"raw": "여성", "value": "여"},
+    "attributes": [{"type": "fit", "raw": "오버사이즈", "value": "오버사이즈"}],
+    "unsupported": []
+  },
+  "expected_warnings": ["season_year_inferred"],
+  "expected_trend_query": {
+    "request_id": "synthetic-query-004",
+    "original_query": "가을에 여성 오버사이즈 코트 트렌드 알려줘",
+    "trend_terms": {
+      "season": {"year": 2027, "season": "FW", "raw": "가을", "origin": "user_requested"},
+      "style_names": [],
+      "item_terms": []
+    },
+    "requested": {
+      "categories": {"include": [{"raw": "코트", "major": "아우터", "minor": "코트"}], "exclude": []},
+      "gender": {"raw": "여성", "value": "여"},
+      "attributes": [{"type": "fit", "raw": "오버사이즈", "value": "오버사이즈"}]
+    },
+    "unsupported": [],
+    "missing_fields": []
+  }
+}

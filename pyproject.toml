@@ -4,6 +4,11 @@ version = "0.1.0"
 description = "Proposal-stage orchestration core for the VOGUE planning pipeline"
 requires-python = ">=3.11"
 
+# The orchestration core stays stdlib-only. Only the query-structuring module
+# (src/vogue_orchestrator/query) needs pydantic; install it with `pip install -e ".[query]"`.
+[project.optional-dependencies]
+query = ["pydantic>=2.0"]
+
 [project.scripts]
 vogue-orchestrator-ui = "vogue_orchestrator.server:serve"
 

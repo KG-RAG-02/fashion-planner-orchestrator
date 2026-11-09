@@ -1,0 +1,40 @@
+{
+  "case": "abstract-and-length",
+  "description": "ASSUMPTION A-3 (contract is silent): an abstract expression and a length are not request attributes, so both are recorded in unsupported instead of being dropped. The supported fit still becomes an attribute.",
+  "today": "2026-11-09",
+  "request_id": "synthetic-query-006",
+  "query": "포멀한 느낌에 길이가 긴 와이드 팬츠",
+  "draft": {
+    "season": null,
+    "style_names": [],
+    "item_terms": [],
+    "include_categories": [{"raw": "팬츠", "major": "하의", "minor": "팬츠"}],
+    "exclude_categories": [],
+    "gender": null,
+    "attributes": [{"type": "fit", "raw": "와이드", "value": "와이드"}],
+    "unsupported": [
+      {"type": "abstract", "raw": "포멀한 느낌"},
+      {"type": "attribute", "raw": "길이가 긴"}
+    ]
+  },
+  "expected_warnings": [],
+  "expected_trend_query": {
+    "request_id": "synthetic-query-006",
+    "original_query": "포멀한 느낌에 길이가 긴 와이드 팬츠",
+    "trend_terms": {
+      "season": {"year": 2027, "season": "SS", "raw": null, "origin": "default_next"},
+      "style_names": [],
+      "item_terms": []
+    },
+    "requested": {
+      "categories": {"include": [{"raw": "팬츠", "major": "하의", "minor": "팬츠"}], "exclude": []},
+      "gender": null,
+      "attributes": [{"type": "fit", "raw": "와이드", "value": "와이드"}]
+    },
+    "unsupported": [
+      {"type": "abstract", "raw": "포멀한 느낌", "reason": "표준 어휘로 바꿀 수 없는 추상 표현"},
+      {"type": "attribute", "raw": "길이가 긴", "reason": "요청 속성으로 쓰지 않는 속성 종류(길이·사이즈·세이프 등)"}
+    ],
+    "missing_fields": []
+  }
+}

@@ -1,0 +1,89 @@
+[
+  {
+    "title": "시즌·트렌드명·상분류·색상",
+    "query": "2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하고 싶어",
+    "draft": {
+      "season": {"year": 2027, "season": "SS", "raw": "2027년 봄"},
+      "style_names": [{"raw": "발레코어"}],
+      "item_terms": [],
+      "include_categories": [{"raw": "상의", "major": "상의", "minor": null}],
+      "exclude_categories": [],
+      "gender": null,
+      "attributes": [{"type": "color", "raw": "핑크색", "value": "핑크"}],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "카테고리 제외, 시즌 없음",
+    "query": "하의 빼고 해줘",
+    "draft": {
+      "season": null,
+      "style_names": [],
+      "item_terms": [],
+      "include_categories": [],
+      "exclude_categories": [{"raw": "하의", "major": "하의", "minor": null}],
+      "gender": null,
+      "attributes": [],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "하분류와 브랜드(지원 불가)",
+    "query": "H&M 블라우스 찾아줘",
+    "draft": {
+      "season": null,
+      "style_names": [],
+      "item_terms": [],
+      "include_categories": [{"raw": "블라우스", "major": "상의", "minor": "블라우스"}],
+      "exclude_categories": [],
+      "gender": null,
+      "attributes": [],
+      "unsupported": [{"type": "brand", "raw": "H&M"}]
+    }
+  },
+  {
+    "title": "연도 없는 시즌, 성별, 핏",
+    "query": "가을에 여성 오버사이즈 코트 트렌드 알려줘",
+    "draft": {
+      "season": {"year": null, "season": "FW", "raw": "가을"},
+      "style_names": [],
+      "item_terms": [],
+      "include_categories": [{"raw": "코트", "major": "아우터", "minor": "코트"}],
+      "exclude_categories": [],
+      "gender": {"raw": "여성", "value": "여"},
+      "attributes": [{"type": "fit", "raw": "오버사이즈", "value": "오버사이즈"}],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "표준 밖 카테고리와 표준 밖 색상",
+    "query": "가방 트렌드랑 카키베이지 니트웨어 알려줘",
+    "draft": {
+      "season": null,
+      "style_names": [],
+      "item_terms": [],
+      "include_categories": [{"raw": "니트웨어", "major": "상의", "minor": "니트웨어"}],
+      "exclude_categories": [],
+      "gender": null,
+      "attributes": [{"type": "color", "raw": "카키베이지", "value": null}],
+      "unsupported": [{"type": "category", "raw": "가방"}]
+    }
+  },
+  {
+    "title": "추상 표현과 길이(속성으로 쓰지 않음)",
+    "query": "포멀한 느낌에 길이가 긴 와이드 팬츠",
+    "draft": {
+      "season": null,
+      "style_names": [],
+      "item_terms": [],
+      "include_categories": [{"raw": "팬츠", "major": "하의", "minor": "팬츠"}],
+      "exclude_categories": [],
+      "gender": null,
+      "attributes": [{"type": "fit", "raw": "와이드", "value": "와이드"}],
+      "unsupported": [
+        {"type": "abstract", "raw": "포멀한 느낌"},
+        {"type": "attribute", "raw": "길이가 긴"}
+      ]
+    }
+  }
+]
