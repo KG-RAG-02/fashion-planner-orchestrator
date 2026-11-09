@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f4ef">
+  <title>VOGUE · Orchestrator Preview</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="wordmark" href="/" aria-label="VOGUE Orchestrator 홈">VOGUE<span> / SYSTEMS</span></a>
+    <div class="mode"><span class="mode-dot"></span><label class="sr-only" for="run-mode">실행 모드</label><select id="run-mode"><option value="demo">SYNTHETIC PREVIEW</option><option value="connected">CONNECTED AGENTS</option></select></div>
+  </header>
+
+  <main>
+    <section class="intro">
+      <p class="eyebrow">PRODUCT INTELLIGENCE · PIPELINE 01—04</p>
+      <h1>기획의 근거를<br><em>한 흐름으로.</em></h1>
+      <p class="lede">요청부터 MD 검토 초안까지, 각 단계의 상태와 근거를 따라갑니다.</p>
+    </section>
+
+    <section class="workspace" aria-label="파이프라인 실행">
+      <form id="run-form" class="query-card">
+        <label for="query">무엇을 기획하고 싶으신가요?</label>
+        <textarea id="query" name="query" maxlength="1000" rows="3" placeholder="예: 2027SS 한국 온라인 여성 니트 기획 방향을 검토하고 싶어요."></textarea>
+        <div class="query-footer">
+          <span id="query-count">0 / 1,000</span>
+          <button id="run-button" type="submit"><span>파이프라인 실행</span><span aria-hidden="true">↗</span></button>
+        </div>
+        <p class="demo-note"><strong>합성 데모</strong> 실제 트렌드·재고·판매 자료나 운영 서비스는 호출하지 않습니다.</p>
+        <label id="connected-consent" class="connected-consent" hidden><input id="allow-connected" type="checkbox"><span id="connected-consent-copy">연결된 서비스에 요청과 앞 단계 결과를 보냅니다.</span></label>
+      </form>
+
+      <section class="connections" aria-label="저장소 연결 상태">
+        <div class="connections-heading"><div><p class="eyebrow">REPOSITORY CONNECTIONS</p><h2>연결 준비 상태</h2></div><span id="connections-ready">확인 중</span></div>
+        <div id="connector-list" class="connector-list"></div>
+        <p class="connections-footnote">연결 상태는 설정값만 확인합니다. 이 화면을 열 때 에이전트 endpoint를 호출하지 않습니다.</p>
+      </section>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+      <section id="results" class="results" hidden aria-label="파이프라인 결과">
+        <div class="run-heading">
+          <div><p class="eyebrow">EXECUTION TRACE</p><h2>실행 기록</h2></div>
+          <div id="overall-status" class="overall-status"></div>
+        </div>
+        <div class="request-line"><span>REQUEST ID</span><code id="request-id"></code></div>
+        <div id="stage-list" class="stage-list"></div>
+        <section id="draft-card" class="draft-card" hidden>
+          <div class="draft-kicker"><span>04 · PROJECT_06</span><span>MD REVIEW REQUIRED</span></div>
+          <h3 id="draft-title">기획 초안</h3>
+          <p id="draft-summary"></p>
+          <p class="human-note">최종 상품 채택과 가격·원가·수량·발주 결정은 MD가 합니다.</p>
+        </section>
+        <p class="trace-footnote">상세 응답은 단계별 기록에서 확인할 수 있습니다. 이 실행은 합성 fixture를 사용한 UI 미리보기입니다.</p>
+      </section>
+    </section>
+  </main>
+
+  <footer><span>VOGUE ORCHESTRATOR</span><span>LOCAL PREVIEW · 2026</span></footer>
+</body>
+</html>
