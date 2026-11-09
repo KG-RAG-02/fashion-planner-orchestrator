@@ -42,12 +42,13 @@ UI의 **CONNECTED AGENTS** 모드는 설정이 완료됐을 때만 실행합니�
 VOGUE_TREND_ADAPTER=my_trend_adapter:run
 VOGUE_STOCK_AGENT_URL=http://127.0.0.1:8002
 VOGUE_PROJECT07_ROOT=/path/to/project_07
+VOGUE_PROJECT07_SOURCE_ADAPTER=my_market_sources:build_source
 VOGUE_PROJECT06_URL=http://127.0.0.1:8766
 ```
 
 - trend adapter callable 입력은 `{request_id, query}`이고 출력은 원본 `TrendAnalysisResult`여야 합니다. 실제 저장소에는 query parser/API가 아직 없어 담당 구현이 필요합니다.
 - stock adapter는 configured base URL의 `/v1/inventory-products`를 호출합니다. stock-agent가 LLM을 사용하도록 설정돼 있으면 trend 결과가 그 LLM 제공자에 전달될 수 있습니다. UI는 CONNECTED 실행 전에 수신 endpoint를 보여 주고 확인 checkbox를 요구합니다.
-- Project_07은 지정한 checkout의 `MarketResearchAgent`를 in-process 호출하고, 승인된 source를 자동 연결하지 않습니다. 현재 기본 source는 `NoConfiguredSources`입니다.
+- Project_07은 지정한 checkout의 `MarketResearchAgent`를 in-process 호출합니다. `VOGUE_PROJECT07_SOURCE_ADAPTER`는 `research(context)`를 구현한 source factory `module:function`이며, 운영 자료원 설정은 이 factory에서 명시적으로 구성해야 합니다. 설정되지 않으면 연결 상태가 준비 완료가 아니며, 기본 `NoConfiguredSources`는 `no_results`를 반환합니다.
 - Project_06은 configured base URL의 `/api/planning-draft`를 호출합니다. Project_06 기본 8765는 이 UI 포트와 겹치므로 별도 포트(예: 8766)로 실행해야 합니다.
 - 자동 timeout, retry, 지속성은 설정하지 않습니다. 연결은 실제 요청 때만 실행됩니다.
 
@@ -61,7 +62,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integr
 
 결과와 저장소별 호환 판정은 [`docs/integration-validation.md`](docs/integration-validation.md)에 기록합니다. 이 검증은 trend/stock 서비스 자체를 호출하지 않습니다.
 
-기본 데모와 합성 검증은 fixture만 사용하며 실제 원천에 연결하지 않습니다. 연결 모드는 설정된 endpoint와 로컬 Project_07 어댑터를 호출합니다.
+기본 데모와 합성 검증은 fixture만 사용하며 실제 원천에 연결하지 않습니다. 연결 모드는 trend/stock/P06 endpoint와 명시 설정된 Project_07 source factory가 모두 있어야 준비 완료로 표시됩니다.
 
 ## 미결정 및 필요한 입력
 

@@ -82,7 +82,7 @@ def _load_callable(spec: str) -> Callable[[dict[str, Any]], Mapping[str, Any]]:
     return value
 
 
-def _project07_adapter(root: Path) -> Adapter:
+def _project07_adapter(root: Path, source_factory: Callable[[], Any] | None = None) -> Adapter:
     source = root / "src"
     if not (source / "market_research_agent").is_dir():
         raise ConnectorConfigurationError("Project_07 source package was not found")
@@ -108,8 +108,9 @@ def _project07_adapter(root: Path) -> Adapter:
             requested_category=category if isinstance(category, str) else None,
             requested_query=request.get("query") if isinstance(request.get("query"), str) else None,
         )
-        # The repository's safe default uses NoConfiguredSources; no live data source is enabled here.
-        result = MarketResearchAgent().run(context).to_proposal_v1_3_dict()
+        # A source is opt-in. Without one, Project_07 safely returns no_results.
+        source = source_factory() if source_factory else None
+        result = MarketResearchAgent(source).run(context).to_proposal_v1_3_dict()
         return result
 
     return run
@@ -122,9 +123,10 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
     stock_url = env.get("VOGUE_STOCK_AGENT_URL")
     p06_url = env.get("VOGUE_PROJECT06_URL")
     trend_spec = env.get("VOGUE_TREND_ADAPTER")
+    p07_source_spec = env.get("VOGUE_PROJECT07_SOURCE_ADAPTER")
     return {
         "mode": "connected",
-        "ready": bool(trend_spec and stock_url and p06_url and p07_root.exists()),
+        "ready": bool(trend_spec and stock_url and p06_url and p07_root.exists() and p07_source_spec),
         "connectors": [
             {
                 "id": "trend", "name": "trend-analysis-agent",
@@ -139,8 +141,11 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
             },
             {
                 "id": "project_07", "name": "Project_07",
-                "configured": p07_root.exists(), "target": "local Python adapter" if p07_root.exists() else None,
-                "detail": "MarketResearchAgent를 로컬 호출하며 기본 NoConfiguredSources 경로를 사용합니다.",
+                "configured": p07_root.exists() and bool(p07_source_spec),
+                "target": "local Python adapter" if p07_root.exists() else None,
+                "source_configured": bool(p07_source_spec),
+                "detail": ("MarketResearchAgent를 로컬 호출합니다. source factory가 설정되어 있습니다." if p07_source_spec
+                           else "MarketResearchAgent를 로컬 호출합니다. source 미설정 시 no_results를 반환합니다."),
             },
             {
                 "id": "project_06", "name": "Project_06",
@@ -160,11 +165,14 @@ def build_connected_orchestrator(environ: Mapping[str, str] | None = None) -> Or
 
     default_p07 = Path(__file__).resolve().parents[3] / "project_07"
     p07_root = Path(env.get("VOGUE_PROJECT07_ROOT", str(default_p07))).expanduser()
+    p07_source_spec = env.get("VOGUE_PROJECT07_SOURCE_ADAPTER")
     stock_url = _service_url(env, "VOGUE_STOCK_AGENT_URL", "/v1/inventory-products")
     p06_url = _service_url(env, "VOGUE_PROJECT06_URL", "/api/planning-draft")
     return Orchestrator(
         trend=_load_callable(env["VOGUE_TREND_ADAPTER"]),
         stock=lambda payload: _post_json(stock_url, payload),
-        project_07=_project07_adapter(p07_root),
+        project_07=_project07_adapter(
+            p07_root, _load_callable(p07_source_spec) if p07_source_spec else None,
+        ),
         project_06=lambda payload: _post_json(p06_url, payload),
     )
