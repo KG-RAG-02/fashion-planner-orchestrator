@@ -14,7 +14,7 @@ Project_08은 VOGUE 중앙 오케스트레이션 계층의 실행 가능한 로�
 - P07에는 요청·trend·stock raw payload를 전달합니다. P07의 `1.3-proposal`을 포함한 제안 schema는 producer schema version으로만 기록하며 공통 계약 버전으로 사용하지 않습니다.
 - 현재 P06 prototype 입력 형식에는 P07 raw 결과 객체를 `sales_market_result`로 전달합니다. 제안 envelope가 오면 전용 경계에서 `result`를 unwrap하고 envelope와 내부 메타데이터의 ID/status/producer version 일치를 확인합니다.
 - 실제 계약 대조 결과 trend producer는 `request_id/status/applied_filters/trends/evidence/limitations`를 반환하고 `agent_id/schema_version`과 호출 API는 없습니다. runner는 이를 raw로 보존하고 status를 확인하며, 기록의 producer ID만 저장소 문서에서 확인된 `trend-analysis-agent`로 표시하고 원본 schema version은 미상으로 둡니다.
-- trend 검색은 `TrendQuery`의 정규화 입력을 요구하지만 쿼리 파서가 미구현입니다. runner는 P07/P06용 최소 PlanningRequest에 원문 쿼리만 담으며 시즌·카테고리를 추론하지 않습니다. 실제 trend 호출 adapter는 아직 연결할 수 없습니다.
+- trend 검색은 `TrendQuery`의 정규화 입력을 요구합니다. 원문 → `TrendQuery` 변환은 독립 모듈 `src/vogue_orchestrator/query/`에 LLM 호출 전 단계(모델·프롬프트·조립·검증)까지 구현돼 있으나, LLM 어댑터가 없고 runner에 연결되지 않았습니다(아래 "질의 구조화 모듈"). runner는 P07/P06용 최소 PlanningRequest에 원문 쿼리만 담으며 시즌·카테고리를 추론하지 않습니다. 실제 trend 호출 adapter는 아직 연결할 수 없습니다.
 - stock producer의 계약은 `POST /v1/inventory-products`에 TrendAnalysisResult를 그대로 보내는 방식이며 응답에는 `schema_version`, `request_id`, `agent_id`, `status`, `products`, `trend_results`, `evidence`, `errors`가 있습니다. runner는 이 구조를 바꾸지 않고 stock adapter 호출을 주입받습니다. 실제 API는 sample DB/LLM 의존이 있어 여기서 호출하지 않습니다.
 - Project_07 CLI는 PlanningRequest와 trend/stock 입력 각각 `schema_version: 1.0`을 요구합니다. trend 원본에는 버전 필드가 없으므로 P07 입력 복사본에만 `1.0`을 추가합니다. StageRecord의 trend raw 응답에는 추가하지 않습니다.
 - `partial`과 `no_results`는 다음 단계에 전달하고, `error` 및 계약 검증 실패는 기본적으로 이후 호출을 멈춥니다. 앞선 성공 결과는 실행 기록에 남습니다.
@@ -33,6 +33,8 @@ PYTHONPATH=src python3 app.py
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 PYTHONPATH=src python3 examples/synthetic_demo.py
 ```
+
+> 주의 (2026-11-09 확인): `examples/synthetic_demo.py`는 현재 trend 단계에서 `CONTRACT_ERROR`로 멈춥니다. 이 예제의 합성 trend 응답이 status `partial`을 돌려주는데, core는 trend status로 `ok/no_results/error`만 허용하기 때문입니다 ([configs/README.md](configs/README.md) F-4, 아직 고치지 않음). Windows에서는 `python3` 대신 `py`를 쓰고, PowerShell에서는 `$env:PYTHONPATH="src"`로 경로를 지정합니다.
 
 UI는 로컬 loopback에서만 열리는 미리보기입니다. 기본 `SYNTHETIC PREVIEW`는 합성 adapter로 네 단계를 실행합니다. 저장소 인터페이스가 확인된 단계는 별도 `CONNECTED AGENTS` 모드에서 opt-in으로 호출할 수 있습니다. 결과는 저장하지 않습니다.
 
@@ -62,6 +64,25 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integr
 결과와 저장소별 호환 판정은 [`docs/integration-validation.md`](docs/integration-validation.md)에 기록합니다. 이 검증은 trend/stock 서비스 자체를 호출하지 않습니다.
 
 기본 데모와 합성 검증은 fixture만 사용하며 실제 원천에 연결하지 않습니다. 연결 모드는 설정된 endpoint와 로컬 Project_07 어댑터를 호출합니다.
+
+## 질의 구조화 모듈 (LLM 호출 전 단계)
+
+사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 바꾸는 독립 모듈입니다. 오케스트레이터 코어와 서로 import하지 않으며, 네트워크·LLM 호출과 키가 없습니다. 이 모듈만 pydantic이 필요합니다(optional extra `query`). 코어와 기존 테스트는 계속 표준 라이브러리만으로 실행되고, pydantic이 없으면 질의 테스트는 skip됩니다.
+
+```bash
+pip install -e ".[query]"
+PYTHONPATH=src python3 -m unittest discover -s tests -v          # 기존 8 + 질의 63
+PYTHONPATH=src python3 examples/query_structuring_demo.py        # 합성 사례 6개 결과
+PYTHONPATH=src python3 examples/query_structuring_demo.py --show-prompt "가을 여성 코트"
+```
+
+| 폴더 | 내용 |
+|---|---|
+| [`prompts/`](prompts/README.md) | LLM 프롬프트 원본, 버전별 텍스트 (현재 `v1`). 실제 전송 텍스트는 `prompts/query_structuring/v1/rendered_system.md` |
+| [`configs/`](configs/README.md) | 질의 모듈 설정(`query_structuring.json`)과 저장소 전체 하드코딩 값·종속 관계 목록 |
+| [`data/`](data/README.md) | 예상 사용자 질의 30개와 기대 출력 (silver, 사용자 확인 전) |
+
+사용자와 합의한 결정·작업 규칙·별칭 사전 정책은 [`docs/query-decisions.md`](docs/query-decisions.md)가 기준입니다(먼저 읽기). 구현 내용, 코드 지도, 프롬프트, 가정, 한계와 향후 과제, 다음 할 일은 [`docs/query-structuring.md`](docs/query-structuring.md)에 있고, 설계 배경은 [`docs/query-preprocessing.md`](docs/query-preprocessing.md)에 있습니다.
 
 ## 미결정 및 필요한 입력
 
