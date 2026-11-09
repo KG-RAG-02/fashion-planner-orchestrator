@@ -1,0 +1,11 @@
+[project]
+name = "vogue-orchestrator"
+version = "0.1.0"
+description = "Proposal-stage orchestration core for the VOGUE planning pipeline"
+requires-python = ">=3.11"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
