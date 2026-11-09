@@ -1,28 +1,24 @@
 import unittest
+import json
+from pathlib import Path
 
 from vogue_orchestrator import Orchestrator, StageName
-from vogue_orchestrator.core import CONTRACT_VERSION, ContractError, unwrap_p07_for_project06
+from vogue_orchestrator.core import (
+    CONTRACT_VERSION, ContractError, project_trend_result_for_p07,
+    unwrap_p07_for_project06,
+)
 
 
 RID = "synthetic-req-001"
+FIXTURES = Path(__file__).resolve().parents[1] / "examples" / "fixtures"
 
 
 def trend_adapter(payload):
-    rid = payload["request_id"]
-    request = {"schema_version": "1.0", "request_id": rid, "query": payload["query"]}
-    trend = {"schema_version": "1.0", "request_id": rid,
-             "agent_id": "trend-analysis-agent", "status": "partial", "evidence": [],
-             "limitations": ["synthetic fixture"]}
-    return {"schema_version": "1.0", "request_id": rid,
-            "agent_id": "trend-analysis-agent", "status": "partial",
-            "planning_request": request, "trend_result": trend}
+    return json.loads((FIXTURES / "trend-analysis-result.no-results.synthetic.json").read_text())
 
 
 def stock_adapter(payload):
-    rid = payload["request_id"]
-    return {"schema_version": "1.0", "request_id": rid,
-            "agent_id": "stock-agent", "status": "no_results", "products": [],
-            "evidence": [], "limitations": ["synthetic fixture"]}
+    return json.loads((FIXTURES / "stock-agent-result.no-results.synthetic.json").read_text())
 
 
 def p07_adapter(payload):
@@ -35,13 +31,17 @@ def p07_adapter(payload):
 
 
 def make_runner(p07=p07_adapter, p06=None, stock=stock_adapter):
-    seen = {}
+    seen = {"p07": None}
+
+    def market(payload):
+        seen["p07"] = payload
+        return p07(payload)
 
     def planning(payload):
         seen["p06"] = payload
         return {"request_id": payload["request_id"], "status": "partial", "draft": {}}
 
-    runner = Orchestrator(trend=trend_adapter, stock=stock, project_07=p07,
+    runner = Orchestrator(trend=trend_adapter, stock=stock, project_07=market,
                           project_06=p06 or planning, request_id_factory=lambda: RID)
     return runner, seen
 
@@ -52,9 +52,19 @@ class OrchestratorTests(unittest.TestCase):
         result = runner.run("합성 쿼리")
         self.assertEqual([s.stage for s in result.stages], list(StageName))
         self.assertEqual({s.request_id for s in result.stages}, {RID})
-        self.assertEqual(result.stages[0].raw_response["trend_result"]["status"], "partial")
+        self.assertEqual(result.stages[0].raw_response["status"], "no_results")
+        self.assertIsNone(result.stages[0].producer_schema_version)
+        self.assertEqual(seen["p07"]["trend_result"]["schema_version"], "1.0")
         self.assertEqual(seen["p06"]["sales_market_result"]["schema_version"], "1.3-proposal")
         self.assertEqual(result.status, "partial")
+
+    def test_p07_projection_preserves_producer_raw_and_rejects_unknown_version(self):
+        raw = trend_adapter({"request_id": RID})
+        projected = project_trend_result_for_p07(raw, RID)
+        self.assertNotIn("schema_version", raw)
+        self.assertEqual(projected["schema_version"], "1.0")
+        with self.assertRaises(ContractError):
+            project_trend_result_for_p07({**raw, "schema_version": "2.0"}, RID)
 
     def test_mismatched_request_stops_without_losing_prior_stage(self):
         def broken_stock(payload):
@@ -65,8 +75,29 @@ class OrchestratorTests(unittest.TestCase):
         result = runner.run("합성 쿼리", request_id=RID)
         self.assertEqual(result.stopped_at, StageName.STOCK)
         self.assertEqual(len(result.stages), 2)
-        self.assertEqual(result.stages[0].status, "partial")
+        self.assertEqual(result.stages[0].status, "no_results")
         self.assertEqual(result.stages[1].error_code, "CONTRACT_ERROR")
+
+    def test_wrong_stock_producer_is_rejected(self):
+        def wrong_producer(payload):
+            return {**stock_adapter(payload), "agent_id": "unexpected-agent"}
+
+        runner, _ = make_runner(stock=wrong_producer)
+        result = runner.run("synthetic query")
+        self.assertEqual(result.stopped_at, StageName.STOCK)
+        self.assertEqual(result.stages[-1].error_code, "CONTRACT_ERROR")
+
+    def test_unexpected_exception_does_not_echo_query_or_exception_text(self):
+        secret_like_text = "synthetic-private-query-marker"
+
+        def raises(payload):
+            raise RuntimeError(secret_like_text)
+
+        runner = Orchestrator(trend=raises, stock=stock_adapter, project_07=p07_adapter,
+                              project_06=lambda payload: {})
+        result = runner.run(secret_like_text, request_id=RID).to_dict()
+        self.assertNotIn(secret_like_text, json.dumps(result))
+        self.assertEqual(result["stages"][0]["error_message"], "Stage adapter failed; details suppressed.")
 
     def test_proposal_envelope_unwraps_only_after_consistency_checks(self):
         body = p07_adapter({"request_id": RID})
