@@ -1,0 +1,23 @@
+{
+  "_about": "Settings of the query-structuring module (src/vogue_orchestrator/query). Read once at import by config.py. Inventory of every hard-coded value in the repository: configs/README.md.",
+  "prompt": {
+    "name": "query_structuring",
+    "version": "v1"
+  },
+  "input": {
+    "max_query_chars": 1000
+  },
+  "draft": {
+    "year_min": 2000,
+    "year_max": 2100
+  },
+  "unsupported": {
+    "reasons": {
+      "brand": "Product 데이터는 Musinsa뿐",
+      "category": "표준 카테고리(상분류 {major_count}·하분류 {minor_count})에 없음",
+      "attribute": "요청 속성으로 쓰지 않는 속성 종류(길이·사이즈·세이프 등)",
+      "abstract": "표준 어휘로 바꿀 수 없는 추상 표현"
+    },
+    "generic_reason": "현재 검색에서 지원하지 않는 조건"
+  }
+}
