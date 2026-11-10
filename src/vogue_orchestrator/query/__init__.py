@@ -16,8 +16,11 @@ _EXPORTS = {
     "QueryStructuringResult": "structure",
     "DraftProvider": "structure",
     "QueryStructuringError": "errors",
-    "TrendQuery": "models",
-    "QueryDraft": "draft",
+    "TrendQuery": "trend_query",
+    "StructuredQuery": "models",
+    "SCHEMA_VERSION": "models",
+    # The draft the running path validates: v1 (legacy_v1) until plan U4 switches to draft v2 (draft.py).
+    "QueryDraft": "legacy_v1",
     "assemble_trend_query": "assemble",
     "build_prompt": "prompt",
     "load_prompt": "prompt",

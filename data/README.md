@@ -28,10 +28,11 @@
 기대값을 `TrendQuery`가 아니라 **draft**로 둔 이유는 이 데이터가 LLM 단계를 평가하기 위한 것이기 때문이다. `TrendQuery`는 draft를 `assemble_trend_query(..., today=reference_today)`에 넣으면 결정적으로 나온다.
 
 ## v1 라벨과 별칭 사전 정책의 관계 (중요)
-v1의 기대 draft는 별칭 사전 정합 정책(H1~H6, [docs/query-decisions.md](../docs/query-decisions.md))이 정해지기 **전에** 만들었다. 정책을 구현할 때 다음 라벨이 바뀌므로 **`user_queries.v2.json`을 새로 만든다** (v1은 보존):
-- q027 `슬랙스`: 지원 불가 → **팬츠** (사전에 정확한 별칭이 있음)
-- q011 `오버핏`, q029 `루즈핏`: 오버사이즈·루즈 → **`null`** (사전 공백, 한계 L-1)
-- 형식: 결정 V1(코드 후보 → LLM 검수)에 맞춰 기대 `TrendQuery` 값으로 바꾼다 ([구현 계획](../docs/query-candidate-review-plan.md) P-5)
+v1의 기대 draft는 별칭 사전 정책(H1)과 γ(Q3, [docs/query-decisions.md](../docs/query-decisions.md))가 정해지기 **전에** 만들었다. γ를 구현할 때(계획 U5) **`user_queries.v2.json`을 새로 만든다** (v1은 보존):
+- 형식: 질의마다 **기대 `StructuredQuery`**(정의서 [contracts/structured-query.md](../contracts/structured-query.md))와, 그 결과를 만드는 기대 LLM 출력(draft v2). 모든 값에 기대 `match`를 적는다.
+- q027 `슬랙스`: 지원 불가 → **팬츠, `match: alias`** (사전에 같은 뜻 별칭이 있음)
+- q011 `오버핏`: 오버사이즈 **`match: llm`** (사전에 없음, LLM 제안). q029 `루즈핏`: 루즈 **`match: llm`** (사전에 "루즈핏"이 없음)
+- q006 "니트 소재": 표현 안 단어 "니트"로 사전 조회 → 니트 `match: exact`
 
 ## 라벨 상태와 확인 절차
 - 30개 모두 **silver**다. 사용자가 확인한 항목만 `label_status`를 `gold`로 바꾼다.
@@ -40,7 +41,7 @@ v1의 기대 draft는 별칭 사전 정합 정책(H1~H6, [docs/query-decisions.m
 | id | 질의 | 확인할 점 |
 |---|---|---|
 | q002 | 올여름 린넨 셔츠 트렌드 알려줘 | 상대 표현 '올여름'. 지금은 year null → 코드가 2027 SS로 정함 (사용자 뜻은 2026 여름일 수 있음, 가정 A-1) |
-| q011 | 유니섹스 오버핏 후드티 그레이로 | **정책으로 결정됨 (H1)**: '오버핏'은 사전에 없으므로 v2에서 `null`. 사전에 표기 변형으로 넣을지는 사전 추가 후보로 사용자 확인 |
+| q011 | 유니섹스 오버핏 후드티 그레이로 | **정책으로 결정됨 (γ)**: '오버핏'은 사전에 없으므로 v2에서 LLM 제안 오버사이즈, `match: llm`. 사전에 같은 뜻 표기로 넣을지(넣으면 `alias`)는 사전 추가 후보 표 2에서 사용자 판단 |
 | q021 | 숏패딩 트렌드 정리해줘 | `item_terms`만 둘지, 카테고리 '패딩'도 넣을지 (계약에 정의 없음) |
 | q027 | 청바지 말고 슬랙스 위주로 | **정책으로 결정됨 (H1)**: 사전에 `슬랙스 → 팬츠` 별칭이 있으므로 v2에서 팬츠 |
 

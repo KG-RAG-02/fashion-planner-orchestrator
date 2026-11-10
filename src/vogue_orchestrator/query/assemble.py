@@ -18,8 +18,8 @@ from datetime import date
 
 from . import vocabulary as vocab
 from .config import CONFIG
-from .draft import DraftCategory, QueryDraft
-from .models import (
+from .legacy_v1 import DraftCategory, QueryDraft  # v1 draft until the StructuredQuery path (plan U4)
+from .trend_query import (
     CategoryFilter, CategoryRef, GenderRef, Requested, RequestedAttribute, SeasonRequest,
     TermRef, TrendQuery, TrendTerms, UnsupportedCondition,
 )

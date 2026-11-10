@@ -7,6 +7,7 @@ const results = document.querySelector('#results');
 const runMode = document.querySelector('#run-mode');
 const connectedConsent = document.querySelector('#connected-consent');
 const allowConnected = document.querySelector('#allow-connected');
+const allowStructuring = document.querySelector('#allow-structuring');
 let currentMode = 'demo';
 
 const stageLabels = {
@@ -78,6 +79,21 @@ function renderConnections(data) {
   document.querySelector('.connections-footnote').textContent += ` 혼합 connector 설정 상태: ${data?.connection_modes?.mixed_connectors?.configured ? '설정됨' : '일부 미설정'}; HTTP v0.1 route: ${routeSummary}`;
 }
 
+async function loadStructuringStatus() {
+  const copy = document.querySelector('#structuring-consent-copy');
+  try {
+    const response = await fetch('/api/query-structuring');
+    const data = await response.json();
+    const llm = data?.llm || {};
+    const prompt = data?.prompt_version ? ` · 프롬프트 ${data.prompt_version}` : '';
+    copy.textContent = llm.configured
+      ? `00 질의 구조화: 입력한 질의를 외부 LLM(${llm.provider} · ${llm.model})에 보내 구조화하는 것을 확인합니다${prompt}.`
+      : `00 질의 구조화: LLM 설정이 없습니다 (${llm.detail || '.env 확인'}). 체크하면 오류로 표시됩니다.`;
+  } catch {
+    copy.textContent = '00 질의 구조화: 상태 확인 실패';
+  }
+}
+
 async function loadConnectionStatus() {
   try {
     const response = await fetch('/api/connections');
@@ -144,13 +160,86 @@ function renderStage(stage) {
   return card;
 }
 
+const structuringStatus = { ok: ['완료', 'ok'], error: ['오류', 'error'], skipped: ['건너뜀', 'no_results'] };
+
+function categoryText(ref) {
+  const value = ref.minor ? `${ref.major}/${ref.minor}` : (ref.major || '표준 값 없음');
+  return `${value} ← "${ref.raw}"`;
+}
+
+function structuringSummary(tq) {
+  const lines = [];
+  const season = tq.trend_terms?.season;
+  if (season) lines.push(['시즌', `${season.year} ${season.season} (${season.origin === 'default_next' ? '말하지 않아 기본값' : `사용자: "${season.raw}"`})`]);
+  const names = (tq.trend_terms?.style_names || []).map((t) => t.raw);
+  if (names.length) lines.push(['트렌드명', names.join(', ')]);
+  const items = (tq.trend_terms?.item_terms || []).map((t) => t.raw);
+  if (items.length) lines.push(['상품명', items.join(', ')]);
+  const req = tq.requested || {};
+  const include = (req.categories?.include || []).map(categoryText);
+  const exclude = (req.categories?.exclude || []).map(categoryText);
+  lines.push(['카테고리 포함', include.length ? include.join(', ') : '전체 (지정 없음)']);
+  if (exclude.length) lines.push(['카테고리 제외', exclude.join(', ')]);
+  if (req.gender) lines.push(['성별', `${req.gender.value || '표준 값 없음'} ← "${req.gender.raw}"`]);
+  const attrs = (req.attributes || []).map((a) => `${a.type}: ${a.value || '표준 값 없음'} ← "${a.raw}"`);
+  if (attrs.length) lines.push(['속성', attrs.join(', ')]);
+  const unsupported = (tq.unsupported || []).map((u) => `${u.type}: "${u.raw}"`);
+  if (unsupported.length) lines.push(['반영 못 한 조건', unsupported.join(', ')]);
+  return lines;
+}
+
+function jsonDisclosure(title, value) {
+  const disclosure = document.createElement('details');
+  disclosure.append(el('summary', '', title));
+  const pre = el('pre');
+  pre.textContent = JSON.stringify(value, null, 2);
+  disclosure.append(pre);
+  return disclosure;
+}
+
+function renderStructuring(s) {
+  if (!s) return null;
+  const card = el('article', 'stage-card');
+  const top = el('div', 'stage-top');
+  top.append(el('span', 'stage-num', '00'));
+  const title = el('div', 'stage-title');
+  const model = s.llm ? ` · ${s.llm.provider} ${s.llm.model}` : '';
+  title.append(el('span', 'stage-name', '질의 구조화'), el('span', 'stage-producer', `query-structuring${s.prompt_version ? ` · ${s.prompt_version}` : ''}${model}`));
+  top.append(title);
+  const [label, statusKey] = structuringStatus[s.status] || [s.status, s.status];
+  const state = el('span', 'stage-status', label);
+  state.dataset.status = statusKey;
+  top.append(state);
+  card.append(top);
+
+  const detail = el('div', 'stage-detail');
+  if (s.status !== 'ok') {
+    if (s.error_message) detail.append(el('p', '', s.error_message));
+    const meta = [];
+    if (s.error_code) meta.push(`오류 코드: ${s.error_code}`);
+    if (s.provider_error) meta.push(`LLM 오류 종류: ${s.provider_error}`);
+    if (meta.length) detail.append(el('p', '', meta.join(' · ')));
+  } else {
+    for (const [name, text] of structuringSummary(s.trend_query)) {
+      detail.append(el('p', '', `${name}: ${text}`));
+    }
+    if (s.warnings?.length) detail.append(el('p', 'stage-counts', `경고: ${s.warnings.join(', ')}`));
+    detail.append(el('p', '', 'trend 단계 입력 예정 (아직 전송하지 않음).'));
+    detail.append(jsonDisclosure('구조화 결과 보기 (TrendQuery)', s.trend_query));
+    detail.append(jsonDisclosure('trend 단계 입력 미리보기', s.trend_input_preview));
+    detail.append(jsonDisclosure('LLM 출력 (draft)', s.draft));
+  }
+  card.append(detail);
+  return card;
+}
+
 function renderExecution(data) {
   document.querySelector('#request-id').textContent = data.request_id;
   const overall = document.querySelector('#overall-status');
   overall.textContent = data.status === 'ok' ? 'PIPELINE COMPLETE' : data.status === 'error' ? 'PIPELINE STOPPED' : 'PIPELINE PARTIAL';
   overall.dataset.status = data.status;
   const list = document.querySelector('#stage-list');
-  list.replaceChildren(...data.stages.map(renderStage));
+  list.replaceChildren(...[renderStructuring(data.query_structuring), ...data.stages.map(renderStage)].filter(Boolean));
   const finalStage = data.stages.find((item) => item.stage === 'project_06');
   const draftCard = document.querySelector('#draft-card');
   if (finalStage?.raw_response?.draft) {
@@ -185,7 +274,7 @@ form.addEventListener('submit', async (event) => {
     const response = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, mode: requestMode }),
+      body: JSON.stringify({ query, mode: requestMode, structure: allowStructuring.checked }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -205,3 +294,4 @@ form.addEventListener('submit', async (event) => {
 });
 
 loadConnectionStatus();
+loadStructuringStatus();

@@ -19,5 +19,13 @@
       "abstract": "표준 어휘로 바꿀 수 없는 추상 표현"
     },
     "generic_reason": "현재 검색에서 지원하지 않는 조건"
+  },
+  "gender": {
+    "_about": "Decision G-1: gender is not in the trend alias dictionary, so query/resolve.py uses this fixed table (match = alias). Keys are standard GENDERS values; spellings are compared like the dictionary does (lower case, no spaces, '-' or '_'). Delete when the trend dictionary gets a gender attribute.",
+    "aliases": {
+      "여": ["여성", "여자", "여성용", "우먼", "위민즈", "women", "womens"],
+      "남": ["남성", "남자", "남성용", "맨즈", "men", "mens"],
+      "공용": ["남녀공용", "유니섹스", "unisex"]
+    }
   }
 }

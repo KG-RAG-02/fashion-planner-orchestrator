@@ -2,6 +2,8 @@
 
 The rendered file is for reading and reviewing only (templates + vocabulary + examples put
 together). The code never reads it; it renders from the templates at import time.
+Every version folder is rendered or checked, whatever its draft format or status (meta.json), so an
+archived version stays reviewable and a broken meta.json fails here as well.
 
 Usage (from the repository root; needs pydantic only because the package is imported):
   PYTHONPATH=src python scripts/render_query_prompt.py            # every version folder
@@ -35,15 +37,19 @@ def main() -> int:
 
     stale = []
     for directory in version_dirs():
-        expected = load_prompt(directory.name).system + "\n"
+        template = load_prompt(directory.name)
+        expected = template.system + "\n"
         target = directory / RENDERED_NAME
         current = target.read_text(encoding="utf-8") if target.exists() else None
         if args.check:
             if current != expected:
                 stale.append(directory.name)
             continue
+        if current == expected:  # leave an up-to-date file alone; a stale one is regenerated, archived or not (it is derived)
+            print(f"unchanged {target.relative_to(ROOT)} (format {template.format}, status {template.status})")
+            continue
         target.write_text(expected, encoding="utf-8", newline="\n")
-        print(f"wrote {target.relative_to(ROOT)}")
+        print(f"wrote {target.relative_to(ROOT)} (format {template.format}, status {template.status})")
     if stale:
         print("stale rendered prompt: " + ", ".join(stale) + "; run scripts/render_query_prompt.py")
         return 1

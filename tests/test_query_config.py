@@ -7,6 +7,7 @@ from pathlib import Path
 
 from _query_support import ROOT
 from vogue_orchestrator.query import config as query_config
+from vogue_orchestrator.query.vocabulary import GENDERS
 
 CONFIG_FILE = ROOT / "configs" / "query_structuring.json"
 
@@ -18,6 +19,13 @@ class QueryConfigTests(unittest.TestCase):
         self.assertEqual(config.max_query_chars, 1000)
         self.assertEqual((config.draft_year_min, config.draft_year_max), (2000, 2100))
         self.assertEqual(set(config.unsupported_reasons), {"brand", "category", "attribute", "abstract"})
+
+    def test_gender_table_maps_only_to_standard_genders(self):
+        config = query_config.load_config(CONFIG_FILE)
+        self.assertEqual(set(config.gender_aliases), set(GENDERS))
+        self.assertIn("여성", config.gender_aliases["여"])
+        self.assertIn("남성", config.gender_aliases["남"])
+        self.assertIn("유니섹스", config.gender_aliases["공용"])
 
     def test_active_config_is_the_repository_file_by_default(self):
         self.assertEqual(query_config.CONFIG.source.resolve(), CONFIG_FILE.resolve())
@@ -33,6 +41,13 @@ class QueryConfigTests(unittest.TestCase):
             "missing section": json.dumps({k: v for k, v in good.items() if k != "draft"}),
             "wrong type": json.dumps({**good, "input": {"max_query_chars": "1000"}}),
             "inverted bounds": json.dumps({**good, "draft": {"year_min": 2100, "year_max": 2000}}),
+            "missing gender table": json.dumps({k: v for k, v in good.items() if k != "gender"}),
+            "gender value not standard": json.dumps({**good, "gender": {"aliases": {"여성": ["여자"]}}}),
+            "gender spellings not a list": json.dumps({**good, "gender": {"aliases": {"여": "여성"}}}),
+            "gender spelling maps to two values": json.dumps(
+                {**good, "gender": {"aliases": {"여": ["여성"], "남": ["여 성"]}}}),
+            "gender spelling is another standard value": json.dumps({**good, "gender": {"aliases": {"여": ["남"]}}}),
+            "gender spelling empty after normalization": json.dumps({**good, "gender": {"aliases": {"여": ["-"]}}}),
         }
         with tempfile.TemporaryDirectory() as directory:
             for name, text in broken_cases.items():

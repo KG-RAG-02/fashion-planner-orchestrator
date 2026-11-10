@@ -1,6 +1,6 @@
 # configs/ — 설정 파일과 하드코딩·종속 관계 목록
 
-조사 기준: 2026-11-09, 브랜치 `feature/orchestrator-core` 작업 트리.
+조사 기준: 2026-11-09, 브랜치 `feature/orchestrator-core` 작업 트리(질의 작업은 이후 `feature/query-structuring`에서 계속). §5의 F-4·F-7은 2026-11-10 갱신.
 
 이 폴더에는 두 가지가 있다.
 1. **실제로 코드가 읽는 설정 파일**: 지금은 질의 구조화 모듈용 `query_structuring.json` 하나다.
@@ -12,16 +12,27 @@
 | 파일 | 읽는 코드 | 읽는 시점 | 경로를 바꾸는 방법 |
 |---|---|---|---|
 | [`query_structuring.json`](query_structuring.json) | `src/vogue_orchestrator/query/config.py` | 패키지 import 때 한 번. 형식이 틀리면 `QueryConfigError`로 바로 실패한다 | 환경변수 `VOGUE_QUERY_CONFIG` |
+| [`llm.json`](llm.json) | `src/vogue_orchestrator/llm_provider.py` | LLM을 호출할 때마다 (00 질의 구조화) | — |
 
 ### `query_structuring.json` 키
 | 키 | 현재 값 | 쓰는 곳 | 뜻 |
 |---|---|---|---|
 | `prompt.name` | `query_structuring` | `prompt.py` | `prompts/` 아래 프롬프트 폴더 이름 |
-| `prompt.version` | `v1` | `prompt.py` | 사용할 프롬프트 버전 폴더. 결과의 `prompt_version`은 `query-structuring-prompt/v1` |
+| `prompt.version` | `v1` | `prompt.py` | 사용할(실행할) 프롬프트 버전 폴더. 결과의 `prompt_version`은 `query-structuring-prompt/v1`. 프롬프트 v2는 작성됐지만 실행 버전 전환은 U4 ([structured-query-plan.md](../docs/structured-query-plan.md)). 폴더의 `meta.json` `status`는 문서용 표시이고 실행 버전은 이 값이 정한다 |
 | `input.max_query_chars` | `1000` | `structure.py` | 질의 최대 길이. 넘으면 `INPUT_INVALID` |
-| `draft.year_min` / `draft.year_max` | `2000` / `2100` | `draft.py` | LLM이 준 연도의 허용 범위. 밖이면 `DRAFT_INVALID` |
+| `draft.year_min` / `draft.year_max` | `2000` / `2100` | `draft.py`(v2), `legacy_v1.py`(v1) | LLM이 준 연도의 허용 범위. 밖이면 `DRAFT_INVALID` |
 | `unsupported.reasons` | brand·category·attribute·abstract 4개 | `assemble.py` | `unsupported.reason`에 들어갈 고정 문장. `{major_count}`/`{minor_count}`는 어휘 개수로 채운다 |
 | `unsupported.generic_reason` | "현재 검색에서 지원하지 않는 조건" | `assemble.py` | 표에 없는 종류의 사유 |
+| `gender.aliases` | 여: 여성·여자·여성용·우먼·위민즈·women·womens / 남: 남성·남자·남성용·맨즈·men·mens / 공용: 남녀공용·유니섹스·unisex | `resolve.py` (`config.py`가 검증) | 성별 고정 표(결정 G-1). 표에 있으면 `match: alias`, 표준 값 그대로면 `exact`. 키는 표준 성별 3개만, 표기 하나는 한 값에만, 비교는 사전과 같은 `norm_key`(소문자, 공백·`-`·`_` 무시). trend 사전에 성별이 생기면 지운다. **2026-11-10부터 필수 키**: `VOGUE_QUERY_CONFIG`로 다른 설정 파일을 쓰면 이 절이 없을 때 import에서 실패한다. 정규화하면 빈 문자열이 되는 표기(`"-"` 등)는 거부한다 |
+
+### `llm.json` 키 (2026-11-10)
+| 키 | 현재 값 | 뜻 |
+|---|---|---|
+| `timeout_seconds` | `60` | LLM 요청 하나의 시간 제한(초) |
+| `max_tokens` | `16000` | Anthropic 호출의 출력 상한 (OpenAI 호출에는 보내지 않음: 모델마다 매개변수 이름이 달라서) |
+| `max_retries` | `2` | SDK 자체 재시도 횟수 |
+
+모델·키·제공자는 이 파일에 두지 않는다 (`.env`의 `LLM_*`, §4.3).
 
 프롬프트 폴더 위치는 환경변수 `VOGUE_QUERY_PROMPTS_DIR`로 바꾼다. 기본값은 저장소 루트의 `prompts/`다.
 
@@ -50,6 +61,9 @@
 | 경고 코드 8개, 오류 코드 5개와 고정 메시지 | `assemble.py`, `errors.py` | 조정 값이 아니라 인터페이스 식별자다. 메시지는 원문 비노출 규칙 때문에 고정이다 |
 | 프롬프트 ID 접두어 `query-structuring-prompt`, 자리 표시자 `{{VOCABULARY}}` `{{EXAMPLES}}` `{{QUERY}}` | `prompt.py` | 템플릿 파일 형식의 일부다 |
 | 질의 안 `<질의>` 태그를 전각 문자로 바꾸는 처리 | `prompt.py` | `user_template.md`의 경계 표시와 짝이다. 템플릿의 경계 표시를 바꾸면 함께 고쳐야 한다 |
+| resolver 경고 코드 7개, `unsupported` 사유 키 3개(`null_value`·`not_in_dictionary`·`route_not_in_contract`), 사전 이동 최대 3단계 | `resolve.py` | 인터페이스 식별자다. 사유 키를 문장으로 바꾸는 것은 조립(U4)이 설정에서 한다 |
+| draft v2의 닫힌 집합 (조건 `kind` 7개, `polarity` 2개, `unsupported.type` 9개) | `draft.py` | LLM 출력 형식의 일부다. 프롬프트 v2 규칙과 짝이다 |
+| 프롬프트 `meta.json`의 `format`(`draft_v1`·`draft_v2`)·`status`(`current`·`archived`) 값 | `prompt.py` | 버전 폴더 형식의 일부다 |
 | 기본 경로 (`configs/`, `prompts/` = 저장소 루트) | `config.py` (`parents[3]`) | src 레이아웃 checkout 기준이다. 다른 위치는 환경변수로 지정한다 |
 
 ## 3. 기존 오케스트레이터 코드의 하드코딩 값 (옮기지 않음)
@@ -93,7 +107,7 @@
 | `demo.py` | 합성 응답의 버전(`1.0`, `1.3-proposal`), 생산자 ID, 안내 문장 | — (합성 데이터) |
 | `web/app.js` | 단계 라벨·번호, 상태 라벨, 단계 설명 문장, 질의 글자 수 표시 "/ 1,000" | ○ |
 | `examples/synthetic_local_integration.py` | sibling 경로 `<상위>/research/src`, `<상위>/project_06/src`, import `market_research_agent`, `vogue_npp.prototype.server._build_planning_draft_response` | — (로컬 검증 스크립트) |
-| `examples/synthetic_demo.py` | trend 합성 응답이 `partial`을 반환 → 현재 core 규칙(`ok/no_results/error`)과 맞지 않아 trend 단계에서 멈춤 | 별도 수정 필요 |
+| `examples/synthetic_demo.py` | (2026-11-09 조사 당시) trend 합성 응답이 `partial`이라 trend 단계에서 멈췄음 → **팀원 커밋 `325a87e`(2026-11-10)에서 수정됨**, 네 단계 끝까지 실행 | 해결 |
 
 ## 4. 종속 관계
 
@@ -108,7 +122,9 @@
 ### 4.2 다른 저장소·문서
 | 대상 | 무엇에 의존 | 어디서 | 바뀌면 |
 |---|---|---|---|
-| trend-analysis-agent | `TrendQuery` 계약 (스냅샷 `contracts/`, 원본 `origin/main@4196bc460876`) | 질의 모듈의 모델·어휘·프롬프트 | 스냅샷 갱신 → `generate_query_vocabulary.py` → 테스트 (`docs/query-structuring.md` §9) |
+| trend-analysis-agent | 표준 어휘 (`contracts/trend-query.contract.json`, 원본 `origin/main@4196bc460876`) | `vocabulary.py` → 모델(`models.py`·`trend_query.py`)·프롬프트·resolver | 스냅샷 갱신 → `generate_query_vocabulary.py` → 테스트 (`docs/query-structuring.md` §9) |
+| trend-analysis-agent | `TrendQuery` 형식 (같은 스냅샷) | `trend_query.py` (v1 실행 경로, 나중의 `to_trend_query()`) | 같은 절차, `test_query_trend_query.py`가 차이를 알려 줌 |
+| trend-analysis-agent | 별칭 사전 (`contracts/alias-map.snapshot.json`, 원본 `feature/extraction-prompt-experiments@7b525c4`) | `alias_data.py` → `lexicon.py` → `resolve.py` | trend `.venv`로 `export_alias_snapshot.py` → 테스트 ([contracts/alias-map.md](../contracts/alias-map.md)) |
 | trend-analysis-agent | `TrendAnalysisResult` 형태 (`request_id`, status 3종 등) | core의 trend 단계 검증 | core 수정 필요 |
 | trend-analysis-agent | 호출 진입점 | 아직 없음 (`TrendSearcher.search` 함수만, D3) | connectors에 연결 방식 추가 |
 | stock-agent | `POST /v1/inventory-products`, 응답 필드·`agent_id` | connectors, core | connectors·core 수정 |
@@ -125,12 +141,16 @@
 | `VOGUE_PROJECT06_URL` | connectors | CONNECTED 모드에서 필수 |
 | `VOGUE_QUERY_CONFIG` | 질의 모듈 | 선택 (기본 `configs/query_structuring.json`) |
 | `VOGUE_QUERY_PROMPTS_DIR` | 질의 모듈 | 선택 (기본 `prompts/`) |
+| `LLM_MODEL` | `llm_provider.py` (00 질의 구조화) | 구조화 실행 시 필수. 환경변수 또는 저장소 루트 `.env`(환경변수 우선) |
+| `LLM_API_KEY` | `llm_provider.py` | 구조화 실행 시 필수. **값은 `.env`에만 두고 출력·로그·오류 메시지에 넣지 않는다** |
+| `LLM_PROVIDER` | `llm_provider.py` | 선택 (`anthropic`·`openai`). 없으면 모델 이름이 `claude`로 시작하면 anthropic, 아니면 openai |
 
 ### 4.4 저장소 안의 의존 방향
 ```
 core ◄── connectors ◄── server ──► demo          (기존, 표준 라이브러리만)
                                                서로 import하지 않음 (tests/test_query_isolation.py)
-query ──► configs/, prompts/, vocabulary.py ◄── contracts/ (생성 스크립트)   (pydantic)
+query ──► configs/, prompts/, vocabulary.py·alias_data.py ◄── contracts/ (생성 스크립트)   (모델·draft는 pydantic)
+  resolve.py ──► lexicon.py ──► alias_data.py   (표준 라이브러리만)
 ```
 
 ## 5. 정리하며 발견한 것 (조치하지 않음)
@@ -139,6 +159,9 @@ query ──► configs/, prompts/, vocabulary.py ◄── contracts/ (생성 �
 | F-1 | `MAX_QUERY_CHARS` 1000이 server, 질의 설정, web 표시 세 곳에 따로 있다 | 하나만 바꾸면 UI와 서버·모듈의 한도가 어긋난다 | 질의 모듈을 파이프라인에 연결할 때 한 곳으로 모은다 |
 | F-2 | 생산자 ID 문자열이 core, connectors, demo, web에 중복된다 | 이름이 바뀌면 여러 곳을 고쳐야 한다 | 공통 상수나 설정으로 모으는 것을 검토 |
 | F-3 | Project_07 기본 경로(`<상위>/project_07`)가 현재 작업 공간에 없다 | `/api/connections`에서 Project_07이 미설정으로 보인다 | `VOGUE_PROJECT07_ROOT`를 쓰거나 기본값을 다시 정한다 |
-| F-4 | `examples/synthetic_demo.py`가 trend 단계에서 계약 오류로 멈춘다 (README가 실행하라고 안내함) | README 안내대로 하면 실패 | 합성 trend 응답을 `no_results`로 맞춘다 (별도 작업) |
+| F-4 | ~~`examples/synthetic_demo.py`가 trend 단계에서 계약 오류로 멈춘다~~ | **해결됨**: 팀원 커밋 `325a87e`(2026-11-10)가 합성 trend 응답을 `no_results`로 고침 | — |
 | F-5 | 서버 포트 8765와 Project_06 기본 포트가 겹친다 (README에 이미 기재) | 동시 실행 불가 | 포트를 설정으로 노출 |
 | F-6 | 외부 호출 timeout이 없다 (미결정 사항) | 응답 없는 서비스에서 무한 대기 가능 | 운영 합의 후 설정으로 노출 |
+| F-7 | `tests/test_connectors.py`(팀원 커밋 `325a87e`)는 작업 공간에 `project_07` 폴더가 있다고 가정한다. 이 PC에는 없어 `test_project07_source_factory_is_required_for_ready_status`와 (2026-11-10 `main` 병합 후) `test_readiness_separates_mixed_connectors_from_http_v01`가 실패한다(병합 전 `main`에서도 같음) (F-3과 같은 원인, 질의 모듈과 무관) | 이 PC에서 전체 테스트(현재 233개) 중 2개 실패 | `project_07` checkout을 두거나, 테스트가 없는 경로를 건너뛰게 담당자와 조율 |
+
+> 참고: 이 문서의 §3 목록은 2026-11-09 코드 기준이다. 팀원 커밋 `325a87e`(proposal HTTP adapter, `VOGUE_PROJECT07_SOURCE_ADAPTER` 등)로 바뀐 core·connectors의 값은 반영하지 않았다.

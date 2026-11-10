@@ -74,6 +74,8 @@ Health endpoint는 `http://127.0.0.1:8765/api/health`입니다. 이 컨테이너
 
 Windows에서는 `python3` 대신 `py`를 쓰고, PowerShell에서는 `$env:PYTHONPATH="src"`로 경로를 지정합니다.
 
+**질의 구조화(00 단계)를 UI에서 실행하려면**: `pip install -e ".[query]"`와 LLM SDK(`pip install openai` 또는 `pip install anthropic`)를 설치하고, `.env`에 `LLM_MODEL`·`LLM_API_KEY`를 둡니다. 화면의 "00 질의 구조화" 동의를 체크하면 질의가 외부 LLM으로 전송되어 구조화되고, 결과가 실행 기록 맨 위 카드와 `/api/run` 응답의 `query_structuring`에 나옵니다. trend 단계로는 아직 전달하지 않습니다(미리보기만). 2026-11-10 실제 호출 확인(openai `gpt-4o-mini`). 세부: [docs/query-structuring.md §13](docs/query-structuring.md).
+
 UI는 로컬 loopback에서만 열리는 미리보기입니다. 기본 `SYNTHETIC PREVIEW`는 합성 adapter로 네 단계를 실행합니다. 저장소 인터페이스가 확인된 단계는 별도 `CONNECTED AGENTS` 모드에서 opt-in으로 호출할 수 있습니다. 결과는 저장하지 않습니다.
 
 UI의 **CONNECTED AGENTS** 모드는 설정이 완료됐을 때만 실행합니다. `/api/connections`는 환경 설정만 보여 주며 페이지 로드 시 agent health/API endpoint를 호출하지 않습니다. 현재 지원 연결 방식:
@@ -108,22 +110,22 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integr
 
 ## 질의 구조화 모듈 (LLM 호출 전 단계)
 
-사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 바꾸는 독립 모듈입니다. 오케스트레이터 코어와 서로 import하지 않으며, 네트워크·LLM 호출과 키가 없습니다. 이 모듈만 pydantic이 필요합니다(optional extra `query`). 코어와 기존 테스트는 계속 표준 라이브러리만으로 실행되고, pydantic이 없으면 질의 테스트는 skip됩니다.
+사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 바꾸는 모듈입니다. 모듈 자체는 네트워크·LLM 호출과 키가 없고, 실제 LLM 호출은 모듈 밖 `llm_provider.py`가 맡습니다. UI 서버(`server.py`)만 이 모듈을 함수로 호출하며, 코어(core·connectors·demo)와는 서로 import하지 않습니다. 이 모듈만 pydantic이 필요합니다(optional extra `query`). 코어와 기존 테스트는 계속 표준 라이브러리만으로 실행되고, pydantic이 없으면 질의 테스트는 skip됩니다. 다음 출력 계약 `StructuredQuery` 1.0(이 저장소 소유) 모델, 값 확정 코드, 프롬프트 v2는 만들어졌고 실행 흐름 연결은 다음 단계입니다.
 
 ```bash
 pip install -e ".[query]"
-PYTHONPATH=src python3 -m unittest discover -s tests -v          # 기존 8 + 질의 63
+PYTHONPATH=src python3 -m unittest discover -s tests -v          # 전체 233 (질의 176 + LLM 호출·UI 연결 15 + 오케스트레이터). 이 PC에서는 test_connectors 2개 실패: configs/README F-7
 PYTHONPATH=src python3 examples/query_structuring_demo.py        # 합성 사례 6개 결과
 PYTHONPATH=src python3 examples/query_structuring_demo.py --show-prompt "가을 여성 코트"
 ```
 
 | 폴더 | 내용 |
 |---|---|
-| [`prompts/`](prompts/README.md) | LLM 프롬프트 원본, 버전별 텍스트 (현재 `v1`). 실제 전송 텍스트는 `prompts/query_structuring/v1/rendered_system.md` |
+| [`prompts/`](prompts/README.md) | LLM 프롬프트 원본, 버전별 텍스트 (실행 버전 `v1`, 다음 버전 `v2` 작성됨). 실제 전송 텍스트는 각 버전 폴더의 `rendered_system.md` |
 | [`configs/`](configs/README.md) | 질의 모듈 설정(`query_structuring.json`)과 저장소 전체 하드코딩 값·종속 관계 목록 |
 | [`data/`](data/README.md) | 예상 사용자 질의 30개와 기대 출력 (silver, 사용자 확인 전) |
 
-사용자와 합의한 결정·작업 규칙·별칭 사전 정책은 [`docs/query-decisions.md`](docs/query-decisions.md)가 기준입니다(먼저 읽기). 구현 내용, 코드 지도, 프롬프트, 가정, 한계와 향후 과제, 다음 할 일은 [`docs/query-structuring.md`](docs/query-structuring.md)에 있고, 설계 배경은 [`docs/query-preprocessing.md`](docs/query-preprocessing.md)에 있습니다.
+사용자와 합의한 결정·작업 규칙·별칭 사전 정책은 [`docs/query-decisions.md`](docs/query-decisions.md)가 기준입니다(먼저 읽기). 확정된 다음 설계는 받는 쪽용 계약 정의서 [`contracts/structured-query.md`](contracts/structured-query.md)(`StructuredQuery` 1.0)와 구현 계획 [`docs/structured-query-plan.md`](docs/structured-query-plan.md)에 있습니다. 구현 내용, 코드 지도, 프롬프트, 가정, 한계와 향후 과제, 다음 할 일은 [`docs/query-structuring.md`](docs/query-structuring.md)에 있고, 설계 배경은 [`docs/query-preprocessing.md`](docs/query-preprocessing.md)에 있습니다.
 
 ## 미결정 및 필요한 입력
 
