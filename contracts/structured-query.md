@@ -1,6 +1,6 @@
 # StructuredQuery 1.0 — 구조화된 질의 계약
 
-> 상태: **1.0 모델 구현됨 (U1, 2026-11-10)**: `src/vogue_orchestrator/query/models.py`, JSON Schema [structured-query.schema.json](structured-query.schema.json) (모델에서 생성, 직접 수정 금지). 질의 → 이 계약으로 조립하는 흐름은 아직 연결 전 (구현 계획 [structured-query-plan.md](../docs/structured-query-plan.md) U4). 소유: **이 저장소(vogue-orchestrator)** — 결정 Y1. 근거와 결정 기록은 [query-decisions.md](../docs/query-decisions.md) (X1·X2·X3·X4·Y1·R0·Q3).
+> 상태: **1.0 모델 구현됨 (U1, 2026-11-10)**: `src/vogue_orchestrator/query/models.py`, JSON Schema [structured-query.schema.json](structured-query.schema.json) (모델에서 생성, 직접 수정 금지). **2026-11-10 결정된 형식 갱신(성별 포함/제외 G-3, `unsupported.type` 9개 OQ-3′, 기장 칸 OQ-9′, "원피스" = 드레스 OQ-5′, "숏패딩" OQ-8′)은 이 문서에 먼저 반영했고 모델·스키마 반영은 대기 중이다(계획 U3.5)** — 표시 ⏳. 질의 → 이 계약으로 조립하는 흐름은 아직 연결 전 (구현 계획 [structured-query-plan.md](../docs/structured-query-plan.md) U4). 소유: **이 저장소(vogue-orchestrator)** — 결정 Y1. 근거와 결정 기록은 [query-decisions.md](../docs/query-decisions.md) (X1·X2·X3·X4·Y1·R0·Q3).
 > 이 문서는 **받는 쪽**(trend-analysis-agent, 이후 재고 등 다른 Agent)이 각 필드의 뜻과 쓰는 법을 판단할 수 있게 쓴 정의서다. 받는 쪽이 어떤 필드를 어떻게 쓸지는 **받는 쪽이 정한다.** 이 문서의 "활용 예"는 권장이지 강제가 아니다.
 
 ## 1. 무엇인가
@@ -25,10 +25,12 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
   },
   "requested": {
     "categories": {"include": [CategoryRef...], "exclude": [CategoryRef...]},
-    "gender": null,                         // 또는 {"raw": "여성", "value": "여", "match": "alias"} — 성별 규칙은 §4.3 G-1
+    "gender": {"include": [GenderRef...], "exclude": [GenderRef...]},   // ⏳ G-3. 말하지 않았으면 둘 다 []
     "attributes": {
-      "include": {"color": [AttributeRef...], "material": [], "pattern": [], "detail": [], "fit": []},
-      "exclude": {"color": [], "material": [], "pattern": [], "detail": [], "fit": []}
+      "include": {"color": [AttributeRef...], "material": [], "pattern": [], "detail": [], "fit": [],
+                  "body_length": [], "sleeve_length": []},          // ⏳ 기장 2종 (OQ-9′)
+      "exclude": {"color": [], "material": [], "pattern": [], "detail": [], "fit": [],
+                  "body_length": [], "sleeve_length": []}
     }
   },
   "unsupported": [{"type": "brand", "raw": "자라", "reason": "...", "polarity": "exclude"}],
@@ -37,7 +39,8 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 ```
 - `CategoryRef` = `{"raw", "major", "minor", "match"}`
 - `AttributeRef` = `{"raw", "value", "match"}`
-- **빈 값은 `null`이 아니라 `[]`** 다. 속성 키 5개(`color`·`material`·`pattern`·`detail`·`fit`)는 포함·제외 양쪽에 **항상 있다.**
+- `GenderRef` = `{"raw", "value", "match"}` (`AttributeRef`와 같은 모양, `value`는 남·여·공용 또는 `null`) ⏳
+- **빈 값은 `null`이 아니라 `[]`** 다. 속성 키 5개(`color`·`material`·`pattern`·`detail`·`fit`)는 포함·제외 양쪽에 **항상 있다.** ⏳ 기장 칸 추가 후에는 7개(`body_length`·`sleeve_length` 포함). §6 예시는 지면상 기장 키를 생략했다.
 - **모든 필드는 항상 출력된다** (JSON Schema에서 모두 `required`). **모르는 필드는 허용하지 않는다** (`additionalProperties: false`). 스키마에서는 속성 종류마다 허용 값 목록(`enum`)이 걸린 `ColorRef`·`MaterialRef`·`PatternRef`·`DetailRef`·`FitRef`로 나오지만 모양은 모두 `AttributeRef`와 같다.
 - **JSON Schema가 표현하지 못하는 규칙**(생산자인 이 저장소의 모델만 검사한다): `match = none` ⇔ `value = null`, `minor`가 있으면 `major`는 그 하분류의 상분류, `minor = null`인 카테고리는 `match = exact`, 시즌의 `origin`과 `raw` 관계. 받는 쪽이 스키마로만 검증하면 이 규칙들은 검사되지 않으므로, 필요하면 받는 쪽이 따로 확인한다.
 
@@ -47,16 +50,17 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 | `schema_version` | 이 계약의 버전 | `"1.0"`. 호환 변경(필드 추가)은 1.x, 깨지는 변경은 2.0. 단, 이 스키마는 모르는 필드를 허용하지 않으므로 받는 쪽이 스키마로 검증한다면 1.x가 올라갈 때 새 스키마로 바꿔야 한다 (확인 대기 OQ-2) |
 | `request_id`, `original_query` | 요청 ID, 사용자 원문 그대로 | 문자열 |
 | `trend_terms.season` | 기획 시즌 | `{year, season(SS/FW), raw, origin}`. `origin = user_requested`(사용자가 말함) 또는 `default_next`(말하지 않아 질의한 날짜 기준 다음 시즌으로 코드가 채움: 3~8월 → 같은 해 FW, 9~12월 → 다음 해 SS, 1~2월 → 같은 해 SS). `default_next`이면 `raw`는 `null`, `user_requested`이면 사용자가 쓴 시즌 표현 |
-| `trend_terms.style_names[]`, `item_terms[]` | 트렌드명(발레코어 등), 특정 상품명 | `{raw, value}`. 정규화 어휘가 아직 없어 `value`는 `null` (스키마에서도 `null`만 허용. 어휘가 생기면 1.x에서 넓힘) |
+| `trend_terms.style_names[]`, `item_terms[]` | 트렌드명(발레코어 등), 특정 상품명. ⏳ `item_terms`는 **표준 카테고리·속성으로 나타낼 수 없는 상품명에만** 쓴다(OQ-8′: "숏패딩"은 패딩 + 기장 크롭으로 나타내므로 넣지 않는다) | `{raw, value}`. 정규화 어휘가 아직 없어 `value`는 `null` (스키마에서도 `null`만 허용. 어휘가 생기면 1.x에서 넓힘) |
 | `requested.categories.include[]` | **기획하고 싶은** 카테고리. 비어 있으면 상분류 4개 전체 | `CategoryRef` |
 | `requested.categories.exclude[]` | **기획에서 빼고 싶은** 카테고리 (§5) | `CategoryRef` |
 | `CategoryRef.major` / `.minor` | 상분류(상의·하의·아우터·원피스) / 하분류 21개. `minor`가 있으면 `major`는 그 하분류의 상분류(코드가 정함). **`minor`가 있으면 그 하분류만, `minor`가 `null`이면 상분류 전체를 가리킨다.** `minor`가 `null`인 참조는 사용자가 상분류 이름을 직접 말한 경우뿐이라 `match`는 항상 `exact`다 | `major`: 표준 어휘 (**항상 있음**). `minor`: 표준 어휘 또는 `null` |
-| `requested.gender` | 성별 | `{raw, value(남·여·공용 또는 null), match}` 또는 `null`. `raw`는 항상 원문. `value`가 `null`이면 `match`는 `none` |
-| `requested.attributes.include.<종류>[]` | **원하는** 속성 값 | `AttributeRef`. 종류별 허용 값은 표준 어휘(색 21, 소재 26, 패턴 19, 디테일 61(디테일·넥라인·칼라 포함), 핏 7) |
+| `requested.gender.include[]` / `.exclude[]` ⏳ | **원하는** 성별 / **빼고 싶은** 성별 (G-3). 말하지 않았으면 둘 다 `[]` | `GenderRef`. `raw`는 항상 원문. `value`가 `null`이면 `match`는 `none` |
+| (성별의 뜻) ⏳ | **고를 성별** = 포함에 값이 있으면 그 값들(제외 값은 뺌) · 포함이 비어 있으면 남·여·공용 중 제외 값을 뺀 나머지 · 둘 다 비면 성별로 거르지 않음. `value = null` 항목은 계산에서 빠진다 | 예: 제외 `[남]`만 있으면 **여·공용** (§4.3) |
+| `requested.attributes.include.<종류>[]` | **원하는** 속성 값 | `AttributeRef`. 종류별 허용 값은 표준 어휘(색 21, 소재 26, 패턴 19, 디테일 61(디테일·넥라인·칼라 포함), 핏 7, ⏳ 몸판 기장 `body_length` 9(크롭·노멀·하프·롱·미니·니렝스·미디·발목·맥시), ⏳ 소매 기장 `sleeve_length` 5(민소매·반팔·캡·7부소매·긴팔)) |
 | `requested.attributes.exclude.<종류>[]` | **빼고 싶은** 속성 값 (§5) | `AttributeRef` |
 | `AttributeRef.value` | 표준 값. 표준 값으로 정하지 못했으면 `null` (원문은 `raw`에 남음) | 표준 어휘 또는 `null` |
 | `match` | 값이 **어떻게 정해졌는지** (§4) | `exact`·`alias`·`approx`·`llm`·`none` (`CategoryRef`에는 `none`이 없다 — 정하지 못한 카테고리는 `unsupported`) |
-| `unsupported[]` | 요청했지만 표준 어휘·이 계약으로 표현할 수 없는 조건 (브랜드·가격·시장·채널·연령·표준 밖 카테고리·길이·세이프·추상 표현 등). 조용히 버리지 않고 기록 | `{type, raw, reason, polarity}`. `polarity = include`(원함) 또는 `exclude`(빼고 싶음, 예: "자라 말고"). `polarity`는 항상 있다 (기본값 없음) |
+| `unsupported[]` | 요청했지만 표준 어휘·이 계약으로 표현할 수 없는 조건 (브랜드·가격·시장·채널·연령·표준 밖 카테고리·세이프·추상 표현 등. 기장은 ⏳ 속성 칸에 담는다). 조용히 버리지 않고 기록 | `{type, raw, reason, polarity}`. ⏳ `type`은 **9개 중 하나**(OQ-3′): `brand`(브랜드)·`category`(표준 밖 카테고리)·`attribute`(세이프 등 표준 밖 속성)·`abstract`(추상 표현)·`price`(가격)·`market`(시장)·`channel`(판매 채널)·`age`(연령)·`other`(그 밖). 받는 쪽은 `type`별로 처리를 정할 수 있다. `polarity = include`(원함) 또는 `exclude`(빼고 싶음, 예: "자라 말고"). `polarity`는 항상 있다 (기본값 없음) |
 | `missing_fields[]` | 예약 필드. 지금은 항상 `[]` (정의 미정, 가정 A-2) | — |
 
 ## 4. `match` — 값의 출처 (받는 쪽 판단용)
@@ -73,10 +77,11 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 **종류별 보충 규칙**
 | 경우 | 규칙 |
 |---|---|
-| 상분류 이름 ("상의", "하의", "아우터", "원피스") | 표준 목록과 직접 비교해 같으면 `exact` (사전은 이 단어를 힌트로만 돌려주므로 사전 결과를 쓰지 않는다) |
+| 상분류 이름 ("상의", "하의", "아우터") | 표준 목록과 직접 비교해 같으면 `exact` (사전은 이 단어를 힌트로만 돌려주므로 사전 결과를 쓰지 않는다). ⏳ **"원피스"는 예외**: 하분류 드레스(`alias`, OQ-5′) |
 | 카테고리를 표준 값으로 정하지 못함 | `CategoryRef`(`major`·`minor` 모두 `null`)로 두지 않고 **`unsupported`(type `category`)** 에 기록한다. 사전이 범위 밖으로 명시한 품목(예: 가방·모자)과 사전에 없는 품목은 `reason` 문장으로 구분한다 |
 | 한 표현에 여러 값 ("블랙 화이트") | LLM이 값마다 따로 낸다. 그래도 한 표현에서 값이 여러 개 나오면 값마다 별도 `AttributeRef`를 만들고 `raw`는 같은 원문을 쓴다 |
-| 성별 | 고정 표로 정하고 `alias` (G-1, §4.3) |
+| 기장 ⏳ | "미니" → `body_length` 미니(`exact`), "반팔" → `sleeve_length` 반팔. 하위 종류 안의 기장("미니스커트", "숏패딩")은 카테고리와 기장 두 조건으로 나눈다 (OQ-9′·OQ-8′, §4.3) |
+| 성별 | 고정 표로 정하고 `alias` (G-1, §4.3). 포함/제외 목록이고, 포함에 남과 여가 함께 나오면 공용 하나로 합친다 (G-3 ⏳, §4.3) |
 | 카테고리 하위 종류 ("블레이저", "미니스커트") | 하분류 목록에 없는 경우에만 LLM이 상위 **하분류**를 제안 → `llm`. 사용자가 말한 하분류·상분류는 그대로 두고 더 넓게 바꾸지 않는다 (G-2, §4.3) |
 
 ### 4.1 값이 정해지는 과정 (결정 Q3 = γ)
@@ -110,7 +115,7 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 |---|---|---|
 | 뜻 | `value`에 들어갈 수 있는 값 전부 | 여러 표현을 표준 값으로 연결하는 표 |
 | 소유 | trend-analysis-agent (K-Fashion 기준) | trend-analysis-agent |
-| 크기 | 상분류 4, 하분류 21, 색 21, 소재 26, 패턴 19, 디테일 61, 핏 7, 시즌 2, 성별 3 | 약 500개 항목 |
+| 크기 | 상분류 4, 하분류 21, 색 21, 소재 26, 패턴 19, 디테일 61, 핏 7, ⏳ 몸판 기장 9, 소매 기장 5, 시즌 2, 성별 3 | 약 500개 항목 |
 | 예 | 팬츠, 블랙, 오버사이즈 | 슬랙스 → 팬츠 (같은 뜻), 슬림 → 타이트 (근사) |
 
 받는 쪽은 `value`가 `null`이 아니면 **항상 표준 목록 안의 값**이라고 믿어도 된다. 표준 목록은 trend 저장소의 `docs/schemas/vocabulary.md`에 정의되어 있다.
@@ -131,7 +136,22 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 
 - 이 표는 trend 사전에 **없는 속성**에 대한 것이라 "질의 전용 별칭 사전을 만들지 않는다"(사전 중복 금지, [query-decisions.md](../docs/query-decisions.md) §5)와 충돌하지 않는다. trend 사전에 성별이 생기면 그쪽을 따르고 이 표는 지운다.
 - 표 항목 (2026-11-10 U2 확정): 여 = 여성·여자·여성용·우먼·위민즈·women·womens, 남 = 남성·남자·남성용·맨즈·men·mens, 공용 = 남녀공용·유니섹스·unisex. "젠더리스"는 같은 뜻이 아니라 넣지 않았다. 비교는 사전과 같은 방식(소문자, 공백·`-`·`_` 무시)이라 "남녀 공용"도 맞는다. 위치: `configs/query_structuring.json`의 `gender.aliases`.
-- **성별 제외("남성 말고")를 담을 칸은 아직 없다** (`gender`는 값 하나, 포함만). 처리 방법은 확인 대기 OQ-4 ([query-decisions.md](../docs/query-decisions.md) §6).
+- **성별 제외와 여러 성별 (결정 G-3, 2026-11-10 사용자 확정, 구현 대기 ⏳)**: 성별도 카테고리·속성처럼 `include`/`exclude` 목록이다.
+
+| 질의 | `gender` | 고를 성별 |
+|---|---|---|
+| 성별을 말하지 않음 | `{"include": [], "exclude": []}` | 거르지 않음 |
+| "여성 코트" | `{"include": [{"raw": "여성", "value": "여", "match": "alias"}], "exclude": []}` | 여 |
+| "남성 말고 셔츠" | `{"include": [], "exclude": [{"raw": "남성", "value": "남", "match": "alias"}]}` | **여·공용** |
+| "여성 말고 니트" | `{"include": [], "exclude": [{"raw": "여성", "value": "여", "match": "alias"}]}` | 남·공용 |
+| "남녀 셔츠" | `{"include": [{"raw": "남녀", "value": "공용", "match": "alias"}], "exclude": []}` | **공용** |
+| "남성·여성 모두 볼 수 있는 셔츠" | `{"include": [{"raw": "남성, 여성", "value": "공용", "match": "alias"}], "exclude": []}` + 경고 `gender_merged_to_unisex` | 공용 |
+| "유니섹스 후드" | `{"include": [{"raw": "유니섹스", "value": "공용", "match": "alias"}], "exclude": []}` | 공용 |
+| 표에 없고 LLM도 정하지 못한 표현 | `{"include": [{"raw": "...", "value": null, "match": "none"}], "exclude": []}` | 거르지 않음 |
+
+  - 코드는 "남성 말고"를 여·공용으로 **바꿔 쓰지 않는다.** 사용자가 말한 대로 제외 `[남]`을 기록하고, 뜻(나머지 성별)은 이 정의서가 정한다. 성별 표준 값이 3개뿐이라 둘은 같은 뜻이다.
+  - 포함에 남과 여가 따로 나오면 코드가 공용 하나로 합친다(사용자 결정: 남녀 = 공용). 합친 항목의 `raw`는 두 원문을 ", "로 이은 것, `match`는 둘 중 덜 확실한 쪽(exact → alias → llm 순). 제외 쪽에는 적용하지 않는다("남성·여성 말고"는 제외 2개 = 공용만).
+  - "남녀"는 성별 표의 공용 표기로 추가한다. 성별은 `unsupported`로 보내지 않는다.
 
 **G-2 카테고리 하위 종류 — 하분류 목록에 없을 때만 LLM이 상위 하분류를 제안**
 
@@ -145,14 +165,19 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 |---|---|---|---|
 | 스커트 | 표준 값 | 하분류 스커트 (하의로 바꾸지 않음) | `exact` |
 | 데님 스커트 | 전체는 없음 → 표현 안 단어 "스커트" | 하분류 스커트 | `exact` |
-| 미니스커트 | 없음 | LLM 제안 스커트 → 하분류 스커트 | `llm` |
+| 미니스커트 | 없음 | LLM 제안 스커트 → 하분류 스커트. ⏳ "미니"는 기장 `body_length` 미니(`exact`)로 따로 (OQ-9′) | `llm` |
 | 블레이저 | 없음 | LLM 제안 재킷 → 하분류 재킷 | `llm` |
 | 하의 | 힌트만 | 상분류 하의 (사용자가 직접 말함) | `exact` |
+| 원피스 ⏳ | 드레스의 별칭 | 하분류 드레스 (점프수트는 포함 안 됨, OQ-5′) | `alias` |
+| 셔츠 원피스 (띄어 씀) | 전체는 없음 → 단어마다 | 하분류 셔츠 **와** 하분류 드레스, 두 항목 (OQ-10′) | `exact`, `alias` |
+| 셔츠원피스 (붙여 씀) | 없음 | LLM 제안 드레스 하나 (OQ-10′) | `llm` |
+| 니트 원피스 | 전체는 없음 → 단어마다("니트"는 카테고리 아님) | 하분류 드레스. "니트"는 LLM이 소재 조건으로 따로 낸다 | `alias` |
+| 숏패딩 ⏳ | 카테고리에는 없음, 기장에는 근사 크롭 | LLM 제안 패딩 → 하분류 패딩 + `body_length` 크롭(`approx`). `item_terms`에는 넣지 않음 (OQ-8′) | `llm`, `approx` |
 | 가방 | 값 없음(범위 밖) | — | `unsupported` |
 
 - 근거: trend 표준 문서도 "블레이저·트렌치코트는 재킷·코트로만 남는다"고 적어 데이터 쪽이 같은 방식으로 다룬다. `llm` 표시로 받는 쪽이 신뢰도를 판단한다.
 - LLM이 하위 종류에 상분류를 제안하면(예: "롱스커트" → 하의) 받지 않고 `unsupported`(type `category`)로 보낸다. 그래서 프롬프트 v2는 "가장 구체적인 하분류를 제안하라"고 지시한다.
-- "원피스"는 사전에서 하분류 드레스의 별칭이지만, 상분류 이름을 사전보다 먼저 보므로 **상분류 원피스**(`exact`, 드레스·점프수트 모두)가 된다. "니트 원피스"도 표현 안 단어로 상분류 원피스. 이 처리가 맞는지는 확인 대기 OQ-5.
+- ⏳ "원피스"는 **하분류 드레스**(`alias`)다(OQ-5′, 2026-11-10 사용자 결정). 지금 코드는 상분류 이름을 먼저 보아 상분류 원피스(`exact`)로 만들며, U3.5에서 고친다.
 - `llm`으로 정해진 하위 종류 표현은 사전 추가 후보다. 단, "미니스커트 → 스커트"처럼 같은 뜻이 아니라 **하위 종류**인 경우 D-29(같은 뜻 표기만 추가)에 따라 `aliases`에 넣을 수 있는지는 따로 판단한다.
 
 ### 4.4 무엇이 저장되나
@@ -174,7 +199,7 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 ```jsonc
 "requested": {
   "categories": {"include": [{"raw": "니트웨어", "major": "상의", "minor": "니트웨어", "match": "exact"}], "exclude": []},
-  "gender": null,
+  "gender": {"include": [], "exclude": []},
   "attributes": {
     "include": {"color": [], "material": [], "pattern": [], "detail": [], "fit": []},
     "exclude": {"color": [{"raw": "블랙", "value": "블랙", "match": "exact"}],
@@ -203,7 +228,7 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
                   "style_names": [], "item_terms": []},
   "requested": {
     "categories": {"include": [{"raw": "후드티", "major": "상의", "minor": "후드티", "match": "exact"}], "exclude": []},
-    "gender": null,
+    "gender": {"include": [], "exclude": []},
     "attributes": {
       "include": {"color": [{"raw": "버터옐로우", "value": "옐로우", "match": "approx"}],
                   "material": [], "pattern": [], "detail": [],
@@ -236,11 +261,11 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 |---|---|---|
 | 이름·소유 | `TrendQuery`, trend 소유 | `StructuredQuery`, 이 저장소 소유 (Y1) |
 | 버전 | 없음 | `schema_version` |
-| 속성 | `attributes: [{type, raw, value}]` (포함만) | `attributes: {include: {종류: [...]}, exclude: {종류: [...]}}` (X2) |
+| 속성 | `attributes: [{type, raw, value}]` (포함만, 기장 없음) | `attributes: {include: {종류: [...]}, exclude: {종류: [...]}}` (X2), ⏳ 기장 2종 포함 7종 (trend로 넘길 때 기장은 "반영되지 않은 조건") |
 | 출처 표시 | 없음 | 모든 값에 `match` |
-| 지원 불가 조건 | `{type, raw, reason}` | + `polarity` |
+| 지원 불가 조건 | `{type, raw, reason}` | + `polarity`, `type`은 9개 닫힌 목록 ⏳ |
 | 카테고리 `major` | `null` 가능 | 항상 있음 (정하지 못한 카테고리는 `unsupported`) |
-| 성별 `raw` | `null` 가능 | 항상 원문 |
+| 성별 | `gender: {raw, value}` 하나 또는 `null` (`raw`는 `null` 가능), 포함만 | `gender: {include: [...], exclude: [...]}`, `raw` 항상 원문 ⏳ (G-3). trend로 넘길 때 포함 1개·제외 없음이면 그 값, 그 밖은 `null` + "반영되지 않은 조건" |
 | `style_names`·`item_terms`의 `value` | 문자열 또는 `null` | `null`만 (어휘 없음) |
 | 모르는 필드 | 무시 (pydantic 기본) | 거부 (`additionalProperties: false`) |
 
@@ -254,3 +279,5 @@ trend에 넘길 때의 변환(`to_trend_query()`)과 trend 쪽 계약 반영은 
 | 2026-11-10 | 초안: 필드 정의, `match` 정의, 제외 조건 정의(X3), 예시 4개, `TrendQuery`와의 차이 |
 | 2026-11-10 (2차) | Q3 = γ 확정 반영: 값이 정해지는 과정(§4.1)과 예 3의 단계별 표, 표준 목록과 별칭 사전(§4.2), 저장 범위(§4.4) |
 | 2026-11-10 (3차) | G-1·G-2 확정(§4.3). U1 구현 반영: 모델·JSON Schema 생성, `CategoryRef`는 `none` 없음·`major` 항상 있음, 상분류 전체는 `exact`만, 성별 `raw` 필수, `TermRef.value`는 `null`만, 시즌 raw/origin 규칙, 모든 필드 출력·모르는 필드 거부, §7에 좁히기 행 추가. U2 확인 반영: 성별 표 항목, 원피스 처리, 가방·신발 사유 구분 |
+| 2026-11-10 (4차) | 사용자 결정 반영(모델·스키마는 U3.5에서): **G-3** 성별 포함/제외 목록과 "고를 성별" 뜻("남성 말고" = 여·공용, "남녀" = 공용, 남+여 합치기), **OQ-3′** `unsupported.type` 9개 고정. §2·§3·§4·§4.3·§6 예·§7 갱신. 1.0은 아직 보낸 적이 없어 버전 유지 |
+| 2026-11-10 (5차) | 사용자 결정 반영(구현은 U3.5): **OQ-9′** 기장 칸 `body_length`·`sleeve_length`, **OQ-5′** "원피스" = 드레스, **OQ-8′** "숏패딩" = 패딩 + 기장 크롭·`item_terms`는 표준으로 못 나타내는 상품명만, **OQ-10′** 띄어 쓴 카테고리 단어는 각각. §2·§3·§4·§4.2·§4.3·§7 갱신 |
