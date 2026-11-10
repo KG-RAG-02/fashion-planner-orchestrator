@@ -71,6 +71,8 @@ class OrchestrationResult:
         if self.stopped_at:
             return "error"
         statuses = [record.status for record in self.stages]
+        if "error" in statuses:
+            return "error"
         if "partial" in statuses or "no_results" in statuses:
             return "partial"
         return "ok"
@@ -150,7 +152,7 @@ def _validate_response(
         raise ContractError(f"unexpected producer agent_id: {agent_id}")
     if not isinstance(version, str) or not version.strip():
         raise ContractError("producer schema_version is required")
-    if status not in VALID_STATUSES:
+    if not isinstance(status, str) or status not in VALID_STATUSES:
         raise ContractError("unsupported or missing response status")
     return agent_id, version, status
 
@@ -177,18 +179,46 @@ def _validate_stage_response(
     return _validate_response(response, request_id, expected_agent=expected_agent)
 
 
-def project_trend_result_for_p07(trend_result: Mapping[str, Any], request_id: str) -> dict[str, Any]:
-    """Make the P07 CLI's local 1.0 input projection without mutating trend raw output.
+def _unpack_handoff_response(
+    response: Mapping[str, Any], request_id: str, *, expected_agent: str,
+) -> tuple[Mapping[str, Any], str, str, str]:
+    """Validate a proposal HTTP envelope and expose its unchanged result body."""
+    if response.get("contract_version") != CONTRACT_VERSION:
+        raise ContractError("unsupported handoff contract_version")
+    producer = response.get("producer")
+    body = response.get("result")
+    if not isinstance(producer, Mapping) or not isinstance(body, Mapping):
+        raise ContractError("handoff envelope requires producer and object result")
+    if response.get("request_id") != request_id or body.get("request_id") != request_id:
+        raise ContractError("handoff envelope/result request_id mismatch")
+    agent_id = producer.get("agent_id")
+    version = producer.get("schema_version")
+    status = response.get("status")
+    if agent_id != expected_agent:
+        raise ContractError("unexpected handoff producer agent_id")
+    if not isinstance(version, str) or not version.strip():
+        raise ContractError("handoff producer schema_version is required")
+    if not isinstance(status, str) or status not in VALID_STATUSES:
+        raise ContractError("handoff envelope has unsupported status")
+    for field, envelope_value in (("agent_id", agent_id), ("schema_version", version), ("status", status)):
+        body_value = body.get(field)
+        if body_value is not None and body_value != envelope_value:
+            raise ContractError(f"handoff envelope/result {field} mismatch")
+    return body, agent_id, version, status
 
-    Trend Analysis Agent currently emits no schema_version. The added version labels
-    this P07 ingress projection only; StageRecord retains the producer response as-is.
+
+def prepare_trend_result_for_p07(trend_result: Mapping[str, Any], request_id: str) -> dict[str, Any]:
+    """Validate and copy TrendAnalysisResult for the in-process P07 adapter unchanged.
+
+    The P07 adapter calls MarketResearchAgent directly, not its CLI. Preserve the
+    producer's actual schema version instead of projecting it to the CLI's 1.0.
     """
     if trend_result.get("request_id") != request_id:
         raise ContractError("trend_result request_id mismatch")
     version = trend_result.get("schema_version")
-    if version is not None and version != P07_INPUT_SCHEMA_VERSION:
-        raise ContractError("P07 currently requires trend_result schema_version 1.0")
-    return {**trend_result, "schema_version": P07_INPUT_SCHEMA_VERSION}
+    if version is not None and (not isinstance(version, str) or not version.strip()):
+        raise ContractError("trend_result schema_version must be non-empty when present")
+    return dict(trend_result)
 
 
 class Orchestrator:
@@ -202,6 +232,7 @@ class Orchestrator:
         project_07: Adapter,
         project_06: Adapter,
         request_id_factory: Callable[[], str] | None = None,
+        continue_after_error: bool = False,
     ) -> None:
         self.adapters = {
             StageName.TREND: trend,
@@ -210,9 +241,10 @@ class Orchestrator:
             StageName.PROJECT_06: project_06,
         }
         self.request_id_factory = request_id_factory or (lambda: str(uuid.uuid4()))
+        self.continue_after_error = continue_after_error
 
     def run(self, query: str, *, request_id: str | None = None) -> OrchestrationResult:
-        rid = request_id or self.request_id_factory()
+        rid = request_id if request_id is not None else self.request_id_factory()
         if not isinstance(rid, str) or not rid.strip():
             raise ValueError("request_id must be non-empty")
         if not isinstance(query, str) or not query.strip():
@@ -229,9 +261,9 @@ class Orchestrator:
                 if stage == StageName.STOCK:
                     payload = shared.get("trend_result")
                 elif stage == StageName.PROJECT_07:
-                    trend_projection = project_trend_result_for_p07(shared["trend_result"], rid)
+                    p07_trend_input = prepare_trend_result_for_p07(shared["trend_result"], rid)
                     payload = {"request_id": rid, "planning_request": shared["planning_request"],
-                               "trend_result": trend_projection,
+                               "trend_result": p07_trend_input,
                                "inventory_product_result": shared.get("inventory_product_result")}
                 elif stage == StageName.PROJECT_06:
                     p07_raw = shared.get("sales_market_result")
@@ -261,38 +293,62 @@ class Orchestrator:
                     payload = stage_inputs[stage]
 
                 raw = self.adapters[stage](payload)
-                if stage == StageName.PROJECT_06:
-                    if not isinstance(raw, Mapping) or raw.get("request_id") != rid:
-                        raise ContractError("Project_06 response request_id mismatch")
-                    status = raw.get("status")
-                    if status not in VALID_STATUSES:
-                        raise ContractError("Project_06 response has unsupported status")
-                    agent_id, version = "project-06-planning-draft-api", None
-                elif stage == StageName.TREND:
-                    if not isinstance(raw, Mapping) or raw.get("request_id") != rid:
-                        raise ContractError("TrendAnalysisResult request_id mismatch")
-                    status = raw.get("status")
-                    if status not in TREND_STATUSES:
-                        raise ContractError("TrendAnalysisResult has unsupported status")
-                    agent_id, version = "trend-analysis-agent", None
-                else:
-                    expected_agent = "stock-agent" if stage == StageName.STOCK else "market-research-agent"
-                    agent_id, version, status = _validate_stage_response(
+                response_body = raw
+                envelope_metadata = None
+                if isinstance(raw, Mapping) and "contract_version" in raw:
+                    expected_agent = {
+                        StageName.TREND: "trend-analysis-agent",
+                        StageName.STOCK: "stock-agent",
+                        StageName.PROJECT_07: "market-research-agent",
+                        StageName.PROJECT_06: "new-product-agent",
+                    }[stage]
+                    response_body, envelope_agent, envelope_version, envelope_status = _unpack_handoff_response(
                         raw, rid, expected_agent=expected_agent,
                     )
+                    envelope_metadata = (envelope_agent, envelope_version, envelope_status)
+                if stage == StageName.PROJECT_06:
+                    if not isinstance(response_body, Mapping) or response_body.get("request_id") != rid:
+                        raise ContractError("Project_06 response request_id mismatch")
+                    status = envelope_metadata[2] if envelope_metadata else response_body.get("status")
+                    if not isinstance(status, str) or status not in VALID_STATUSES:
+                        raise ContractError("Project_06 response has unsupported status")
+                    agent_id, version = ((envelope_metadata[0], envelope_metadata[1]) if envelope_metadata
+                                         else ("project-06-planning-draft-api", None))
+                elif stage == StageName.TREND:
+                    if not isinstance(response_body, Mapping) or response_body.get("request_id") != rid:
+                        raise ContractError("TrendAnalysisResult request_id mismatch")
+                    status = envelope_metadata[2] if envelope_metadata else response_body.get("status")
+                    if not isinstance(status, str) or status not in TREND_STATUSES:
+                        raise ContractError("TrendAnalysisResult has unsupported status")
+                    # The producer has no agent_id; v1.1 adds schema_version.
+                    # Validate optional metadata without changing its raw response.
+                    agent_id = response_body.get("agent_id", envelope_metadata[0] if envelope_metadata else "trend-analysis-agent")
+                    version = response_body.get("schema_version", envelope_metadata[1] if envelope_metadata else None)
+                    if agent_id != "trend-analysis-agent":
+                        raise ContractError("unexpected trend producer agent_id")
+                    if version is not None and (not isinstance(version, str) or not version.strip()):
+                        raise ContractError("TrendAnalysisResult schema_version must be non-empty when present")
+                else:
+                    expected_agent = "stock-agent" if stage == StageName.STOCK else "market-research-agent"
+                    if envelope_metadata:
+                        agent_id, version, status = envelope_metadata
+                    else:
+                        agent_id, version, status = _validate_stage_response(
+                            response_body, rid, expected_agent=expected_agent,
+                        )
                 if stage == StageName.TREND:
                     planning_request = {"schema_version": P07_INPUT_SCHEMA_VERSION,
                                         "request_id": rid, "query": query}
                 record = StageRecord(stage, status, rid, agent_id, version, raw_response=raw)
                 result.stages.append(record)
-                if status == "error":
+                if status == "error" and not self.continue_after_error:
                     result.stopped_at = stage
                     break
                 if stage == StageName.TREND:
-                    shared["trend_result"] = raw
+                    shared["trend_result"] = response_body
                     shared["planning_request"] = planning_request
                 elif stage == StageName.STOCK:
-                    shared["inventory_product_result"] = raw
+                    shared["inventory_product_result"] = response_body
                 elif stage == StageName.PROJECT_07:
                     shared["sales_market_result"] = raw
             except Exception as exc:

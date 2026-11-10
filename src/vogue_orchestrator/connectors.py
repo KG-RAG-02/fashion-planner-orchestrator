@@ -72,6 +72,30 @@ def _post_json(url: str, payload: Mapping[str, Any]) -> Mapping[str, Any]:
     return value
 
 
+def proposal_http_adapter(base_url: str, route_agent_id: str) -> Adapter:
+    """Build an opt-in client for the unapproved HTTP handoff proposal.
+
+    The endpoint is POST /v1/agents/{route_agent_id}/runs. Agent-specific
+    request data remains under `input`; response envelope validation and raw
+    result preservation happen in the orchestration core.
+    """
+    if not route_agent_id or "/" in route_agent_id:
+        raise ConnectorConfigurationError("route_agent_id must be a single path segment")
+    url = _service_url({"AGENT_URL": base_url}, "AGENT_URL", f"/v1/agents/{route_agent_id}/runs")
+
+    def run(payload: dict[str, Any]) -> Mapping[str, Any]:
+        request_id = payload.get("request_id")
+        if not isinstance(request_id, str) or not request_id.strip():
+            raise ConnectorConfigurationError("proposal HTTP input requires request_id")
+        return _post_json(url, {
+            "contract_version": "vogue-handoff/0.1-proposal",
+            "request_id": request_id,
+            "input": payload,
+        })
+
+    return run
+
+
 def _load_callable(spec: str) -> Callable[[dict[str, Any]], Mapping[str, Any]]:
     module_name, separator, attribute = spec.partition(":")
     if not separator or not module_name or not attribute:
@@ -124,9 +148,10 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
     p06_url = env.get("VOGUE_PROJECT06_URL")
     trend_spec = env.get("VOGUE_TREND_ADAPTER")
     p07_source_spec = env.get("VOGUE_PROJECT07_SOURCE_ADAPTER")
+    p07_package_available = (p07_root / "src" / "market_research_agent").is_dir()
     return {
         "mode": "connected",
-        "ready": bool(trend_spec and stock_url and p06_url and p07_root.exists() and p07_source_spec),
+        "ready": bool(trend_spec and stock_url and p06_url and p07_package_available and p07_source_spec),
         "connectors": [
             {
                 "id": "trend", "name": "trend-analysis-agent",
@@ -141,16 +166,18 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
             },
             {
                 "id": "project_07", "name": "Project_07",
-                "configured": p07_root.exists() and bool(p07_source_spec),
-                "target": "local Python adapter" if p07_root.exists() else None,
+                "configured": p07_package_available and bool(p07_source_spec),
+                "target": "local Python adapter" if p07_package_available else None,
                 "source_configured": bool(p07_source_spec),
-                "detail": ("MarketResearchAgent를 로컬 호출합니다. source factory가 설정되어 있습니다." if p07_source_spec
-                           else "MarketResearchAgent를 로컬 호출합니다. source 미설정 시 no_results를 반환합니다."),
+                "detail": ("MarketResearchAgent를 로컬 호출합니다. source factory가 설정되어 있습니다."
+                           if p07_package_available and p07_source_spec else
+                           "MarketResearchAgent 경로 또는 source factory 설정이 필요합니다."),
             },
             {
                 "id": "project_06", "name": "Project_06",
                 "configured": bool(p06_url), "target": _safe_origin(p06_url),
-                "detail": "POST /api/planning-draft; Project_06 prototype endpoint.",
+                "detail": ("POST /api/planning-draft; request/trend/stock schema_version must match. "
+                           "Current trend 1.1 conflicts with PlanningRequest 1.0, so this run stops before P06."),
             },
         ],
     }
@@ -175,4 +202,34 @@ def build_connected_orchestrator(environ: Mapping[str, str] | None = None) -> Or
             p07_root, _load_callable(p07_source_spec) if p07_source_spec else None,
         ),
         project_06=lambda payload: _post_json(p06_url, payload),
+    )
+
+
+def build_proposal_http_orchestrator(environ: Mapping[str, str] | None = None) -> Orchestrator:
+    """Build four HTTP clients for the unapproved shared-envelope proposal.
+
+    This is opt-in scaffolding. It works only after each agent exposes the
+    proposed runs endpoint and accepts its own documented `input` payload.
+    It does not imply the agents currently support that endpoint.
+    """
+    env = environ or os.environ
+    endpoints = {
+        "VOGUE_TREND_AGENT_URL": "trend-analysis-agent",
+        "VOGUE_STOCK_AGENT_URL": "stock-agent",
+        "VOGUE_PROJECT07_AGENT_URL": "sales-market-agent",
+        "VOGUE_PROJECT06_AGENT_URL": "new-product-agent",
+    }
+    missing = [name for name in endpoints if not env.get(name)]
+    if missing:
+        raise ConnectorConfigurationError("HTTP agent base URLs are required: " + ", ".join(missing))
+    clients = {
+        agent_id: proposal_http_adapter(env[variable], agent_id)
+        for variable, agent_id in endpoints.items()
+    }
+    return Orchestrator(
+        trend=clients["trend-analysis-agent"],
+        stock=clients["stock-agent"],
+        project_07=clients["sales-market-agent"],
+        project_06=clients["new-product-agent"],
+        continue_after_error=True,
     )

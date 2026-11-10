@@ -11,11 +11,9 @@ def envelope(stage, producer, version="synthetic/0", status="ok", **extra):
 
 
 def trend(payload):
-    rid = payload["request_id"]
-    return envelope(payload, "trend-analysis-agent", "1.0", "partial",
-                    planning_request={"request_id": rid, "schema_version": "1.0", "query": payload["query"]},
-                    trend_result=envelope(payload, "trend-analysis-agent", "1.0", "partial",
-                                          findings=[], evidence=[], limitations=["합성 트렌드 fixture"]))
+    return {"request_id": payload["request_id"], "status": "no_results",
+            "applied_filters": None, "trends": [], "evidence": [],
+            "limitations": ["합성 트렌드 fixture: trend 서비스는 호출하지 않았습니다."]}
 
 
 def stock(payload):
