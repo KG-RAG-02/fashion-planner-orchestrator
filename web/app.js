@@ -56,11 +56,25 @@ function renderConnections(data) {
     return card;
   }));
   const ready = document.querySelector('#connections-ready');
-  ready.textContent = data?.ready ? '전체 설정 완료' : '일부 설정 필요';
+  if (!data?.configuration_complete) {
+    ready.textContent = '일부 설정 필요';
+  } else if (data?.known_blockers?.length) {
+    ready.textContent = `설정 입력 완료 · 미해결 호환 문제 ${data.known_blockers.length}건`;
+  } else {
+    ready.textContent = '설정 입력 완료 · 실연결 미검증';
+  }
   const targets = connectors.filter((item) => item.configured && item.target).map((item) => `${item.name} (${item.target})`);
   const destinationText = targets.length ? targets.join(', ') : '설정된 서비스가 없습니다';
   document.querySelector('#connected-consent-copy').textContent =
-    `요청과 앞 단계 결과를 ${destinationText}에 전송하는 것을 확인합니다. stock-agent 설정에 따라 트렌드 결과가 해당 서비스의 LLM 제공자에게도 전달될 수 있습니다.`;
+    `요청과 앞 단계 결과를 ${destinationText}에 전송하는 것을 확인합니다. Trend query와 P07 요청 scope는 아직 자동 구조화되지 않습니다. Project_07에는 미지정 geography/channel/period를 null로 전달하며, stock-agent 설정에 따라 trend 결과가 해당 서비스의 LLM 제공자에게도 전달될 수 있습니다.`;
+  const checkScope = [
+    `연결 상태는 ${data?.endpoint_health || 'not_checked'} (endpoint health), ` +
+      `${data?.contract_compatibility || 'not_verified'} (계약 호환), ` +
+      `${data?.source_permission || 'not_verified'} (자료 권한), ` +
+      `${data?.operational_approval || 'not_verified'} (운영 승인)입니다.`,
+    data?.readiness_note || '',
+  ].filter(Boolean).join(' ');
+  document.querySelector('.connections-footnote').textContent = checkScope;
 }
 
 async function loadConnectionStatus() {

@@ -201,6 +201,39 @@ class OrchestratorTests(unittest.TestCase):
         with self.assertRaises(ContractError):
             unwrap_p07_for_project06(bad, RID)
 
+    def test_p07_sibling_artifacts_are_recorded_but_not_sent_to_current_p06_input(self):
+        """Pin current behavior until P06/P07 owners approve an artifact input contract."""
+        seen = {}
+        body = {
+            "schema_version": "1.3-proposal", "request_id": RID,
+            "agent_id": "market-research-agent", "status": "partial",
+            "summary": "synthetic only", "findings": [], "evidence": [],
+            "limitations": ["Synthetic fixture only"], "errors": [],
+        }
+        artifacts = [{
+            "artifact_id": "synthetic-chart-001", "artifact_type": "chart",
+            "format": "image/svg+xml", "artifact_uri": "fixture://synthetic/chart.svg",
+            "sha256": "synthetic-hash", "synthetic": True,
+        }]
+        envelope = {
+            "contract_version": CONTRACT_VERSION, "request_id": RID,
+            "producer": {"agent_id": body["agent_id"], "schema_version": body["schema_version"]},
+            "status": body["status"], "result": body, "artifacts": artifacts,
+        }
+
+        def project06(payload):
+            seen["input"] = payload
+            return {"request_id": RID, "status": "partial", "draft": {}}
+
+        runner, _ = make_runner(p07=lambda payload: envelope, p06=project06)
+        result = runner.run("synthetic query", request_id=RID)
+
+        self.assertEqual(result.stages[2].raw_response, envelope)
+        self.assertEqual(result.stages[2].raw_response["artifacts"], artifacts)
+        self.assertEqual(seen["input"]["sales_market_result"], body)
+        self.assertNotIn("artifacts", seen["input"])
+        self.assertNotIn("sales_market_artifacts", seen["input"])
+
     def test_bad_p07_envelope_is_rejected_and_project06_is_not_called(self):
         body = p07_adapter({"request_id": RID})
         bad_envelope = {"contract_version": CONTRACT_VERSION, "request_id": "other-id",

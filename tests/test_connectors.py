@@ -3,7 +3,8 @@ import unittest
 from unittest.mock import patch
 
 from vogue_orchestrator.connectors import (
-    ConnectorConfigurationError, _service_url, connection_status, proposal_http_adapter,
+    ConnectorConfigurationError, _project07_context_fields, _service_url,
+    connection_status, proposal_http_adapter,
 )
 
 
@@ -25,7 +26,14 @@ class ConnectorConfigurationTests(unittest.TestCase):
         self.assertFalse(p07["source_configured"])
 
         status = connection_status({**self.base_env, "VOGUE_PROJECT07_SOURCE_ADAPTER": "sources:build"})
-        self.assertTrue(status["ready"])
+        self.assertTrue(status["configuration_complete"])
+        self.assertFalse(status["ready"])
+        self.assertTrue(any("Project_06" in blocker for blocker in status["known_blockers"]))
+        self.assertTrue(any("Trend runner" in blocker for blocker in status["known_blockers"]))
+        self.assertEqual(status["endpoint_health"], "not_checked")
+        self.assertEqual(status["contract_compatibility"], "not_verified")
+        self.assertEqual(status["source_permission"], "not_verified")
+        self.assertEqual(status["operational_approval"], "not_verified")
 
     def test_project07_checkout_must_contain_the_importable_package(self):
         env = {
@@ -37,6 +45,26 @@ class ConnectorConfigurationTests(unittest.TestCase):
         self.assertFalse(status["ready"])
         p07 = next(item for item in status["connectors"] if item["id"] == "project_07")
         self.assertFalse(p07["configured"])
+
+    def test_project07_scope_does_not_silently_inherit_geography_or_channel_defaults(self):
+        mapped = _project07_context_fields({
+            "query": "synthetic query mentions no scope",
+            "context": {"category": {"value": "synthetic category"}},
+        })
+        self.assertEqual(mapped["requested_category"], "synthetic category")
+        self.assertIsNone(mapped["requested_geography"])
+        self.assertIsNone(mapped["requested_channel"])
+        self.assertIsNone(mapped["requested_period"])
+        self.assertEqual(mapped["requested_query"], "synthetic query mentions no scope")
+
+    def test_project07_scope_mapper_does_not_parse_ambiguous_or_multiple_values(self):
+        mapped = _project07_context_fields({
+            "query": "synthetic query: KR or JP, online and store, maybe spring",
+            "context": {},
+        })
+        self.assertIsNone(mapped["requested_geography"])
+        self.assertIsNone(mapped["requested_channel"])
+        self.assertIsNone(mapped["requested_period"])
 
     def test_http_is_restricted_to_loopback(self):
         self.assertEqual(

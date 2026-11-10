@@ -11,6 +11,8 @@ Project_08은 VOGUE 중앙 오케스트레이션 계층의 실행 가능한 로�
 
 agent별 현재 구현과 fixture 기반 input/output은 [`docs/agent-io-contracts.md`](docs/agent-io-contracts.md)에, 필드를 채운 공통 HTTP 계약 초안은 [`docs/agent-io-contract-proposal.md`](docs/agent-io-contract-proposal.md)에 정리했습니다. 후자는 담당자 합의 전 제안입니다.
 
+현재 구현과 제안·미합의 사항의 차이, Project_07 결과 및 차트 artifact의 실제 handoff 경로, 담당자 합의 질문은 [`docs/integration-gap-analysis.md`](docs/integration-gap-analysis.md)에 기록했습니다. 특히 P07 envelope 전체는 실행 기록에 남지만 현행 P06 요청에는 `result`만 전달되고 sibling `artifacts`는 전달되지 않습니다.
+
 - 동기 순차 runner는 transport-neutral callable 어댑터를 받습니다. 현재 opt-in 연결은 trend의 사용자 callable, stock의 기존 HTTP API, Project_07 Python 인터페이스 직접 호출, Project_06의 기존 HTTP API를 사용합니다. 이는 확인된 저장소 인터페이스를 잇는 로컬 adapter 선택이며, 최종 배포 토폴로지나 공통 transport 결정을 뜻하지 않습니다.
 - 응답 원문을 복사·정규화하지 않고 `StageRecord.raw_response`로 보존합니다. request ID, producer ID, producer schema version, 상태 일치 여부는 별도 검증합니다.
 - P07에는 요청·trend·stock raw payload를 전달합니다. P07의 `1.3-proposal`을 포함한 제안 schema는 producer schema version으로만 기록하며 공통 계약 버전으로 사용하지 않습니다.
@@ -72,7 +74,7 @@ VOGUE_PROJECT06_URL=http://127.0.0.1:8766
 
 이 연결 방식은 저장소에서 확인된 인터페이스에 맞춘 것입니다. stock과 Project_06은 기존 HTTP endpoint를 사용하고, Project_07은 현재 Python `MarketResearchAgent` 진입점을 같은 프로세스에서 부릅니다. trend는 아직 API가 없어 callable adapter가 필요합니다. 각 저장소를 별도 서비스로 배포할지, transport를 표준화할지는 팀 결정이 남아 있습니다.
 
-연결 상태만 확인하려면 `http://127.0.0.1:8765/api/connections`를 엽니다. 이 endpoint는 env 설정과 Project_07 경로만 검사하며 service health 요청을 보내지 않습니다. CONNECTED 모드는 필수 adapter/endpoint가 모두 설정된 경우에만 시작하고, 화면에서 보이는 대상 확인 checkbox를 누른 뒤 실행합니다.
+연결 상태만 확인하려면 `http://127.0.0.1:8765/api/connections`를 엽니다. 이 endpoint는 env 설정과 Project_07 경로만 검사하며 service health 요청을 보내지 않습니다. `configuration_complete`는 필수 설정값 존재 여부이고, `ready`는 알려진 로컬 차단 사유가 없는지 나타냅니다. 현재 Trend query 구조화/provider 미연결과 Project_06의 Trend `1.1` 대 PlanningRequest/Stock `1.0` 버전 gate가 알려진 blocker이므로 설정값을 모두 넣어도 파이프라인 완결 준비 상태가 아닙니다. `endpoint_health`, `contract_compatibility`, `source_permission`, `operational_approval`은 별도로 확인되지 않음으로 표시합니다. 연결 실행 전 화면은 대상과 scope 자동 추출 미지원 사실을 알리고 명시 동의를 요구합니다. Project_07의 geography/channel/period가 없으면 해당 필드는 null이며 KR/online으로 추정하지 않습니다.
 
 다른 로컬 sibling checkout이 있을 때 synthetic trend/stock fixture와 실제 Project_07 코드, Project_06 HTTP handler를 연결하는 검증:
 

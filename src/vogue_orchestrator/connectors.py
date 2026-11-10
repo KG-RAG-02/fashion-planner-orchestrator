@@ -120,17 +120,12 @@ def _project07_adapter(root: Path, source_factory: Callable[[], Any] | None = No
 
     def run(payload: dict[str, Any]) -> Mapping[str, Any]:
         request = payload["planning_request"]
-        context_data = request.get("context") if isinstance(request.get("context"), dict) else {}
-        category = context_data.get("category")
-        if isinstance(category, dict):
-            category = category.get("value")
         context = MarketResearchContext(
             request_id=payload["request_id"],
             planning_request=request,
             trend_result=payload.get("trend_result"),
             inventory_product_result=payload.get("inventory_product_result"),
-            requested_category=category if isinstance(category, str) else None,
-            requested_query=request.get("query") if isinstance(request.get("query"), str) else None,
+            **_project07_context_fields(request),
         )
         # A source is opt-in. Without one, Project_07 safely returns no_results.
         source = source_factory() if source_factory else None
@@ -138,6 +133,23 @@ def _project07_adapter(root: Path, source_factory: Callable[[], Any] | None = No
         return result
 
     return run
+
+
+def _project07_context_fields(request: Mapping[str, Any]) -> dict[str, Any]:
+    """Map only explicit context fields; never infer market scope from raw query."""
+    context_data = request.get("context") if isinstance(request.get("context"), dict) else {}
+    category = context_data.get("category")
+    if isinstance(category, dict):
+        category = category.get("value")
+    # Explicit nulls suppress Project_07's KR/online dataclass defaults until
+    # scope extraction and missing-scope behavior are agreed by the owners.
+    return {
+        "requested_category": category if isinstance(category, str) else None,
+        "requested_geography": None,
+        "requested_channel": None,
+        "requested_query": request.get("query") if isinstance(request.get("query"), str) else None,
+        "requested_period": None,
+    }
 
 
 def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any]:
@@ -149,9 +161,21 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
     trend_spec = env.get("VOGUE_TREND_ADAPTER")
     p07_source_spec = env.get("VOGUE_PROJECT07_SOURCE_ADAPTER")
     p07_package_available = (p07_root / "src" / "market_research_agent").is_dir()
+    configuration_complete = bool(trend_spec and stock_url and p06_url and p07_package_available and p07_source_spec)
+    known_blockers = [
+        "Trend runner input is the temporary {request_id, query} adapter shape; the TrendQuery structuring module has no approved provider and is not connected to the runner.",
+        "Project_06 currently requires the planning request, trend, and stock schema versions to match; the orchestrator emits request/stock 1.0 while the current Trend result is 1.1. The pipeline can reach Project_06 but that call is rejected until owner-approved compatibility support exists."
+    ]
     return {
         "mode": "connected",
-        "ready": bool(trend_spec and stock_url and p06_url and p07_package_available and p07_source_spec),
+        "configuration_complete": configuration_complete,
+        "ready": configuration_complete and not known_blockers,
+        "known_blockers": known_blockers,
+        "endpoint_health": "not_checked",
+        "contract_compatibility": "not_verified",
+        "source_permission": "not_verified",
+        "operational_approval": "not_verified",
+        "readiness_note": "Readiness checks configuration presence and known local blockers only; they do not perform live health or schema negotiation.",
         "connectors": [
             {
                 "id": "trend", "name": "trend-analysis-agent",
@@ -169,9 +193,9 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
                 "configured": p07_package_available and bool(p07_source_spec),
                 "target": "local Python adapter" if p07_package_available else None,
                 "source_configured": bool(p07_source_spec),
-                "detail": ("MarketResearchAgent를 로컬 호출합니다. source factory가 설정되어 있습니다."
+                "detail": ("MarketResearchAgent를 로컬 호출합니다. 미지정 geography/channel/period는 None으로 전달하며, 사용자 질의로 추론하지 않습니다. source factory가 설정되어 있습니다."
                            if p07_package_available and p07_source_spec else
-                           "MarketResearchAgent 경로 또는 source factory 설정이 필요합니다."),
+                           "MarketResearchAgent 경로 또는 source factory 설정이 필요합니다. 미지정 geography/channel/period를 임의 기본값으로 채우지 않습니다."),
             },
             {
                 "id": "project_06", "name": "Project_06",
