@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import mimetypes
+import os
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -14,6 +16,7 @@ from .demo import build_demo_orchestrator
 from .connectors import (
     ConnectorConfigurationError,
     build_connected_orchestrator,
+    build_v01_http_orchestrator,
     connection_status,
 )
 from .llm_provider import LLMConfigurationError, build_draft_provider, llm_status, load_settings
@@ -22,6 +25,8 @@ from .llm_provider import LLMConfigurationError, build_draft_provider, llm_statu
 WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
 MAX_BODY_BYTES = 32_000
 MAX_QUERY_CHARS = 1_000
+MAX_REQUEST_ID_CHARS = 128
+MAX_SCOPE_FIELDS = {"season", "category", "market", "geography", "channel", "period"}
 
 
 ProviderFactory = Callable[[], tuple[Callable[[Any], Any], dict[str, Any]]]
@@ -137,46 +142,109 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
         self._send(200, target.read_bytes(), content_type)
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path != "/api/run":
+        path = urlparse(self.path).path
+        if path not in {"/api/run", "/v1/orchestrations"}:
             self._json(404, {"error": "not_found"})
             return
+        public_api = path == "/v1/orchestrations"
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > MAX_BODY_BYTES:
                 raise ValueError("요청 크기를 확인해 주세요.")
             value = json.loads(self.rfile.read(length))
-            query = value.get("query") if isinstance(value, dict) else None
-            mode = value.get("mode", "demo") if isinstance(value, dict) else "demo"
-            structure = value.get("structure", False) if isinstance(value, dict) else False
+            if public_api:
+                if not isinstance(value, dict):
+                    raise ValueError("요청 본문은 JSON 객체여야 합니다.")
+                input_value = value.get("input")
+                if not isinstance(input_value, dict):
+                    raise ValueError("input 객체가 필요합니다.")
+                query = input_value.get("original_query")
+                request_id = value.get("request_id")
+                scope = input_value.get("scope", {})
+                trend_query = input_value.get("trend_query")
+                if trend_query is not None and not isinstance(trend_query, dict):
+                    raise ValueError("trend_query는 객체여야 합니다.")
+                if trend_query is not None:
+                    if trend_query.get("request_id") != request_id:
+                        raise ValueError("trend_query.request_id는 request_id와 같아야 합니다.")
+                    if trend_query.get("original_query") != query:
+                        raise ValueError("trend_query.original_query는 original_query와 같아야 합니다.")
+                mode = value.get("mode", "demo")
+                if request_id is not None and (not isinstance(request_id, str) or not request_id.strip()
+                                               or len(request_id) > MAX_REQUEST_ID_CHARS):
+                    raise ValueError("request_id는 1~128자의 문자열이어야 합니다.")
+                if not isinstance(scope, dict) or set(scope) - MAX_SCOPE_FIELDS:
+                    raise ValueError("scope는 허용된 범위 필드만 포함하는 객체여야 합니다.")
+                scope = _validate_scope(scope)
+                structure = False
+            else:
+                query = value.get("query") if isinstance(value, dict) else None
+                request_id = None
+                scope = {}
+                trend_query = None
+                mode = value.get("mode", "demo") if isinstance(value, dict) else "demo"
+                # UI only: run 00 query structuring (external LLM) when the user ticked the consent box.
+                structure = value.get("structure", False) if isinstance(value, dict) else False
             if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
                 raise ValueError(f"쿼리는 1~{MAX_QUERY_CHARS}자로 입력해 주세요.")
-            if mode not in {"demo", "connected"}:
+            if mode not in {"demo", "connected", "agent_http_v01"}:
                 raise ValueError("지원하지 않는 실행 모드입니다.")
+            if not public_api and mode == "agent_http_v01":
+                raise ValueError("agent_http_v01은 POST /v1/orchestrations에서만 호출할 수 있습니다.")
             if not isinstance(structure, bool):
                 raise ValueError("structure 값은 true/false여야 합니다.")
         except (ValueError, json.JSONDecodeError) as exc:
-            self._json(400, {"error": str(exc)})
+            self._json(400, {"error": "invalid_request", "message": str(exc)})
             return
         try:
-            orchestrator = build_connected_orchestrator() if mode == "connected" else build_demo_orchestrator()
-            request_id = str(uuid.uuid4())
-            # 00 query structuring (in-process call of the query module), then the existing pipeline
-            # with the same request_id. The structured query is added to the output only.
-            structuring = structure_query_for_ui(query.strip(), request_id, enabled=structure)
-            execution = orchestrator.run(query.strip(), request_id=request_id)
-            payload = execution.to_dict()
-            payload["query_structuring"] = structuring
-            self._json(200, payload)
+            if mode == "connected":
+                orchestrator = build_connected_orchestrator()
+            elif mode == "agent_http_v01":
+                if not public_api:
+                    raise ValueError("agent_http_v01은 POST /v1/orchestrations에서만 호출할 수 있습니다.")
+                orchestrator = build_v01_http_orchestrator()
+            else:
+                orchestrator = build_demo_orchestrator()
+            structuring = None
+            if not public_api:
+                # UI: 00 query structuring (in-process call of the query module) first, then the
+                # pipeline with the same request_id. The structured query is added to the output only
+                # (not sent to the trend stage; docs/query-decisions.md UI-1).
+                request_id = str(uuid.uuid4())
+                structuring = structure_query_for_ui(query.strip(), request_id, enabled=structure)
+            run_options: dict[str, Any] = {"request_id": request_id, "scope": scope}
+            if mode == "agent_http_v01":
+                run_options["trend_query"] = trend_query
+            execution = orchestrator.run(query.strip(), **run_options)
+            result = execution.to_dict()
+            if public_api:
+                result["input"] = {"original_query": query.strip(), "scope": scope}
+                fingerprint = json.dumps({"request_id": execution.request_id, "input": result["input"]},
+                                         sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+                result["run_id"] = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+                last = execution.stages[-1].raw_response if execution.stages else None
+                if isinstance(last, dict) and isinstance(last.get("result"), dict):
+                    last = last["result"]
+                if isinstance(last, dict):
+                    result["final_result"] = last.get("draft")
+                self._json(200 if result["status"] != "error" else 502, result)
+            else:
+                result["query_structuring"] = structuring
+                self._json(200, result)
         except ConnectorConfigurationError as exc:
             self._json(409, {"error": "connectors_not_ready", "message": str(exc), "connections": connection_status()})
+        except ValueError as exc:
+            self._json(400, {"error": "invalid_request", "message": str(exc)})
         except Exception:
             # Avoid returning adapter exception text or query-bearing tracebacks to the UI.
             self._json(500, {"error": "pipeline_failed", "message": "파이프라인 실행에 실패했습니다."})
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
-    if host not in {"127.0.0.1", "localhost"}:
-        raise ValueError("The demo server may only bind to loopback.")
+    host = os.environ.get("VOGUE_ORCHESTRATOR_HOST", host)
+    port = int(os.environ.get("VOGUE_ORCHESTRATOR_PORT", str(port)))
+    if host not in {"127.0.0.1", "localhost"} and os.environ.get("VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND") != "1":
+        raise ValueError("Binding outside loopback requires VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND=1.")
     server = ThreadingHTTPServer((host, port), OrchestratorHandler)
     print(f"VOGUE synthetic demo UI: http://{host}:{port}")
     try:
@@ -185,3 +253,25 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
         print("\nStopping VOGUE demo UI.")
     finally:
         server.server_close()
+
+
+def _validate_scope(scope: dict[str, object]) -> dict[str, object]:
+    """Accept only explicit bounded scope values; never infer them from query text."""
+    validated: dict[str, object] = {}
+    for field, value in scope.items():
+        values = value if isinstance(value, list) else [value]
+        if not values or len(values) > 10:
+            raise ValueError(f"scope.{field}는 1~10개 값이어야 합니다.")
+        normalized = []
+        for item in values:
+            if isinstance(item, str):
+                item = {"value": item, "origin": "user_requested"}
+            if not isinstance(item, dict) or set(item) - {"value", "origin"}:
+                raise ValueError(f"scope.{field} 항목은 value와 origin만 포함해야 합니다.")
+            if not isinstance(item.get("value"), str) or not item["value"].strip() or len(item["value"]) > 120:
+                raise ValueError(f"scope.{field}.value는 1~120자의 문자열이어야 합니다.")
+            if item.get("origin", "user_requested") not in {"user_requested", "unknown"}:
+                raise ValueError(f"scope.{field}.origin은 user_requested 또는 unknown이어야 합니다.")
+            normalized.append({"value": item["value"].strip(), "origin": item.get("origin", "user_requested")})
+        validated[field] = normalized if isinstance(value, list) else normalized[0]
+    return validated

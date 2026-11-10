@@ -122,9 +122,9 @@
 ### 4.2 다른 저장소·문서
 | 대상 | 무엇에 의존 | 어디서 | 바뀌면 |
 |---|---|---|---|
-| trend-analysis-agent | 표준 어휘 (`docs/contracts/trend-query.contract.json`, 원본 `origin/main@4196bc460876`) | `vocabulary.py` → 모델(`models.py`·`trend_query.py`)·프롬프트·resolver | 스냅샷 갱신 → `generate_query_vocabulary.py` → 테스트 (`docs/query-structuring.md` §9) |
+| trend-analysis-agent | 표준 어휘 (`contracts/trend-query.contract.json`, 원본 `origin/main@4196bc460876`) | `vocabulary.py` → 모델(`models.py`·`trend_query.py`)·프롬프트·resolver | 스냅샷 갱신 → `generate_query_vocabulary.py` → 테스트 (`docs/query-structuring.md` §9) |
 | trend-analysis-agent | `TrendQuery` 형식 (같은 스냅샷) | `trend_query.py` (v1 실행 경로, 나중의 `to_trend_query()`) | 같은 절차, `test_query_trend_query.py`가 차이를 알려 줌 |
-| trend-analysis-agent | 별칭 사전 (`docs/contracts/alias-map.snapshot.json`, 원본 `feature/extraction-prompt-experiments@7b525c4`) | `alias_data.py` → `lexicon.py` → `resolve.py` | trend `.venv`로 `export_alias_snapshot.py` → 테스트 ([contracts/alias-map.md](../docs/contracts/alias-map.md)) |
+| trend-analysis-agent | 별칭 사전 (`contracts/alias-map.snapshot.json`, 원본 `feature/extraction-prompt-experiments@7b525c4`) | `alias_data.py` → `lexicon.py` → `resolve.py` | trend `.venv`로 `export_alias_snapshot.py` → 테스트 ([contracts/alias-map.md](../contracts/alias-map.md)) |
 | trend-analysis-agent | `TrendAnalysisResult` 형태 (`request_id`, status 3종 등) | core의 trend 단계 검증 | core 수정 필요 |
 | trend-analysis-agent | 호출 진입점 | 아직 없음 (`TrendSearcher.search` 함수만, D3) | connectors에 연결 방식 추가 |
 | stock-agent | `POST /v1/inventory-products`, 응답 필드·`agent_id` | connectors, core | connectors·core 수정 |
@@ -149,7 +149,7 @@
 ```
 core ◄── connectors ◄── server ──► demo          (기존, 표준 라이브러리만)
                                                서로 import하지 않음 (tests/test_query_isolation.py)
-query ──► configs/, prompts/, vocabulary.py·alias_data.py ◄── docs/contracts/ (생성 스크립트)   (모델·draft는 pydantic)
+query ──► configs/, prompts/, vocabulary.py·alias_data.py ◄── contracts/ (생성 스크립트)   (모델·draft는 pydantic)
   resolve.py ──► lexicon.py ──► alias_data.py   (표준 라이브러리만)
 ```
 
@@ -162,6 +162,6 @@ query ──► configs/, prompts/, vocabulary.py·alias_data.py ◄── docs/
 | F-4 | ~~`examples/synthetic_demo.py`가 trend 단계에서 계약 오류로 멈춘다~~ | **해결됨**: 팀원 커밋 `325a87e`(2026-11-10)가 합성 trend 응답을 `no_results`로 고침 | — |
 | F-5 | 서버 포트 8765와 Project_06 기본 포트가 겹친다 (README에 이미 기재) | 동시 실행 불가 | 포트를 설정으로 노출 |
 | F-6 | 외부 호출 timeout이 없다 (미결정 사항) | 응답 없는 서비스에서 무한 대기 가능 | 운영 합의 후 설정으로 노출 |
-| F-7 | `tests/test_connectors.py`(팀원 커밋 `325a87e`)는 작업 공간에 `project_07` 폴더가 있다고 가정한다. 이 PC에는 없어 `test_project07_source_factory_is_required_for_ready_status`가 실패한다 (F-3과 같은 원인, 질의 모듈과 무관) | 이 PC에서 전체 테스트(현재 211개) 중 1개 실패 | `project_07` checkout을 두거나, 테스트가 없는 경로를 건너뛰게 담당자와 조율 |
+| F-7 | `tests/test_connectors.py`(팀원 커밋 `325a87e`)는 작업 공간에 `project_07` 폴더가 있다고 가정한다. 이 PC에는 없어 `test_project07_source_factory_is_required_for_ready_status`와 (2026-11-10 `main` 병합 후) `test_readiness_separates_mixed_connectors_from_http_v01`가 실패한다(병합 전 `main`에서도 같음) (F-3과 같은 원인, 질의 모듈과 무관) | 이 PC에서 전체 테스트(현재 233개) 중 2개 실패 | `project_07` checkout을 두거나, 테스트가 없는 경로를 건너뛰게 담당자와 조율 |
 
 > 참고: 이 문서의 §3 목록은 2026-11-09 코드 기준이다. 팀원 커밋 `325a87e`(proposal HTTP adapter, `VOGUE_PROJECT07_SOURCE_ADAPTER` 등)로 바뀐 core·connectors의 값은 반영하지 않았다.

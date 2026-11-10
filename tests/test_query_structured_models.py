@@ -1,5 +1,5 @@
 """StructuredQuery 1.0 model: contract examples, validation rules, JSON Schema export, and the
-intended differences from trend's TrendQuery snapshot (docs/contracts/structured-query.md)."""
+intended differences from trend's TrendQuery snapshot (contracts/structured-query.md)."""
 
 import copy
 import importlib
@@ -11,7 +11,7 @@ from datetime import date
 from _query_support import HAS_PYDANTIC, ROOT, SKIP_REASON, SNAPSHOT_PATH, load_snapshot
 from vogue_orchestrator.query import vocabulary as vocab
 
-SCHEMA_PATH = ROOT / "docs" / "contracts" / "structured-query.schema.json"
+SCHEMA_PATH = ROOT / "contracts" / "structured-query.schema.json"
 HAS_JSONSCHEMA = importlib.util.find_spec("jsonschema") is not None
 
 EMPTY_ATTRIBUTES = {"color": [], "material": [], "pattern": [], "detail": [], "fit": []}

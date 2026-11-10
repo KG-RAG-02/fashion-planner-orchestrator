@@ -1,12 +1,12 @@
 # 질의 구조화 모듈 — 구현 문서 (LLM 호출 전 단계)
 
 > 상태: **1차 구현 완료 (2026-11-09). 2026-11-10 다음 설계의 부품(U1~U3: `StructuredQuery` 모델, 값 확정 `resolve.py`, LLM 출력 v2·프롬프트 v2) 추가, 실행 흐름 연결(U4)은 아직. 2026-11-10 UI 연결과 실제 LLM 호출(프롬프트 v1) 확인(§13). trend 단계로의 전달은 아직 없다.**
-> 설계·결정 배경은 [query-preprocessing.md](query-preprocessing.md). **지금 코드의 출력 계약**은 trend 형식 스냅샷 [contracts/trend-query.md](contracts/trend-query.md)(`TrendQuery`)이고, **확정된 다음 계약**은 [contracts/structured-query.md](contracts/structured-query.md)(`StructuredQuery` 1.0, 이 저장소 소유)다. 이 문서는 **무엇이 구현됐고 어떻게 이어서 작업하는지**를 다룬다.
+> 설계·결정 배경은 [query-preprocessing.md](query-preprocessing.md). **지금 코드의 출력 계약**은 trend 형식 스냅샷 [contracts/trend-query.md](../contracts/trend-query.md)(`TrendQuery`)이고, **확정된 다음 계약**은 [contracts/structured-query.md](../contracts/structured-query.md)(`StructuredQuery` 1.0, 이 저장소 소유)다. 이 문서는 **무엇이 구현됐고 어떻게 이어서 작업하는지**를 다룬다.
 
 ## 0. 새로 이어받는 사람을 위한 시작 순서
-0. **[query-decisions.md](query-decisions.md)를 먼저 읽는다.** 사용자와 합의한 결정·작업 규칙·별칭 사전 정책이 있고, 다른 문서와 다르면 그 문서가 우선이다. **이 문서는 지금 코드를 설명한다: 실행 흐름은 여전히 v1(LLM이 값을 고르는 방식 → `TrendQuery`)이고, 다음 설계의 부품(U1~U3)은 만들어졌지만 아직 실행 흐름에 연결되지 않았다(§3 표의 "미연결").** 확정된 다음 설계(`StructuredQuery` 1.0 + γ)는 [contracts/structured-query.md](contracts/structured-query.md)(받는 쪽용 정의서)와 [structured-query-plan.md](structured-query-plan.md)(구현 계획)에 있다.
+0. **[query-decisions.md](query-decisions.md)를 먼저 읽는다.** 사용자와 합의한 결정·작업 규칙·별칭 사전 정책이 있고, 다른 문서와 다르면 그 문서가 우선이다. **이 문서는 지금 코드를 설명한다: 실행 흐름은 여전히 v1(LLM이 값을 고르는 방식 → `TrendQuery`)이고, 다음 설계의 부품(U1~U3)은 만들어졌지만 아직 실행 흐름에 연결되지 않았다(§3 표의 "미연결").** 확정된 다음 설계(`StructuredQuery` 1.0 + γ)는 [contracts/structured-query.md](../contracts/structured-query.md)(받는 쪽용 정의서)와 [structured-query-plan.md](structured-query-plan.md)(구현 계획)에 있다.
 1. 이 문서 §1~§3을 읽는다 (무엇을, 어디에, 어떤 흐름으로).
-2. 테스트를 돌려 현재 상태를 확인한다 (§8). 기대값: **질의 테스트 176개 통과**. 저장소 전체는 211개(LLM 호출·UI 연결 15개 포함)이며, 이 PC에서는 `test_connectors.py` 1개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7).
+2. 테스트를 돌려 현재 상태를 확인한다 (§8). 기대값: **질의 테스트 176개 통과**. 저장소 전체는 233개(LLM 호출·UI 연결 15개, 팀원 테스트 포함)이며, 이 PC에서는 `test_connectors.py` 2개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7).
 3. 결과를 눈으로 본다: `examples/query_structuring_demo.py` (§8).
 4. 프롬프트는 [`prompts/`](../prompts/README.md), 설정과 하드코딩 목록은 [`configs/`](../configs/README.md), 예상 질의 30개는 [`data/`](../data/README.md)에 있다.
 5. **다음 할 일과 결정 대기 목록의 기준은 [query-decisions.md §0·§6](query-decisions.md)이다** (이 문서 §10은 요약). 확인이 필요한 가정은 §6이다. **§6의 가정을 바꾸려면 사용자(소유자) 확인이 먼저다.**
@@ -56,7 +56,7 @@ QueryStructuringResult {trend_query, draft, warnings, prompt_version}  → trend
 | `vocabulary.py` | **생성 파일 (직접 수정 금지).** 표준 어휘 상수와 출처(커밋·해시) | `SEASONS`, `GENDERS`, `CATEGORY_MAJOR`(4), `CATEGORY_MINOR`(21), `CATEGORY_MINOR_TO_MAJOR`, `ATTRIBUTE_TYPES`(5), `ATTRIBUTE_VALUES`(21/26/19/61/7), `PROVENANCE` | ○ |
 | `season.py` | 다음 패션 시즌 계산, 연도 없는 시즌의 연도 결정(가정 A-1) | `next_fashion_season`, `resolve_season_year` | ○ |
 | `errors.py` | 오류 코드와 고정 메시지 | `QueryStructuringError`, `INPUT_INVALID` 등 5개 | ○ |
-| `models.py` | **다음 출력 계약** `StructuredQuery` 1.0 (이 저장소 소유, Y1. 정의서 [contracts/structured-query.md](contracts/structured-query.md)). 속성 종류마다 허용 값이 걸린 참조 타입. **미연결** (U4) | `StructuredQuery`, `CategoryRef`, `GenderRef`, `AttributeRef`·`ColorRef`…`FitRef`, `ATTRIBUTE_REF_TYPES`, `export_json_schema`, `SCHEMA_VERSION` | ⚙ |
+| `models.py` | **다음 출력 계약** `StructuredQuery` 1.0 (이 저장소 소유, Y1. 정의서 [contracts/structured-query.md](../contracts/structured-query.md)). 속성 종류마다 허용 값이 걸린 참조 타입. **미연결** (U4) | `StructuredQuery`, `CategoryRef`, `GenderRef`, `AttributeRef`·`ColorRef`…`FitRef`, `ATTRIBUTE_REF_TYPES`, `export_json_schema`, `SCHEMA_VERSION` | ⚙ |
 | `trend_query.py` | **지금 실행 흐름의 출력 계약** `TrendQuery` (trend 스냅샷과 같은 필드·검증 규칙). v1 조립 경로와 나중의 `to_trend_query()`용으로 보관 (2026-11-10 `models.py`에서 이름만 옮김) | `TrendQuery`, `SeasonRequest`, `CategoryRef`, `RequestedAttribute` … | ⚙ |
 | `legacy_v1.py` | **보관** draft v1: 프롬프트 v1에서 LLM이 반환하는 중간 스키마(LLM이 값까지 고름). 지금의 실행 경로(`assemble.py`·`structure.py`)와 v1 자산(프롬프트 v1 예시, `data/user_queries.v1.json`) 검증용. 연도 범위는 설정에서. v1 자산 정리 때 삭제 | `QueryDraft`, `DraftSeason`, `DraftCategory`, `DRAFT_FORMAT` … | ⚙ |
 | `draft.py` | **draft v2**: 프롬프트 v2에서 LLM이 반환할 형식 (조건 표현·종류·포함/제외·표준 목록 안 제안 값). 모양만 검증하고 제안 값의 표준 목록 확인은 resolver가 한다. **미연결** (U4) | `QueryDraft`, `DraftCondition`, `DraftUnsupported`, `DraftSeason`, `DRAFT_FORMAT`, `CONDITION_KINDS`, `UNSUPPORTED_TYPES` | ⚙ |
@@ -78,11 +78,11 @@ QueryStructuringResult {trend_query, draft, warnings, prompt_version}  → trend
 | `data/user_queries.v1.json` | 예상 사용자 질의 30개와 기대 draft (silver). 설명은 [data/README.md](../data/README.md) |
 | `scripts/generate_query_vocabulary.py` | 스냅샷 JSON → `vocabulary.py` 생성. `--check`로 최신 여부만 확인 |
 | `scripts/render_query_prompt.py` | 템플릿 → `rendered_system.md` 생성. `--check`로 최신 여부만 확인 |
-| `scripts/export_alias_snapshot.py` | **trend `.venv`로 실행**(`--trend-repo` 경로). trend 사전 YAML → `docs/contracts/alias-map.snapshot.json`, 원본 코드 출력 `alias-map.golden.json`, `alias_data.py`를 함께 생성. `--check` 있음. trend HEAD가 바뀌면 사전이 같아도 출처가 달라져 `--check`가 1을 낸다 |
+| `scripts/export_alias_snapshot.py` | **trend `.venv`로 실행**(`--trend-repo` 경로). trend 사전 YAML → `contracts/alias-map.snapshot.json`, 원본 코드 출력 `alias-map.golden.json`, `alias_data.py`를 함께 생성. `--check` 있음. trend HEAD가 바뀌면 사전이 같아도 출처가 달라져 `--check`가 1을 낸다 |
 | `scripts/generate_alias_data.py` | 표준 라이브러리만으로 스냅샷 → `alias_data.py` 재생성(해시 검증 포함). `--check` 있음 |
-| `scripts/export_structured_query_schema.py` | `models.py` → `docs/contracts/structured-query.schema.json` 생성(받는 쪽에 줄 JSON Schema). `--check` 있음. pydantic 버전이 바뀌면 출력이 달라질 수 있다(생성: 2.14.3) |
-| `docs/contracts/structured-query.schema.json` | **생성 파일 (직접 수정 금지).** `StructuredQuery` 1.0 JSON Schema (draft 2020-12, 모든 필드 required, 모르는 필드 거부) |
-| `docs/contracts/alias-map.*` | 별칭 사전 스냅샷과 golden(원본 출력 약 1.1MB), 설명 [alias-map.md](contracts/alias-map.md) (원본 동작 중 이상해 보이는 것 목록 포함) |
+| `scripts/export_structured_query_schema.py` | `models.py` → `contracts/structured-query.schema.json` 생성(받는 쪽에 줄 JSON Schema). `--check` 있음. pydantic 버전이 바뀌면 출력이 달라질 수 있다(생성: 2.14.3) |
+| `contracts/structured-query.schema.json` | **생성 파일 (직접 수정 금지).** `StructuredQuery` 1.0 JSON Schema (draft 2020-12, 모든 필드 required, 모르는 필드 거부) |
+| `contracts/alias-map.*` | 별칭 사전 스냅샷과 golden(원본 출력 약 1.1MB), 설명 [alias-map.md](../contracts/alias-map.md) (원본 동작 중 이상해 보이는 것 목록 포함) |
 | `examples/fixtures/query/*.synthetic.json` | 합성 사례 6개: `{case, description, today, request_id, query, draft, expected_warnings, expected_trend_query}`. 기대값은 계약 규칙을 보고 **손으로** 썼다 |
 | `examples/query_structuring_demo.py` | 사례 요약·상세 출력, 프롬프트 출력 |
 | `tests/_query_support.py`, `tests/test_query_*.py` | 공용 경로 + 12개 파일, 176개 테스트 (§8) |
@@ -267,10 +267,10 @@ Windows PowerShell: `$env:PYTHONPATH="src"; py -m unittest discover -s tests -v`
 | `test_query_isolation.py` | 5 | §7 불변 조건 (소스 정적 검사) | 불필요 |
 | `test_query_lexicon.py` | 25 | `alias_data.py`가 스냅샷 생성 결과와 같음, 해시·출처, **golden 전부 일치**(normalize 11,369건, normalize_tokens 822, normalize_color 2,027, split_tokens 134, norm_key 632), 직접 확인 13건 | 불필요 |
 
-2026-11-10 결과: **질의 테스트 176개 통과** (pydantic 2.14.3; U1~U3 전 88개). 저장소 전체는 211개(`test_llm_provider.py` 10, `test_ui_query_structuring.py` 5 포함)이고, 이 PC에서는 그중 `test_connectors.py` 1개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7). 질의 테스트만 돌리려면 `-p "test_query_*.py"`. JSON Schema 비교·생성기 검사는 값 하나를 바꾸면 실패하는 것을 확인했다.
+2026-11-10 결과: **질의 테스트 176개 통과** (pydantic 2.14.3; U1~U3 전 88개). 저장소 전체는 233개(`test_llm_provider.py` 10, `test_ui_query_structuring.py` 5, 팀원 테스트 포함)이고, 이 PC에서는 그중 `test_connectors.py` 1개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7). 질의 테스트만 돌리려면 `-p "test_query_*.py"`. JSON Schema 비교·생성기 검사는 값 하나를 바꾸면 실패하는 것을 확인했다.
 
 ## 9. 계약이 바뀔 때 (스냅샷 갱신 절차의 이 모듈 부분)
-[contracts/trend-query.md §6](contracts/trend-query.md)대로 스냅샷 JSON을 교체한 뒤:
+[contracts/trend-query.md §6](../contracts/trend-query.md)대로 스냅샷 JSON을 교체한 뒤:
 1. `python scripts/generate_query_vocabulary.py` → `vocabulary.py` 재생성.
 2. `PYTHONPATH=src python scripts/render_query_prompt.py` → 어휘가 들어간 `rendered_system.md` 재생성. 어휘가 바뀌면 프롬프트 내용도 바뀌므로 새 프롬프트 버전으로 올릴지 정한다 ([prompts/README.md](../prompts/README.md)).
 3. `TrendQuery` 필드·검증 규칙이 바뀌었으면 `trend_query.py`를 고친다 (`test_query_trend_query.py`가 어긋난 곳을 알려 준다). 그러면 `test_query_structured_models.py`의 의도된 차이 목록도 확인한다.
@@ -279,7 +279,7 @@ Windows PowerShell: `$env:PYTHONPATH="src"; py -m unittest discover -s tests -v`
 
 **`StructuredQuery`를 바꿀 때**: `models.py` 수정 → `py scripts/export_structured_query_schema.py` → 정의서 §3·§7과 `INTENDED_DIFFERENCES` 갱신 → 필드 추가는 `schema_version` 1.x, 깨지는 변경은 2.0.
 
-**별칭 사전이 바뀔 때** (trend `configs/alias_map/*.yaml` 변경, 예: 승인된 표기 변형 추가): trend `.venv`로 `scripts/export_alias_snapshot.py --trend-repo ../trend-analysis-agent`를 실행해 스냅샷·golden·`alias_data.py`를 다시 만들고 전체 테스트를 돌린다. 세부는 [contracts/alias-map.md](contracts/alias-map.md).
+**별칭 사전이 바뀔 때** (trend `configs/alias_map/*.yaml` 변경, 예: 승인된 표기 변형 추가): trend `.venv`로 `scripts/export_alias_snapshot.py --trend-repo ../trend-analysis-agent`를 실행해 스냅샷·golden·`alias_data.py`를 다시 만들고 전체 테스트를 돌린다. 세부는 [contracts/alias-map.md](../contracts/alias-map.md).
 
 ## 10. 다음 할 일
 > 순서와 결정 대기의 **기준은 [query-decisions.md §0](query-decisions.md)**다. 아래는 이 모듈 관점의 요약이며, 다르면 그 문서를 따른다. 속성 제외 칸 추가(X1·X2)는 그 문서 §0.4의 1번(계획 U1, 계약 모델)에 들어 있다.
@@ -328,12 +328,13 @@ trend_query_json = result.trend_query.model_dump(mode="json")   # trend 검색 �
 | 2026-11-09 (2차) | 프롬프트를 코드에서 `prompts/query_structuring/v1/` 파일로 이동(출력 동일, 버전 이름 0.1 → v1, `prompt_examples.py` 삭제). 하드코딩 값을 `configs/query_structuring.json`으로 이동하고 저장소 전체 하드코딩·종속 목록 작성. 예상 사용자 질의 30개(`data/`, silver) 추가. 렌더 스크립트, 테스트 15개 추가(총 63) |
 | 2026-11-09 (3차) | 결정 문서 [query-decisions.md](query-decisions.md) 신설 (작업 규칙, 결정 기록, 별칭 사전 정합 정책 H1~H6, 사전 추가 규칙 D-29). §11 한계와 향후 과제 추가(변경 이력은 §12로 이동), A-6을 H2로 해소 예정 처리, §10에 H 구현을 다음 작업으로 추가. 코드 변경 없음 |
 | 2026-11-09 (4차) | 결정 V1(코드 후보 → LLM 검수, [구현 계획](query-candidate-review-plan.md))·X1·X4(속성 제외 칸, 이 저장소가 먼저 정의) 반영. 다음 할 일의 기준을 query-decisions.md §0으로 일원화. 코드 변경 없음 |
-| 2026-11-10 | 구현 계획 S1·S2 완료: 별칭 사전 스냅샷(`docs/contracts/alias-map.*`), 생성 모듈 `alias_data.py`, 변환기 `lexicon.py`(원본 출력과 전부 일치), 스크립트 2개, 테스트 25개(총 88). 조립 흐름 연결은 S3~S5. 사전 추가 후보는 [query-alias-candidates.md](query-alias-candidates.md) |
+| 2026-11-10 | 구현 계획 S1·S2 완료: 별칭 사전 스냅샷(`contracts/alias-map.*`), 생성 모듈 `alias_data.py`, 변환기 `lexicon.py`(원본 출력과 전부 일치), 스크립트 2개, 테스트 25개(총 88). 조립 흐름 연결은 S3~S5. 사전 추가 후보는 [query-alias-candidates.md](query-alias-candidates.md) |
 | 2026-11-10 (2차) | Q3 = γ 확정 반영: 이 문서가 v1 코드 설명임을 명시, §5·§10·§11(L-1·L-2)에 γ 이후 동작 표시. 다음 설계는 정의서·[structured-query-plan.md](structured-query-plan.md) |
 | 2026-11-10 (3차) | **U1~U3 병합**: `models.py` = `StructuredQuery` 1.0(기존 `TrendQuery`는 `trend_query.py`로), `resolve.py`(값 확정), `draft.py` = draft v2(기존 v1은 `legacy_v1.py`로), 프롬프트 v2, 버전 폴더 `meta.json`, JSON Schema 생성 스크립트, 설정 `gender.aliases`. 실행 흐름은 v1 그대로. 질의 테스트 88 → 175 |
 | 2026-11-10 (4차) | 검수 반영 코드 수정: `structure_query`가 draft_v2 형식 프롬프트를 받으면 `QueryConfigError`(설정을 U4 전에 v2로 바꾸는 실수 방지), draft v2의 공백뿐인 `raw` 거부(resolver 예외 방지), 정규화하면 빈 성별 표기 거부, 사전 이동 대상에 값이 없을 때 이동 자체의 값 사용. §1·§6 A-6·§11 L-9 갱신. 질의 테스트 176 |
 | 2026-11-10 (5차) | **UI 연결**(§13): `llm_provider.py`(실제 LLM 호출), `server.py`의 00 질의 구조화와 `/api/query-structuring`, 화면 카드·동의 체크, `configs/llm.json`, 테스트 15개(`test_llm_provider.py`·`test_ui_query_structuring.py`), 격리 규칙 예외(`server.py`) |
 | 2026-11-10 (6차) | 실제 LLM 호출 1회 확인(openai `gpt-4o-mini`, "가을 여성 코트" → 2027 FW·아우터/코트·여, 4초), §13에 기록 |
+| 2026-11-10 (7차) | 팀원 `main` 병합: 계약 폴더 `contracts/`로 경로 변경, `server.py` 병합(00 구조화는 `/api/run`만), 테스트 수 갱신 |
 
 ## 13. UI 연결 (2026-11-10, 결정 UI-1·UI-2·D5′)
 사용자가 화면에서 질의를 입력하면 이 모듈의 프롬프트와 코드가 실제 LLM과 함께 실행된다. **새 POST API나 저장소 사이 통신은 없다**: 브라우저 → 같은 PC의 기존 `/api/run` → `server.py`가 질의 모듈을 **함수로 호출**한다.
@@ -390,5 +391,7 @@ trend_query_json = result.trend_query.model_dump(mode="json")   # trend 검색 �
 | 화면 스크립트 | `node --check web/app.js` 통과 |
 
 이 확인으로 **프롬프트 v1 → 실제 LLM → 검증 → 조립 → UI 응답** 경로가 동작함을 확인했다. 정확도 측정(30개 질의)은 아직 하지 않았다.
+
+**공개 API와의 관계** (2026-11-10 팀원 `main` 병합 후): 00 질의 구조화는 화면 경로 `/api/run`에서만 실행한다. 팀원의 공개 API `POST /v1/orchestrations`는 호출자가 `input.trend_query`를 직접 넣는 방식이라 구조화를 실행하지 않는다(OQ-11).
 
 **지금의 한계**: 실행 프롬프트가 v1이라 결과는 `TrendQuery`(속성 제외·`match` 없음)다. v2(γ) 결과를 보려면 U4가 먼저다. trend로 실제 전달할 형식은 OQ-11([query-decisions.md §6](query-decisions.md)).

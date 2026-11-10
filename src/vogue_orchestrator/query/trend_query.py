@@ -1,7 +1,7 @@
 """Pydantic models of the TrendQuery contract (the input format trend-analysis-agent knows today).
 
 Owner of the contract: trend-analysis-agent. This is a LOCAL implementation of the snapshot in
-docs/contracts/ (decision D1 = (d)): this repository does not import the trend package; the two
+contracts/ (decision D1 = (d)): this repository does not import the trend package; the two
 sides exchange JSON. tests/test_query_trend_query.py compares this model's JSON Schema with the
 snapshot, so drift is detected. Field names and validation rules mirror the original on purpose.
 

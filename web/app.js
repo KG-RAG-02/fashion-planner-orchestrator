@@ -13,21 +13,21 @@ let currentMode = 'demo';
 const stageLabels = {
   trend: ['01', '쿼리 · 트렌드 분석', 'trend-analysis-agent'],
   stock: ['02', '자사 상품 · 재고', 'stock-agent'],
-  project_07: ['03', '판매 · 시장 조사', 'Project_07 · market-research-agent'],
-  project_06: ['04', '기획 초안', 'Project_06 · planning-draft'],
+  project_07: ['03', '판매 · 시장 조사', 'sales-market-agent'],
+  project_06: ['04', '기획 초안', 'new-product-agent'],
 };
 const statusLabels = { ok: '완료', partial: '부분 완료', no_results: '자료 없음', error: '오류' };
 const stageNotes = {
   trend: '현재 합성 모드에서는 trend 서비스에 연결하지 않고 결과 없음 fixture를 사용합니다.',
   stock: '현재 합성 모드에서는 재고 DB나 stock API를 조회하지 않습니다.',
-  project_07: 'Project_07 단계의 합성 결과입니다. 실제 판매·시장 자료를 조회하지 않습니다.',
-  project_06: 'Project_06 단계의 합성 응답입니다. 실제 기획 생성기는 호출하지 않습니다.',
+  project_07: 'sales-market-agent 단계의 합성 결과입니다. 실제 판매·시장 자료를 조회하지 않습니다.',
+  project_06: 'new-product-agent 단계의 합성 응답입니다. 실제 기획 생성기는 호출하지 않습니다.',
 };
 const connectedStageNotes = {
   trend: '주입한 trend adapter가 반환한 원본 TrendAnalysisResult입니다.',
   stock: 'stock-agent HTTP API 응답입니다. 상세 상품·트렌드 관계는 raw 결과를 확인하세요.',
-  project_07: '로컬 Project_07 MarketResearchAgent 결과입니다. 기본 source는 NoConfiguredSources입니다.',
-  project_06: 'Project_06 planning-draft endpoint 응답입니다. 최종 판단은 MD 검토로 남습니다.',
+  project_07: 'sales-market-agent의 MarketResearchAgent 결과입니다. 기본 source는 NoConfiguredSources입니다.',
+  project_06: 'new-product-agent의 planning-draft endpoint 응답입니다. 최종 판단은 MD 검토로 남습니다.',
 };
 
 queryInput.addEventListener('input', () => {
@@ -57,11 +57,26 @@ function renderConnections(data) {
     return card;
   }));
   const ready = document.querySelector('#connections-ready');
-  ready.textContent = data?.ready ? '전체 설정 완료' : '일부 설정 필요';
+  const httpMode = data?.connection_modes?.agent_http_v01;
+  ready.textContent = httpMode?.ready
+    ? 'HTTP v0.1 · 검사 통과'
+    : `HTTP v0.1 · E2E 차단 ${httpMode?.routes?.filter((route) => route.known_status !== 'supported').length ?? 4}개 route`;
   const targets = connectors.filter((item) => item.configured && item.target).map((item) => `${item.name} (${item.target})`);
   const destinationText = targets.length ? targets.join(', ') : '설정된 서비스가 없습니다';
   document.querySelector('#connected-consent-copy').textContent =
-    `요청과 앞 단계 결과를 ${destinationText}에 전송하는 것을 확인합니다. stock-agent 설정에 따라 트렌드 결과가 해당 서비스의 LLM 제공자에게도 전달될 수 있습니다.`;
+    `요청과 앞 단계 결과를 ${destinationText}에 전송하는 것을 확인합니다. Trend query와 sales-market-agent 요청 scope는 아직 자동 구조화되지 않습니다. sales-market-agent에는 미지정 geography/channel/period를 null로 전달하며, stock-agent 설정에 따라 trend 결과가 해당 서비스의 LLM 제공자에게도 전달될 수 있습니다.`;
+  const checkScope = [
+    `연결 상태는 ${data?.endpoint_health || 'not_checked'} (endpoint health), ` +
+      `${data?.contract_compatibility || 'not_verified'} (계약 호환), ` +
+      `${data?.source_permission || 'not_verified'} (자료 권한), ` +
+      `${data?.operational_approval || 'not_verified'} (운영 승인)입니다.`,
+    data?.readiness_note || '',
+  ].filter(Boolean).join(' ');
+  document.querySelector('.connections-footnote').textContent = checkScope;
+  const routeSummary = (httpMode?.routes || []).map((route) =>
+    `${route.route_agent_id}: ${route.known_status}, health ${route.endpoint_health}, schema ${route.schema_compatibility}`,
+  ).join(' · ');
+  document.querySelector('.connections-footnote').textContent += ` 혼합 connector 설정 상태: ${data?.connection_modes?.mixed_connectors?.configured ? '설정됨' : '일부 미설정'}; HTTP v0.1 route: ${routeSummary}`;
 }
 
 async function loadStructuringStatus() {

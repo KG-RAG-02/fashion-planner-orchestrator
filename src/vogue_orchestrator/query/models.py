@@ -1,8 +1,8 @@
 """Pydantic models of the StructuredQuery 1.0 contract (the output of query structuring).
 
 Owner of the contract: THIS repository (decision Y1). Receiver-facing definition:
-docs/contracts/structured-query.md. The JSON Schema handed to receivers,
-docs/contracts/structured-query.schema.json, is generated from these models by
+contracts/structured-query.md. The JSON Schema handed to receivers,
+contracts/structured-query.schema.json, is generated from these models by
 scripts/export_structured_query_schema.py (drift check: tests/test_query_structured_models.py).
 
 Values come from the K-Fashion standard vocabulary owned by trend-analysis-agent (vocabulary.py).
@@ -219,7 +219,7 @@ class UnsupportedCondition(_Contract):
 
 class StructuredQuery(_Contract):
     """StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard
-    vocabulary. Definition: docs/contracts/structured-query.md (owner: vogue-orchestrator)."""
+    vocabulary. Definition: contracts/structured-query.md (owner: vogue-orchestrator)."""
 
     schema_version: Literal["1.0"] = SCHEMA_VERSION
     request_id: NonEmptyStr

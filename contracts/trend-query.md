@@ -2,7 +2,7 @@
 
 > **이 문서와 `trend-query.contract.json`은 trend-analysis-agent가 소유한 계약의 복사본이다.** 원본 저장소는 비공개이고, 이 저장소의 작업자는 원본을 읽을 수 없다는 전제로 **이것만 보고 질의 구조화를 구현할 수 있게** 만들었다. 직접 고치지 않는다. 계약을 바꾸려면 원본 소유자와 합의한 뒤 아래 "갱신 절차"로 다시 만든다.
 >
-> **상태 메모 (2026-11-09)**: 이 스냅샷은 trend의 **현재** 계약을 기록한 것으로 그대로 유지한다. 결정 X4에 따라 이 저장소가 정하는 변경(속성 제외 칸 등)은 이 파일이 아니라 별도 확장 제안으로 관리한다 ([query-decisions.md](../query-decisions.md) X1·X4·Y1). "원본을 읽을 수 없다"는 전제는 구현·테스트 기준이며, 스냅샷 생성·갱신자는 원본에 접근한다 (W-7).
+> **상태 메모 (2026-11-09)**: 이 스냅샷은 trend의 **현재** 계약을 기록한 것으로 그대로 유지한다. 결정 X4에 따라 이 저장소가 정하는 변경(속성 제외 칸 등)은 이 파일이 아니라 별도 확장 제안으로 관리한다 ([query-decisions.md](../docs/query-decisions.md) X1·X4·Y1). "원본을 읽을 수 없다"는 전제는 구현·테스트 기준이며, 스냅샷 생성·갱신자는 원본에 접근한다 (W-7).
 
 | 항목 | 값 |
 |---|---|
@@ -77,7 +77,7 @@
 - 블라우스 + 브랜드 H&M: `include = [{"raw": "블라우스", "major": "상의", "minor": "블라우스"}]`, `unsupported = [{"type": "brand", "raw": "H&M", "reason": "Product 데이터는 Musinsa뿐"}]`.
 
 ## 5. 이 스냅샷이 다루지 않는 것
-- **별칭 사전**(무신사·LLM 표현 → 표준 값 변환표)은 포함하지 않았다. 원본 저장소의 파일이다. 질의 구조화가 표준 값을 고르는 방법은 처음에 [query-preprocessing.md](../query-preprocessing.md)의 D8이었으나 **H1·Q3(γ)로 대체됐다**: 별칭 사전도 별도 스냅샷으로 가져와([alias-map.md](alias-map.md)) 코드가 값을 정하고, 사전에 없을 때만 LLM 제안을 출처 표시와 함께 쓴다 ([query-decisions.md](../query-decisions.md), [structured-query-plan.md](../structured-query-plan.md)).
+- **별칭 사전**(무신사·LLM 표현 → 표준 값 변환표)은 포함하지 않았다. 원본 저장소의 파일이다. 질의 구조화가 표준 값을 고르는 방법은 처음에 [query-preprocessing.md](../docs/query-preprocessing.md)의 D8이었으나 **H1·Q3(γ)로 대체됐다**: 별칭 사전도 별도 스냅샷으로 가져와([alias-map.md](alias-map.md)) 코드가 값을 정하고, 사전에 없을 때만 LLM 제안을 출처 표시와 함께 쓴다 ([query-decisions.md](../docs/query-decisions.md), [structured-query-plan.md](../docs/structured-query-plan.md)).
 - 검색·점수 계산, `TrendAnalysisResult`의 정의 (응답 쪽 계약은 이 저장소의 `docs/orchestration-design.md`가 다루는 범위를 따른다).
 
 ## 6. 갱신 절차 (원본이 바뀔 때)

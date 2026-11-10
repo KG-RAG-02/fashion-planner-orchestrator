@@ -716,7 +716,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard\nvocabulary. Definition: docs/contracts/structured-query.md (owner: vogue-orchestrator).",
+  "description": "StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard\nvocabulary. Definition: contracts/structured-query.md (owner: vogue-orchestrator).",
   "properties": {
     "missing_fields": {
       "items": {

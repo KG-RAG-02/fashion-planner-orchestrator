@@ -1,4 +1,4 @@
-"""Call the actual local Project_07 and Project_06 code with synthetic payloads only.
+"""Call the actual local sales-market-agent and new-product-agent code with synthetic payloads only.
 
 Run from project_08 with:
   PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integration.py
@@ -28,7 +28,7 @@ from vogue_orchestrator.connectors import _post_json, _project07_adapter  # noqa
 
 
 class SyntheticSalesMarketSource:
-    """Explicit synthetic Project_07 source; no local datasets are read."""
+    """Explicit synthetic sales-market-agent source; no local datasets are read."""
 
     def research(self, context):
         sales_evidence = EvidenceRecord(
@@ -79,7 +79,7 @@ def main() -> None:
         WORKSPACE / "project_07", SyntheticSalesMarketSource,
     )
 
-    # Reuse Project_06's real HTTP handler on an ephemeral loopback port.
+    # Reuse new-product-agent's real HTTP handler on an ephemeral loopback port.
     # POST /api/planning-draft does not initialize or write its SQLite repository.
     p06_server = ThreadingHTTPServer(("127.0.0.1", 0), PrototypeHandler)
     p06_thread = Thread(target=p06_server.serve_forever, daemon=True)
@@ -102,6 +102,7 @@ def main() -> None:
     assert [stage["stage"] for stage in result["stages"]] == ["trend", "stock", "project_07", "project_06"]
     assert all(stage["request_id"] == rid for stage in result["stages"])
     assert p07_raw["schema_version"] == "1.3-proposal"
+    assert p07_raw["agent_id"] == "sales-market-agent"
     assert len(p07_raw["sales_data"]["observations"]) == 1
     assert len(p07_raw["market_data"]["observations"]) == 1
     # HTTP JSON converts tuples to arrays; compare the serialized producer value.
@@ -118,6 +119,7 @@ def main() -> None:
         "project_06_transport": "actual HTTP handler on ephemeral loopback",
         "stages": [{"stage": s["stage"], "status": s["status"]} for s in result["stages"]],
         "project_07_schema_version": p07_raw["schema_version"],
+        "project_07_producer_id": p07_raw["agent_id"],
         "sales_observations": len(p07_raw["sales_data"]["observations"]),
         "market_observations": len(p07_raw["market_data"]["observations"]),
         "project_06_sales_market_input_status": p06_result["input_statuses"]["sales_market_result"],

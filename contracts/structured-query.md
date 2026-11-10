@@ -1,6 +1,6 @@
 # StructuredQuery 1.0 — 구조화된 질의 계약
 
-> 상태: **1.0 모델 구현됨 (U1, 2026-11-10)**: `src/vogue_orchestrator/query/models.py`, JSON Schema [structured-query.schema.json](structured-query.schema.json) (모델에서 생성, 직접 수정 금지). 질의 → 이 계약으로 조립하는 흐름은 아직 연결 전 (구현 계획 [structured-query-plan.md](../structured-query-plan.md) U4). 소유: **이 저장소(vogue-orchestrator)** — 결정 Y1. 근거와 결정 기록은 [query-decisions.md](../query-decisions.md) (X1·X2·X3·X4·Y1·R0·Q3).
+> 상태: **1.0 모델 구현됨 (U1, 2026-11-10)**: `src/vogue_orchestrator/query/models.py`, JSON Schema [structured-query.schema.json](structured-query.schema.json) (모델에서 생성, 직접 수정 금지). 질의 → 이 계약으로 조립하는 흐름은 아직 연결 전 (구현 계획 [structured-query-plan.md](../docs/structured-query-plan.md) U4). 소유: **이 저장소(vogue-orchestrator)** — 결정 Y1. 근거와 결정 기록은 [query-decisions.md](../docs/query-decisions.md) (X1·X2·X3·X4·Y1·R0·Q3).
 > 이 문서는 **받는 쪽**(trend-analysis-agent, 이후 재고 등 다른 Agent)이 각 필드의 뜻과 쓰는 법을 판단할 수 있게 쓴 정의서다. 받는 쪽이 어떤 필드를 어떻게 쓸지는 **받는 쪽이 정한다.** 이 문서의 "활용 예"는 권장이지 강제가 아니다.
 
 ## 1. 무엇인가
@@ -129,9 +129,9 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 | 남녀공용, 유니섹스 | 공용 | `alias` |
 | 표에 없는 표현 | LLM 제안이 남·여·공용 중 하나면 그 값 | `llm` |
 
-- 이 표는 trend 사전에 **없는 속성**에 대한 것이라 "질의 전용 별칭 사전을 만들지 않는다"(사전 중복 금지, [query-decisions.md](../query-decisions.md) §5)와 충돌하지 않는다. trend 사전에 성별이 생기면 그쪽을 따르고 이 표는 지운다.
+- 이 표는 trend 사전에 **없는 속성**에 대한 것이라 "질의 전용 별칭 사전을 만들지 않는다"(사전 중복 금지, [query-decisions.md](../docs/query-decisions.md) §5)와 충돌하지 않는다. trend 사전에 성별이 생기면 그쪽을 따르고 이 표는 지운다.
 - 표 항목 (2026-11-10 U2 확정): 여 = 여성·여자·여성용·우먼·위민즈·women·womens, 남 = 남성·남자·남성용·맨즈·men·mens, 공용 = 남녀공용·유니섹스·unisex. "젠더리스"는 같은 뜻이 아니라 넣지 않았다. 비교는 사전과 같은 방식(소문자, 공백·`-`·`_` 무시)이라 "남녀 공용"도 맞는다. 위치: `configs/query_structuring.json`의 `gender.aliases`.
-- **성별 제외("남성 말고")를 담을 칸은 아직 없다** (`gender`는 값 하나, 포함만). 처리 방법은 확인 대기 OQ-4 ([query-decisions.md](../query-decisions.md) §6).
+- **성별 제외("남성 말고")를 담을 칸은 아직 없다** (`gender`는 값 하나, 포함만). 처리 방법은 확인 대기 OQ-4 ([query-decisions.md](../docs/query-decisions.md) §6).
 
 **G-2 카테고리 하위 종류 — 하분류 목록에 없을 때만 LLM이 상위 하분류를 제안**
 
@@ -246,7 +246,7 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 
 이 차이 목록은 `tests/test_query_structured_models.py`의 `INTENDED_DIFFERENCES`로 검사한다. 목록에 없는 차이가 생기면 테스트가 실패한다.
 
-trend에 넘길 때의 변환(`to_trend_query()`)과 trend 쪽 계약 반영은 **Action Item**이다([query-decisions.md §0](../query-decisions.md)의 7·8). 변환에서 trend가 아직 모르는 필드(속성 제외, `match`)를 그냥 버리면 안 된다. trend가 반영하기 전에는 결과에 "반영되지 않은 조건"으로 알려야 한다 (X4 안전 조건).
+trend에 넘길 때의 변환(`to_trend_query()`)과 trend 쪽 계약 반영은 **Action Item**이다([query-decisions.md §0](../docs/query-decisions.md)의 7·8). 변환에서 trend가 아직 모르는 필드(속성 제외, `match`)를 그냥 버리면 안 된다. trend가 반영하기 전에는 결과에 "반영되지 않은 조건"으로 알려야 한다 (X4 안전 조건).
 
 ## 8. 변경 이력
 | 날짜 | 내용 |

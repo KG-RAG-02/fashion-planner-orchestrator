@@ -19,7 +19,7 @@ def codes(result):
 
 
 class SpecExample3Tests(unittest.TestCase):
-    """docs/contracts/structured-query.md §4.1, example 3."""
+    """contracts/structured-query.md §4.1, example 3."""
 
     def test_example_3_table(self):
         result = r.resolve_conditions([
@@ -144,7 +144,7 @@ class DetailAndRouteTests(unittest.TestCase):
 
 
 class CategoryG2Tests(unittest.TestCase):
-    """docs/contracts/structured-query.md §4.3 G-2."""
+    """contracts/structured-query.md §4.3 G-2."""
 
     def check(self, raw, suggestion, expected, polarity="include"):
         result = one(raw, "category", polarity, suggestion)

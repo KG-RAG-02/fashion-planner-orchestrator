@@ -1,6 +1,6 @@
 """Regenerate src/vogue_orchestrator/query/alias_data.py from the alias-map snapshot.
 
-The snapshot (docs/contracts/alias-map.snapshot.json) is a read-only copy of the alias dictionary
+The snapshot (contracts/alias-map.snapshot.json) is a read-only copy of the alias dictionary
 owned by trend-analysis-agent (configs/alias_map/*.yaml). It is produced by
 scripts/export_alias_snapshot.py. This script turns it into plain Python constants so the query
 module needs neither the docs folder nor pyyaml at run time.
@@ -9,7 +9,7 @@ Usage (from the repository root):
   py scripts/generate_alias_data.py          # rewrite the module
   py scripts/generate_alias_data.py --check  # exit 1 when the module is out of date
 
-Standard library only. Description of the snapshot: docs/contracts/alias-map.md
+Standard library only. Description of the snapshot: contracts/alias-map.md
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
-SNAPSHOT_PATH = ROOT / "docs" / "contracts" / "alias-map.snapshot.json"
+SNAPSHOT_PATH = ROOT / "contracts" / "alias-map.snapshot.json"
 TARGET_PATH = ROOT / "src" / "vogue_orchestrator" / "query" / "alias_data.py"
 
 # The 11 attributes AliasMap normalizes (trend alias_map.STANDARD), in that order.
@@ -39,7 +39,7 @@ LIST_SECTIONS = ("null_values", "modifiers")
 HEADER = '''"""GENERATED FILE - do not edit by hand.
 
 Alias dictionary of trend-analysis-agent (configs/alias_map/*.yaml), generated from the read-only
-snapshot docs/contracts/alias-map.snapshot.json. The dictionary is owned by trend-analysis-agent;
+snapshot contracts/alias-map.snapshot.json. The dictionary is owned by trend-analysis-agent;
 changes follow its rule D-29 and arrive here only through a new snapshot.
 
 Entry order inside each section is the YAML order (the original code depends on it: the first
@@ -137,7 +137,7 @@ def render(snapshot: Mapping[str, Any]) -> str:
         "source_repo": provenance["source_repo"],
         "source_ref": provenance["source_ref"],
         "content_sha256": provenance["content_sha256"],
-        "generated_from": "docs/contracts/alias-map.snapshot.json",
+        "generated_from": "contracts/alias-map.snapshot.json",
     }
     parts.append(f"PROVENANCE: dict[str, str] = {_literal(prov, 0)}")
     parts.append(f"ATTRIBUTES: tuple[str, ...] = {_literal(list(ATTRIBUTES), 0)}")

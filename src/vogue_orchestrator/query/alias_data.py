@@ -1,7 +1,7 @@
 """GENERATED FILE - do not edit by hand.
 
 Alias dictionary of trend-analysis-agent (configs/alias_map/*.yaml), generated from the read-only
-snapshot docs/contracts/alias-map.snapshot.json. The dictionary is owned by trend-analysis-agent;
+snapshot contracts/alias-map.snapshot.json. The dictionary is owned by trend-analysis-agent;
 changes follow its rule D-29 and arrive here only through a new snapshot.
 
 Entry order inside each section is the YAML order (the original code depends on it: the first
@@ -21,7 +21,7 @@ PROVENANCE: dict[str, str] = {
     "source_repo": "trend-analysis-agent",
     "source_ref": "feature/extraction-prompt-experiments@7b525c4",
     "content_sha256": "3be44539d7737c320a4bf425336a2ef5cd876b3ed87abf27146fc7e456593fe7",
-    "generated_from": "docs/contracts/alias-map.snapshot.json",
+    "generated_from": "contracts/alias-map.snapshot.json",
 }
 
 ATTRIBUTES: tuple[str, ...] = (
