@@ -14,7 +14,7 @@
 | 파일 | 내용 |
 |---|---|
 | `alias-map.snapshot.json` | `attributes.<속성>`: YAML의 모든 절(`aliases`, `approx`, `null_values`, `route`, `hint`, 색의 `modifiers`) + 표준 값 `standard`(trend `vocabulary.py`의 Enum 순서). `text_guard.guards`: 자유 텍스트 오탐 가드. `code_constants.compound_values`: 나누지 않는 슬래시 복합 값(`alias_map.COMPOUND_VALUES`) |
-| `alias-map.golden.json` | trend **원본 코드**의 출력: `normalize`(속성별, 그 속성의 모든 키 + 표기 변형(대소문자·공백·`-`·`_`) + 다른 속성의 키 + 모르는 단어), `normalize_tokens`(복수 값·블렌드/혼방), `normalize_color`(수식어·끝의 기본색·`Ncolor`·멜란지), `split_tokens`, `norm_key`, `text_match`(30개 질의 + 추가 문장의 `TextMatcher` 결과, 구현 계획 S3 후보 스캐너용) |
+| `alias-map.golden.json` | trend **원본 코드**의 출력: `normalize`(속성별, 그 속성의 모든 키 + 표기 변형(대소문자·공백·`-`·`_`) + 다른 속성의 키 + 모르는 단어), `normalize_tokens`(복수 값·블렌드/혼방), `normalize_color`(수식어·끝의 기본색·`Ncolor`·멜란지), `split_tokens`, `norm_key`, `text_match`(30개 질의 + 추가 문장의 `TextMatcher` 결과. 원래 문장 전체 스캐너(V1 계획 S3)용이었으나 V1은 γ로 대체되어 지금은 쓰지 않는다. 나중에 "띄어쓰기 단위 정확 일치" 보조 기능을 만들 때 기대값으로 쓸 수 있게 남겨 둠) |
 | `src/vogue_orchestrator/query/alias_data.py` | 스냅샷에서 생성한 상수 모듈. 실행 코드는 이 모듈만 읽는다 (`docs/`·pyyaml 불필요) |
 | `src/vogue_orchestrator/query/lexicon.py` | `AliasMap` 변환의 표준 라이브러리 이식 (`norm_key`, `normalize`, `split_tokens`, `normalize_tokens`, `normalize_color`) |
 
@@ -23,7 +23,7 @@
 golden 형식: 각 경우는 `[입력, 기대값]`이다. 변환 결과 하나는 `normalized_fields` 순서(`raw, value, approx, route_to, hint, matched_by`)의 행이다.
 
 ## 2. 변환 규칙 (원본과 같음, 정책은 호출하는 쪽)
-`normalize` 순서: 정규화 키(소문자, 공백·`-`·`_` 제거) → 표준 값 → 별칭 → 근사 → 이동(`route`) → 힌트(`hint`) → 값 없음(`null_values`) → 매핑 불가. `lexicon.py`는 결과를 **보고만** 한다. 근사 값을 필터로 쓰지 않는 것(H2)과 힌트를 적용하지 않는 것(H5)은 이 모듈을 쓰는 쪽(조립 단계)이 지킨다.
+`normalize` 순서: 정규화 키(소문자, 공백·`-`·`_` 제거) → 표준 값 → 별칭 → 근사 → 이동(`route`) → 힌트(`hint`) → 값 없음(`null_values`) → 매핑 불가. `lexicon.py`는 결과를 **보고만** 한다. 근사 값에 `match: approx`를 붙여 전달하는 것(H2′, 결정 Q3 = γ)과 힌트를 적용하지 않는 것(H5)은 이 모듈을 쓰는 쪽(값 확정 단계 `resolve.py`, [structured-query-plan.md §2.1](../structured-query-plan.md))이 지킨다.
 
 ## 3. 갱신 절차
 1. trend 저장소에서 사전이 바뀌고 커밋됐는지 확인한다 (생성은 원본을 읽기만 한다. trend 작업 트리의 브랜치를 바꾸지 않는다).
@@ -41,7 +41,7 @@ golden 형식: 각 경우는 `[입력, 기대값]`이다. 변환 결과 하나�
 |---|---|
 | 색: 끝의 기본색은 영문 별칭 키(`red`·`sky`·`gold`·`cream`)로도 근사 일치 | `colored` → 레드(근사), `husky` → 스카이블루(근사), `marigold` → 골드(근사) |
 | 색: 수식어는 문자열 어디서든 지운다 | `웜그레이` → 그레이(별칭) |
-| 무늬: `없음`·`없는`·`none`·`null`은 `무지`의 별칭 | 질의의 "로고 없는"을 그대로 넣으면 무지가 된다 (스캐너에서 주의) |
+| 무늬: `없음`·`없는`·`none`·`null`은 `무지`의 별칭 | LLM이 "로고 없는"을 패턴 조건으로 뽑으면 사전 조회 결과가 무지가 된다 (프롬프트 v2 규칙과 값 확정 코드에서 주의) |
 | 카테고리: `원피스`는 하분류 `드레스`의 별칭 (상분류 이름이기도 함) | `normalize("category", "원피스")` → 드레스 |
 | 블렌드/혼방 꼬리표는 문자열 어디서든 지우고 다시 찾는다 | `혼방울` → 울/캐시미어 |
 | 정규화 키는 유니코드 정규화(NFC/NFKC)를 하지 않는다 | 전각 문자·분해형 한글은 일치하지 않는다 |

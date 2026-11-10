@@ -77,7 +77,7 @@
 - 블라우스 + 브랜드 H&M: `include = [{"raw": "블라우스", "major": "상의", "minor": "블라우스"}]`, `unsupported = [{"type": "brand", "raw": "H&M", "reason": "Product 데이터는 Musinsa뿐"}]`.
 
 ## 5. 이 스냅샷이 다루지 않는 것
-- **별칭 사전**(무신사·LLM 표현 → 표준 값 변환표)은 포함하지 않았다. 원본 저장소의 파일이다. 질의 구조화가 표준 값을 고르는 방법은 처음에 [query-preprocessing.md](../query-preprocessing.md)의 D8이었으나 **H1~H6·V1로 대체됐다**: 별칭 사전도 별도 스냅샷으로 가져와 코드가 값을 정한다 ([query-decisions.md](../query-decisions.md), [구현 계획](../query-candidate-review-plan.md) S1).
+- **별칭 사전**(무신사·LLM 표현 → 표준 값 변환표)은 포함하지 않았다. 원본 저장소의 파일이다. 질의 구조화가 표준 값을 고르는 방법은 처음에 [query-preprocessing.md](../query-preprocessing.md)의 D8이었으나 **H1·Q3(γ)로 대체됐다**: 별칭 사전도 별도 스냅샷으로 가져와([alias-map.md](alias-map.md)) 코드가 값을 정하고, 사전에 없을 때만 LLM 제안을 출처 표시와 함께 쓴다 ([query-decisions.md](../query-decisions.md), [structured-query-plan.md](../structured-query-plan.md)).
 - 검색·점수 계산, `TrendAnalysisResult`의 정의 (응답 쪽 계약은 이 저장소의 `docs/orchestration-design.md`가 다루는 범위를 따른다).
 
 ## 6. 갱신 절차 (원본이 바뀔 때)
