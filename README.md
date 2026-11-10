@@ -13,9 +13,9 @@ Project_08은 VOGUE 중앙 오케스트레이션 계층의 실행 가능한 로�
 
 agent별 현재 구현과 fixture 기반 input/output은 [`docs/agent-io-contracts.md`](docs/agent-io-contracts.md)에 정리했습니다. 공통 HTTP envelope는 팀 합의 `vogue-handoff/0.1`을 사용하며, producer별 필드와 schema는 producer 소유입니다.
 
-표시 이름은 `sales-market-agent`와 `new-product-agent`로 통일했습니다. 첫 단계의 현재 producer ID는 `market-research-agent`이며, 두 agent의 checkout 디렉터리(`project_07`, `project_06`), Python stage key와 기존 환경변수명은 저장소 호환성을 위해 그대로 둡니다. `new-product-agent`의 현재 prototype route는 `/api/planning-draft`입니다.
+표시 이름은 `sales-market-agent`와 `new-product-agent`로 통일했습니다. 첫 단계의 현재 producer ID는 `sales-market-agent`이며, 두 agent의 checkout 디렉터리(`project_07`, `project_06`), Python stage key와 기존 환경변수명은 저장소 호환성을 위해 그대로 둡니다. `new-product-agent`의 현재 prototype route는 `/api/planning-draft`입니다.
 
-현재 구현과 제안·미합의 사항의 차이, sales-market-agent 결과 및 차트 artifact의 실제 handoff 경로, 담당자 합의 질문은 [`docs/integration-gap-analysis.md`](docs/integration-gap-analysis.md)에 기록했습니다. 특히 sales-market-agent envelope 전체는 실행 기록에 남지만 현행 new-product-agent 요청에는 `result`만 전달되고 sibling `artifacts`는 전달되지 않습니다.
+현재 구현과 합의 v0.1 간 차이, sales-market-agent 결과 및 차트 artifact의 실제 handoff 경로는 [`docs/integration-gap-analysis.md`](docs/integration-gap-analysis.md)에 기록했습니다. 특히 sales-market-agent envelope 전체는 실행 기록에 남지만 downstream 요청에는 `result`만 전달되고 sibling `artifacts`는 전달되지 않습니다.
 
 - 동기 순차 runner는 transport-neutral callable 어댑터를 받습니다. 현재 opt-in 연결은 trend의 사용자 callable, stock의 기존 HTTP API, sales-market-agent Python 인터페이스 직접 호출, new-product-agent의 기존 HTTP API를 사용합니다. 이는 확인된 저장소 인터페이스를 잇는 로컬 adapter 선택이며, 최종 배포 토폴로지나 공통 transport 결정을 뜻하지 않습니다.
 - 응답 원문을 복사·정규화하지 않고 `StageRecord.raw_response`로 보존합니다. request ID, producer ID, producer schema version, 상태 일치 여부는 별도 검증합니다.
@@ -90,7 +90,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integr
 
 결과와 저장소별 호환 판정은 [`docs/integration-validation.md`](docs/integration-validation.md)에 기록합니다. 이 검증은 trend/stock 서비스 자체를 호출하지 않으며, sales-market-agent는 명시적 합성 source만 사용합니다.
 
-기본 데모와 합성 검증은 fixture만 사용하며 실제 원천에 연결하지 않습니다. 연결 모드는 trend/stock/new-product-agent endpoint와 명시 설정된 sales-market-agent source factory가 모두 있어야 준비 완료로 표시됩니다.
+기본 데모와 합성 검증은 fixture만 사용하며 실제 원천에 연결하지 않습니다. 혼합 연결 모드의 설정 여부와 v0.1 route의 호환성/health/운영 승인은 별도로 표시됩니다.
 
 ## 질의 구조화 모듈 (LLM 호출 전 단계)
 
@@ -114,9 +114,9 @@ PYTHONPATH=src python3 examples/query_structuring_demo.py --show-prompt "가을 
 ## 미결정 및 필요한 입력
 
 - trend-analysis-agent와 stock-agent의 sanitized response fixture 및 담당자 승인 mapping
-- 중앙 런타임의 배치, HTTP/queue transport, 인증 문맥 전달
-- 오류 이후 독립 단계 실행 여부, timeout·retry 한도, 멱등 저장소와 보존 기간
-- producer schema fixture/version ownership for all four v0.1 agent routes
+- Trend, Stock, sales-market-agent, new-product-agent 공통 `/runs` 서버 구현과 producer schema fixture/version 검증
+- TrendQuery 구조화 provider 선택 및 runner wiring
+- HTTP response size, persistent idempotency, execution retention, audit/redaction 정책
 - sales-market-agent 1.3 상세 proposal과 new-product-agent 표시 adapter의 담당자 간 승인. new-product-agent는 현재 payload를 opaque하게 보존하며 관측값 표시를 위해 재집계하지 않습니다.
 
 Notion의 `System Architecture`는 Proposed/unverified, `Project Workflow`와 저장소 협업 가이드도 workflow/계약 관련 내용을 포함하지만 unverified 상태로 반환됐습니다. 해당 문서의 업무 순서와 MD 경계는 참고했고, 미확정 구현 결정을 합의사항으로 취급하지 않았습니다.

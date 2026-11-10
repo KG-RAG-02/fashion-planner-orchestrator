@@ -22,7 +22,7 @@ def stock(payload):
 
 
 def project_07(payload):
-    return envelope(payload, "market-research-agent", "1.3-proposal", "no_results",
+    return envelope(payload, "sales-market-agent", "1.3-proposal", "no_results",
                     summary="합성 fixture 전용", findings=[], evidence=[], limitations=["실제 자료 미사용"],
                     errors=[], sales_data={"status": "no_results", "observations": [], "limitations": [],
                                            "errors": [], "missing_data": []})

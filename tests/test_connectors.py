@@ -5,7 +5,7 @@ from unittest.mock import patch
 from vogue_orchestrator.connectors import (
     ConnectorConfigurationError, _project07_context_fields, _service_url,
     connection_status, agent_http_v01_adapter, build_v01_http_orchestrator,
-    HTTP_CONNECT_TIMEOUT_SECONDS, AGENT_REQUEST_TIMEOUT_SECONDS,
+    HTTP_CONNECT_TIMEOUT_SECONDS, AGENT_REQUEST_TIMEOUT_SECONDS, _post_json,
 )
 
 
@@ -118,6 +118,83 @@ class ConnectorConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(ConnectorConfigurationError, "TrendQuery is required"):
             adapter({"request_id": "req-synthetic", "query": "raw query"})
 
+    def test_trend_http_adapter_sends_direct_orchestrator_trend_query(self):
+        sent = {}
+
+        def fake_post(url, payload, *, bearer_token=None):
+            sent["url"] = url
+            sent["payload"] = payload
+            return {"synthetic": True}
+
+        trend_query = {"request_id": "req-synthetic", "original_query": "synthetic", "schema_version": "1.0"}
+        with patch("vogue_orchestrator.connectors._post_json", side_effect=fake_post):
+            adapter = agent_http_v01_adapter("http://localhost:8000", "trend-analysis-agent", dev_mode=True)
+            adapter(trend_query)
+
+        self.assertEqual(sent["url"], "http://localhost:8000/v1/agents/trend-analysis-agent/runs")
+        self.assertEqual(sent["payload"]["input"], trend_query)
+
+    def test_http_transport_applies_bearer_timeouts_and_makes_one_request(self):
+        class FakeSocket:
+            timeout = None
+            def settimeout(self, value):
+                self.timeout = value
+
+        class FakeResponse:
+            status = 200
+            def read(self):
+                return b'{"ok": true}'
+
+        class FakeConnection:
+            def __init__(self):
+                self.sock = FakeSocket()
+                self.requests = []
+                self.closed = False
+            def connect(self):
+                pass
+            def request(self, method, path, *, body, headers):
+                self.requests.append((method, path, body, headers))
+            def getresponse(self):
+                return FakeResponse()
+            def close(self):
+                self.closed = True
+
+        connection = FakeConnection()
+        with patch("vogue_orchestrator.connectors.http.client.HTTPConnection", return_value=connection) as factory:
+            result = _post_json("http://127.0.0.1:8080/run", {"synthetic": True}, bearer_token="test-token")
+
+        factory.assert_called_once_with("127.0.0.1", 8080, timeout=HTTP_CONNECT_TIMEOUT_SECONDS)
+        self.assertEqual(connection.sock.timeout, AGENT_REQUEST_TIMEOUT_SECONDS)
+        self.assertEqual(len(connection.requests), 1)
+        self.assertEqual(connection.requests[0][0:2], ("POST", "/run"))
+        self.assertEqual(connection.requests[0][3]["Authorization"], "Bearer test-token")
+        self.assertEqual(result, {"ok": True})
+        self.assertTrue(connection.closed)
+
+    def test_project06_http_adapter_keeps_request_id_only_in_outer_envelope(self):
+        sent = {}
+
+        def fake_post(url, payload, *, bearer_token=None):
+            sent["url"] = url
+            sent["payload"] = payload
+            return {"synthetic": True}
+
+        stage_input = {
+            "request_id": "req-synthetic", "planning_request": {"schema_version": "1.0"},
+            "trend_result": {"schema_version": "1.1"},
+            "inventory_product_result": {"schema_version": "1.0"},
+            "sales_market_result": {"schema_version": "1.0"},
+        }
+        with patch("vogue_orchestrator.connectors._post_json", side_effect=fake_post):
+            adapter = agent_http_v01_adapter("http://localhost:8000", "new-product-agent", dev_mode=True)
+            adapter(stage_input)
+
+        self.assertEqual(sent["url"], "http://localhost:8000/v1/agents/new-product-agent/runs")
+        self.assertEqual(sent["payload"]["request_id"], "req-synthetic")
+        self.assertEqual(set(sent["payload"]["input"]), {
+            "planning_request", "trend_result", "inventory_product_result", "sales_market_result",
+        })
+
     def test_v01_builder_uses_new_explicit_environment_names_and_no_retries(self):
         env = {
             "VOGUE_TREND_AGENT_URL": "http://localhost:8001",
@@ -128,7 +205,6 @@ class ConnectorConfigurationTests(unittest.TestCase):
         }
         runner = build_v01_http_orchestrator(env)
         self.assertTrue(runner.require_envelopes)
-        self.assertFalse(runner.continue_after_error)
         self.assertEqual(HTTP_CONNECT_TIMEOUT_SECONDS, 3)
         self.assertEqual(AGENT_REQUEST_TIMEOUT_SECONDS, 60)
 

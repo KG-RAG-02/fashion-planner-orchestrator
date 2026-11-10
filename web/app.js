@@ -25,7 +25,7 @@ const stageNotes = {
 const connectedStageNotes = {
   trend: '주입한 trend adapter가 반환한 원본 TrendAnalysisResult입니다.',
   stock: 'stock-agent HTTP API 응답입니다. 상세 상품·트렌드 관계는 raw 결과를 확인하세요.',
-  project_07: 'sales-market-agent의 MarketResearchAgent 결과입니다. 원본 producer ID는 market-research-agent이며 기본 source는 NoConfiguredSources입니다.',
+  project_07: 'sales-market-agent의 MarketResearchAgent 결과입니다. 기본 source는 NoConfiguredSources입니다.',
   project_06: 'new-product-agent의 planning-draft endpoint 응답입니다. 최종 판단은 MD 검토로 남습니다.',
 };
 

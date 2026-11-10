@@ -119,9 +119,18 @@ def agent_http_v01_adapter(base_url: str, route_agent_id: str, *, bearer_token: 
         agent_input = payload
         if stage == StageName.TREND:
             trend_query = payload.get("trend_query")
+            # The orchestrator passes the structured TrendQuery itself as the
+            # stage input. Accept that direct shape as well as the legacy
+            # wrapper used by callers of this adapter.
+            if not isinstance(trend_query, Mapping) and payload.get("original_query"):
+                trend_query = payload
             if not isinstance(trend_query, Mapping):
                 raise ConnectorConfigurationError("TrendQuery is required; no query structuring provider is configured")
             agent_input = dict(trend_query)
+        elif stage == StageName.PROJECT_06:
+            # Project_06 takes request_id from the outer envelope; its input
+            # object is exactly the four producer payload fields.
+            agent_input = {key: value for key, value in payload.items() if key != "request_id"}
         return _post_json(url, {
             "contract_version": CONTRACT_VERSION,
             "request_id": request_id,
@@ -214,19 +223,19 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
         "The v0.1 HTTP route is not ready: Trend/Stock common endpoints are unconfirmed, Sales/Market currently exposes an incompatible proposal version, and New Product has no /runs adapter."
     ]
     dev_mode = env.get("VOGUE_AGENT_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
-    v01_vars = {
-        "trend": "VOGUE_TREND_AGENT_URL", "stock": "VOGUE_STOCK_AGENT_URL",
-        "sales-market": "VOGUE_SALES_MARKET_AGENT_URL", "new-product": "VOGUE_NEW_PRODUCT_AGENT_URL",
-    }
+    v01_vars = (
+        (StageName.TREND, "VOGUE_TREND_AGENT_URL", "no_common_route_confirmed"),
+        (StageName.STOCK, "VOGUE_STOCK_AGENT_URL", "legacy_endpoint_only"),
+        (StageName.PROJECT_07, "VOGUE_SALES_MARKET_AGENT_URL", "proposal_incompatible"),
+        (StageName.PROJECT_06, "VOGUE_NEW_PRODUCT_AGENT_URL", "legacy_endpoint_only"),
+    )
     v01_routes = [
-        {"route_agent_id": route, "producer_id": producer,
-         "configured": bool(env.get(v01_vars[key])), "target": _safe_origin(env.get(v01_vars[key])),
+        {"route_agent_id": ROUTE_PRODUCERS[stage][0], "producer_id": ROUTE_PRODUCERS[stage][1],
+         "configured": bool(env.get(env_var)), "target": _safe_origin(env.get(env_var)),
          "endpoint_health": "not_checked", "schema_compatibility": "not_verified",
          "implemented": False,
-         "known_status": ("proposal_incompatible" if key == "sales-market" else
-                          "legacy_endpoint_only" if key in {"stock", "new-product"} else "no_common_route_confirmed")}
-        for key, route_stage in zip(v01_vars, StageName)
-        for route, producer in [ROUTE_PRODUCERS[route_stage]]
+         "known_status": known_status}
+        for stage, env_var, known_status in v01_vars
     ]
     mixed_mode = {
         "configured": configuration_complete,
@@ -344,7 +353,6 @@ def build_v01_http_orchestrator(environ: Mapping[str, str] | None = None) -> Orc
         stock=clients["stock-agent"],
         project_07=clients["sales-market-agent"],
         project_06=clients["new-product-agent"],
-        continue_after_error=False,
         require_envelopes=True,
         project06_version_policy="v01_supported_sources",
     )

@@ -38,7 +38,7 @@ def build_demo_orchestrator() -> Orchestrator:
         return {
             "schema_version": "1.3-proposal",
             "request_id": payload["request_id"],
-            "agent_id": "market-research-agent",
+            "agent_id": "sales-market-agent",
             "status": "no_results",
             "summary": "합성 데모: 판매·시장 자료를 조회하지 않았습니다.",
             "requested_scope": {"query": payload["planning_request"].get("query")},

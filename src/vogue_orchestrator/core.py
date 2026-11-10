@@ -24,7 +24,7 @@ P07_INPUT_SCHEMA_VERSION = "1.0"
 ROUTE_PRODUCERS = {
     StageName.TREND: ("trend-analysis-agent", "trend-analysis-agent"),
     StageName.STOCK: ("stock-agent", "stock-agent"),
-    StageName.PROJECT_07: ("sales-market-agent", "market-research-agent"),
+    StageName.PROJECT_07: ("sales-market-agent", "sales-market-agent"),
     StageName.PROJECT_06: ("new-product-agent", "new-product-agent"),
 }
 SUPPORTED_PRODUCER_VERSIONS = {
@@ -127,7 +127,7 @@ def idempotency_key(request_id: str, stage: StageName | str, input_payload: Any)
 def unwrap_p07_for_project06(value: Mapping[str, Any], request_id: str) -> dict[str, Any]:
     """Return P07 body for the current P06 prototype, validating a proposal envelope if present."""
     if "result" not in value:
-        _validate_response(value, request_id, expected_agent="market-research-agent")
+        _validate_response(value, request_id, expected_agent="sales-market-agent")
         return dict(value)
 
     if value.get("contract_version") != CONTRACT_VERSION:
@@ -144,7 +144,7 @@ def unwrap_p07_for_project06(value: Mapping[str, Any], request_id: str) -> dict[
         raise ContractError("P07 envelope/result schema_version mismatch")
     if value.get("status") != result.get("status"):
         raise ContractError("P07 envelope/result status mismatch")
-    _validate_response(result, request_id, expected_agent="market-research-agent")
+    _validate_response(result, request_id, expected_agent="sales-market-agent")
     return dict(result)
 
 
@@ -175,22 +175,7 @@ def _validate_response(
 def _validate_stage_response(
     response: Mapping[str, Any], request_id: str, *, expected_agent: str,
 ) -> tuple[str, str, str]:
-    """Accept either producer raw response or the optional handoff proposal wrapper."""
-    if isinstance(response, Mapping) and "contract_version" in response:
-        if response.get("contract_version") != CONTRACT_VERSION:
-            raise ContractError("unsupported handoff contract_version")
-        producer, body = response.get("producer"), response.get("result")
-        if not isinstance(producer, Mapping) or not isinstance(body, Mapping):
-            raise ContractError("handoff envelope requires producer and object result")
-        outer_id = response.get("request_id")
-        if outer_id != request_id or body.get("request_id") != request_id:
-            raise ContractError("handoff envelope/result request_id mismatch")
-        agent_id, version, status = _validate_response(body, request_id, expected_agent=expected_agent)
-        if producer.get("agent_id") != agent_id or producer.get("schema_version") != version:
-            raise ContractError("handoff producer metadata mismatch")
-        if response.get("status") != status:
-            raise ContractError("handoff status mismatch")
-        return agent_id, version, status
+    """Validate an unwrapped legacy producer response."""
     return _validate_response(response, request_id, expected_agent=expected_agent)
 
 
@@ -215,6 +200,8 @@ def _unpack_handoff_response(
         raise ContractError("handoff producer schema_version is required")
     if not isinstance(status, str) or status not in VALID_STATUSES:
         raise ContractError("handoff envelope has unsupported status")
+    if body.get("status") != status:
+        raise ContractError("handoff envelope/result status mismatch")
     for field, envelope_value in (("agent_id", agent_id), ("schema_version", version), ("status", status)):
         body_value = body.get(field)
         if body_value is not None and body_value != envelope_value:
@@ -247,7 +234,6 @@ class Orchestrator:
         project_07: Adapter,
         project_06: Adapter,
         request_id_factory: Callable[[], str] | None = None,
-        continue_after_error: bool = False,
         require_envelopes: bool = False,
         project06_version_policy: str = "legacy_equal",
     ) -> None:
@@ -258,7 +244,6 @@ class Orchestrator:
             StageName.PROJECT_06: project_06,
         }
         self.request_id_factory = request_id_factory or (lambda: str(uuid.uuid4()))
-        self.continue_after_error = continue_after_error
         self.require_envelopes = require_envelopes
         self.project06_version_policy = project06_version_policy
 
@@ -289,10 +274,8 @@ class Orchestrator:
             ))
             return result
         shared: dict[str, Any] = {"request_id": rid, "query": query, "scope": normalized_scope}
-        stage_inputs: dict[StageName, dict[str, Any]] = {
-            StageName.TREND: dict(trend_query) if trend_query is not None else {
-                "request_id": rid, "query": query, "scope": normalized_scope,
-            },
+        trend_payload = dict(trend_query) if trend_query is not None else {
+            "request_id": rid, "query": query, "scope": normalized_scope,
         }
 
         for stage in (StageName.TREND, StageName.STOCK, StageName.PROJECT_07, StageName.PROJECT_06):
@@ -323,10 +306,8 @@ class Orchestrator:
                                       and inventory_version == request_version
                                       and (trend_version is None or trend_version == request_version))
                     elif self.project06_version_policy == "v01_supported_sources":
-                        compatible = (
-                            (request_version == "1.0" and inventory_version == "1.0" and trend_version == "1.1")
-                            or (request_version == "1.0" and inventory_version == "1.0" and trend_version is None)
-                        )
+                        compatible = (request_version == "1.0" and inventory_version == "1.0"
+                                      and trend_version == "1.1")
                     else:
                         raise ContractError("unknown Project_06 producer-version policy")
                     if not compatible:
@@ -338,10 +319,8 @@ class Orchestrator:
                         "inventory_product_result": inventory_result,
                         "sales_market_result": p07_body,
                     }
-                    if self.require_envelopes:
-                        payload["sales_market_result"] = p07_body
                 else:
-                    payload = stage_inputs[stage]
+                    payload = trend_payload
 
                 raw = self.adapters[stage](payload)
                 response_body = raw
@@ -383,7 +362,7 @@ class Orchestrator:
                     if version is not None and (not isinstance(version, str) or not version.strip()):
                         raise ContractError("TrendAnalysisResult schema_version must be non-empty when present")
                 else:
-                    expected_agent = "stock-agent" if stage == StageName.STOCK else "market-research-agent"
+                    expected_agent = "stock-agent" if stage == StageName.STOCK else "sales-market-agent"
                     if envelope_metadata:
                         agent_id, version, status = envelope_metadata
                     else:
@@ -397,13 +376,11 @@ class Orchestrator:
                         planning_request["context"] = normalized_scope
                 record = StageRecord(stage, status, rid, agent_id, version, raw_response=raw)
                 result.stages.append(record)
-                if status == "error" and not self.continue_after_error:
+                if status == "error":
                     result.stopped_at = stage
                     break
                 if stage == StageName.TREND:
                     shared["trend_result"] = response_body
-                    if self.require_envelopes:
-                        stage_inputs[StageName.STOCK] = {"request_id": rid, "trend_result": response_body}
                     shared["planning_request"] = planning_request
                 elif stage == StageName.STOCK:
                     shared["inventory_product_result"] = response_body

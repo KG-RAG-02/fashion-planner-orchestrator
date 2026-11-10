@@ -102,6 +102,7 @@ def main() -> None:
     assert [stage["stage"] for stage in result["stages"]] == ["trend", "stock", "project_07", "project_06"]
     assert all(stage["request_id"] == rid for stage in result["stages"])
     assert p07_raw["schema_version"] == "1.3-proposal"
+    assert p07_raw["agent_id"] == "sales-market-agent"
     assert len(p07_raw["sales_data"]["observations"]) == 1
     assert len(p07_raw["market_data"]["observations"]) == 1
     # HTTP JSON converts tuples to arrays; compare the serialized producer value.
@@ -118,6 +119,7 @@ def main() -> None:
         "project_06_transport": "actual HTTP handler on ephemeral loopback",
         "stages": [{"stage": s["stage"], "status": s["status"]} for s in result["stages"]],
         "project_07_schema_version": p07_raw["schema_version"],
+        "project_07_producer_id": p07_raw["agent_id"],
         "sales_observations": len(p07_raw["sales_data"]["observations"]),
         "market_observations": len(p07_raw["market_data"]["observations"]),
         "project_06_sales_market_input_status": p06_result["input_statuses"]["sales_market_result"],
