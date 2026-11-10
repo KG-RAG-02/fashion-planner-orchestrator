@@ -146,6 +146,23 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(seen["p06"]["sales_market_result"]["schema_version"], "1.3-proposal")
         self.assertEqual(result.status, "partial")
 
+    def test_run_passes_explicit_scope_to_trend_and_project07_request(self):
+        seen = {}
+        scope = {"category": {"value": "outerwear", "origin": "user_requested"},
+                 "market": {"value": "KR", "origin": "user_requested"}}
+        def trend(payload):
+            seen["trend"] = payload
+            return {"schema_version": "1.0", "request_id": RID, "status": "no_results",
+                    "trends": [], "evidence": [], "limitations": []}
+        def p07(payload):
+            seen["p07"] = payload
+            return p07_adapter(payload)
+        runner, _ = make_runner(p07=p07)
+        runner.adapters[StageName.TREND] = trend
+        runner.run("synthetic query", request_id=RID, scope=scope)
+        self.assertEqual(seen["trend"]["scope"], scope)
+        self.assertEqual(seen["p07"]["planning_request"]["context"], scope)
+
     def test_p07_input_preserves_actual_trend_schema_version(self):
         raw = trend_adapter({"request_id": RID})
         prepared = prepare_trend_result_for_p07(raw, RID)

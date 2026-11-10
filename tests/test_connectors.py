@@ -66,6 +66,18 @@ class ConnectorConfigurationTests(unittest.TestCase):
         self.assertIsNone(mapped["requested_channel"])
         self.assertIsNone(mapped["requested_period"])
 
+    def test_project07_scope_mapper_passes_only_single_explicit_market_and_channel(self):
+        mapped = _project07_context_fields({"query": "synthetic", "context": {
+            "market": {"value": "KR", "origin": "user_requested"},
+            "channel": [{"value": "online", "origin": "user_requested"}],
+        }})
+        self.assertEqual(mapped["requested_geography"], "KR")
+        self.assertEqual(mapped["requested_channel"], "online")
+        multiple = _project07_context_fields({"query": "synthetic", "context": {
+            "market": [{"value": "KR"}, {"value": "JP"}],
+        }})
+        self.assertIsNone(multiple["requested_geography"])
+
     def test_http_is_restricted_to_loopback(self):
         self.assertEqual(
             _service_url({"ENDPOINT": "http://localhost:8766"}, "ENDPOINT", "/api/planning-draft"),

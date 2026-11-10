@@ -243,16 +243,20 @@ class Orchestrator:
         self.request_id_factory = request_id_factory or (lambda: str(uuid.uuid4()))
         self.continue_after_error = continue_after_error
 
-    def run(self, query: str, *, request_id: str | None = None) -> OrchestrationResult:
+    def run(
+        self, query: str, *, request_id: str | None = None,
+        scope: Mapping[str, Any] | None = None,
+    ) -> OrchestrationResult:
         rid = request_id if request_id is not None else self.request_id_factory()
         if not isinstance(rid, str) or not rid.strip():
             raise ValueError("request_id must be non-empty")
         if not isinstance(query, str) or not query.strip():
             raise ValueError("query must be non-empty")
         result = OrchestrationResult(request_id=rid)
-        shared: dict[str, Any] = {"request_id": rid, "query": query}
+        normalized_scope = dict(scope) if isinstance(scope, Mapping) else {}
+        shared: dict[str, Any] = {"request_id": rid, "query": query, "scope": normalized_scope}
         stage_inputs: dict[StageName, dict[str, Any]] = {
-            StageName.TREND: {"request_id": rid, "query": query},
+            StageName.TREND: {"request_id": rid, "query": query, "scope": normalized_scope},
         }
 
         for stage in (StageName.TREND, StageName.STOCK, StageName.PROJECT_07, StageName.PROJECT_06):
@@ -339,6 +343,8 @@ class Orchestrator:
                 if stage == StageName.TREND:
                     planning_request = {"schema_version": P07_INPUT_SCHEMA_VERSION,
                                         "request_id": rid, "query": query}
+                    if normalized_scope:
+                        planning_request["context"] = normalized_scope
                 record = StageRecord(stage, status, rid, agent_id, version, raw_response=raw)
                 result.stages.append(record)
                 if status == "error" and not self.continue_after_error:

@@ -141,12 +141,24 @@ def _project07_context_fields(request: Mapping[str, Any]) -> dict[str, Any]:
     category = context_data.get("category")
     if isinstance(category, dict):
         category = category.get("value")
+    geography = context_data.get("market", context_data.get("geography"))
+    channel = context_data.get("channel")
+    def single_explicit_value(value: Any) -> str | None:
+        if isinstance(value, list):
+            if len(value) != 1:
+                return None
+            value = value[0]
+        if isinstance(value, dict):
+            if value.get("origin") not in {None, "user_requested"}:
+                return None
+            value = value.get("value")
+        return value.strip() if isinstance(value, str) and value.strip() else None
     # Explicit nulls suppress Project_07's KR/online dataclass defaults until
     # scope extraction and missing-scope behavior are agreed by the owners.
     return {
         "requested_category": category if isinstance(category, str) else None,
-        "requested_geography": None,
-        "requested_channel": None,
+        "requested_geography": single_explicit_value(geography),
+        "requested_channel": single_explicit_value(channel),
         "requested_query": request.get("query") if isinstance(request.get("query"), str) else None,
         "requested_period": None,
     }
