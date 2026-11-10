@@ -12,6 +12,7 @@
 | 파일 | 읽는 코드 | 읽는 시점 | 경로를 바꾸는 방법 |
 |---|---|---|---|
 | [`query_structuring.json`](query_structuring.json) | `src/vogue_orchestrator/query/config.py` | 패키지 import 때 한 번. 형식이 틀리면 `QueryConfigError`로 바로 실패한다 | 환경변수 `VOGUE_QUERY_CONFIG` |
+| [`llm.json`](llm.json) | `src/vogue_orchestrator/llm_provider.py` | LLM을 호출할 때마다 (00 질의 구조화) | — |
 
 ### `query_structuring.json` 키
 | 키 | 현재 값 | 쓰는 곳 | 뜻 |
@@ -23,6 +24,15 @@
 | `unsupported.reasons` | brand·category·attribute·abstract 4개 | `assemble.py` | `unsupported.reason`에 들어갈 고정 문장. `{major_count}`/`{minor_count}`는 어휘 개수로 채운다 |
 | `unsupported.generic_reason` | "현재 검색에서 지원하지 않는 조건" | `assemble.py` | 표에 없는 종류의 사유 |
 | `gender.aliases` | 여: 여성·여자·여성용·우먼·위민즈·women·womens / 남: 남성·남자·남성용·맨즈·men·mens / 공용: 남녀공용·유니섹스·unisex | `resolve.py` (`config.py`가 검증) | 성별 고정 표(결정 G-1). 표에 있으면 `match: alias`, 표준 값 그대로면 `exact`. 키는 표준 성별 3개만, 표기 하나는 한 값에만, 비교는 사전과 같은 `norm_key`(소문자, 공백·`-`·`_` 무시). trend 사전에 성별이 생기면 지운다. **2026-11-10부터 필수 키**: `VOGUE_QUERY_CONFIG`로 다른 설정 파일을 쓰면 이 절이 없을 때 import에서 실패한다. 정규화하면 빈 문자열이 되는 표기(`"-"` 등)는 거부한다 |
+
+### `llm.json` 키 (2026-11-10)
+| 키 | 현재 값 | 뜻 |
+|---|---|---|
+| `timeout_seconds` | `60` | LLM 요청 하나의 시간 제한(초) |
+| `max_tokens` | `16000` | Anthropic 호출의 출력 상한 (OpenAI 호출에는 보내지 않음: 모델마다 매개변수 이름이 달라서) |
+| `max_retries` | `2` | SDK 자체 재시도 횟수 |
+
+모델·키·제공자는 이 파일에 두지 않는다 (`.env`의 `LLM_*`, §4.3).
 
 프롬프트 폴더 위치는 환경변수 `VOGUE_QUERY_PROMPTS_DIR`로 바꾼다. 기본값은 저장소 루트의 `prompts/`다.
 
@@ -131,6 +141,9 @@
 | `VOGUE_PROJECT06_URL` | connectors | CONNECTED 모드에서 필수 |
 | `VOGUE_QUERY_CONFIG` | 질의 모듈 | 선택 (기본 `configs/query_structuring.json`) |
 | `VOGUE_QUERY_PROMPTS_DIR` | 질의 모듈 | 선택 (기본 `prompts/`) |
+| `LLM_MODEL` | `llm_provider.py` (00 질의 구조화) | 구조화 실행 시 필수. 환경변수 또는 저장소 루트 `.env`(환경변수 우선) |
+| `LLM_API_KEY` | `llm_provider.py` | 구조화 실행 시 필수. **값은 `.env`에만 두고 출력·로그·오류 메시지에 넣지 않는다** |
+| `LLM_PROVIDER` | `llm_provider.py` | 선택 (`anthropic`·`openai`). 없으면 모델 이름이 `claude`로 시작하면 anthropic, 아니면 openai |
 
 ### 4.4 저장소 안의 의존 방향
 ```
@@ -149,6 +162,6 @@ query ──► configs/, prompts/, vocabulary.py·alias_data.py ◄── docs/
 | F-4 | ~~`examples/synthetic_demo.py`가 trend 단계에서 계약 오류로 멈춘다~~ | **해결됨**: 팀원 커밋 `325a87e`(2026-11-10)가 합성 trend 응답을 `no_results`로 고침 | — |
 | F-5 | 서버 포트 8765와 Project_06 기본 포트가 겹친다 (README에 이미 기재) | 동시 실행 불가 | 포트를 설정으로 노출 |
 | F-6 | 외부 호출 timeout이 없다 (미결정 사항) | 응답 없는 서비스에서 무한 대기 가능 | 운영 합의 후 설정으로 노출 |
-| F-7 | `tests/test_connectors.py`(팀원 커밋 `325a87e`)는 작업 공간에 `project_07` 폴더가 있다고 가정한다. 이 PC에는 없어 `test_project07_source_factory_is_required_for_ready_status`가 실패한다 (F-3과 같은 원인, 질의 모듈과 무관) | 이 PC에서 전체 테스트(현재 196개) 중 1개 실패 | `project_07` checkout을 두거나, 테스트가 없는 경로를 건너뛰게 담당자와 조율 |
+| F-7 | `tests/test_connectors.py`(팀원 커밋 `325a87e`)는 작업 공간에 `project_07` 폴더가 있다고 가정한다. 이 PC에는 없어 `test_project07_source_factory_is_required_for_ready_status`가 실패한다 (F-3과 같은 원인, 질의 모듈과 무관) | 이 PC에서 전체 테스트(현재 211개) 중 1개 실패 | `project_07` checkout을 두거나, 테스트가 없는 경로를 건너뛰게 담당자와 조율 |
 
 > 참고: 이 문서의 §3 목록은 2026-11-09 코드 기준이다. 팀원 커밋 `325a87e`(proposal HTTP adapter, `VOGUE_PROJECT07_SOURCE_ADAPTER` 등)로 바뀐 core·connectors의 값은 반영하지 않았다.

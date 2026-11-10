@@ -8,6 +8,10 @@ requires-python = ">=3.11"
 # (src/vogue_orchestrator/query) needs pydantic; install it with `pip install -e ".[query]"`.
 [project.optional-dependencies]
 query = ["pydantic>=2.0"]
+# Real LLM call for query structuring (src/vogue_orchestrator/llm_provider.py); install the one
+# matching LLM_MODEL in .env (a model name starting with "claude" uses Anthropic, others OpenAI).
+llm-openai = ["openai"]
+llm-anthropic = ["anthropic"]
 
 [project.scripts]
 vogue-orchestrator-ui = "vogue_orchestrator.server:serve"

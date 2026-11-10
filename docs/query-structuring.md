@@ -1,12 +1,12 @@
 # 질의 구조화 모듈 — 구현 문서 (LLM 호출 전 단계)
 
-> 상태: **1차 구현 완료 (2026-11-09). 2026-11-10 다음 설계의 부품(U1~U3: `StructuredQuery` 모델, 값 확정 `resolve.py`, LLM 출력 v2·프롬프트 v2) 추가, 실행 흐름 연결(U4)은 아직. LLM 호출과 파이프라인 연결은 없다.**
+> 상태: **1차 구현 완료 (2026-11-09). 2026-11-10 다음 설계의 부품(U1~U3: `StructuredQuery` 모델, 값 확정 `resolve.py`, LLM 출력 v2·프롬프트 v2) 추가, 실행 흐름 연결(U4)은 아직. 2026-11-10 UI 연결과 실제 LLM 호출(프롬프트 v1) 확인(§13). trend 단계로의 전달은 아직 없다.**
 > 설계·결정 배경은 [query-preprocessing.md](query-preprocessing.md). **지금 코드의 출력 계약**은 trend 형식 스냅샷 [contracts/trend-query.md](contracts/trend-query.md)(`TrendQuery`)이고, **확정된 다음 계약**은 [contracts/structured-query.md](contracts/structured-query.md)(`StructuredQuery` 1.0, 이 저장소 소유)다. 이 문서는 **무엇이 구현됐고 어떻게 이어서 작업하는지**를 다룬다.
 
 ## 0. 새로 이어받는 사람을 위한 시작 순서
 0. **[query-decisions.md](query-decisions.md)를 먼저 읽는다.** 사용자와 합의한 결정·작업 규칙·별칭 사전 정책이 있고, 다른 문서와 다르면 그 문서가 우선이다. **이 문서는 지금 코드를 설명한다: 실행 흐름은 여전히 v1(LLM이 값을 고르는 방식 → `TrendQuery`)이고, 다음 설계의 부품(U1~U3)은 만들어졌지만 아직 실행 흐름에 연결되지 않았다(§3 표의 "미연결").** 확정된 다음 설계(`StructuredQuery` 1.0 + γ)는 [contracts/structured-query.md](contracts/structured-query.md)(받는 쪽용 정의서)와 [structured-query-plan.md](structured-query-plan.md)(구현 계획)에 있다.
 1. 이 문서 §1~§3을 읽는다 (무엇을, 어디에, 어떤 흐름으로).
-2. 테스트를 돌려 현재 상태를 확인한다 (§8). 기대값: **질의 테스트 176개 통과**. 저장소 전체는 196개이며, 이 PC에서는 `test_connectors.py` 1개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7).
+2. 테스트를 돌려 현재 상태를 확인한다 (§8). 기대값: **질의 테스트 176개 통과**. 저장소 전체는 211개(LLM 호출·UI 연결 15개 포함)이며, 이 PC에서는 `test_connectors.py` 1개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7).
 3. 결과를 눈으로 본다: `examples/query_structuring_demo.py` (§8).
 4. 프롬프트는 [`prompts/`](../prompts/README.md), 설정과 하드코딩 목록은 [`configs/`](../configs/README.md), 예상 질의 30개는 [`data/`](../data/README.md)에 있다.
 5. **다음 할 일과 결정 대기 목록의 기준은 [query-decisions.md §0·§6](query-decisions.md)이다** (이 문서 §10은 요약). 확인이 필요한 가정은 §6이다. **§6의 가정을 바꾸려면 사용자(소유자) 확인이 먼저다.**
@@ -228,7 +228,7 @@ v2 예시는 `data/user_queries.v1.json`과 겹치지 않고, 정의서 §6 예 
 | 조건 | 검사 |
 |---|---|
 | 질의 모듈은 core·connectors·demo·server를 import하지 않는다 (상위 패키지 상대 import 금지) | `test_query_isolation.py` |
-| 기존 모듈은 질의 모듈을 import하지 않는다 | `test_query_isolation.py` |
+| 기존 모듈은 질의 모듈을 import하지 않는다. **예외: UI 진입점 `server.py`**(결정 UI-2, 함수 안 지연 import) | `test_query_isolation.py` |
 | pydantic은 질의 모듈 밖에서 쓰지 않는다 | `test_query_isolation.py` |
 | 질의 모듈은 네트워크·LLM 라이브러리(`urllib`, `http`, `socket`, `requests`, `openai`, `anthropic` 등)를 import하지 않는다 | `test_query_isolation.py` |
 | 질의 모듈 코드에 프롬프트 문장이나 설정으로 옮긴 값이 다시 들어가지 않는다 | `test_query_config.py` |
@@ -267,7 +267,7 @@ Windows PowerShell: `$env:PYTHONPATH="src"; py -m unittest discover -s tests -v`
 | `test_query_isolation.py` | 5 | §7 불변 조건 (소스 정적 검사) | 불필요 |
 | `test_query_lexicon.py` | 25 | `alias_data.py`가 스냅샷 생성 결과와 같음, 해시·출처, **golden 전부 일치**(normalize 11,369건, normalize_tokens 822, normalize_color 2,027, split_tokens 134, norm_key 632), 직접 확인 13건 | 불필요 |
 
-2026-11-10 결과: **질의 테스트 176개 통과** (pydantic 2.14.3; U1~U3 전 88개). 저장소 전체는 196개이고, 이 PC에서는 그중 `test_connectors.py` 1개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7). 질의 테스트만 돌리려면 `-p "test_query_*.py"`. JSON Schema 비교·생성기 검사는 값 하나를 바꾸면 실패하는 것을 확인했다.
+2026-11-10 결과: **질의 테스트 176개 통과** (pydantic 2.14.3; U1~U3 전 88개). 저장소 전체는 211개(`test_llm_provider.py` 10, `test_ui_query_structuring.py` 5 포함)이고, 이 PC에서는 그중 `test_connectors.py` 1개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7). 질의 테스트만 돌리려면 `-p "test_query_*.py"`. JSON Schema 비교·생성기 검사는 값 하나를 바꾸면 실패하는 것을 확인했다.
 
 ## 9. 계약이 바뀔 때 (스냅샷 갱신 절차의 이 모듈 부분)
 [contracts/trend-query.md §6](contracts/trend-query.md)대로 스냅샷 JSON을 교체한 뒤:
@@ -288,12 +288,12 @@ Windows PowerShell: `$env:PYTHONPATH="src"; py -m unittest discover -s tests -v`
 |---|---|---|
 | 0 | **`StructuredQuery` 1.0 + γ 구현**: 계획 [structured-query-plan.md](structured-query-plan.md). U1~U3(계약 모델·값 확정 코드·LLM 출력 v2·프롬프트 v2)은 완료(2026-11-10). 남은 것: U4 통합 → U5 데이터 v2·평가 → U6 문서 | U4 전 사용자 결정 권장: OQ-4·OQ-5 ([query-decisions.md §6](query-decisions.md)) |
 | 1 | §6 가정 A-1~A-5 확인, `data/` silver 30개 확인 (특히 `ambiguous` 4개) → gold, 사전 추가 후보 확인 ([query-decisions.md §4](query-decisions.md)) | trend-analysis-agent 소유자·사용자 답변 |
-| 2 | **LLM 어댑터 (QP-4)**: `DraftProvider`를 구현하는 함수/클래스 하나. `bundle.messages`를 모델에 보내고 JSON(dict 또는 문자열)을 돌려준다. 키·모델·대상은 환경변수나 `configs/`로만 받고 코드에 넣지 않는다. 가능하면 `QueryDraft.model_json_schema()`를 구조화 출력(response format)으로 함께 보낸다 | D5 결정 (제공자, 키 관리, 질의 외부 전송 동의 표시) |
+| 2 | **LLM 어댑터 (QP-4)** — 2026-11-10 `src/vogue_orchestrator/llm_provider.py`로 만들고 실제 호출 1회 확인(§13). 원래 계획: `DraftProvider`를 구현하는 함수/클래스 하나. `bundle.messages`를 모델에 보내고 JSON(dict 또는 문자열)을 돌려준다. 키·모델·대상은 환경변수나 `configs/`로만 받고 코드에 넣지 않는다. 가능하면 `QueryDraft.model_json_schema()`를 구조화 출력(response format)으로 함께 보낸다 | D5 결정 (제공자, 키 관리, 질의 외부 전송 동의 표시) |
 | 3 | `data/user_queries.v1.json`으로 실제 LLM 정확도와 경고 빈도 확인 (QP-8, 비교 기준은 [data/README.md](../data/README.md)) | 2 |
 | 4 | 파이프라인 연결 (D2: trend 어댑터 내부 vs 별도 단계), 결과를 envelope로 감쌀지 결정. 연결할 때 질의 길이 한도 3곳을 하나로 모은다 ([configs/README.md](../configs/README.md) F-1) | D2, Notion 문서 확인 |
 | 5 | 다른 레포로 옮기기 | 대상 레포 결정 |
 
-LLM 어댑터를 붙이는 모양 (예시, 아직 없음):
+LLM 어댑터를 붙이는 모양 (실제 구현은 §13의 `build_draft_provider`):
 ```python
 from vogue_orchestrator.query import structure_query
 
@@ -332,3 +332,63 @@ trend_query_json = result.trend_query.model_dump(mode="json")   # trend 검색 �
 | 2026-11-10 (2차) | Q3 = γ 확정 반영: 이 문서가 v1 코드 설명임을 명시, §5·§10·§11(L-1·L-2)에 γ 이후 동작 표시. 다음 설계는 정의서·[structured-query-plan.md](structured-query-plan.md) |
 | 2026-11-10 (3차) | **U1~U3 병합**: `models.py` = `StructuredQuery` 1.0(기존 `TrendQuery`는 `trend_query.py`로), `resolve.py`(값 확정), `draft.py` = draft v2(기존 v1은 `legacy_v1.py`로), 프롬프트 v2, 버전 폴더 `meta.json`, JSON Schema 생성 스크립트, 설정 `gender.aliases`. 실행 흐름은 v1 그대로. 질의 테스트 88 → 175 |
 | 2026-11-10 (4차) | 검수 반영 코드 수정: `structure_query`가 draft_v2 형식 프롬프트를 받으면 `QueryConfigError`(설정을 U4 전에 v2로 바꾸는 실수 방지), draft v2의 공백뿐인 `raw` 거부(resolver 예외 방지), 정규화하면 빈 성별 표기 거부, 사전 이동 대상에 값이 없을 때 이동 자체의 값 사용. §1·§6 A-6·§11 L-9 갱신. 질의 테스트 176 |
+| 2026-11-10 (5차) | **UI 연결**(§13): `llm_provider.py`(실제 LLM 호출), `server.py`의 00 질의 구조화와 `/api/query-structuring`, 화면 카드·동의 체크, `configs/llm.json`, 테스트 15개(`test_llm_provider.py`·`test_ui_query_structuring.py`), 격리 규칙 예외(`server.py`) |
+| 2026-11-10 (6차) | 실제 LLM 호출 1회 확인(openai `gpt-4o-mini`, "가을 여성 코트" → 2027 FW·아우터/코트·여, 4초), §13에 기록 |
+
+## 13. UI 연결 (2026-11-10, 결정 UI-1·UI-2·D5′)
+사용자가 화면에서 질의를 입력하면 이 모듈의 프롬프트와 코드가 실제 LLM과 함께 실행된다. **새 POST API나 저장소 사이 통신은 없다**: 브라우저 → 같은 PC의 기존 `/api/run` → `server.py`가 질의 모듈을 **함수로 호출**한다.
+
+```
+브라우저 (web/app.js)  ── POST /api/run {query, mode, structure: 동의 체크 여부} ──►  server.py
+  server.py:
+    ① request_id = uuid4()
+    ② structure_query_for_ui(query, request_id, enabled=structure)
+         structure_query(..., draft_provider=llm_provider.build_draft_provider())
+         = prompts/query_structuring/<설정 버전, 지금 v1> → 실제 LLM → QueryDraft 검증 → TrendQuery 조립
+    ③ 기존 파이프라인 orchestrator.run(query, request_id=같은 ID)  (trend 단계 입력은 여전히 {request_id, query})
+    ④ 응답 = execution.to_dict() + {"query_structuring": ②의 결과}
+  화면: 실행 기록 맨 위에 "00 질의 구조화" 카드 (요약 + 결과 JSON + trend 단계 입력 미리보기 + LLM 출력)
+```
+
+| 파일 | 역할 |
+|---|---|
+| `src/vogue_orchestrator/llm_provider.py` | 실제 LLM 호출(`DraftProvider`). `.env`·환경변수의 `LLM_MODEL`·`LLM_API_KEY`(선택 `LLM_PROVIDER`). 모델 이름이 `claude`로 시작하면 Anthropic SDK, 그 밖은 OpenAI SDK(JSON 객체 응답 모드). SDK는 호출 때만 import. 거절·잘림·빈 응답은 `LLMCallError`. 키는 어떤 출력에도 넣지 않는다 |
+| `configs/llm.json` | 시간 제한 60초, Anthropic 출력 상한 16000, 재시도 2 |
+| `src/vogue_orchestrator/server.py` | `structure_query_for_ui()`: 동의 없으면 `skipped`, 설정·SDK 없으면 `LLM_NOT_CONFIGURED`, 질의 모듈 오류는 그 코드(§5.3), LLM 예외는 **클래스 이름만**(`provider_error`, 예 `AuthenticationError`). `GET /api/query-structuring`: 제공자·모델 이름·프롬프트 버전(키 없음) |
+| `web/index.html`, `web/app.js` | 동의 체크("질의를 외부 LLM(제공자 · 모델)에 보내 구조화하는 것을 확인"), 00 카드 |
+| `tests/test_llm_provider.py` (10) | 가짜 SDK 클라이언트로 두 제공자 호출 모양, `.env` 해석, 키 비노출. **실제 `.env`를 읽지 않는다** |
+| `tests/test_ui_query_structuring.py` (5) | 동의 없음, 설정 없음, fixture로 정상 구조화와 trend 입력 미리보기, LLM 실패·잘못된 출력에서 원문 비노출 |
+
+`query_structuring` 응답 모양:
+```jsonc
+{
+  "status": "ok" | "error" | "skipped",
+  "request_id": "…(파이프라인과 같음)",
+  "llm": {"provider": "openai", "model": "…"},          // 키 없음
+  "error_code": null, "error_message": null, "provider_error": null,
+  "prompt_version": "query-structuring-prompt/v1",
+  "trend_query": { …TrendQuery… },                      // 지금 실행 버전 v1의 결과
+  "draft": { …LLM 출력(검증 후)… },
+  "warnings": ["season_year_inferred", …],
+  "trend_input_preview": {"sent": false, "request_id": "…", "query": "…", "trend_query": { … }}
+}
+```
+
+실행: `pip install -e ".[query]"`, `pip install openai`(또는 `anthropic`; 이 PC에는 openai 3.49.0 설치됨), `.env`에 `LLM_MODEL`·`LLM_API_KEY` → `PYTHONPATH=src py app.py` → http://127.0.0.1:8765 → "00 질의 구조화" 동의 체크 → 실행.
+
+**실제 호출 확인 (2026-11-10, 사용자 승인 후 1회)**: `pip install openai`(설치 버전 3.49.0, `chat.completions.create`·`response_format`·`timeout` 매개변수 확인) 후, 시험 서버(127.0.0.1:8799)에 화면과 같은 요청 `{"query": "가을 여성 코트", "mode": "demo", "structure": true}`를 보냈다.
+
+| 항목 | 결과 |
+|---|---|
+| 제공자·모델 | openai · `gpt-4o-mini` (`.env`의 `LLM_MODEL`) |
+| 걸린 시간 | 약 4초 (파이프라인 포함) |
+| 00 질의 구조화 | `ok`, 프롬프트 `query-structuring-prompt/v1`, 경고 `season_year_inferred` |
+| LLM 출력(draft v1) | 시즌 `{year: null, season: FW, raw: "가을"}`, 카테고리 포함 `{raw: 코트, major: 아우터, minor: 코트}`, 성별 `{raw: 여성, value: 여}`, 속성·지원 불가 없음 |
+| 조립 결과(`TrendQuery`) | 시즌 **2027 FW** (`user_requested`; 연도는 코드가 A-1 규칙으로 정함: 2026-11-10 기준 가을 → 2027 FW), 아우터/코트, 여 |
+| 파이프라인 | 4단계 합성 결과 그대로(`partial`), `request_id`가 00 단계와 같음 |
+| trend 입력 미리보기 | `sent: false` (전송 안 함) |
+| 화면 스크립트 | `node --check web/app.js` 통과 |
+
+이 확인으로 **프롬프트 v1 → 실제 LLM → 검증 → 조립 → UI 응답** 경로가 동작함을 확인했다. 정확도 측정(30개 질의)은 아직 하지 않았다.
+
+**지금의 한계**: 실행 프롬프트가 v1이라 결과는 `TrendQuery`(속성 제외·`match` 없음)다. v2(γ) 결과를 보려면 U4가 먼저다. trend로 실제 전달할 형식은 OQ-11([query-decisions.md §6](query-decisions.md)).
