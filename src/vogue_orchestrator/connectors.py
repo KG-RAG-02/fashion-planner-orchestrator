@@ -371,3 +371,12 @@ def build_v01_http_orchestrator(environ: Mapping[str, str] | None = None) -> Orc
         require_envelopes=True,
         project06_version_policy="v01_supported_sources",
     )
+
+
+def request_project06_review_images(
+    payload: Mapping[str, Any], environ: Mapping[str, str] | None = None,
+) -> Mapping[str, Any]:
+    """Call Project_06's separate opt-in image adapter, leaving HTTP v0.1 untouched."""
+    env = environ or os.environ
+    url = _service_url(env, "VOGUE_NEW_PRODUCT_AGENT_URL", "/api/planning-draft")
+    return _post_json(url, payload, bearer_token=env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN"))

@@ -6,8 +6,14 @@ const notice = document.querySelector('#notice');
 const results = document.querySelector('#results');
 const runMode = document.querySelector('#run-mode');
 const connectedConsent = document.querySelector('#connected-consent');
+const imageGenerationConsent = document.querySelector('#image-generation-consent');
 const allowConnected = document.querySelector('#allow-connected');
 const allowStructuring = document.querySelector('#allow-structuring');
+const generateImages = document.querySelector('#generate-images');
+const historyToolbar = document.querySelector('#history-toolbar');
+const historySelect = document.querySelector('#history-select');
+const loadHistoryButton = document.querySelector('#load-history');
+const clearHistoryButton = document.querySelector('#clear-history');
 let currentMode = 'demo';
 
 const stageLabels = {
@@ -87,7 +93,7 @@ function renderConnections(data) {
   const targets = connectors.filter((item) => item.configured && item.target).map((item) => `${item.name} (${item.target})`);
   const destinationText = targets.length ? targets.join(', ') : '설정된 서비스가 없습니다';
   document.querySelector('#connected-consent-copy').textContent =
-    `요청과 앞 단계 결과를 ${destinationText}에 전송하는 것을 확인합니다. 선택한 endpoint와 서비스 설정을 확인한 뒤 실행하세요. 합성 HTTP E2E 모드에서는 Trend 검색 결과 없음과 Stock 합성 DB를 사용합니다.`;
+    `요청과 앞 단계 결과를 ${destinationText}에 전송합니다. 실행 후 실제·합성 데이터 여부와 제한사항은 각 단계 응답에서 확인하세요.`;
   const checkScope = [
     `연결 상태는 ${data?.endpoint_health || 'not_checked'} (endpoint health), ` +
       `${data?.contract_compatibility || 'not_verified'} (계약 호환), ` +
@@ -132,6 +138,7 @@ runMode.addEventListener('change', () => {
   const sendsToAgents = connected || httpE2e;
   currentMode = runMode.value;
   connectedConsent.hidden = !sendsToAgents;
+  imageGenerationConsent.hidden = !httpE2e;
   allowConnected.checked = false;
   const note = document.querySelector('.demo-note');
   if (connected) {
@@ -157,7 +164,8 @@ function renderStage(stage) {
   card.append(top);
 
   const detail = el('div', 'stage-detail');
-  const notes = currentMode === 'connected' ? connectedStageNotes : stageNotes;
+  const notes = currentMode === 'connected' || currentMode === 'agent_http_v01'
+    ? connectedStageNotes : stageNotes;
   const note = stage.error_message || notes[stage.stage] || '';
   if (note) detail.append(el('p', '', note));
   const metaParts = [];
@@ -167,12 +175,30 @@ function renderStage(stage) {
   const raw = stage.raw_response;
   if (raw) {
     const body = raw.result && typeof raw.result === 'object' ? raw.result : raw;
+    if (typeof body.summary === 'string' && body.summary.trim()) {
+      detail.append(el('p', 'stage-summary', body.summary));
+    }
+    if (Array.isArray(body.findings)) {
+      for (const finding of body.findings.slice(0, 3)) {
+        const text = typeof finding === 'string' ? finding
+          : finding?.summary || finding?.statement || finding?.description || finding?.text;
+        const value = typeof text === 'string' ? text : text?.value;
+        if (typeof value === 'string' && value.trim()) detail.append(el('p', 'stage-finding', value));
+      }
+    }
     const evidence = Array.isArray(body.evidence) ? body.evidence.length : 0;
     const missing = Array.isArray(body.missing_data) ? body.missing_data.length : 0;
     const errors = Array.isArray(body.errors) ? body.errors.length : 0;
     const limitations = Array.isArray(body.limitations) ? body.limitations.length : 0;
     if (evidence || missing || errors || limitations) {
       detail.append(el('p', 'stage-counts', `Evidence ${evidence} · 미확보 ${missing} · 제한 ${limitations} · 오류 ${errors}`));
+    }
+    if (Array.isArray(body.limitations)) {
+      for (const limitation of body.limitations.slice(0, 3)) {
+        if (typeof limitation === 'string' && limitation.trim()) {
+          detail.append(el('p', 'stage-limitation', `제한 · ${limitation}`));
+        }
+      }
     }
   }
   if (metaParts.length) detail.append(el('p', '', metaParts.join(' · ')));
@@ -262,7 +288,20 @@ function renderStructuring(s) {
 }
 
 function renderExecution(data) {
-  document.querySelector('#request-id').textContent = data.request_id;
+  document.querySelector('#request-id').textContent = data.request_id ||
+    (data.historical_preview ? '직전 실행 · 응답 상세 미저장' : '');
+  const queryLine = document.querySelector('#run-query');
+  queryLine.hidden = !data.query;
+  queryLine.textContent = data.query ? `질의 · ${data.query}` : '';
+  const historyNote = document.querySelector('#history-note');
+  historyNote.hidden = !data.historical_preview && !data.restored_from_cache && !data.restored_from_history;
+  historyNote.textContent = data.historical_preview
+    ? '이전 실행의 단계 상태와 이미지는 복원했습니다. 당시 전체 agent 응답과 초안 텍스트는 저장하지 않아 이 요약에 포함되지 않습니다.'
+    : data.restored_from_history
+      ? `저장된 실행 기록입니다${data.saved_at ? ` · ${data.saved_at}` : ''}.`
+      : data.restored_from_cache
+      ? '이 컴퓨터에 저장된 최근 실행 결과입니다. 전체 기록 삭제로 이 로컬 기록을 지울 수 있습니다.'
+      : '';
   const overall = document.querySelector('#overall-status');
   overall.textContent = data.status === 'ok' ? 'PIPELINE COMPLETE' : data.status === 'error' ? 'PIPELINE STOPPED' : 'PIPELINE PARTIAL';
   overall.dataset.status = data.status;
@@ -271,12 +310,77 @@ function renderExecution(data) {
   const finalStage = data.stages.find((item) => item.stage === 'project_06');
   const draftCard = document.querySelector('#draft-card');
   const finalBody = finalStage?.raw_response?.result || finalStage?.raw_response;
+  const imageData = data.image_generation;
+  const productUrl = imageData?.image_display_url;
+  const boardUrl = imageData?.planning_board_display_url;
   if (finalBody?.draft) {
-    document.querySelector('#draft-title').textContent = finalBody.draft.title || '기획 초안';
-    document.querySelector('#draft-summary').textContent = finalBody.draft.summary || '';
+    const draft = finalBody.draft;
+    document.querySelector('#draft-title').textContent = draft.title || '기획 초안';
+    const summary = document.querySelector('#draft-summary');
+    summary.textContent = draft.summary || '';
+    summary.hidden = !draft.summary;
+    const detail = document.querySelector('#draft-details');
+    const rows = [];
+    const claimValue = (value) => typeof value === 'string' ? value
+      : value && typeof value === 'object' ? (value.value || '') : '';
+    for (const [key, label] of [['opportunity', '기회 가설'], ['target_customer', '대상 고객'],
+      ['product_definition', '상품 정의']]) {
+      const value = claimValue(draft[key]);
+      if (value) rows.push([label, value]);
+    }
+    for (const [key, label] of [['attributes', '제안 속성'], ['differentiation', '차별화'],
+      ['risks', '리스크'], ['questions_for_validation', '검토 질문'], ['limitations', '제한사항']]) {
+      const values = Array.isArray(draft[key]) ? draft[key].map(claimValue).filter(Boolean) : [];
+      if (values.length) rows.push([label, values.join(' · ')]);
+    }
+    detail.replaceChildren(...rows.map(([label, value]) => {
+      const row = el('p', 'draft-detail-row');
+      row.append(el('strong', '', `${label} · `), document.createTextNode(value));
+      return row;
+    }));
     draftCard.hidden = false;
+  } else if (!productUrl && !boardUrl) draftCard.hidden = true;
+  else {
+    document.querySelector('#draft-title').textContent = 'Project_06 기획 이미지 미리보기';
+    document.querySelector('#draft-summary').textContent = '';
+    document.querySelector('#draft-summary').hidden = true;
+    document.querySelector('#draft-details').replaceChildren();
+    draftCard.hidden = false;
+  }
+  const imageNote = document.querySelector('#image-generation-note');
+  const imageArea = document.querySelector('#draft-images');
+  const productFigure = document.querySelector('#product-image-figure');
+  const boardFigure = document.querySelector('#planning-board-figure');
+  productFigure.hidden = !productUrl;
+  boardFigure.hidden = !boardUrl;
+  imageArea.hidden = !productUrl && !boardUrl;
+  if (productUrl) document.querySelector('#product-image').src = productUrl;
+  if (boardUrl) document.querySelector('#planning-board-image').src = boardUrl;
+  document.querySelector('#product-image').onerror = () => {
+    imageNote.textContent = 'Project_06 상품 시안은 생성됐지만 UI에서 이미지를 불러오지 못했습니다.';
+  };
+  document.querySelector('#planning-board-image').onerror = () => {
+    imageNote.textContent = 'Project_06 기획서 보드는 생성됐지만 UI에서 이미지를 불러오지 못했습니다.';
+  };
+  imageNote.hidden = !imageData;
+  const fallbackConflicts = imageData?.synthetic_fallback?.blocked_actual_attempt?.conflicts || [];
+  const conflictLabels = fallbackConflicts.map((conflict) => {
+    const vals = conflict.values || {};
+    const inventory = Array.isArray(vals.inventory) ? vals.inventory.join(', ') : String(vals.inventory ?? '');
+    return `${conflict.field}: 요청 ${vals.request ?? '미상'} / 재고 ${inventory || '미상'}`;
+  });
+  imageNote.textContent = !imageData ? '' : imageData.status === 'generated'
+    ? `Project_06 이미지 생성 상태: ${imageData.status}. 별도 이미지 요청 응답이며 텍스트 초안과 함께 MD 검토가 필요합니다${imageData.planning_board?.status ? ` · 기획서 보드 ${imageData.planning_board.status}` : ''}.`
+    : imageData.status === 'generated_synthetic_fallback'
+      ? `Project_06 이미지와 기획서 보드를 가상 보완 입력으로 생성했습니다. 실제 재고 근거가 아니며, 실제 단계 응답과 충돌은 유지됩니다${conflictLabels.length ? ` · 원본 충돌: ${conflictLabels.join('; ')}` : ''}. 이미지와 초안 모두 MD 검토가 필요합니다.`
+      : `Project_06 이미지 생성 상태: ${imageData.status || 'unknown'}${imageData.error_code ? ` · ${imageData.error_code}` : ''}${conflictLabels.length ? ` · 충돌: ${conflictLabels.join('; ')}` : ''}. 텍스트 초안과 단계 결과는 별도로 보존됩니다.`;
+  const traceFootnote = document.querySelector('.trace-footnote');
+  if (currentMode === 'agent_http_v01') {
+    traceFootnote.textContent = 'HTTP v0.1 route를 순차 호출한 실행입니다. 합성 입력·실제 자료원 결과·제한은 각 단계 응답에 표시됩니다. 초안은 MD 검토가 필요합니다.';
+  } else if (currentMode === 'connected') {
+    traceFootnote.textContent = '혼합 connector 실행입니다. HTTP v0.1 전체 E2E와 구분되며, 각 단계 응답의 데이터 성격과 제한을 확인하세요.';
   } else {
-    draftCard.hidden = true;
+    traceFootnote.textContent = '합성 fixture 기반 미리보기입니다. 실제 agent endpoint나 자료원을 호출하지 않았습니다.';
   }
   results.hidden = false;
 }
@@ -301,6 +405,11 @@ form.addEventListener('submit', async (event) => {
     notice.hidden = false;
     return;
   }
+  if (generateImages.checked && runMode.value !== 'agent_http_v01') {
+    notice.textContent = '기획서 이미지 생성은 AGENT HTTP v0.1 모드에서 사용할 수 있습니다.';
+    notice.hidden = false;
+    return;
+  }
   const requestMode = runMode.value;
   runButton.disabled = true;
   runButton.querySelector('span:first-child').textContent = '실행 중…';
@@ -308,7 +417,8 @@ form.addEventListener('submit', async (event) => {
     const response = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, mode: requestMode, structure: allowStructuring.checked }),
+      body: JSON.stringify({ query, mode: requestMode, structure: allowStructuring.checked,
+        generate_images: requestMode === 'agent_http_v01' && generateImages.checked }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -316,6 +426,7 @@ form.addEventListener('submit', async (event) => {
       throw new Error(data.message || data.error || '실행을 완료하지 못했습니다.');
     }
     currentMode = requestMode;
+    await refreshRunHistory(data.history_id || '');
     renderExecution(data);
     results.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
@@ -327,5 +438,72 @@ form.addEventListener('submit', async (event) => {
   }
 });
 
+loadHistoryButton.addEventListener('click', async () => {
+  const historyId = historySelect.value;
+  if (!historyId) return;
+  try {
+    const response = await fetch(`/api/run-history/${encodeURIComponent(historyId)}`);
+    const record = await response.json();
+    if (!response.ok || !record.result) throw new Error('저장된 실행 기록을 불러오지 못했습니다.');
+    currentMode = record.mode || 'demo';
+    record.result.restored_from_history = true;
+    record.result.saved_at = record.saved_at;
+    renderExecution(record.result);
+    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (error) {
+    notice.textContent = error.message;
+    notice.hidden = false;
+  }
+});
+
+clearHistoryButton.addEventListener('click', async () => {
+  try {
+    const response = await fetch('/api/run-history', { method: 'DELETE' });
+    if (!response.ok) throw new Error('저장 기록을 삭제하지 못했습니다.');
+    await refreshRunHistory();
+    results.hidden = true;
+    notice.textContent = '이 컴퓨터에 저장된 실행 기록을 모두 삭제했습니다.';
+    notice.hidden = false;
+  } catch (error) {
+    notice.textContent = error.message;
+    notice.hidden = false;
+  }
+});
+
+async function refreshRunHistory(selectedId = '') {
+  try {
+    const response = await fetch('/api/run-history');
+    const data = await response.json();
+    const runs = Array.isArray(data.runs) ? data.runs : [];
+    historySelect.replaceChildren(new Option('저장 기록 선택', ''));
+    for (const run of runs) {
+      const when = (run.saved_at || '').replace('T', ' ').replace('+00:00', ' UTC');
+      const query = run.query || '질의 미보관';
+      const suffix = run.historical_preview ? ' · 요약만 있음' : '';
+      historySelect.add(new Option(`${when} · ${query} · ${run.status || 'unknown'}${suffix}`, run.id));
+    }
+    historyToolbar.hidden = runs.length === 0;
+    if (selectedId && runs.some((run) => run.id === selectedId)) historySelect.value = selectedId;
+  } catch {
+    historyToolbar.hidden = true;
+  }
+}
+
+async function restoreLatestRun() {
+  try {
+    const response = await fetch('/api/latest-run');
+    const cached = await response.json();
+    await refreshRunHistory(cached.id || cached.result?.history_id || '');
+    if (!response.ok || !cached.available || !cached.result) return;
+    currentMode = cached.mode || 'demo';
+    cached.result.restored_from_cache = true;
+    cached.result.saved_at = cached.saved_at;
+    renderExecution(cached.result);
+  } catch {
+    // The page stays usable if the optional local result cache is unavailable.
+  }
+}
+
 loadConnectionStatus();
 loadStructuringStatus();
+restoreLatestRun();

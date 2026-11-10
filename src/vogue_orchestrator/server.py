@@ -1,23 +1,29 @@
-"""Loopback-only stdlib web UI for the synthetic orchestrator demo."""
+"""Loopback-only stdlib web UI for VOGUE orchestration modes."""
 
 from __future__ import annotations
 
 import json
 import hashlib
+import http.client
+import copy
 import mimetypes
 import os
+import ssl
 import uuid
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse, urlsplit
 
 from .demo import build_demo_orchestrator
 from .connectors import (
     ConnectorConfigurationError,
+    _service_url,
     build_connected_orchestrator,
     build_v01_http_orchestrator,
     connection_status,
+    request_project06_review_images,
 )
 from .llm_provider import LLMConfigurationError, build_draft_provider, llm_status, load_settings
 
@@ -27,6 +33,11 @@ MAX_BODY_BYTES = 32_000
 MAX_QUERY_CHARS = 1_000
 MAX_REQUEST_ID_CHARS = 128
 MAX_SCOPE_FIELDS = {"season", "category", "market", "geography", "channel", "period"}
+MAX_IMAGE_BYTES = 25 * 1024 * 1024
+MAX_LATEST_RUN_BYTES = 12 * 1024 * 1024
+LATEST_RUN_PATH = Path(__file__).resolve().parents[2] / ".local" / "latest-run.json"
+RUN_HISTORY_DIR = LATEST_RUN_PATH.parent / "runs"
+MAX_SAVED_RUNS = 20
 
 
 ProviderFactory = Callable[[], tuple[Callable[[Any], Any], dict[str, Any]]]
@@ -118,6 +129,225 @@ def query_structuring_status() -> dict[str, Any]:
     return {"llm": llm_status(), "prompt_version": PROMPT_VERSION}
 
 
+def _write_private_json(path: Path, data: bytes) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(data)
+    os.replace(temporary, path)
+
+
+def _save_latest_run(mode: str, result: dict[str, Any]) -> str | None:
+    """Archive a UI run and keep the latest run available for page restore."""
+    try:
+        history_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:8]}"
+        record = {
+            "id": history_id, "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "mode": mode, "result": result,
+        }
+        result["history_id"] = history_id
+        data = json.dumps(record, ensure_ascii=False).encode("utf-8")
+        if len(data) > MAX_LATEST_RUN_BYTES:
+            result.pop("history_id", None)
+            return None
+        LATEST_RUN_PATH.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        RUN_HISTORY_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _write_private_json(RUN_HISTORY_DIR / f"{history_id}.json", data)
+        _write_private_json(LATEST_RUN_PATH, data)
+        old_runs = sorted(RUN_HISTORY_DIR.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
+        for old in old_runs[MAX_SAVED_RUNS:]:
+            old.unlink(missing_ok=True)
+        return history_id
+    except OSError:
+        result.pop("history_id", None)
+        return None
+
+
+def _load_latest_run() -> dict[str, Any] | None:
+    try:
+        if not LATEST_RUN_PATH.is_file() or LATEST_RUN_PATH.stat().st_size > MAX_LATEST_RUN_BYTES:
+            return None
+        value = json.loads(LATEST_RUN_PATH.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) and isinstance(value.get("result"), dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _history_id_is_safe(history_id: str) -> bool:
+    return bool(history_id) and Path(history_id).name == history_id and all(
+        char.isalnum() or char in "_-" for char in history_id
+    )
+
+
+def _load_history_record(history_id: str) -> dict[str, Any] | None:
+    if not _history_id_is_safe(history_id):
+        return None
+    path = RUN_HISTORY_DIR / f"{history_id}.json"
+    try:
+        if not path.is_file() or path.stat().st_size > MAX_LATEST_RUN_BYTES:
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) and isinstance(value.get("result"), dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _list_run_history() -> list[dict[str, Any]]:
+    try:
+        paths = sorted(RUN_HISTORY_DIR.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
+    except OSError:
+        return []
+    history = []
+    for path in paths[:MAX_SAVED_RUNS]:
+        record = _load_history_record(path.stem)
+        if record:
+            result = record["result"]
+            history.append({
+                "id": record.get("id", path.stem), "saved_at": record.get("saved_at"),
+                "mode": record.get("mode"), "query": result.get("query"),
+                "status": result.get("status"), "historical_preview": result.get("historical_preview", False),
+            })
+    return history
+
+
+def _image_generation_followup(execution: Any) -> dict[str, Any]:
+    """Ask Project_06's opt-in legacy image adapter using the exact saved upstream bodies."""
+    final = next((stage for stage in execution.stages if stage.stage.value == "project_06"), None)
+    response = final.raw_response if final is not None else None
+    body = response.get("result") if isinstance(response, dict) else None
+    evidence = body.get("input_evidence") if isinstance(body, dict) else None
+    if not isinstance(evidence, dict):
+        return {"status": "not_available", "error_code": "PROJECT_06_INPUT_TRACE_MISSING"}
+    inputs = {
+        name: (evidence.get(name) or {}).get("payload")
+        for name in ("planning_request", "trend_result", "inventory_product_result", "sales_market_result")
+    }
+    if not all(isinstance(value, dict) for value in inputs.values()):
+        return {"status": "not_available", "error_code": "PROJECT_06_IMAGE_INPUT_MISSING"}
+    source_trend_version = inputs["trend_result"].get("schema_version")
+    legacy_inputs = copy.deepcopy(inputs)
+    if source_trend_version == "1.1":
+        # The separate legacy image endpoint requires all producer schemas to
+        # match PlanningRequest 1.0. Adapt a copy only; the canonical v0.1 raw
+        # response and original Trend 1.1 payload remain untouched in the trace.
+        legacy_inputs["trend_result"]["schema_version"] = "1.0"
+    elif source_trend_version not in {None, "1.0"}:
+        return {"status": "not_supported", "error_code": "UNSUPPORTED_TREND_IMAGE_INPUT_VERSION"}
+    image_request = {
+        "request_id": execution.request_id,
+        **legacy_inputs,
+        "generate_image": True,
+        "generate_planning_board": True,
+    }
+    image_response = request_project06_review_images(image_request)
+    actual_image_response = image_response
+    image = image_response.get("image") if isinstance(image_response, dict) else None
+    board = image_response.get("planning_board") if isinstance(image_response, dict) else None
+    fallback_response = None
+    fallback_used = False
+    conflicts = image_response.get("conflicts") if isinstance(image_response, dict) else None
+    context = inputs["planning_request"].get("context")
+    context = context if isinstance(context, dict) else {}
+    explicit_season = context.get("season")
+    explicit_category = context.get("category")
+    has_user_scope = all(
+        isinstance(value, dict) and value.get("source") == "user"
+        and isinstance(value.get("value"), str) and value.get("value").strip()
+        for value in (explicit_season, explicit_category)
+    )
+    if (isinstance(image, dict) and image.get("status") == "blocked"
+            and isinstance(conflicts, list) and conflicts and has_user_scope):
+        # User-authorized visual fallback: keep the actual canonical run intact,
+        # but make a separate Project_06 image request with an explicit
+        # synthetic no-results inventory input. Never represent it as real
+        # stock data or alter the recorded agent response.
+        fallback_inputs = copy.deepcopy(legacy_inputs)
+        fallback_inputs["inventory_product_result"] = {
+            "agent_id": "stock-agent",
+            "schema_version": "1.0",
+            "request_id": execution.request_id,
+            "status": "no_results",
+            "products": [],
+            "evidence": [],
+            "limitations": [
+                "SYNTHETIC IMAGE FALLBACK: conflicting inventory was excluded from this separate visual request; this does not mean actual inventory is empty."
+            ],
+            "errors": [],
+        }
+        fallback_request = {
+            "request_id": execution.request_id,
+            **fallback_inputs,
+            "generate_image": True,
+            "generate_planning_board": True,
+        }
+        fallback_response = request_project06_review_images(fallback_request)
+        fallback_image = fallback_response.get("image") if isinstance(fallback_response, dict) else None
+        if isinstance(fallback_image, dict) and fallback_image.get("status") == "generated":
+            image_response, image, board = fallback_response, fallback_image, fallback_response.get("planning_board")
+            fallback_used = True
+    return {
+        "status": ("generated_synthetic_fallback" if fallback_used else
+                  "generated" if isinstance(image, dict) and image.get("status") == "generated" else
+                  (image.get("status") if isinstance(image, dict) else "failed")),
+        "image": image,
+        "planning_board": board,
+        "synthetic_fallback": {
+            "used": fallback_used,
+            "reason": "Project_06 blocked visual generation because actual upstream inventory conflicts with the explicitly requested season/category." if conflicts else None,
+            "excluded_input": "inventory_product_result" if fallback_used else None,
+            "limitations": ([
+                "가상 보완 입력으로 별도 생성한 이미지입니다. 실제 재고 근거가 아니며, 실제 Project_08 단계 응답과 MD 검토 필요 상태는 그대로 유지됩니다."
+            ] if fallback_used else []),
+            "blocked_actual_attempt": ({
+                "status": actual_image_response.get("image", {}).get("status"),
+                "conflicts": conflicts,
+                "raw_response": actual_image_response,
+            } if fallback_used else None),
+        },
+        "input_compatibility": {
+            "adapter_version": "project08-project06-image-legacy/0.1",
+            "trend_source_schema_version": source_trend_version,
+            "trend_legacy_input_schema_version": legacy_inputs["trend_result"].get("schema_version"),
+            "original_trend_payload_preserved": True,
+        },
+        "raw_response": image_response,
+    }
+
+
+def _fetch_project06_image(filename: str) -> tuple[bytes, str]:
+    """Proxy one generated image from the configured Project_06 host to the same-origin UI."""
+    if Path(filename).name != filename or not filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+        raise ValueError("invalid image filename")
+    image_url = _service_url(os.environ, "VOGUE_NEW_PRODUCT_AGENT_URL",
+                             "/api/generated-images/" + quote(filename))
+    parts = urlsplit(image_url)
+    path = parts.path
+    headers = {"Accept": "image/png,image/jpeg,image/webp"}
+    token = os.environ.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    conn: http.client.HTTPConnection | http.client.HTTPSConnection
+    if parts.scheme == "https":
+        conn = http.client.HTTPSConnection(parts.hostname, parts.port, timeout=10,
+                                           context=ssl.create_default_context())
+    else:
+        conn = http.client.HTTPConnection(parts.hostname, parts.port, timeout=10)
+    try:
+        conn.request("GET", path, headers=headers)
+        response = conn.getresponse()
+        if response.status != 200:
+            raise FileNotFoundError("Project_06 image is unavailable")
+        content_type = response.getheader("Content-Type", "application/octet-stream").split(";", 1)[0]
+        if content_type not in {"image/png", "image/jpeg", "image/webp"}:
+            raise ValueError("unsupported image content type")
+        data = response.read(MAX_IMAGE_BYTES + 1)
+        if len(data) > MAX_IMAGE_BYTES:
+            raise ValueError("generated image exceeds the UI size limit")
+        return data, content_type
+    finally:
+        conn.close()
+
+
 class OrchestratorHandler(BaseHTTPRequestHandler):
     server_version = "VOGUEOrchestratorDemo/0.1"
 
@@ -142,13 +372,40 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path == "/api/health":
-            self._json(200, {"status": "ok", "mode": "synthetic-demo"})
+            self._json(200, {"status": "ok", "mode": "local-orchestrator-ui"})
             return
         if path == "/api/connections":
             self._json(200, connection_status())
             return
         if path == "/api/query-structuring":
             self._json(200, query_structuring_status())
+            return
+        if path == "/api/latest-run":
+            value = _load_latest_run()
+            self._json(200, {"available": value is not None, **(value or {})})
+            return
+        if path == "/api/run-history":
+            self._json(200, {"runs": _list_run_history()})
+            return
+        if path.startswith("/api/run-history/"):
+            history_id = path.removeprefix("/api/run-history/")
+            record = _load_history_record(history_id)
+            self._json(200 if record else 404, record or {"error": "run_not_found"})
+            return
+        if path.startswith("/api/new-product/images/"):
+            filename = path.removeprefix("/api/new-product/images/")
+            try:
+                content, content_type = _fetch_project06_image(filename)
+            except FileNotFoundError:
+                self._json(404, {"error": "generated_image_not_found"})
+                return
+            except ValueError:
+                self._json(400, {"error": "invalid_generated_image"})
+                return
+            except Exception:
+                self._json(502, {"error": "generated_image_unavailable"})
+                return
+            self._send(200, content, content_type)
             return
         relative = "index.html" if path == "/" else path.removeprefix("/")
         target = (WEB_ROOT / relative).resolve()
@@ -160,6 +417,44 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
         if content_type.startswith("text/") or content_type in {"application/javascript", "application/json"}:
             content_type += "; charset=utf-8"
         self._send(200, target.read_bytes(), content_type)
+
+    def do_DELETE(self) -> None:
+        path = urlparse(self.path).path
+        if path == "/api/run-history":
+            try:
+                for item in RUN_HISTORY_DIR.glob("*"):
+                    if item.is_file():
+                        item.unlink(missing_ok=True)
+                LATEST_RUN_PATH.unlink(missing_ok=True)
+            except OSError:
+                self._json(500, {"error": "run_history_clear_failed"})
+                return
+            self._json(200, {"cleared": True})
+            return
+        if path.startswith("/api/run-history/"):
+            history_id = path.removeprefix("/api/run-history/")
+            if not _history_id_is_safe(history_id):
+                self._json(400, {"error": "invalid_run_id"})
+                return
+            try:
+                (RUN_HISTORY_DIR / f"{history_id}.json").unlink(missing_ok=True)
+                latest = _load_latest_run()
+                if latest and latest.get("id") == history_id:
+                    LATEST_RUN_PATH.unlink(missing_ok=True)
+            except OSError:
+                self._json(500, {"error": "run_delete_failed"})
+                return
+            self._json(200, {"deleted": True})
+            return
+        if path != "/api/latest-run":
+            self._json(404, {"error": "not_found"})
+            return
+        try:
+            LATEST_RUN_PATH.unlink(missing_ok=True)
+        except OSError:
+            self._json(500, {"error": "latest_run_clear_failed"})
+            return
+        self._json(200, {"cleared": True})
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
@@ -184,6 +479,7 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 scope = input_value.get("scope", {})
                 trend_query = input_value.get("trend_query")
                 structure = input_value.get("structure_query", False)
+                generate_images = False  # image generation is a separate Project_06 opt-in API
                 if not isinstance(structure, bool):
                     raise ValueError("input.structure_query는 true/false여야 합니다.")
                 if structure and trend_query is not None:
@@ -210,6 +506,7 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 mode = value.get("mode", "demo") if isinstance(value, dict) else "demo"
                 # UI only: run 00 query structuring (external LLM) when the user ticked the consent box.
                 structure = value.get("structure", False) if isinstance(value, dict) else False
+                generate_images = value.get("generate_images", False) if isinstance(value, dict) else False
             if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
                 raise ValueError(f"쿼리는 1~{MAX_QUERY_CHARS}자로 입력해 주세요.")
             if mode not in {"demo", "connected", "agent_http_v01"}:
@@ -218,6 +515,10 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 raise ValueError("agent_http_v01 모드는 query structuring 동의가 필요합니다.")
             if not isinstance(structure, bool):
                 raise ValueError("structure 값은 true/false여야 합니다.")
+            if not isinstance(generate_images, bool):
+                raise ValueError("generate_images 값은 true/false여야 합니다.")
+            if generate_images and (public_api or mode != "agent_http_v01"):
+                raise ValueError("기획 이미지 생성은 UI의 HTTP v0.1 실행에서만 요청할 수 있습니다.")
         except (ValueError, json.JSONDecodeError) as exc:
             self._json(400, {"error": "invalid_request", "message": str(exc)})
             return
@@ -252,6 +553,25 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 run_options["trend_query"] = trend_query
             execution = orchestrator.run(query.strip(), **run_options)
             result = execution.to_dict()
+            if generate_images:
+                try:
+                    images = _image_generation_followup(execution)
+                    for name, key in (("image", "image_display_url"),
+                                      ("planning_board", "planning_board_display_url")):
+                        item = images.get(name)
+                        image_url = item.get("image_url") if isinstance(item, dict) else None
+                        filename = Path(urlparse(image_url).path).name if isinstance(image_url, str) else ""
+                        if (isinstance(image_url, str) and image_url.startswith("/api/generated-images/")
+                                and Path(image_url).name == filename and filename):
+                            images[key] = "/api/new-product/images/" + quote(filename)
+                    result["image_generation"] = images
+                except Exception as exc:
+                    result["image_generation"] = {
+                        "status": "failed", "error_code": "PROJECT_06_IMAGE_REQUEST_FAILED",
+                        "error_type": type(exc).__name__,
+                        "error_message": (str(exc) if isinstance(exc, (ConnectorConfigurationError,))
+                                         or type(exc).__name__ == "TransportError" else None),
+                    }
             if public_api:
                 result["input"] = {"original_query": query.strip(), "scope": scope}
                 if trend_query is not None:
@@ -271,6 +591,8 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 self._json(200 if result["status"] != "error" else 502, result)
             else:
                 result["query_structuring"] = structuring
+                result["query"] = query.strip()
+                _save_latest_run(mode, result)
                 self._json(200, result)
         except ConnectorConfigurationError as exc:
             self._json(409, {"error": "connectors_not_ready", "message": str(exc), "connections": connection_status()})
@@ -287,7 +609,7 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
     if host not in {"127.0.0.1", "localhost"} and os.environ.get("VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND") != "1":
         raise ValueError("Binding outside loopback requires VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND=1.")
     server = ThreadingHTTPServer((host, port), OrchestratorHandler)
-    print(f"VOGUE synthetic demo UI: http://{host}:{port}")
+    print(f"VOGUE orchestrator UI: http://{host}:{port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
