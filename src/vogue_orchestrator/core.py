@@ -19,17 +19,32 @@ class StageName(StrEnum):
 
 VALID_STATUSES = {"ok", "partial", "no_results", "error"}
 TREND_STATUSES = {"ok", "no_results", "error"}
-CONTRACT_VERSION = "vogue-handoff/0.1-proposal"
+CONTRACT_VERSION = "vogue-handoff/0.1"
 P07_INPUT_SCHEMA_VERSION = "1.0"
+ROUTE_PRODUCERS = {
+    StageName.TREND: ("trend-analysis-agent", "trend-analysis-agent"),
+    StageName.STOCK: ("stock-agent", "stock-agent"),
+    StageName.PROJECT_07: ("sales-market-agent", "market-research-agent"),
+    StageName.PROJECT_06: ("new-product-agent", "new-product-agent"),
+}
+SUPPORTED_PRODUCER_VERSIONS = {
+    StageName.TREND: "1.1",
+    StageName.STOCK: "1.0",
+    StageName.PROJECT_07: "1.0",
+}
 
 
 class ContractError(ValueError):
     """A producer response violates the minimum orchestration boundary."""
 
 
+class TransportError(RuntimeError):
+    """An agent request failed before a valid producer result was received."""
+
+
 @dataclass(frozen=True)
 class HandoffEnvelope:
-    """Proposal wrapper that keeps producer schema version distinct."""
+    """HTTP v0.1 wrapper that keeps producer schema version distinct."""
 
     request_id: str
     agent_id: str
@@ -233,6 +248,8 @@ class Orchestrator:
         project_06: Adapter,
         request_id_factory: Callable[[], str] | None = None,
         continue_after_error: bool = False,
+        require_envelopes: bool = False,
+        project06_version_policy: str = "legacy_equal",
     ) -> None:
         self.adapters = {
             StageName.TREND: trend,
@@ -242,10 +259,13 @@ class Orchestrator:
         }
         self.request_id_factory = request_id_factory or (lambda: str(uuid.uuid4()))
         self.continue_after_error = continue_after_error
+        self.require_envelopes = require_envelopes
+        self.project06_version_policy = project06_version_policy
 
     def run(
         self, query: str, *, request_id: str | None = None,
         scope: Mapping[str, Any] | None = None,
+        trend_query: Mapping[str, Any] | None = None,
     ) -> OrchestrationResult:
         rid = request_id if request_id is not None else self.request_id_factory()
         if not isinstance(rid, str) or not rid.strip():
@@ -254,9 +274,25 @@ class Orchestrator:
             raise ValueError("query must be non-empty")
         result = OrchestrationResult(request_id=rid)
         normalized_scope = dict(scope) if isinstance(scope, Mapping) else {}
+        if trend_query is not None:
+            if not isinstance(trend_query, Mapping):
+                raise ValueError("trend_query must be an object")
+            if trend_query.get("request_id") != rid:
+                raise ValueError("trend_query.request_id must match request_id")
+            if trend_query.get("original_query") != query:
+                raise ValueError("trend_query.original_query must match the submitted query")
+        elif self.require_envelopes:
+            result.stopped_at = StageName.TREND
+            result.stages.append(StageRecord(
+                StageName.TREND, "error", rid, error_code="TREND_QUERY_REQUIRED",
+                error_message="Structured TrendQuery is required; no query structuring provider is configured.",
+            ))
+            return result
         shared: dict[str, Any] = {"request_id": rid, "query": query, "scope": normalized_scope}
         stage_inputs: dict[StageName, dict[str, Any]] = {
-            StageName.TREND: {"request_id": rid, "query": query, "scope": normalized_scope},
+            StageName.TREND: dict(trend_query) if trend_query is not None else {
+                "request_id": rid, "query": query, "scope": normalized_scope,
+            },
         }
 
         for stage in (StageName.TREND, StageName.STOCK, StageName.PROJECT_07, StageName.PROJECT_06):
@@ -282,10 +318,19 @@ class Orchestrator:
                     request_version = planning_request.get("schema_version")
                     inventory_version = inventory_result.get("schema_version")
                     trend_version = trend_result.get("schema_version")
-                    if (not isinstance(request_version, str) or not request_version.strip()
-                            or inventory_version != request_version
-                            or (trend_version is not None and trend_version != request_version)):
-                        raise ContractError("Project_06 prototype requires matching input schema_version values.")
+                    if self.project06_version_policy == "legacy_equal":
+                        compatible = (isinstance(request_version, str) and bool(request_version.strip())
+                                      and inventory_version == request_version
+                                      and (trend_version is None or trend_version == request_version))
+                    elif self.project06_version_policy == "v01_supported_sources":
+                        compatible = (
+                            (request_version == "1.0" and inventory_version == "1.0" and trend_version == "1.1")
+                            or (request_version == "1.0" and inventory_version == "1.0" and trend_version is None)
+                        )
+                    else:
+                        raise ContractError("unknown Project_06 producer-version policy")
+                    if not compatible:
+                        raise ContractError("Project_06 input producer schema versions are incompatible.")
                     payload = {
                         "request_id": rid,
                         "planning_request": planning_request,
@@ -293,22 +338,27 @@ class Orchestrator:
                         "inventory_product_result": inventory_result,
                         "sales_market_result": p07_body,
                     }
+                    if self.require_envelopes:
+                        payload["sales_market_result"] = p07_body
                 else:
                     payload = stage_inputs[stage]
 
                 raw = self.adapters[stage](payload)
                 response_body = raw
                 envelope_metadata = None
+                if self.require_envelopes and not (isinstance(raw, Mapping) and "contract_version" in raw):
+                    raise ContractError("HTTP v0.1 response envelope is required")
                 if isinstance(raw, Mapping) and "contract_version" in raw:
-                    expected_agent = {
-                        StageName.TREND: "trend-analysis-agent",
-                        StageName.STOCK: "stock-agent",
-                        StageName.PROJECT_07: "market-research-agent",
-                        StageName.PROJECT_06: "new-product-agent",
-                    }[stage]
+                    _, expected_agent = ROUTE_PRODUCERS[stage]
                     response_body, envelope_agent, envelope_version, envelope_status = _unpack_handoff_response(
                         raw, rid, expected_agent=expected_agent,
                     )
+                    result_version = response_body.get("schema_version")
+                    if (stage in SUPPORTED_PRODUCER_VERSIONS
+                            and envelope_version != SUPPORTED_PRODUCER_VERSIONS[stage]):
+                        raise ContractError("unsupported producer schema_version")
+                    if result_version is not None and result_version != envelope_version:
+                        raise ContractError("producer envelope/result schema_version mismatch")
                     envelope_metadata = (envelope_agent, envelope_version, envelope_status)
                 if stage == StageName.PROJECT_06:
                     if not isinstance(response_body, Mapping) or response_body.get("request_id") != rid:
@@ -352,6 +402,8 @@ class Orchestrator:
                     break
                 if stage == StageName.TREND:
                     shared["trend_result"] = response_body
+                    if self.require_envelopes:
+                        stage_inputs[StageName.STOCK] = {"request_id": rid, "trend_result": response_body}
                     shared["planning_request"] = planning_request
                 elif stage == StageName.STOCK:
                     shared["inventory_product_result"] = response_body
@@ -360,8 +412,10 @@ class Orchestrator:
             except Exception as exc:
                 result.stages.append(StageRecord(
                     stage=stage, status="error", request_id=rid,
-                    raw_response=raw, error_code=("CONTRACT_ERROR" if isinstance(exc, ContractError) else "STAGE_FAILURE"),
-                    error_message=str(exc) if isinstance(exc, ContractError) else "Stage adapter failed; details suppressed.",
+                    raw_response=raw, error_code=("CONTRACT_ERROR" if isinstance(exc, ContractError) else
+                                                  "TRANSPORT_ERROR" if isinstance(exc, TransportError) else "STAGE_FAILURE"),
+                    error_message=(str(exc) if isinstance(exc, (ContractError, TransportError))
+                                   else "Stage adapter failed; details suppressed."),
                 ))
                 result.stopped_at = stage
                 break

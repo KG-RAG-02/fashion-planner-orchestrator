@@ -85,6 +85,11 @@ class PublicOrchestrationApiTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(result["error"], "invalid_request")
 
+    def test_agent_v01_mode_is_rejected_on_legacy_api_run(self):
+        status, result = self.post("/api/run", {"query": "synthetic", "mode": "agent_http_v01"})
+        self.assertEqual(status, 400)
+        self.assertEqual(result["error"], "invalid_request")
+
     def test_legacy_api_run_remains_available(self):
         status, result = self.post("/api/run", {"query": "synthetic legacy"})
         self.assertEqual(status, 200)

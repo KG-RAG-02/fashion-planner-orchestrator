@@ -14,6 +14,7 @@ from .demo import build_demo_orchestrator
 from .connectors import (
     ConnectorConfigurationError,
     build_connected_orchestrator,
+    build_v01_http_orchestrator,
     connection_status,
 )
 
@@ -85,6 +86,14 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 query = input_value.get("original_query")
                 request_id = value.get("request_id")
                 scope = input_value.get("scope", {})
+                trend_query = input_value.get("trend_query")
+                if trend_query is not None and not isinstance(trend_query, dict):
+                    raise ValueError("trend_query는 객체여야 합니다.")
+                if trend_query is not None:
+                    if trend_query.get("request_id") != request_id:
+                        raise ValueError("trend_query.request_id는 request_id와 같아야 합니다.")
+                    if trend_query.get("original_query") != query:
+                        raise ValueError("trend_query.original_query는 original_query와 같아야 합니다.")
                 mode = value.get("mode", "demo")
                 if request_id is not None and (not isinstance(request_id, str) or not request_id.strip()
                                                or len(request_id) > MAX_REQUEST_ID_CHARS):
@@ -96,17 +105,26 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 query = value.get("query") if isinstance(value, dict) else None
                 request_id = None
                 scope = {}
+                trend_query = None
                 mode = value.get("mode", "demo") if isinstance(value, dict) else "demo"
             if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
                 raise ValueError(f"쿼리는 1~{MAX_QUERY_CHARS}자로 입력해 주세요.")
-            if mode not in {"demo", "connected"}:
+            if mode not in {"demo", "connected", "agent_http_v01"}:
                 raise ValueError("지원하지 않는 실행 모드입니다.")
+            if not public_api and mode == "agent_http_v01":
+                raise ValueError("agent_http_v01은 POST /v1/orchestrations에서만 호출할 수 있습니다.")
         except (ValueError, json.JSONDecodeError) as exc:
             self._json(400, {"error": "invalid_request", "message": str(exc)})
             return
         try:
             if mode == "connected":
                 execution = build_connected_orchestrator().run(query.strip(), request_id=request_id, scope=scope)
+            elif mode == "agent_http_v01":
+                if not public_api:
+                    raise ValueError("agent_http_v01은 POST /v1/orchestrations에서만 호출할 수 있습니다.")
+                execution = build_v01_http_orchestrator().run(
+                    query.strip(), request_id=request_id, scope=scope, trend_query=trend_query,
+                )
             else:
                 execution = build_demo_orchestrator().run(query.strip(), request_id=request_id, scope=scope)
             result = execution.to_dict()
@@ -125,6 +143,8 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 self._json(200, result)
         except ConnectorConfigurationError as exc:
             self._json(409, {"error": "connectors_not_ready", "message": str(exc), "connections": connection_status()})
+        except ValueError as exc:
+            self._json(400, {"error": "invalid_request", "message": str(exc)})
         except Exception:
             # Avoid returning adapter exception text or query-bearing tracebacks to the UI.
             self._json(500, {"error": "pipeline_failed", "message": "파이프라인 실행에 실패했습니다."})

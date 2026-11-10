@@ -55,17 +55,17 @@ class OrchestratorTests(unittest.TestCase):
                     "producer": {"agent_id": agent_id, "schema_version": version},
                     "status": body["status"], "result": body}
 
-        trend_body = {"request_id": RID, "status": "no_results", "trends": [],
+        trend_body = {"schema_version": "1.1", "request_id": RID, "status": "no_results", "trends": [],
                       "evidence": [], "limitations": ["synthetic"]}
         stock_body = {"schema_version": "1.0", "request_id": RID, "agent_id": "stock-agent",
                       "status": "no_results", "products": [], "trend_results": [],
                       "evidence": [], "errors": []}
-        p07_body = {"schema_version": "1.3-proposal", "request_id": RID,
+        p07_body = {"schema_version": "1.0", "request_id": RID,
                     "agent_id": "market-research-agent", "status": "partial",
                     "findings": [], "evidence": [], "limitations": ["synthetic"], "errors": []}
 
         def trend(payload):
-            return envelope("trend-analysis-agent", "1.0", trend_body)
+            return envelope("trend-analysis-agent", "1.1", trend_body)
 
         def stock(payload):
             seen["stock_input"] = payload
@@ -73,19 +73,20 @@ class OrchestratorTests(unittest.TestCase):
 
         def p07(payload):
             seen["p07_input"] = payload
-            return envelope("market-research-agent", "1.3-proposal", p07_body)
+            return envelope("market-research-agent", "1.0", p07_body)
 
         def p06(payload):
             seen["p06_input"] = payload
             body = {"request_id": RID, "status": "partial", "draft": {}}
             return envelope("new-product-agent", "1.0", body)
 
-        result = Orchestrator(trend=trend, stock=stock, project_07=p07, project_06=p06).run(
+        result = Orchestrator(trend=trend, stock=stock, project_07=p07, project_06=p06,
+                              project06_version_policy="v01_supported_sources").run(
             "synthetic query", request_id=RID,
         )
         self.assertEqual(result.status, "partial")
         self.assertEqual(result.stages[0].raw_response["result"], trend_body)
-        self.assertEqual(result.stages[0].producer_schema_version, "1.0")
+        self.assertEqual(result.stages[0].producer_schema_version, "1.1")
         self.assertEqual(seen["stock_input"], trend_body)
         self.assertEqual(seen["p07_input"]["inventory_product_result"], stock_body)
         self.assertEqual(seen["p06_input"]["sales_market_result"], p07_body)
@@ -222,7 +223,7 @@ class OrchestratorTests(unittest.TestCase):
         """Pin current behavior until P06/P07 owners approve an artifact input contract."""
         seen = {}
         body = {
-            "schema_version": "1.3-proposal", "request_id": RID,
+            "schema_version": "1.0", "request_id": RID,
             "agent_id": "market-research-agent", "status": "partial",
             "summary": "synthetic only", "findings": [], "evidence": [],
             "limitations": ["Synthetic fixture only"], "errors": [],
@@ -378,6 +379,73 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(seen["p07_trend"]["schema_version"], "1.1")
         self.assertFalse(seen["p06"])
         self.assertEqual(result.stages[-1].error_code, "CONTRACT_ERROR")
+
+    def test_v01_envelopes_preserve_full_response_and_deliver_only_raw_result(self):
+        seen = {}
+        def envelope(agent, version, body, artifacts=None):
+            value = {"contract_version": CONTRACT_VERSION, "request_id": RID,
+                     "producer": {"agent_id": agent, "schema_version": version},
+                     "status": body["status"], "result": body}
+            if artifacts is not None:
+                value["artifacts"] = artifacts
+            return value
+        tq = {"request_id": RID, "original_query": "synthetic", "requested": {}}
+        trend_body = {"schema_version": "1.1", "request_id": RID, "status": "no_results",
+                      "trends": [], "evidence": [], "limitations": ["synthetic"]}
+        stock_body = {"schema_version": "1.0", "request_id": RID, "agent_id": "stock-agent",
+                      "status": "partial", "products": [], "evidence": [], "limitations": ["synthetic"], "errors": []}
+        p07_body = {"schema_version": "1.0", "request_id": RID, "agent_id": "market-research-agent",
+                    "status": "no_results", "findings": [], "evidence": [], "limitations": ["synthetic"], "errors": []}
+        p06_body = {"schema_version": "1.0", "request_id": RID, "agent_id": "new-product-agent",
+                    "status": "partial", "draft": {}}
+        p07_envelope = envelope("market-research-agent", "1.0", p07_body, artifacts=[{"synthetic": True}])
+        def trend(payload):
+            seen["trend_input"] = payload
+            return envelope("trend-analysis-agent", "1.1", trend_body)
+        def stock(payload):
+            seen["stock_input"] = payload
+            return envelope("stock-agent", "1.0", stock_body)
+        def p07(payload):
+            seen["p07_input"] = payload
+            return p07_envelope
+        def p06(payload):
+            seen["p06_input"] = payload
+            return envelope("new-product-agent", "1.0", p06_body)
+        runner = Orchestrator(trend=trend, stock=stock, project_07=p07, project_06=p06,
+                              require_envelopes=True, project06_version_policy="v01_supported_sources")
+        result = runner.run("synthetic", request_id=RID, trend_query=tq)
+        self.assertEqual(result.status, "partial")
+        self.assertEqual(seen["trend_input"], tq)
+        self.assertEqual(seen["stock_input"], trend_body)
+        self.assertEqual(seen["p06_input"]["sales_market_result"], p07_body)
+        self.assertNotIn("artifacts", seen["p06_input"])
+        self.assertEqual(result.stages[2].raw_response, p07_envelope)
+        self.assertEqual(result.stages[0].producer_schema_version, "1.1")
+
+    def test_v01_missing_trend_query_stops_without_calling_any_agent(self):
+        calls = []
+        runner = Orchestrator(trend=lambda x: calls.append("trend"), stock=lambda x: {},
+                              project_07=lambda x: {}, project_06=lambda x: {}, require_envelopes=True)
+        result = runner.run("synthetic", request_id=RID)
+        self.assertEqual(result.stopped_at, StageName.TREND)
+        self.assertEqual(result.stages[0].error_code, "TREND_QUERY_REQUIRED")
+        self.assertEqual(calls, [])
+
+    def test_v01_domain_error_stops_and_retains_envelope(self):
+        body = {"schema_version": "1.1", "request_id": RID, "status": "error",
+                "trends": [], "evidence": [], "limitations": [], "errors": [{"code": "SYNTHETIC"}]}
+        response = {"contract_version": CONTRACT_VERSION, "request_id": RID,
+                    "producer": {"agent_id": "trend-analysis-agent", "schema_version": "1.1"},
+                    "status": "error", "result": body}
+        calls = []
+        runner = Orchestrator(trend=lambda x: response, stock=lambda x: calls.append("stock"),
+                              project_07=lambda x: {}, project_06=lambda x: {}, require_envelopes=True)
+        result = runner.run("synthetic", request_id=RID,
+                            trend_query={"request_id": RID, "original_query": "synthetic"})
+        self.assertEqual(result.stopped_at, StageName.TREND)
+        self.assertEqual(result.stages[0].raw_response, response)
+        self.assertEqual(result.stages[0].status, "error")
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

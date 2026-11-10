@@ -3,21 +3,25 @@
 from __future__ import annotations
 
 import importlib
+import http.client
 import json
 import os
+import ssl
 import sys
 from pathlib import Path
 from typing import Any, Callable, Mapping
 import ipaddress
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 
-from .core import Adapter, Orchestrator
+from .core import Adapter, CONTRACT_VERSION, Orchestrator, ROUTE_PRODUCERS, StageName, TransportError
 
 
 class ConnectorConfigurationError(RuntimeError):
     pass
+
+
+HTTP_CONNECT_TIMEOUT_SECONDS = 3
+AGENT_REQUEST_TIMEOUT_SECONDS = 60
 
 
 def _safe_origin(url: str | None) -> str | None:
@@ -43,37 +47,54 @@ def _service_url(env: Mapping[str, str], variable: str, route: str) -> str:
         raise ConnectorConfigurationError(f"{variable} must be an http(s) base URL")
     if parts.username or parts.password or parts.path not in {"", "/"} or parts.query or parts.fragment:
         raise ConnectorConfigurationError(f"{variable} must be a plain base URL without credentials or path")
+    dev_mode = env.get("VOGUE_AGENT_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
     if parts.scheme == "http":
         hostname = parts.hostname.lower()
         try:
             loopback = ipaddress.ip_address(hostname).is_loopback
         except ValueError:
             loopback = hostname == "localhost"
-        if not loopback:
-            raise ConnectorConfigurationError(f"{variable} must use HTTPS outside loopback")
+        if not loopback or not dev_mode:
+            raise ConnectorConfigurationError(f"{variable} must use HTTPS; loopback HTTP requires development mode")
     return base.rstrip("/") + route
 
 
-def _post_json(url: str, payload: Mapping[str, Any]) -> Mapping[str, Any]:
-    request = Request(
-        url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
-        method="POST",
-    )
-    # Timeout and retry policy remain unselected; urlopen uses the process default.
+def _post_json(url: str, payload: Mapping[str, Any], *, bearer_token: str | None = None) -> Mapping[str, Any]:
+    parts = urlsplit(url)
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if bearer_token:
+        headers["Authorization"] = f"Bearer {bearer_token}"
+    connection: http.client.HTTPConnection | http.client.HTTPSConnection
+    if parts.scheme == "https":
+        connection = http.client.HTTPSConnection(parts.hostname, parts.port, timeout=HTTP_CONNECT_TIMEOUT_SECONDS,
+                                                 context=ssl.create_default_context())
+    elif parts.scheme == "http":
+        connection = http.client.HTTPConnection(parts.hostname, parts.port, timeout=HTTP_CONNECT_TIMEOUT_SECONDS)
+    else:
+        raise ConnectorConfigurationError("agent URL must use HTTP or HTTPS")
     try:
-        with urlopen(request) as response:
-            value = json.loads(response.read())
-    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("configured agent endpoint did not return a usable response") from exc
-    if not isinstance(value, Mapping):
-        raise RuntimeError("configured agent returned a non-object response")
-    return value
+        connection.connect()
+        if connection.sock:
+            connection.sock.settimeout(AGENT_REQUEST_TIMEOUT_SECONDS)
+        connection.request("POST", parts.path or "/", body=body, headers=headers)
+        response = connection.getresponse()
+        response_body = response.read()
+        if response.status < 200 or response.status >= 300:
+            raise TransportError(f"agent returned HTTP {response.status}")
+        value = json.loads(response_body)
+        if not isinstance(value, Mapping):
+            raise TransportError("agent returned a non-object JSON response")
+        return value
+    except (http.client.HTTPException, OSError, TimeoutError, json.JSONDecodeError) as exc:
+        raise TransportError("agent transport or response decoding failed") from exc
+    finally:
+        connection.close()
 
 
-def proposal_http_adapter(base_url: str, route_agent_id: str) -> Adapter:
-    """Build an opt-in client for the unapproved HTTP handoff proposal.
+def agent_http_v01_adapter(base_url: str, route_agent_id: str, *, bearer_token: str | None = None,
+                           dev_mode: bool = False) -> Adapter:
+    """Build an opt-in client for the agreed HTTP v0.1 route.
 
     The endpoint is POST /v1/agents/{route_agent_id}/runs. Agent-specific
     request data remains under `input`; response envelope validation and raw
@@ -81,17 +102,31 @@ def proposal_http_adapter(base_url: str, route_agent_id: str) -> Adapter:
     """
     if not route_agent_id or "/" in route_agent_id:
         raise ConnectorConfigurationError("route_agent_id must be a single path segment")
-    url = _service_url({"AGENT_URL": base_url}, "AGENT_URL", f"/v1/agents/{route_agent_id}/runs")
+    stage = next((stage for stage, (route, _) in ROUTE_PRODUCERS.items() if route == route_agent_id), None)
+    if stage is None:
+        raise ConnectorConfigurationError("unsupported route_agent_id")
+    url = _service_url({"AGENT_URL": base_url, "VOGUE_AGENT_HTTP_DEV_MODE": "1" if dev_mode else ""},
+                       "AGENT_URL", f"/v1/agents/{route_agent_id}/runs")
+    if urlsplit(url).scheme == "http" and not dev_mode:
+        raise ConnectorConfigurationError("HTTP loopback is allowed only in development mode")
+    if not dev_mode and not bearer_token:
+        raise ConnectorConfigurationError("operational HTTP mode requires a service Bearer token")
 
     def run(payload: dict[str, Any]) -> Mapping[str, Any]:
         request_id = payload.get("request_id")
         if not isinstance(request_id, str) or not request_id.strip():
-            raise ConnectorConfigurationError("proposal HTTP input requires request_id")
+            raise ConnectorConfigurationError("HTTP v0.1 input requires request_id")
+        agent_input = payload
+        if stage == StageName.TREND:
+            trend_query = payload.get("trend_query")
+            if not isinstance(trend_query, Mapping):
+                raise ConnectorConfigurationError("TrendQuery is required; no query structuring provider is configured")
+            agent_input = dict(trend_query)
         return _post_json(url, {
-            "contract_version": "vogue-handoff/0.1-proposal",
+            "contract_version": CONTRACT_VERSION,
             "request_id": request_id,
-            "input": payload,
-        })
+            "input": agent_input,
+        }, bearer_token=bearer_token)
 
     return run
 
@@ -175,9 +210,42 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
     p07_package_available = (p07_root / "src" / "market_research_agent").is_dir()
     configuration_complete = bool(trend_spec and stock_url and p06_url and p07_package_available and p07_source_spec)
     known_blockers = [
-        "Trend runner input is the temporary {request_id, query} adapter shape; the TrendQuery structuring module has no approved provider and is not connected to the runner.",
-        "Project_06 currently requires the planning request, trend, and stock schema versions to match; the orchestrator emits request/stock 1.0 while the current Trend result is 1.1. The pipeline can reach Project_06 but that call is rejected until owner-approved compatibility support exists."
+        "The legacy mixed runner uses temporary {request_id, query}; the v0.1 HTTP route requires explicit TrendQuery and no structuring provider is connected.",
+        "The v0.1 HTTP route is not ready: Trend/Stock common endpoints are unconfirmed, Sales/Market currently exposes an incompatible proposal version, and New Product has no /runs adapter."
     ]
+    dev_mode = env.get("VOGUE_AGENT_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
+    v01_vars = {
+        "trend": "VOGUE_TREND_AGENT_URL", "stock": "VOGUE_STOCK_AGENT_URL",
+        "sales-market": "VOGUE_SALES_MARKET_AGENT_URL", "new-product": "VOGUE_NEW_PRODUCT_AGENT_URL",
+    }
+    v01_routes = [
+        {"route_agent_id": route, "producer_id": producer,
+         "configured": bool(env.get(v01_vars[key])), "target": _safe_origin(env.get(v01_vars[key])),
+         "endpoint_health": "not_checked", "schema_compatibility": "not_verified",
+         "implemented": False,
+         "known_status": ("proposal_incompatible" if key == "sales-market" else
+                          "legacy_endpoint_only" if key in {"stock", "new-product"} else "no_common_route_confirmed")}
+        for key, route_stage in zip(v01_vars, StageName)
+        for route, producer in [ROUTE_PRODUCERS[route_stage]]
+    ]
+    mixed_mode = {
+        "configured": configuration_complete,
+        "operational_ready": False,
+        "description": "Trend callable + Stock legacy HTTP + sales-market in-process + new-product legacy HTTP.",
+    }
+    v01_mode = {
+        "contract_version": CONTRACT_VERSION,
+        "configured": all(x["configured"] for x in v01_routes),
+        "routes": v01_routes,
+        "endpoint_health": "not_checked",
+        "schema_compatibility": "not_verified",
+        "operational_approval": "not_verified",
+        "dev_loopback_mode": dev_mode,
+        "authentication": "development_only" if dev_mode else
+                          ("bearer_token_configured" if env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN") else "missing_service_bearer_token"),
+        "ready": False,
+        "readiness_note": "Configuration presence is not endpoint health, schema compatibility, or operational approval.",
+    }
     return {
         "mode": "connected",
         "configuration_complete": configuration_complete,
@@ -188,6 +256,7 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
         "source_permission": "not_verified",
         "operational_approval": "not_verified",
         "readiness_note": "Readiness checks configuration presence and known local blockers only; they do not perform live health or schema negotiation.",
+        "connection_modes": {"mixed_connectors": mixed_mode, "agent_http_v01": v01_mode},
         "connectors": [
             {
                 "id": "trend", "name": "trend-analysis-agent",
@@ -212,8 +281,8 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
             {
                 "id": "project_06", "name": "Project_06",
                 "configured": bool(p06_url), "target": _safe_origin(p06_url),
-                "detail": ("POST /api/planning-draft; request/trend/stock schema_version must match. "
-                           "Current trend 1.1 conflicts with PlanningRequest 1.0, so this run stops before P06."),
+                "detail": ("Legacy POST /api/planning-draft requires matching versions. The separate v0.1 route needs "
+                           "an explicit PlanningRequest 1.0 / Trend 1.1 / Stock 1.0 adapter; no compatible /runs route confirmed."),
             },
         ],
     }
@@ -242,24 +311,32 @@ def build_connected_orchestrator(environ: Mapping[str, str] | None = None) -> Or
 
 
 def build_proposal_http_orchestrator(environ: Mapping[str, str] | None = None) -> Orchestrator:
-    """Build four HTTP clients for the unapproved shared-envelope proposal.
+    """Backward-compatible name for the agreed HTTP v0.1 client builder.
 
     This is opt-in scaffolding. It works only after each agent exposes the
     proposed runs endpoint and accepts its own documented `input` payload.
     It does not imply the agents currently support that endpoint.
     """
     env = environ or os.environ
+    return build_v01_http_orchestrator(env)
+
+
+def build_v01_http_orchestrator(environ: Mapping[str, str] | None = None) -> Orchestrator:
+    """Build four HTTP v0.1 clients; configuration does not imply live support."""
+    env = environ or os.environ
     endpoints = {
         "VOGUE_TREND_AGENT_URL": "trend-analysis-agent",
         "VOGUE_STOCK_AGENT_URL": "stock-agent",
-        "VOGUE_PROJECT07_AGENT_URL": "sales-market-agent",
-        "VOGUE_PROJECT06_AGENT_URL": "new-product-agent",
+        "VOGUE_SALES_MARKET_AGENT_URL": "sales-market-agent",
+        "VOGUE_NEW_PRODUCT_AGENT_URL": "new-product-agent",
     }
     missing = [name for name in endpoints if not env.get(name)]
     if missing:
         raise ConnectorConfigurationError("HTTP agent base URLs are required: " + ", ".join(missing))
+    dev_mode = env.get("VOGUE_AGENT_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
+    token = env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN")
     clients = {
-        agent_id: proposal_http_adapter(env[variable], agent_id)
+        agent_id: agent_http_v01_adapter(env[variable], agent_id, bearer_token=token, dev_mode=dev_mode)
         for variable, agent_id in endpoints.items()
     }
     return Orchestrator(
@@ -267,5 +344,7 @@ def build_proposal_http_orchestrator(environ: Mapping[str, str] | None = None) -
         stock=clients["stock-agent"],
         project_07=clients["sales-market-agent"],
         project_06=clients["new-product-agent"],
-        continue_after_error=True,
+        continue_after_error=False,
+        require_envelopes=True,
+        project06_version_policy="v01_supported_sources",
     )

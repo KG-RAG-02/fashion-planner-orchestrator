@@ -56,13 +56,10 @@ function renderConnections(data) {
     return card;
   }));
   const ready = document.querySelector('#connections-ready');
-  if (!data?.configuration_complete) {
-    ready.textContent = '일부 설정 필요';
-  } else if (data?.known_blockers?.length) {
-    ready.textContent = `설정 입력 완료 · 미해결 호환 문제 ${data.known_blockers.length}건`;
-  } else {
-    ready.textContent = '설정 입력 완료 · 실연결 미검증';
-  }
+  const httpMode = data?.connection_modes?.agent_http_v01;
+  ready.textContent = httpMode?.ready
+    ? 'HTTP v0.1 · 검사 통과'
+    : `HTTP v0.1 · E2E 차단 ${httpMode?.routes?.filter((route) => route.known_status !== 'supported').length ?? 4}개 route`;
   const targets = connectors.filter((item) => item.configured && item.target).map((item) => `${item.name} (${item.target})`);
   const destinationText = targets.length ? targets.join(', ') : '설정된 서비스가 없습니다';
   document.querySelector('#connected-consent-copy').textContent =
@@ -75,6 +72,10 @@ function renderConnections(data) {
     data?.readiness_note || '',
   ].filter(Boolean).join(' ');
   document.querySelector('.connections-footnote').textContent = checkScope;
+  const routeSummary = (httpMode?.routes || []).map((route) =>
+    `${route.route_agent_id}: ${route.known_status}, health ${route.endpoint_health}, schema ${route.schema_compatibility}`,
+  ).join(' · ');
+  document.querySelector('.connections-footnote').textContent += ` 혼합 connector 설정 상태: ${data?.connection_modes?.mixed_connectors?.configured ? '설정됨' : '일부 미설정'}; HTTP v0.1 route: ${routeSummary}`;
 }
 
 async function loadConnectionStatus() {

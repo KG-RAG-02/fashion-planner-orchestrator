@@ -4,7 +4,8 @@ from unittest.mock import patch
 
 from vogue_orchestrator.connectors import (
     ConnectorConfigurationError, _project07_context_fields, _service_url,
-    connection_status, proposal_http_adapter,
+    connection_status, agent_http_v01_adapter, build_v01_http_orchestrator,
+    HTTP_CONNECT_TIMEOUT_SECONDS, AGENT_REQUEST_TIMEOUT_SECONDS,
 )
 
 
@@ -28,8 +29,8 @@ class ConnectorConfigurationTests(unittest.TestCase):
         status = connection_status({**self.base_env, "VOGUE_PROJECT07_SOURCE_ADAPTER": "sources:build"})
         self.assertTrue(status["configuration_complete"])
         self.assertFalse(status["ready"])
-        self.assertTrue(any("Project_06" in blocker for blocker in status["known_blockers"]))
-        self.assertTrue(any("Trend runner" in blocker for blocker in status["known_blockers"]))
+        self.assertTrue(any("New Product" in blocker for blocker in status["known_blockers"]))
+        self.assertTrue(any("TrendQuery" in blocker for blocker in status["known_blockers"]))
         self.assertEqual(status["endpoint_health"], "not_checked")
         self.assertEqual(status["contract_compatibility"], "not_verified")
         self.assertEqual(status["source_permission"], "not_verified")
@@ -80,31 +81,64 @@ class ConnectorConfigurationTests(unittest.TestCase):
 
     def test_http_is_restricted_to_loopback(self):
         self.assertEqual(
-            _service_url({"ENDPOINT": "http://localhost:8766"}, "ENDPOINT", "/api/planning-draft"),
+            _service_url({"ENDPOINT": "http://localhost:8766", "VOGUE_AGENT_HTTP_DEV_MODE": "1"},
+                         "ENDPOINT", "/api/planning-draft"),
             "http://localhost:8766/api/planning-draft",
         )
         with self.assertRaises(ConnectorConfigurationError):
             _service_url({"ENDPOINT": "http://example.com"}, "ENDPOINT", "/api/planning-draft")
+        with self.assertRaises(ConnectorConfigurationError):
+            _service_url({"ENDPOINT": "http://localhost:8766"}, "ENDPOINT", "/api/planning-draft")
 
     def test_proposal_http_adapter_sends_shared_envelope_to_runs_endpoint(self):
         sent = {}
 
-        def fake_post(url, payload):
+        def fake_post(url, payload, *, bearer_token=None):
             sent["url"] = url
             sent["payload"] = payload
+            sent["bearer_token"] = bearer_token
             return {"synthetic": True}
 
         with patch("vogue_orchestrator.connectors._post_json", side_effect=fake_post):
-            adapter = proposal_http_adapter("http://localhost:8000", "trend-analysis-agent")
-            response = adapter({"request_id": "req-synthetic", "query": "synthetic"})
+            adapter = agent_http_v01_adapter("http://localhost:8000", "stock-agent",
+                                             bearer_token="synthetic-token", dev_mode=True)
+            response = adapter({"request_id": "req-synthetic", "trend_result": {"x": 1}})
 
         self.assertEqual(response, {"synthetic": True})
-        self.assertEqual(sent["url"], "http://localhost:8000/v1/agents/trend-analysis-agent/runs")
+        self.assertEqual(sent["url"], "http://localhost:8000/v1/agents/stock-agent/runs")
         self.assertEqual(sent["payload"], {
-            "contract_version": "vogue-handoff/0.1-proposal",
+            "contract_version": "vogue-handoff/0.1",
             "request_id": "req-synthetic",
-            "input": {"request_id": "req-synthetic", "query": "synthetic"},
+            "input": {"request_id": "req-synthetic", "trend_result": {"x": 1}},
         })
+        self.assertEqual(sent["bearer_token"], "synthetic-token")
+
+    def test_trend_http_adapter_requires_explicit_structured_trend_query(self):
+        adapter = agent_http_v01_adapter("http://localhost:8000", "trend-analysis-agent", dev_mode=True)
+        with self.assertRaisesRegex(ConnectorConfigurationError, "TrendQuery is required"):
+            adapter({"request_id": "req-synthetic", "query": "raw query"})
+
+    def test_v01_builder_uses_new_explicit_environment_names_and_no_retries(self):
+        env = {
+            "VOGUE_TREND_AGENT_URL": "http://localhost:8001",
+            "VOGUE_STOCK_AGENT_URL": "http://localhost:8002",
+            "VOGUE_SALES_MARKET_AGENT_URL": "http://localhost:8003",
+            "VOGUE_NEW_PRODUCT_AGENT_URL": "http://localhost:8004",
+            "VOGUE_AGENT_HTTP_DEV_MODE": "1",
+        }
+        runner = build_v01_http_orchestrator(env)
+        self.assertTrue(runner.require_envelopes)
+        self.assertFalse(runner.continue_after_error)
+        self.assertEqual(HTTP_CONNECT_TIMEOUT_SECONDS, 3)
+        self.assertEqual(AGENT_REQUEST_TIMEOUT_SECONDS, 60)
+
+    def test_readiness_separates_mixed_connectors_from_http_v01(self):
+        status = connection_status({**self.base_env, "VOGUE_PROJECT07_SOURCE_ADAPTER": "sources:build"})
+        self.assertTrue(status["connection_modes"]["mixed_connectors"]["configured"])
+        canonical = status["connection_modes"]["agent_http_v01"]
+        self.assertFalse(canonical["ready"])
+        self.assertTrue(all(route["endpoint_health"] == "not_checked" for route in canonical["routes"]))
+        self.assertTrue(any(route["known_status"] == "proposal_incompatible" for route in canonical["routes"]))
 
 
 if __name__ == "__main__":
