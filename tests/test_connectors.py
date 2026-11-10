@@ -5,7 +5,7 @@ from unittest.mock import patch
 from vogue_orchestrator.connectors import (
     ConnectorConfigurationError, _project07_context_fields, _service_url,
     connection_status, agent_http_v01_adapter, build_v01_http_orchestrator,
-    HTTP_CONNECT_TIMEOUT_SECONDS, AGENT_REQUEST_TIMEOUT_SECONDS, _post_json,
+    HTTP_CONNECT_TIMEOUT_SECONDS, AGENT_REQUEST_TIMEOUT_SECONDS, _post_json, TransportError,
 )
 
 
@@ -29,8 +29,8 @@ class ConnectorConfigurationTests(unittest.TestCase):
         status = connection_status({**self.base_env, "VOGUE_PROJECT07_SOURCE_ADAPTER": "sources:build"})
         self.assertTrue(status["configuration_complete"])
         self.assertFalse(status["ready"])
-        self.assertTrue(any("New Product" in blocker for blocker in status["known_blockers"]))
-        self.assertTrue(any("TrendQuery" in blocker for blocker in status["known_blockers"]))
+        self.assertTrue(any("Trend local HTTP" in blocker for blocker in status["known_blockers"]))
+        self.assertTrue(any("Stock" in blocker for blocker in status["known_blockers"]))
         self.assertEqual(status["endpoint_health"], "not_checked")
         self.assertEqual(status["contract_compatibility"], "not_verified")
         self.assertEqual(status["source_permission"], "not_verified")
@@ -171,6 +171,40 @@ class ConnectorConfigurationTests(unittest.TestCase):
         self.assertEqual(result, {"ok": True})
         self.assertTrue(connection.closed)
 
+    def test_http_transport_timeout_and_invalid_json_remain_transport_errors(self):
+        class TimeoutConnection:
+            sock = None
+            def connect(self):
+                raise TimeoutError("synthetic timeout")
+            def close(self):
+                self.closed = True
+
+        timeout_connection = TimeoutConnection()
+        with patch("vogue_orchestrator.connectors.http.client.HTTPConnection", return_value=timeout_connection):
+            with self.assertRaises(TransportError):
+                _post_json("http://127.0.0.1:8080/run", {"synthetic": True})
+        self.assertTrue(timeout_connection.closed)
+
+        class InvalidJsonResponse:
+            status = 200
+            def read(self):
+                return b"not-json"
+
+        class InvalidJsonConnection:
+            sock = None
+            def connect(self):
+                pass
+            def request(self, *args, **kwargs):
+                pass
+            def getresponse(self):
+                return InvalidJsonResponse()
+            def close(self):
+                pass
+
+        with patch("vogue_orchestrator.connectors.http.client.HTTPConnection", return_value=InvalidJsonConnection()):
+            with self.assertRaises(TransportError):
+                _post_json("http://127.0.0.1:8080/run", {"synthetic": True})
+
     def test_project06_http_adapter_keeps_request_id_only_in_outer_envelope(self):
         sent = {}
 
@@ -214,7 +248,17 @@ class ConnectorConfigurationTests(unittest.TestCase):
         canonical = status["connection_modes"]["agent_http_v01"]
         self.assertFalse(canonical["ready"])
         self.assertTrue(all(route["endpoint_health"] == "not_checked" for route in canonical["routes"]))
-        self.assertTrue(any(route["known_status"] == "proposal_incompatible" for route in canonical["routes"]))
+        by_route = {route["route_agent_id"]: route for route in canonical["routes"]}
+        self.assertEqual(by_route["trend-analysis-agent"]["known_status"], "local_development_route")
+        self.assertTrue(by_route["trend-analysis-agent"]["implemented"])
+        self.assertEqual(by_route["trend-analysis-agent"]["local_development_base_url"], "http://127.0.0.1:8768")
+        self.assertEqual(by_route["stock-agent"]["known_status"], "source_adapter_verified")
+        self.assertTrue(by_route["stock-agent"]["implemented"])
+        self.assertEqual(by_route["sales-market-agent"]["known_status"], "runtime_schema_aligned")
+        self.assertEqual(by_route["sales-market-agent"]["producer_result_schema_version"], "1.0")
+        self.assertEqual(by_route["sales-market-agent"]["local_development_base_url"], "http://127.0.0.1:8766")
+        self.assertEqual(by_route["new-product-agent"]["producer_result_schema_version"], "1.0")
+        self.assertEqual(by_route["new-product-agent"]["local_development_base_url"], "http://127.0.0.1:8767")
 
 
 if __name__ == "__main__":

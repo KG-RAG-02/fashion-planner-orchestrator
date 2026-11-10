@@ -4,7 +4,7 @@
 > 설계·결정 배경은 [query-preprocessing.md](query-preprocessing.md). **지금 코드의 출력 계약**은 trend 형식 스냅샷 [contracts/trend-query.md](../contracts/trend-query.md)(`TrendQuery`)이고, **확정된 다음 계약**은 [contracts/structured-query.md](../contracts/structured-query.md)(`StructuredQuery` 1.0, 이 저장소 소유)다. 이 문서는 **무엇이 구현됐고 어떻게 이어서 작업하는지**를 다룬다.
 
 ## 0. 새로 이어받는 사람을 위한 시작 순서
-0. **[query-decisions.md](query-decisions.md)를 먼저 읽는다.** 사용자와 합의한 결정·작업 규칙·별칭 사전 정책이 있고, 다른 문서와 다르면 그 문서가 우선이다. **이 문서는 지금 코드를 설명한다: 실행 흐름은 여전히 v1(LLM이 값을 고르는 방식 → `TrendQuery`)이고, 다음 설계의 부품(U1~U3)은 만들어졌지만 아직 실행 흐름에 연결되지 않았다(§3 표의 "미연결").** 확정된 다음 설계(`StructuredQuery` 1.0 + γ)는 [contracts/structured-query.md](../contracts/structured-query.md)(받는 쪽용 정의서)와 [structured-query-plan.md](structured-query-plan.md)(구현 계획)에 있다.
+0. **[query-decisions.md](query-decisions.md)를 먼저 읽는다.** 사용자와 합의한 결정·작업 규칙·별칭 사전 정책이 있고, 다른 문서와 다르면 그 문서가 우선이다. **2026-11-10 상태:** v1 실행 흐름(LLM이 값을 고르는 방식 → `TrendQuery`)은 `POST /v1/orchestrations`의 선택형 `structure_query` 경로와 UI HTTP v0.1 실행에 연결됐다. U1~U3의 `StructuredQuery` 1.0 + γ 부품은 만들어졌지만 v2 실행 흐름에는 아직 연결되지 않았다(U4). 다음 설계는 [contracts/structured-query.md](../contracts/structured-query.md)와 [structured-query-plan.md](structured-query-plan.md)에 있다.
 1. 이 문서 §1~§3을 읽는다 (무엇을, 어디에, 어떤 흐름으로).
 2. 테스트를 돌려 현재 상태를 확인한다 (§8). 기대값: **질의 테스트 176개 통과**. 저장소 전체는 233개(LLM 호출·UI 연결 15개, 팀원 테스트 포함)이며, 이 PC에서는 `test_connectors.py` 2개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7).
 3. 결과를 눈으로 본다: `examples/query_structuring_demo.py` (§8).

@@ -37,14 +37,35 @@ def _default_provider_factory() -> tuple[Callable[[Any], Any], dict[str, Any]]:
     return build_draft_provider(settings), {"provider": settings.provider, "model": settings.model}
 
 
+def _synthetic_fixture_provider_factory() -> tuple[Callable[[Any], Any], dict[str, Any]]:
+    """Load repository-owned synthetic drafts for offline end-to-end tests."""
+    from .query.synthetic import FixtureDraftProvider
+
+    fixture_root = Path(__file__).resolve().parents[2] / "examples" / "fixtures" / "query"
+    drafts: dict[str, Any] = {}
+    for path in sorted(fixture_root.glob("*.synthetic.json")):
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(value, dict) or not isinstance(value.get("query"), str) or not isinstance(value.get("draft"), dict):
+            raise LLMConfigurationError("synthetic query fixture is invalid")
+        drafts[value["query"]] = value["draft"]
+    if not drafts:
+        raise LLMConfigurationError("synthetic query fixtures are unavailable")
+    return FixtureDraftProvider(drafts), {"provider": "synthetic_fixture", "model": "repository-fixture"}
+
+
+def _query_provider_factory() -> tuple[Callable[[Any], Any], dict[str, Any]]:
+    if os.environ.get("VOGUE_QUERY_STRUCTURING_MODE", "").strip() == "synthetic_fixture":
+        return _synthetic_fixture_provider_factory()
+    return _default_provider_factory()
+
+
 def structure_query_for_ui(
     query: str, request_id: str, *, enabled: bool, provider_factory: ProviderFactory | None = None,
 ) -> dict[str, Any]:
     """Run the query-structuring module in-process (prompt -> LLM -> validate -> assemble) for the UI.
 
-    The result is only added to the /api/run response; it is NOT passed to the trend stage yet
-    (`trend_input_preview.sent` is false, decision D2). Failures never stop the pipeline and never
-    echo the query, the model output or exception text: only codes (and an exception class name).
+    The caller decides whether the structured result is a preview or an orchestration input.
+    Failures never echo model output or exception text: only safe codes and messages are returned.
     """
     out: dict[str, Any] = {"status": "skipped", "request_id": request_id, "llm": None,
                            "error_code": None, "error_message": None, "provider_error": None}
@@ -62,7 +83,7 @@ def structure_query_for_ui(
     except ImportError:
         return fail("QUERY_MODULE_UNAVAILABLE", "질의 모듈을 불러오지 못했습니다 (pydantic 설치 확인).")
     try:
-        provider, info = (provider_factory or _default_provider_factory)()
+        provider, info = (provider_factory or _query_provider_factory)()
     except LLMConfigurationError as exc:  # message names settings/SDK only, never the key
         return fail("LLM_NOT_CONFIGURED", str(exc))
     out["llm"] = info
@@ -84,7 +105,6 @@ def structure_query_for_ui(
         return fail("QUERY_CONFIG_INVALID", "질의 구조화 설정이 올바르지 않습니다.")
     data = result.to_dict()
     out.update(status="ok", **data)
-    # What the trend stage would receive once the pipeline is wired (D2). Shown, not sent.
     out["trend_input_preview"] = {"sent": False, "request_id": request_id, "query": query,
                                   "trend_query": data["trend_query"]}
     return out
@@ -152,6 +172,7 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             if length <= 0 or length > MAX_BODY_BYTES:
                 raise ValueError("요청 크기를 확인해 주세요.")
             value = json.loads(self.rfile.read(length))
+            structure = False
             if public_api:
                 if not isinstance(value, dict):
                     raise ValueError("요청 본문은 JSON 객체여야 합니다.")
@@ -162,6 +183,11 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 request_id = value.get("request_id")
                 scope = input_value.get("scope", {})
                 trend_query = input_value.get("trend_query")
+                structure = input_value.get("structure_query", False)
+                if not isinstance(structure, bool):
+                    raise ValueError("input.structure_query는 true/false여야 합니다.")
+                if structure and trend_query is not None:
+                    raise ValueError("input.trend_query와 input.structure_query는 동시에 사용할 수 없습니다.")
                 if trend_query is not None and not isinstance(trend_query, dict):
                     raise ValueError("trend_query는 객체여야 합니다.")
                 if trend_query is not None:
@@ -176,7 +202,6 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 if not isinstance(scope, dict) or set(scope) - MAX_SCOPE_FIELDS:
                     raise ValueError("scope는 허용된 범위 필드만 포함하는 객체여야 합니다.")
                 scope = _validate_scope(scope)
-                structure = False
             else:
                 query = value.get("query") if isinstance(value, dict) else None
                 request_id = None
@@ -189,8 +214,8 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 raise ValueError(f"쿼리는 1~{MAX_QUERY_CHARS}자로 입력해 주세요.")
             if mode not in {"demo", "connected", "agent_http_v01"}:
                 raise ValueError("지원하지 않는 실행 모드입니다.")
-            if not public_api and mode == "agent_http_v01":
-                raise ValueError("agent_http_v01은 POST /v1/orchestrations에서만 호출할 수 있습니다.")
+            if not public_api and mode == "agent_http_v01" and not structure:
+                raise ValueError("agent_http_v01 모드는 query structuring 동의가 필요합니다.")
             if not isinstance(structure, bool):
                 raise ValueError("structure 값은 true/false여야 합니다.")
         except (ValueError, json.JSONDecodeError) as exc:
@@ -200,25 +225,39 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             if mode == "connected":
                 orchestrator = build_connected_orchestrator()
             elif mode == "agent_http_v01":
-                if not public_api:
-                    raise ValueError("agent_http_v01은 POST /v1/orchestrations에서만 호출할 수 있습니다.")
                 orchestrator = build_v01_http_orchestrator()
             else:
                 orchestrator = build_demo_orchestrator()
             structuring = None
             if not public_api:
-                # UI: 00 query structuring (in-process call of the query module) first, then the
-                # pipeline with the same request_id. The structured query is added to the output only
-                # (not sent to the trend stage; docs/query-decisions.md UI-1).
+                # Keep one request ID from query structuring through all pipeline stages.
                 request_id = str(uuid.uuid4())
                 structuring = structure_query_for_ui(query.strip(), request_id, enabled=structure)
+                if mode == "agent_http_v01" and structure:
+                    if structuring.get("status") != "ok":
+                        self._json(422, {"error": "query_structuring_failed", "query_structuring": structuring})
+                        return
+                    trend_query = structuring["trend_query"]
+                    structuring["trend_input_preview"]["sent"] = True
+            elif structure:
+                request_id = request_id or str(uuid.uuid4())
+                structuring = structure_query_for_ui(query.strip(), request_id, enabled=True)
+                if structuring.get("status") != "ok":
+                    self._json(422, {"error": "query_structuring_failed", "query_structuring": structuring})
+                    return
+                trend_query = structuring["trend_query"]
+                structuring["trend_input_preview"]["sent"] = mode == "agent_http_v01"
             run_options: dict[str, Any] = {"request_id": request_id, "scope": scope}
-            if mode == "agent_http_v01":
+            if mode == "agent_http_v01" and trend_query is not None:
                 run_options["trend_query"] = trend_query
             execution = orchestrator.run(query.strip(), **run_options)
             result = execution.to_dict()
             if public_api:
                 result["input"] = {"original_query": query.strip(), "scope": scope}
+                if trend_query is not None:
+                    result["input"]["trend_query"] = trend_query
+                if structure:
+                    result["input"]["structure_query"] = True
                 fingerprint = json.dumps({"request_id": execution.request_id, "input": result["input"]},
                                          sort_keys=True, ensure_ascii=False, separators=(",", ":"))
                 result["run_id"] = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
@@ -227,6 +266,8 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                     last = last["result"]
                 if isinstance(last, dict):
                     result["final_result"] = last.get("draft")
+                if structuring is not None:
+                    result["query_structuring"] = structuring
                 self._json(200 if result["status"] != "error" else 502, result)
             else:
                 result["query_structuring"] = structuring
