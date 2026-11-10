@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 import mimetypes
+import os
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -151,8 +152,10 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
-    if host not in {"127.0.0.1", "localhost"}:
-        raise ValueError("The demo server may only bind to loopback.")
+    host = os.environ.get("VOGUE_ORCHESTRATOR_HOST", host)
+    port = int(os.environ.get("VOGUE_ORCHESTRATOR_PORT", str(port)))
+    if host not in {"127.0.0.1", "localhost"} and os.environ.get("VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND") != "1":
+        raise ValueError("Binding outside loopback requires VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND=1.")
     server = ThreadingHTTPServer((host, port), OrchestratorHandler)
     print(f"VOGUE synthetic demo UI: http://{host}:{port}")
     try:

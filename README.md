@@ -58,6 +58,18 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 PYTHONPATH=src python3 examples/synthetic_demo.py
 ```
 
+### Docker로 로컬 preview 실행
+
+Docker Compose는 Python 의존성 설치 없이 합성 preview UI를 빌드하고 실행합니다. 컨테이너는 non-root/read-only로 실행되며 host port는 loopback에만 공개됩니다.
+
+```bash
+docker compose up --build
+# http://127.0.0.1:8765
+docker compose down
+```
+
+Health endpoint는 `http://127.0.0.1:8765/api/health`입니다. 이 컨테이너는 기본 합성 모드이며 agent 서비스나 실제 자료원에 연결하지 않습니다.
+
 Windows에서는 `python3` 대신 `py`를 쓰고, PowerShell에서는 `$env:PYTHONPATH="src"`로 경로를 지정합니다.
 
 UI는 로컬 loopback에서만 열리는 미리보기입니다. 기본 `SYNTHETIC PREVIEW`는 합성 adapter로 네 단계를 실행합니다. 저장소 인터페이스가 확인된 단계는 별도 `CONNECTED AGENTS` 모드에서 opt-in으로 호출할 수 있습니다. 결과는 저장하지 않습니다.
