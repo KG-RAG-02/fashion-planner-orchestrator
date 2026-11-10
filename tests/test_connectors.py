@@ -16,7 +16,7 @@ class ConnectorConfigurationTests(unittest.TestCase):
             "VOGUE_TREND_ADAPTER": "trend_adapter:run",
             "VOGUE_STOCK_AGENT_URL": "http://127.0.0.1:8002",
             "VOGUE_PROJECT07_ROOT": str(self.project_07_root),
-            "VOGUE_PROJECT06_URL": "http://127.0.0.1:8766",
+            "VOGUE_PROJECT06_URL": "http://127.0.0.1:8767",
         }
 
     def test_project07_source_factory_is_required_for_ready_status(self):

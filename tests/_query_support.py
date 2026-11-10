@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SNAPSHOT_PATH = ROOT / "docs" / "contracts" / "trend-query.contract.json"
+SNAPSHOT_PATH = ROOT / "contracts" / "trend-query.contract.json"
 FIXTURE_DIR = ROOT / "examples" / "fixtures" / "query"
 QUERY_PACKAGE_DIR = ROOT / "src" / "vogue_orchestrator" / "query"
 SOURCE_DIR = ROOT / "src" / "vogue_orchestrator"

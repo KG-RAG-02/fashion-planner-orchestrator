@@ -1,7 +1,7 @@
 # 질의 구조화 모듈 — 구현 문서 (LLM 호출 전 단계)
 
 > 상태: **1차 구현 완료 (2026-11-09). LLM 호출과 파이프라인 연결은 아직 없다.**
-> 설계·결정 배경은 [query-preprocessing.md](query-preprocessing.md), 출력 계약은 [contracts/trend-query.md](contracts/trend-query.md)다. 이 문서는 **무엇이 구현됐고 어떻게 이어서 작업하는지**를 다룬다.
+> 설계·결정 배경은 [query-preprocessing.md](query-preprocessing.md), 출력 계약은 [contracts/trend-query.md](../contracts/trend-query.md)다. 이 문서는 **무엇이 구현됐고 어떻게 이어서 작업하는지**를 다룬다.
 
 ## 0. 새로 이어받는 사람을 위한 시작 순서
 0. **[query-decisions.md](query-decisions.md)를 먼저 읽는다.** 사용자와 합의한 결정·작업 규칙·별칭 사전 정책이 있고, 다른 문서와 다르면 그 문서가 우선이다.
@@ -217,7 +217,7 @@ Windows PowerShell: `$env:PYTHONPATH="src"; py -m unittest discover -s tests -v`
 2026-11-09 결과: pydantic 2.14.3 환경에서 **71개 통과** (기존 8 + 질의 63). pydantic을 막은 환경에서 **71개 중 43개 skip, 나머지 통과**. JSON Schema 비교·생성기 검사는 값 하나를 바꾸면 실패하는 것을 확인했다.
 
 ## 9. 계약이 바뀔 때 (스냅샷 갱신 절차의 이 모듈 부분)
-[contracts/trend-query.md §6](contracts/trend-query.md)대로 스냅샷 JSON을 교체한 뒤:
+[contracts/trend-query.md §6](../contracts/trend-query.md)대로 스냅샷 JSON을 교체한 뒤:
 1. `python scripts/generate_query_vocabulary.py` → `vocabulary.py` 재생성.
 2. `PYTHONPATH=src python scripts/render_query_prompt.py` → 어휘가 들어간 `rendered_system.md` 재생성. 어휘가 바뀌면 프롬프트 내용도 바뀌므로 새 프롬프트 버전으로 올릴지 정한다 ([prompts/README.md](../prompts/README.md)).
 3. 필드·검증 규칙이 바뀌었으면 `models.py`를 고친다 (`test_query_models.py`의 스키마 비교가 어긋난 곳을 알려 준다).

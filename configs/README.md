@@ -108,7 +108,7 @@
 ### 4.2 다른 저장소·문서
 | 대상 | 무엇에 의존 | 어디서 | 바뀌면 |
 |---|---|---|---|
-| trend-analysis-agent | `TrendQuery` 계약 (스냅샷 `docs/contracts/`, 원본 `origin/main@4196bc460876`) | 질의 모듈의 모델·어휘·프롬프트 | 스냅샷 갱신 → `generate_query_vocabulary.py` → 테스트 (`docs/query-structuring.md` §9) |
+| trend-analysis-agent | `TrendQuery` 계약 (스냅샷 `contracts/`, 원본 `origin/main@4196bc460876`) | 질의 모듈의 모델·어휘·프롬프트 | 스냅샷 갱신 → `generate_query_vocabulary.py` → 테스트 (`docs/query-structuring.md` §9) |
 | trend-analysis-agent | `TrendAnalysisResult` 형태 (`request_id`, status 3종 등) | core의 trend 단계 검증 | core 수정 필요 |
 | trend-analysis-agent | 호출 진입점 | 아직 없음 (`TrendSearcher.search` 함수만, D3) | connectors에 연결 방식 추가 |
 | stock-agent | `POST /v1/inventory-products`, 응답 필드·`agent_id` | connectors, core | connectors·core 수정 |
@@ -130,7 +130,7 @@
 ```
 core ◄── connectors ◄── server ──► demo          (기존, 표준 라이브러리만)
                                                서로 import하지 않음 (tests/test_query_isolation.py)
-query ──► configs/, prompts/, vocabulary.py ◄── docs/contracts/ (생성 스크립트)   (pydantic)
+query ──► configs/, prompts/, vocabulary.py ◄── contracts/ (생성 스크립트)   (pydantic)
 ```
 
 ## 5. 정리하며 발견한 것 (조치하지 않음)

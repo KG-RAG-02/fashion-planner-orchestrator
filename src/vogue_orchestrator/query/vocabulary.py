@@ -1,7 +1,7 @@
 """GENERATED FILE - do not edit by hand.
 
 Standard vocabulary of the TrendQuery contract, generated from the read-only snapshot
-docs/contracts/trend-query.contract.json (a copy of the contract owned by trend-analysis-agent).
+contracts/trend-query.contract.json (a copy of the contract owned by trend-analysis-agent).
 
 Regenerate:  py scripts/generate_query_vocabulary.py
 Drift check: tests/test_query_vocabulary.py (fails when this file and the snapshot disagree)
