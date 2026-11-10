@@ -1,4 +1,4 @@
-"""Call the actual local Project_07 and Project_06 code with synthetic payloads only.
+"""Call the actual local sales-market-agent and new-product-agent code with synthetic payloads only.
 
 Run from project_08 with:
   PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integration.py
@@ -28,7 +28,7 @@ from vogue_orchestrator.connectors import _post_json, _project07_adapter  # noqa
 
 
 class SyntheticSalesMarketSource:
-    """Explicit synthetic Project_07 source; no local datasets are read."""
+    """Explicit synthetic sales-market-agent source; no local datasets are read."""
 
     def research(self, context):
         sales_evidence = EvidenceRecord(
@@ -79,7 +79,7 @@ def main() -> None:
         WORKSPACE / "project_07", SyntheticSalesMarketSource,
     )
 
-    # Reuse Project_06's real HTTP handler on an ephemeral loopback port.
+    # Reuse new-product-agent's real HTTP handler on an ephemeral loopback port.
     # POST /api/planning-draft does not initialize or write its SQLite repository.
     p06_server = ThreadingHTTPServer(("127.0.0.1", 0), PrototypeHandler)
     p06_thread = Thread(target=p06_server.serve_forever, daemon=True)
