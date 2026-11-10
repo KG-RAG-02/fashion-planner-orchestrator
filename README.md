@@ -71,7 +71,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integr
 
 ```bash
 pip install -e ".[query]"
-PYTHONPATH=src python3 -m unittest discover -s tests -v          # 기존 8 + 질의 63
+PYTHONPATH=src python3 -m unittest discover -s tests -v          # 기존 8 + 질의 88
 PYTHONPATH=src python3 examples/query_structuring_demo.py        # 합성 사례 6개 결과
 PYTHONPATH=src python3 examples/query_structuring_demo.py --show-prompt "가을 여성 코트"
 ```

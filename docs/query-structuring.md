@@ -6,7 +6,7 @@
 ## 0. 새로 이어받는 사람을 위한 시작 순서
 0. **[query-decisions.md](query-decisions.md)를 먼저 읽는다.** 사용자와 합의한 결정·작업 규칙·별칭 사전 정책이 있고, 다른 문서와 다르면 그 문서가 우선이다.
 1. 이 문서 §1~§3을 읽는다 (무엇을, 어디에, 어떤 흐름으로).
-2. 테스트를 돌려 현재 상태를 확인한다 (§8). 기대값: **71개 통과** (기존 8 + 질의 63).
+2. 테스트를 돌려 현재 상태를 확인한다 (§8). 기대값: **96개 통과** (기존 8 + 질의 88).
 3. 결과를 눈으로 본다: `examples/query_structuring_demo.py` (§8).
 4. 프롬프트는 [`prompts/`](../prompts/README.md), 설정과 하드코딩 목록은 [`configs/`](../configs/README.md), 예상 질의 30개는 [`data/`](../data/README.md)에 있다.
 5. **다음 할 일과 결정 대기 목록의 기준은 [query-decisions.md §0·§6](query-decisions.md)이다** (이 문서 §10은 요약). 확인이 필요한 가정은 §6이다. **§6의 가정을 바꾸려면 사용자(소유자) 확인이 먼저다.**
@@ -61,6 +61,8 @@ QueryStructuringResult {trend_query, draft, warnings, prompt_version}  → trend
 | `prompt.py` | 프롬프트 파일을 읽어 렌더링. **코드에 프롬프트 문장이 없다** | `load_prompt`, `build_prompt`, `PromptBundle`, `PROMPT_VERSION`, `SYSTEM_PROMPT`, `EXAMPLES` | ○ |
 | `structure.py` | 진입점. 입력 검증 → 프롬프트 → provider → 검증 → 조립 | `structure_query`, `DraftProvider`, `QueryStructuringResult`, `MAX_QUERY_CHARS` | ⚙ |
 | `synthetic.py` | 테스트 더블. 미리 쓴 draft를 질의별로 돌려줌 (**파서가 아님**) | `FixtureDraftProvider` | ○ |
+| `alias_data.py` | **생성 파일 (직접 수정 금지).** trend 별칭 사전 스냅샷(11개 속성 + 텍스트 가드)의 상수와 출처 | `STANDARD_VALUES`, `ALIASES`, `APPROX`, `NULL_VALUES`, `ROUTES`, `HINTS`, `COLOR_MODIFIERS`, `COMPOUND_VALUES`, `TEXT_GUARDS`, `PROVENANCE` | ○ |
+| `lexicon.py` | trend `AliasMap` 정규화를 표준 라이브러리로 이식 (정규화 키, 표준→별칭→근사→이동→힌트→값 없음 순서, 복수 값 분리, 색 수식어·끝 기본색 규칙). 힌트는 보고만 하고 쓰지 않는다(H5). **아직 조립 흐름에 연결되지 않음** (구현 계획 S3~S5에서 사용) | `Lexicon`, `Normalized`, `norm_key`, `default_lexicon`, `normalize`, `normalize_tokens`, `normalize_color`, `split_tokens` | ○ |
 
 저장소의 다른 위치:
 
@@ -71,6 +73,9 @@ QueryStructuringResult {trend_query, draft, warnings, prompt_version}  → trend
 | `data/user_queries.v1.json` | 예상 사용자 질의 30개와 기대 draft (silver). 설명은 [data/README.md](../data/README.md) |
 | `scripts/generate_query_vocabulary.py` | 스냅샷 JSON → `vocabulary.py` 생성. `--check`로 최신 여부만 확인 |
 | `scripts/render_query_prompt.py` | 템플릿 → `rendered_system.md` 생성. `--check`로 최신 여부만 확인 |
+| `scripts/export_alias_snapshot.py` | **trend `.venv`로 실행**(`--trend-repo` 경로). trend 사전 YAML → `docs/contracts/alias-map.snapshot.json`, 원본 코드 출력 `alias-map.golden.json`, `alias_data.py`를 함께 생성. `--check` 있음. trend HEAD가 바뀌면 사전이 같아도 출처가 달라져 `--check`가 1을 낸다 |
+| `scripts/generate_alias_data.py` | 표준 라이브러리만으로 스냅샷 → `alias_data.py` 재생성(해시 검증 포함). `--check` 있음 |
+| `docs/contracts/alias-map.*` | 별칭 사전 스냅샷과 golden(원본 출력 약 1.1MB), 설명 [alias-map.md](contracts/alias-map.md) (원본 동작 중 이상해 보이는 것 목록 포함) |
 | `examples/fixtures/query/*.synthetic.json` | 합성 사례 6개: `{case, description, today, request_id, query, draft, expected_warnings, expected_trend_query}`. 기대값은 계약 규칙을 보고 **손으로** 썼다 |
 | `examples/query_structuring_demo.py` | 사례 요약·상세 출력, 프롬프트 출력 |
 | `tests/_query_support.py`, `tests/test_query_*.py` | 공용 경로 + 8개 파일, 63개 테스트 (§8) |
@@ -213,8 +218,9 @@ Windows PowerShell: `$env:PYTHONPATH="src"; py -m unittest discover -s tests -v`
 | `test_query_structure.py` | 10 | fixture 6개 종단 결과, JSON 문자열·코드 블록 허용, 오류 코드, 원문·예외 비노출 | 필요 |
 | `test_query_data.py` | 6 | 30개·고유 ID, 태그 집합, `raw`가 질의의 부분 문자열, 기대 draft가 유효하고 계약대로 조립됨, few-shot과 겹치지 않음, 프롬프트 버전 일치 | 일부 필요 |
 | `test_query_isolation.py` | 5 | §7 불변 조건 (소스 정적 검사) | 불필요 |
+| `test_query_lexicon.py` | 25 | `alias_data.py`가 스냅샷 생성 결과와 같음, 해시·출처, **golden 전부 일치**(normalize 11,369건, normalize_tokens 822, normalize_color 2,027, split_tokens 134, norm_key 632), 직접 확인 13건 | 불필요 |
 
-2026-11-09 결과: pydantic 2.14.3 환경에서 **71개 통과** (기존 8 + 질의 63). pydantic을 막은 환경에서 **71개 중 43개 skip, 나머지 통과**. JSON Schema 비교·생성기 검사는 값 하나를 바꾸면 실패하는 것을 확인했다.
+2026-11-10 결과: pydantic 2.14.3 환경에서 **96개 통과** (기존 8 + 질의 88). pydantic을 막은 환경에서 **96개 중 43개 skip, 나머지 통과**. (2026-11-09 기준은 71개였다.) JSON Schema 비교·생성기 검사는 값 하나를 바꾸면 실패하는 것을 확인했다.
 
 ## 9. 계약이 바뀔 때 (스냅샷 갱신 절차의 이 모듈 부분)
 [contracts/trend-query.md §6](contracts/trend-query.md)대로 스냅샷 JSON을 교체한 뒤:
@@ -223,6 +229,8 @@ Windows PowerShell: `$env:PYTHONPATH="src"; py -m unittest discover -s tests -v`
 3. 필드·검증 규칙이 바뀌었으면 `models.py`를 고친다 (`test_query_models.py`의 스키마 비교가 어긋난 곳을 알려 준다).
 4. 필요하면 `draft.py`, `assemble.py`, 프롬프트, fixture, `data/`를 고친다.
 5. 전체 테스트 통과 확인.
+
+**별칭 사전이 바뀔 때** (trend `configs/alias_map/*.yaml` 변경, 예: 승인된 표기 변형 추가): trend `.venv`로 `scripts/export_alias_snapshot.py --trend-repo ../trend-analysis-agent`를 실행해 스냅샷·golden·`alias_data.py`를 다시 만들고 전체 테스트를 돌린다. 세부는 [contracts/alias-map.md](contracts/alias-map.md).
 
 ## 10. 다음 할 일
 > 순서와 결정 대기의 **기준은 [query-decisions.md §0](query-decisions.md)**다. 아래는 이 모듈 관점의 요약이며, 다르면 그 문서를 따른다. 속성 제외 칸 추가(X1·X4)는 그 문서 §0의 2번이다.
@@ -271,3 +279,4 @@ trend_query_json = result.trend_query.model_dump(mode="json")   # trend 검색 �
 | 2026-11-09 (2차) | 프롬프트를 코드에서 `prompts/query_structuring/v1/` 파일로 이동(출력 동일, 버전 이름 0.1 → v1, `prompt_examples.py` 삭제). 하드코딩 값을 `configs/query_structuring.json`으로 이동하고 저장소 전체 하드코딩·종속 목록 작성. 예상 사용자 질의 30개(`data/`, silver) 추가. 렌더 스크립트, 테스트 15개 추가(총 63) |
 | 2026-11-09 (3차) | 결정 문서 [query-decisions.md](query-decisions.md) 신설 (작업 규칙, 결정 기록, 별칭 사전 정합 정책 H1~H6, 사전 추가 규칙 D-29). §11 한계와 향후 과제 추가(변경 이력은 §12로 이동), A-6을 H2로 해소 예정 처리, §10에 H 구현을 다음 작업으로 추가. 코드 변경 없음 |
 | 2026-11-09 (4차) | 결정 V1(코드 후보 → LLM 검수, [구현 계획](query-candidate-review-plan.md))·X1·X4(속성 제외 칸, 이 저장소가 먼저 정의) 반영. 다음 할 일의 기준을 query-decisions.md §0으로 일원화. 코드 변경 없음 |
+| 2026-11-10 | 구현 계획 S1·S2 완료: 별칭 사전 스냅샷(`docs/contracts/alias-map.*`), 생성 모듈 `alias_data.py`, 변환기 `lexicon.py`(원본 출력과 전부 일치), 스크립트 2개, 테스트 25개(총 96). 조립 흐름 연결은 S3~S5. 사전 추가 후보는 [query-alias-candidates.md](query-alias-candidates.md) |
