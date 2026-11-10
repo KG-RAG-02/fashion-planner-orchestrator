@@ -22,10 +22,10 @@ from pydantic import ValidationError
 
 from . import errors
 from .assemble import assemble_trend_query
-from .config import CONFIG
-from .draft import QueryDraft
+from .config import CONFIG, QueryConfigError
+from .legacy_v1 import DRAFT_FORMAT, QueryDraft  # v1 draft until the StructuredQuery path (plan U4)
 from .errors import QueryStructuringError
-from .models import TrendQuery
+from .trend_query import TrendQuery
 from .prompt import PromptBundle, build_prompt
 
 # configs/query_structuring.json input.max_query_chars (1000, same bound as the demo UI server)
@@ -67,6 +67,13 @@ def structure_query(
     today = today or date.today()
 
     bundle = build_prompt(query)
+    if bundle.format != DRAFT_FORMAT:
+        # This path validates and assembles draft v1 only. A draft_v2 prompt (v2) needs the
+        # StructuredQuery path of plan U4; fail loudly as a deployment error, not per request.
+        raise QueryConfigError(
+            f"prompt format {bundle.format!r} is not supported by structure_query yet "
+            f"(needs {DRAFT_FORMAT!r}; draft_v2 is wired in plan U4)"
+        )
     try:
         produced = draft_provider(bundle)
     except Exception:

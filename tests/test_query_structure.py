@@ -18,7 +18,7 @@ class StructureQueryTests(unittest.TestCase):
         cls.structure = importlib.import_module("vogue_orchestrator.query.structure")
         cls.errors = importlib.import_module("vogue_orchestrator.query.errors")
         cls.synthetic = importlib.import_module("vogue_orchestrator.query.synthetic")
-        cls.models = importlib.import_module("vogue_orchestrator.query.models")
+        cls.models = importlib.import_module("vogue_orchestrator.query.trend_query")
 
     def run_structure(self, provider, query="합성 질의", request_id="rid-1", **kwargs):
         return self.structure.structure_query(
@@ -109,6 +109,20 @@ class StructureQueryTests(unittest.TestCase):
         self.run_structure(provider, query="합성 질의")
         self.assertEqual(seen[0].query, "합성 질의")
         self.assertIn("합성 질의", seen[0].user)
+
+    def test_a_draft_v2_prompt_is_refused_until_the_structured_query_path_exists(self):
+        # Switching the config to prompt v2 before plan U4 must fail loudly, not on every request.
+        config = importlib.import_module("vogue_orchestrator.query.config")
+        prompt = importlib.import_module("vogue_orchestrator.query.prompt")
+        calls = []
+        original = self.structure.build_prompt
+        self.structure.build_prompt = lambda query: prompt.build_prompt(query, version="v2")
+        try:
+            with self.assertRaises(config.QueryConfigError):
+                self.run_structure(lambda bundle: calls.append(bundle) or {})
+        finally:
+            self.structure.build_prompt = original
+        self.assertEqual(calls, [])
 
     def test_today_defaults_to_the_system_date(self):
         result = self.structure.structure_query("합성 질의", request_id="rid", draft_provider=lambda b: {})

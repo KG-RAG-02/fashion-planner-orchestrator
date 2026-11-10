@@ -30,7 +30,7 @@ def normalize(node, defs):
 class TrendQueryModelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.models = importlib.import_module("vogue_orchestrator.query.models")
+        cls.models = importlib.import_module("vogue_orchestrator.query.trend_query")
         cls.pydantic = importlib.import_module("pydantic")
 
     @unittest.skipUnless(SNAPSHOT_PATH.exists(), "contract snapshot not present in this checkout")

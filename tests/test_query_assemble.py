@@ -14,7 +14,7 @@ class AssembleTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.assemble_module = importlib.import_module("vogue_orchestrator.query.assemble")
-        cls.draft_module = importlib.import_module("vogue_orchestrator.query.draft")
+        cls.draft_module = importlib.import_module("vogue_orchestrator.query.legacy_v1")
 
     def assemble(self, draft=None, query="합성 질의", today=TODAY):
         draft = self.draft_module.QueryDraft.model_validate(draft or {})

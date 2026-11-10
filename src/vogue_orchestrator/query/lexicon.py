@@ -10,7 +10,8 @@ Conversion order of `normalize` (same as the original):
   normalization key -> standard value -> alias -> approx -> route -> hint -> null value -> none
 
 This module only reports what the dictionary says. Policy lives in the caller:
-- approx results must not become filters (decision H2),
+- approx results are passed on tagged as match "approx"; whether to filter on them is the
+  receiver's choice (decision H2', docs/query-decisions.md),
 - hints are reported but never applied (decision H5).
 
 Standard library only; no pyyaml, no file access at run time.
