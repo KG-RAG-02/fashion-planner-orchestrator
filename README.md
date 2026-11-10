@@ -47,7 +47,7 @@ result = runner.run("synthetic query", request_id="synthetic-req-001",
                                  "original_query": "synthetic query", "requested": {}})
 ```
 
-환경변수와 비밀 없는 local URL 예시는 [`configs/agent-http.env.example`](configs/agent-http.env.example)에 있습니다. 운영은 HTTPS와 `VOGUE_AGENT_SERVICE_BEARER_TOKEN`이 필요하며 connect timeout 3초, request timeout 60초, 자동 재시도 없음입니다. loopback HTTP 개발은 `VOGUE_AGENT_HTTP_DEV_MODE=1`일 때만 허용합니다. Stock은 `STOCK_AGENT_SERVICE_TOKEN`도 요구하며 합성 검증에서는 두 환경변수에 같은 임시 token을 설정합니다.
+환경변수와 비밀 없는 local URL 예시는 [`configs/agent-http.env.example`](configs/agent-http.env.example)에 있습니다. 네 canonical `/runs` route는 모두 같은 `VOGUE_AGENT_SERVICE_BEARER_TOKEN`을 검증합니다. 운영은 HTTPS가 필요하며 connect timeout 3초, request timeout 60초, 자동 재시도 없음입니다. loopback HTTP 개발은 `VOGUE_AGENT_HTTP_DEV_MODE=1`일 때만 허용합니다.
 
 ## 실행·합성 검증
 

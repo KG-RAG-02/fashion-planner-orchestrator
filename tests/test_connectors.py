@@ -247,6 +247,7 @@ class ConnectorConfigurationTests(unittest.TestCase):
         self.assertTrue(status["connection_modes"]["mixed_connectors"]["configured"])
         canonical = status["connection_modes"]["agent_http_v01"]
         self.assertFalse(canonical["ready"])
+        self.assertEqual(canonical["authentication"], "missing_service_bearer_token")
         self.assertTrue(all(route["endpoint_health"] == "not_checked" for route in canonical["routes"]))
         by_route = {route["route_agent_id"]: route for route in canonical["routes"]}
         self.assertEqual(by_route["trend-analysis-agent"]["known_status"], "local_development_route")

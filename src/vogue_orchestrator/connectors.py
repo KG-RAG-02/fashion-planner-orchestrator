@@ -219,7 +219,7 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
     p07_package_available = (p07_root / "src" / "market_research_agent").is_dir()
     configuration_complete = bool(trend_spec and stock_url and p06_url and p07_package_available and p07_source_spec)
     known_blockers = [
-        "Trend local HTTP is unauthenticated loopback development only; production TLS, service authentication, and Neo4j readiness are not provided here.",
+        "Trend local HTTP requires the shared Bearer token and a connected Neo4j graph; loopback has no TLS and production readiness is not provided here.",
         "Stock local HTTP requires a synthetic or approved DuckDB and a Bearer token; URL configuration does not establish either dependency's readiness.",
         "Endpoint health, runtime schema compatibility, source permission, and operational approval must be checked independently of URL configuration.",
     ]
@@ -230,16 +230,16 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
     v01_vars = (
         (StageName.TREND, "VOGUE_TREND_AGENT_URL", "local_development_route", True,
          "http://127.0.0.1:8768", "TrendQuery (no schema_version field)", "1.1",
-         "loopback development only; no authentication or HTTPS"),
+         "shared Bearer token required; loopback development only; no HTTPS"),
         (StageName.STOCK, "VOGUE_STOCK_AGENT_URL", "source_adapter_verified", True,
          "http://127.0.0.1:8002", "TrendAnalysisResult 1.1 (explicit Stock adapter; source version/hash recorded)", "1.0",
          "Bearer token required; local DuckDB required; loopback HTTP is test-only"),
         (StageName.PROJECT_07, "VOGUE_SALES_MARKET_AGENT_URL", "runtime_schema_aligned", True,
          "http://127.0.0.1:8766", "PlanningRequest 1.0, Trend 1.0/1.1, Stock 1.0", "1.0",
-         "runtime is loopback-only/no auth; JSON Schema producer ID aligned to sales-market-agent"),
+         "runtime is loopback-only with shared Bearer auth and no HTTPS; producer ID aligned to sales-market-agent"),
         (StageName.PROJECT_06, "VOGUE_NEW_PRODUCT_AGENT_URL", "local_development_route", True,
          "http://127.0.0.1:8767", "PlanningRequest 1.0, Trend 1.1, Stock 1.0, Sales Market 1.0", "1.0",
-         "loopback development; service mode requires HTTPS and Bearer token"),
+         "shared Bearer token required in local and service modes; service mode also requires HTTPS"),
     )
     v01_routes = [
         {"route_agent_id": ROUTE_PRODUCERS[stage][0], "producer_id": ROUTE_PRODUCERS[stage][1],
@@ -265,8 +265,7 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
         "schema_compatibility": "not_verified",
         "operational_approval": "not_verified",
         "dev_loopback_mode": dev_mode,
-        "authentication": "development_only" if dev_mode else
-                          ("bearer_token_configured" if env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN") else "missing_service_bearer_token"),
+        "authentication": "bearer_token_configured" if env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN") else "missing_service_bearer_token",
         "ready": False,
         "readiness_note": "Configuration presence is not endpoint health, schema compatibility, or operational approval.",
     }
