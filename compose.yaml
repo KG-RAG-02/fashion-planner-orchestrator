@@ -9,6 +9,8 @@ services:
       VOGUE_ORCHESTRATOR_PORT: "8765"
       VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND: "1"
     read_only: true
+    volumes:
+      - run-data:/app/.local
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
     cap_drop:
@@ -16,3 +18,6 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+
+volumes:
+  run-data:

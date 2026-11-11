@@ -6,13 +6,17 @@ import json
 import hashlib
 import http.client
 import copy
+import ipaddress
 import mimetypes
 import os
+import subprocess
 import ssl
+import sys
 import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 from urllib.parse import quote, urlparse, urlsplit
 
@@ -25,7 +29,7 @@ from .connectors import (
     connection_status,
     request_project06_review_images,
 )
-from .llm_provider import LLMConfigurationError, build_draft_provider, llm_status, load_settings
+from .llm_provider import LLMConfigurationError, build_draft_provider, load_settings
 
 
 WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
@@ -38,6 +42,13 @@ MAX_LATEST_RUN_BYTES = 12 * 1024 * 1024
 LATEST_RUN_PATH = Path(__file__).resolve().parents[2] / ".local" / "latest-run.json"
 RUN_HISTORY_DIR = LATEST_RUN_PATH.parent / "runs"
 MAX_SAVED_RUNS = 20
+LOCAL_SERVICE_ENDPOINTS = (
+    ("trend", "트렌드", "VOGUE_TREND_AGENT_URL", "http://127.0.0.1:8768", "/health"),
+    ("stock", "상품·재고", "VOGUE_STOCK_AGENT_URL", "http://127.0.0.1:8769", "/health"),
+    ("market", "시장 조사", "VOGUE_SALES_MARKET_AGENT_URL", "http://127.0.0.1:8766", "/api/health"),
+    ("planning", "기획 초안", "VOGUE_NEW_PRODUCT_AGENT_URL", "http://127.0.0.1:8767", "/api/health"),
+    ("orchestrator", "기획 UI", "", "http://127.0.0.1:8765", "/api/health"),
+)
 
 
 ProviderFactory = Callable[[], tuple[Callable[[Any], Any], dict[str, Any]]]
@@ -81,7 +92,7 @@ def structure_query_for_ui(
     out: dict[str, Any] = {"status": "skipped", "request_id": request_id, "llm": None,
                            "error_code": None, "error_message": None, "provider_error": None}
     if not enabled:
-        out["error_message"] = "외부 LLM 전송에 동의하지 않아 질의 구조화를 건너뛰었습니다."
+        out["error_message"] = "질의 구조화가 요청되지 않아 건너뛰었습니다."
         return out
 
     def fail(code: str, message: str, provider_error: str | None = None) -> dict[str, Any]:
@@ -121,14 +132,6 @@ def structure_query_for_ui(
     return out
 
 
-def query_structuring_status() -> dict[str, Any]:
-    try:
-        from .query.prompt import PROMPT_VERSION
-    except Exception:
-        PROMPT_VERSION = None
-    return {"llm": llm_status(), "prompt_version": PROMPT_VERSION}
-
-
 def _write_private_json(path: Path, data: bytes) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -137,8 +140,35 @@ def _write_private_json(path: Path, data: bytes) -> None:
     os.replace(temporary, path)
 
 
+def _image_attachment_failed(result: dict[str, Any]) -> bool:
+    image_generation = result.get("image_generation")
+    if not isinstance(image_generation, dict):
+        return False
+    if image_generation.get("status") in {
+        "blocked", "failed", "partial", "error", "not_available", "not_supported",
+    }:
+        return True
+    image = image_generation.get("image")
+    board = image_generation.get("planning_board")
+    return not (
+        isinstance(image, dict) and image.get("status") == "generated"
+        and isinstance(board, dict) and board.get("status") == "generated"
+    )
+
+
+def _run_save_exclusion_reason(result: dict[str, Any]) -> str | None:
+    if result.get("status") == "error":
+        return "전체 실행이 오류로 끝나 저장하지 않았습니다."
+    if _image_attachment_failed(result):
+        return "이미지 또는 기획서 보드 첨부에 실패해 실행 기록에 저장하지 않았습니다."
+    return None
+
+
 def _save_latest_run(mode: str, result: dict[str, Any]) -> str | None:
     """Archive a UI run and keep the latest run available for page restore."""
+    if _run_save_exclusion_reason(result):
+        result.pop("history_id", None)
+        return None
     try:
         history_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:8]}"
         record = {
@@ -168,9 +198,51 @@ def _load_latest_run() -> dict[str, Any] | None:
         if not LATEST_RUN_PATH.is_file() or LATEST_RUN_PATH.stat().st_size > MAX_LATEST_RUN_BYTES:
             return None
         value = json.loads(LATEST_RUN_PATH.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) and isinstance(value.get("result"), dict) else None
+        if not isinstance(value, dict) or not isinstance(value.get("result"), dict):
+            return None
+        return None if _run_save_exclusion_reason(value["result"]) else value
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def _local_services_status() -> dict[str, Any]:
+    services = []
+    for service_id, label, env_key, default_url, health_path in LOCAL_SERVICE_ENDPOINTS:
+        base_url = os.environ.get(env_key, default_url) if env_key else default_url
+        parsed = urlsplit(base_url)
+        try:
+            is_loopback = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+            if parsed.scheme != "http" or not is_loopback:
+                status = "remote_or_unmanaged"
+            else:
+                connection = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=1.5)
+                try:
+                    path = parsed.path.rstrip("/") + health_path
+                    connection.request("GET", path or health_path)
+                    response = connection.getresponse()
+                    response.read(1024)
+                    status = "running" if response.status == 200 else "unavailable"
+                finally:
+                    connection.close()
+        except (OSError, ValueError, http.client.HTTPException):
+            status = "unavailable"
+        services.append({"id": service_id, "name": label, "status": status})
+    return {"services": services, "healthy": sum(item["status"] == "running" for item in services),
+            "total": len(services), "all_healthy": all(item["status"] == "running" for item in services)}
+
+
+def _request_is_loopback(handler: BaseHTTPRequestHandler) -> bool:
+    try:
+        if not ipaddress.ip_address(handler.client_address[0]).is_loopback:
+            return False
+    except (ValueError, IndexError):
+        return False
+    origin = handler.headers.get("Origin")
+    if origin:
+        parsed = urlsplit(origin)
+        if parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            return False
+    return True
 
 
 def _history_id_is_safe(history_id: str) -> bool:
@@ -198,15 +270,19 @@ def _list_run_history() -> list[dict[str, Any]]:
     except OSError:
         return []
     history = []
-    for path in paths[:MAX_SAVED_RUNS]:
+    for path in paths:
         record = _load_history_record(path.stem)
         if record:
             result = record["result"]
+            if _run_save_exclusion_reason(result):
+                continue
             history.append({
                 "id": record.get("id", path.stem), "saved_at": record.get("saved_at"),
                 "mode": record.get("mode"), "query": result.get("query"),
                 "status": result.get("status"), "historical_preview": result.get("historical_preview", False),
             })
+            if len(history) >= MAX_SAVED_RUNS:
+                break
     return history
 
 
@@ -226,6 +302,35 @@ def _image_generation_followup(execution: Any) -> dict[str, Any]:
         return {"status": "not_available", "error_code": "PROJECT_06_IMAGE_INPUT_MISSING"}
     source_trend_version = inputs["trend_result"].get("schema_version")
     legacy_inputs = copy.deepcopy(inputs)
+    visual_season = None
+    visual_season_source = None
+    planning_request = legacy_inputs.get("planning_request")
+    planning_context = planning_request.get("context") if isinstance(planning_request, dict) else None
+    if not isinstance(planning_context, dict):
+        planning_context = {}
+        if isinstance(planning_request, dict):
+            planning_request["context"] = planning_context
+    season_context = planning_context.get("season")
+    if isinstance(season_context, dict) and season_context.get("value"):
+        visual_season = season_context.get("value")
+        visual_season_source = season_context.get("source")
+    else:
+        # A query without an explicit season may still have one season grounded
+        # in its Trend result. Use it only in this separate visual request and
+        # label the provenance; the canonical run and saved producer payloads
+        # remain unchanged.
+        trend_seasons = {
+            season
+            for trend in (inputs["trend_result"].get("trends") or [])
+            if isinstance(trend, dict)
+            for season in ((trend.get("style") or {}).get("seasons") or [])
+            if isinstance(season, str) and len(season) > 2
+            and season[:-2].isdigit() and season[-2:] in {"SS", "FW"}
+        }
+        if len(trend_seasons) == 1:
+            visual_season = next(iter(trend_seasons))
+            visual_season_source = "trend_result"
+            planning_context["season"] = {"value": visual_season, "source": visual_season_source}
     if source_trend_version == "1.1":
         # The separate legacy image endpoint requires all producer schemas to
         # match PlanningRequest 1.0. Adapt a copy only; the canonical v0.1 raw
@@ -310,8 +415,27 @@ def _image_generation_followup(execution: Any) -> dict[str, Any]:
             "trend_legacy_input_schema_version": legacy_inputs["trend_result"].get("schema_version"),
             "original_trend_payload_preserved": True,
         },
+        "visual_request_scope": {
+            "season": visual_season,
+            "season_source": visual_season_source,
+            "category_source": ((planning_context.get("category") or {}).get("source")
+                                if isinstance(planning_context.get("category"), dict) else None),
+        },
         "raw_response": image_response,
     }
+
+
+def _image_display_urls(image_generation: dict[str, Any]) -> dict[str, Any]:
+    images = copy.deepcopy(image_generation)
+    for name, key in (("image", "image_display_url"),
+                      ("planning_board", "planning_board_display_url")):
+        item = images.get(name)
+        image_url = item.get("image_url") if isinstance(item, dict) else None
+        filename = Path(urlparse(image_url).path).name if isinstance(image_url, str) else ""
+        if (isinstance(image_url, str) and image_url.startswith("/api/generated-images/")
+                and Path(image_url).name == filename and filename):
+            images[key] = "/api/new-product/images/" + quote(filename)
+    return images
 
 
 def _fetch_project06_image(filename: str) -> tuple[bytes, str]:
@@ -374,11 +498,11 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
         if path == "/api/health":
             self._json(200, {"status": "ok", "mode": "local-orchestrator-ui"})
             return
+        if path == "/api/local-services/status":
+            self._json(200, _local_services_status())
+            return
         if path == "/api/connections":
             self._json(200, connection_status())
-            return
-        if path == "/api/query-structuring":
-            self._json(200, query_structuring_status())
             return
         if path == "/api/latest-run":
             value = _load_latest_run()
@@ -458,6 +582,65 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if path == "/api/local-services/restart":
+            if not _request_is_loopback(self):
+                self._json(403, {"error": "local_restart_only"})
+                return
+            root = Path(__file__).resolve().parents[2]
+            script = root / "scripts" / "local_servers.py"
+            state_dir = LATEST_RUN_PATH.parent / "services"
+            log_path = state_dir / "ui-triggered-restart.log"
+            try:
+                state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+                with log_path.open("ab", buffering=0) as log:
+                    subprocess.Popen(
+                        [sys.executable, str(script), "restart", "--no-open"],
+                        cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                        start_new_session=True,
+                    )
+            except OSError:
+                self._json(500, {"error": "local_restart_failed"})
+                return
+            self._json(202, {"status": "restarting"})
+            return
+        if path.startswith("/api/run-history/") and path.endswith("/images"):
+            history_id = path.removeprefix("/api/run-history/").removesuffix("/images")
+            if not _history_id_is_safe(history_id):
+                self._json(400, {"error": "invalid_run_id"})
+                return
+            record = _load_history_record(history_id)
+            if not record:
+                self._json(404, {"error": "run_not_found"})
+                return
+            result = record["result"]
+            final_stage = next((stage for stage in result.get("stages", [])
+                                if stage.get("stage") == "project_06"), None)
+            if not isinstance(final_stage, dict) or not isinstance(final_stage.get("raw_response"), dict):
+                self._json(409, {"error": "project06_response_unavailable"})
+                return
+            execution = SimpleNamespace(
+                request_id=result.get("request_id"),
+                stages=[SimpleNamespace(
+                    stage=SimpleNamespace(value="project_06"),
+                    raw_response=final_stage["raw_response"],
+                )],
+            )
+            try:
+                image_generation = _image_display_urls(dict(_image_generation_followup(execution)))
+                result["image_generation"] = image_generation
+                data = json.dumps(record, ensure_ascii=False).encode("utf-8")
+                if len(data) > MAX_LATEST_RUN_BYTES:
+                    self._json(413, {"error": "run_record_too_large"})
+                    return
+                RUN_HISTORY_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+                _write_private_json(RUN_HISTORY_DIR / f"{history_id}.json", data)
+                latest = _load_latest_run()
+                if latest and latest.get("id") == history_id:
+                    _write_private_json(LATEST_RUN_PATH, data)
+                self._json(200, {"image_generation": image_generation})
+            except Exception as exc:
+                self._json(502, {"error": "image_generation_failed", "error_type": type(exc).__name__})
+            return
         if path not in {"/api/run", "/v1/orchestrations"}:
             self._json(404, {"error": "not_found"})
             return
@@ -504,15 +687,13 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 scope = {}
                 trend_query = None
                 mode = value.get("mode", "demo") if isinstance(value, dict) else "demo"
-                # UI only: run 00 query structuring (external LLM) when the user ticked the consent box.
-                structure = value.get("structure", False) if isinstance(value, dict) else False
+                # UI runs query structuring by default; public API callers can opt in explicitly.
+                structure = value.get("structure", not public_api) if isinstance(value, dict) else not public_api
                 generate_images = value.get("generate_images", False) if isinstance(value, dict) else False
             if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
                 raise ValueError(f"쿼리는 1~{MAX_QUERY_CHARS}자로 입력해 주세요.")
             if mode not in {"demo", "connected", "agent_http_v01"}:
                 raise ValueError("지원하지 않는 실행 모드입니다.")
-            if not public_api and mode == "agent_http_v01" and not structure:
-                raise ValueError("agent_http_v01 모드는 query structuring 동의가 필요합니다.")
             if not isinstance(structure, bool):
                 raise ValueError("structure 값은 true/false여야 합니다.")
             if not isinstance(generate_images, bool):
@@ -555,16 +736,8 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             result = execution.to_dict()
             if generate_images:
                 try:
-                    images = _image_generation_followup(execution)
-                    for name, key in (("image", "image_display_url"),
-                                      ("planning_board", "planning_board_display_url")):
-                        item = images.get(name)
-                        image_url = item.get("image_url") if isinstance(item, dict) else None
-                        filename = Path(urlparse(image_url).path).name if isinstance(image_url, str) else ""
-                        if (isinstance(image_url, str) and image_url.startswith("/api/generated-images/")
-                                and Path(image_url).name == filename and filename):
-                            images[key] = "/api/new-product/images/" + quote(filename)
-                    result["image_generation"] = images
+                    result["image_generation"] = _image_display_urls(
+                        dict(_image_generation_followup(execution)))
                 except Exception as exc:
                     result["image_generation"] = {
                         "status": "failed", "error_code": "PROJECT_06_IMAGE_REQUEST_FAILED",
@@ -592,7 +765,11 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             else:
                 result["query_structuring"] = structuring
                 result["query"] = query.strip()
-                _save_latest_run(mode, result)
+                if _save_latest_run(mode, result) is None:
+                    result["save_warning"] = _run_save_exclusion_reason(result) or (
+                        "실행 결과는 표시됐지만 로컬 기록에 저장하지 못했습니다. "
+                        "기록 크기 제한을 넘었거나 저장 경로를 쓸 수 없습니다."
+                    )
                 self._json(200, result)
         except ConnectorConfigurationError as exc:
             self._json(409, {"error": "connectors_not_ready", "message": str(exc), "connections": connection_status()})

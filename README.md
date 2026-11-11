@@ -30,13 +30,13 @@ agent별 현재 구현과 fixture 기반 input/output은 [`docs/agent-io-contrac
 - New Product의 legacy `/api/planning-draft`는 입력 버전 동등성을 요구하지만, canonical `/v1/agents/new-product-agent/runs`는 PlanningRequest `1.0` + Trend `1.1` + Stock `1.0` + Sales Market `1.0` 조합을 명시 adapter로 지원합니다. Project_08 HTTP v0.1 client는 canonical route를 사용합니다.
 - `partial`과 `no_results`는 다음 단계에 전달하고, `error` 및 계약 검증 실패는 기본적으로 이후 호출을 멈춥니다. 앞선 성공 결과는 실행 기록에 남습니다.
 - 자동 재시도와 영속 중복 제거는 기본 비활성입니다. 선택 가능한 idempotency key 생성 함수만 제공합니다. 재시도·중복 저장은 운영 합의 후 외부 구현을 주입해야 합니다.
-- 실행 trace는 응답으로 반환하지만 영속 저장은 하지 않습니다. Legacy mixed mode에는 공통 HTTP 인증 전달이 없습니다. HTTP v0.1 client는 Bearer token 전달, 3초 connect timeout, 60초 request timeout을 적용하며 자동 재시도는 하지 않습니다. 승인된 외부 자료원은 이 저장소에서 연결하지 않습니다.
+- 실행 trace는 UI 응답에 포함되며, 전체 `error` 실행과 요청한 상품 이미지·기획서 보드 첨부가 실패한 실행은 저장하지 않습니다. 이미지 생성을 요청하지 않은 실행이나 이미지가 생성된 `partial` 실행은 저장합니다. UI 실행의 최근 20건은 저장소 루트의 `.local/runs/`에 로컬 보관됩니다. `.local/latest-run.json`에서 마지막 저장 실행을 페이지 로드 때 복원하고, 화면의 저장 기록 선택 메뉴에서 과거 실행을 불러오거나 개별 삭제할 수 있습니다. 이 파일은 Git에서 제외되며 UI에서 전체 기록도 삭제할 수 있습니다. Legacy mixed mode에는 공통 HTTP 인증 전달이 없습니다. HTTP v0.1 client는 Bearer token 전달, 3초 connect timeout, 60초 request timeout을 적용하며 자동 재시도는 하지 않습니다. 승인된 외부 자료원은 이 저장소에서 연결하지 않습니다.
 
 2026-11-10 합성 local E2E에서 네 canonical route를 실제 loopback TCP로 호출하고 Project_08 orchestration 응답까지 확인했습니다. Trend·Stock·Sales Market은 유효한 `no_results`를 유지했고 New Product는 `partial` MD 검토 초안을 반환했습니다. HTTP 경로는 통과했지만 business-result 성공이나 운영 readiness를 뜻하지 않습니다. 실제 서비스 readiness 점검에서 Neo4j·Stock DB·Sales Market 승인 자료원·Project_08 URL/LLM 설정이 없어 real-data E2E는 준비되지 않은 것으로 확인했습니다. 세부 결과와 다음 준비 항목은 [`docs/integration-validation.md`](docs/integration-validation.md)에 있습니다.
 
 ## 공통 HTTP v0.1 어댑터 (opt-in)
 
-`POST /v1/agents/{route_agent_id}/runs` 호출은 합의한 JSON envelope를 보내며, 전체 응답을 기록하고 producer `result`만 downstream에 전달합니다. UI의 `AGENT HTTP v0.1 · LOCAL E2E` 옵션이 이 경로를 호출합니다. 이 옵션은 두 체크박스(질의 구조화, agent 전송)에 동의해야 합니다.
+`POST /v1/agents/{route_agent_id}/runs` 호출은 합의한 JSON envelope를 보내며, 전체 응답을 기록하고 producer `result`만 downstream에 전달합니다. UI의 `에이전트 API로 분석` 옵션이 이 경로를 호출합니다. UI는 질의를 외부 LLM으로 구조화하고, 이미지·기획서 보드도 생성합니다. 이미지 생성은 Project_06 및 설정된 이미지 제공자에 입력을 전달하며 API 비용이 발생할 수 있습니다.
 
 ```python
 from vogue_orchestrator.connectors import build_v01_http_orchestrator
@@ -51,6 +51,10 @@ result = runner.run("synthetic query", request_id="synthetic-req-001",
 
 ## 실행·합성 검증
 
+### 로컬 서버 한 번에 재시작
+
+UI 상단 분석 방식 옆의 **서버 재시작** 버튼을 누르면 Trend, Stock, Sales Market, Project_06, Orchestrator를 다시 시작하고 상태 확인 후 화면을 새로고침합니다. 터미널에서는 `./.venv/bin/python scripts/local_servers.py restart`를 실행할 수도 있습니다. 상태 확인은 `./.venv/bin/python scripts/local_servers.py status`, 종료는 `./.venv/bin/python scripts/local_servers.py stop`을 사용합니다. 시작 로그와 PID는 `.local/services/`에 저장됩니다. 이 실행기는 현재 저장소의 에이전트 프로세스만 종료하며, 다른 프로그램이 해당 포트를 사용하면 종료하지 않고 안내합니다.
+
 외부 의존성 없이:
 
 ```bash
@@ -62,7 +66,7 @@ PYTHONPATH=src python3 examples/synthetic_demo.py
 
 ### Docker로 로컬 preview 실행
 
-Docker Compose는 Python 의존성 설치 없이 합성 preview UI를 빌드하고 실행합니다. 컨테이너는 non-root/read-only로 실행되며 host port는 loopback에만 공개됩니다.
+Docker Compose는 Python 의존성 설치 없이 합성 preview UI를 빌드하고 실행합니다. 컨테이너는 non-root/read-only로 실행되며 host port는 loopback에만 공개됩니다. 실행 기록은 `run-data` named volume에 저장되어 컨테이너를 다시 만들어도 유지됩니다.
 
 ```bash
 docker compose up --build
@@ -74,9 +78,9 @@ Health endpoint는 `http://127.0.0.1:8765/api/health`입니다. 이 컨테이너
 
 Windows에서는 `python3` 대신 `py`를 쓰고, PowerShell에서는 `$env:PYTHONPATH="src"`로 경로를 지정합니다.
 
-**질의 구조화**는 UI에서 명시 동의가 필요합니다. HTTP v0.1 실행에서는 구조화된 TrendQuery가 Trend 단계로 전달됩니다. 오프라인 검증은 `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`를 사용하고 실제 LLM 설정과 분리합니다.
+**질의 구조화**는 UI 실행에서 기본 수행됩니다. HTTP v0.1 실행에서는 구조화된 TrendQuery가 Trend 단계로 전달됩니다. 오프라인 검증은 `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`를 사용하고 실제 LLM 설정과 분리합니다.
 
-UI는 기본적으로 합성 미리보기입니다. `LEGACY MIXED CONNECTORS`는 기존 adapter 조합이며 `AGENT HTTP v0.1 · LOCAL E2E`는 네 HTTP route를 순차 호출합니다. 결과는 영속 저장하지 않습니다.
+UI 기본값은 `에이전트 API로 분석`이며, `미리보기 · 샘플 결과`는 실제 agent endpoint나 자료원을 호출하지 않습니다. `기존 연결로 분석`은 기존 adapter 조합이며 `에이전트 API로 분석`은 네 HTTP route를 순차 호출하고 이미지 생성을 요청합니다. UI에서 실행한 결과는 위 로컬 기록에 저장됩니다. 브라우저 밖에서 실행한 결과는 자동으로 기록되지 않습니다. 요약만 저장된 과거 기록은 전체 단계 응답과 초안 내용을 복원할 수 없습니다.
 
 UI의 **CONNECTED AGENTS** 모드는 설정이 완료됐을 때만 실행합니다. `/api/connections`는 환경 설정만 보여 주며 페이지 로드 시 agent health/API endpoint를 호출하지 않습니다. 아래는 legacy 혼합 연결 설정입니다.
 
@@ -110,7 +114,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integr
 
 ## 질의 구조화 모듈 (LLM 호출 전 단계)
 
-사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 구조화하는 단계입니다. UI 서버는 동의 후 이 모듈을 실행하고, HTTP v0.1 mode는 결과를 Trend route에 전달합니다. `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`는 로컬 합성 E2E 전용 exact-match provider입니다. 일반 모드에서는 설정된 LLM provider를 사용합니다.
+사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 구조화하는 단계입니다. UI는 이 모듈을 기본 실행하고, HTTP v0.1 mode는 결과를 Trend route에 전달합니다. `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`는 로컬 합성 E2E 전용 exact-match provider입니다. 일반 모드에서는 설정된 LLM provider를 사용합니다.
 
 ```bash
 pip install -e ".[query]"
