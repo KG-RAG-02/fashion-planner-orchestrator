@@ -17,6 +17,7 @@
       {"type": "attribute", "raw": "길이가 긴"}
     ]
   },
+  "structured_draft": {"seasons": [], "style_names": [], "product_model_names": [], "items": [{"raw": "팬츠", "suggestion": "팬츠"}], "conditions": [{"raw": "길이가 긴", "kind": "body_length", "polarity": "include", "suggestion": "롱", "item": "팬츠"}, {"raw": "와이드", "kind": "fit", "polarity": "include", "suggestion": "와이드", "item": "팬츠"}], "unsupported": [{"type": "abstract", "raw": "포멀한 느낌", "polarity": "include", "item": "팬츠"}]},
   "expected_warnings": [],
   "expected_trend_query": {
     "request_id": "synthetic-query-006",

@@ -1,0 +1,2699 @@
+{
+ "_about": "홀드아웃 질의 20개(합성, 새 질의 h201~h220). 2026-11-11 프롬프트 v4를 읽지 않은 별도 Claude Agent가 질의와 라벨을 작성했다(라벨 근거: draft_v3.py 형식, contracts/structured-query.md, docs/query-decisions.md). 프롬프트 v4의 최종 확인용(튜닝에 쓰지 않은 세트). label_status=silver: 사용자 확인 전. 생성: scripts/build_query_holdout_v3.py",
+ "dataset": "user_queries_holdout",
+ "version": "v3",
+ "created": "2026-11-11",
+ "prompt_version": "query-structuring-prompt/v4",
+ "reference_today": "2026-11-10",
+ "items": [
+  {
+   "id": "h201",
+   "query": "봄 시즌이랑 가을 시즌에 같이 가져갈 베이지 트렌치코트 기획해줘",
+   "tags": [
+    "several_seasons",
+    "season_without_year",
+    "subtype",
+    "color"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [
+     {
+      "year": null,
+      "season": "SS",
+      "raw": "봄"
+     },
+     {
+      "year": null,
+      "season": "FW",
+      "raw": "가을"
+     }
+    ],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "트렌치코트",
+      "suggestion": "코트",
+      "conditions": [
+       {
+        "raw": "베이지",
+        "kind": "color",
+        "polarity": "include",
+        "suggestion": "베이지"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h201",
+    "original_query": "봄 시즌이랑 가을 시즌에 같이 가져갈 베이지 트렌치코트 기획해줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": "봄",
+       "origin": "user_requested"
+      },
+      {
+       "year": 2027,
+       "season": "FW",
+       "raw": "가을",
+       "origin": "user_requested"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "트렌치코트",
+       "major": "아우터",
+       "minor": "코트",
+       "match": "llm"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [
+         {
+          "raw": "베이지",
+          "value": "베이지",
+          "match": "exact"
+         }
+        ],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [
+    "season_year_inferred"
+   ],
+   "notes": "SQ-2: 시즌 두 개, 둘 다 연도 없음 → 코드가 연도를 정한다. G-2: '트렌치코트'는 하분류에 없는 하위 종류 → 코트(llm)."
+  },
+  {
+   "id": "h202",
+   "query": "꽈배기 니트 조끼랑 스트라이프 셔츠, 둘 다 그레이 컬러로 보여줘",
+   "tags": [
+    "multi_item",
+    "common_condition",
+    "detail",
+    "material",
+    "pattern",
+    "color",
+    "alias"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "조끼",
+      "suggestion": "베스트",
+      "conditions": [
+       {
+        "raw": "꽈배기",
+        "kind": "detail",
+        "polarity": "include",
+        "suggestion": "니트꽈배기"
+       },
+       {
+        "raw": "니트",
+        "kind": "material",
+        "polarity": "include",
+        "suggestion": "니트"
+       }
+      ],
+      "unsupported": []
+     },
+     {
+      "raw": "셔츠",
+      "suggestion": "셔츠",
+      "conditions": [
+       {
+        "raw": "스트라이프",
+        "kind": "pattern",
+        "polarity": "include",
+        "suggestion": "스트라이프"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [
+      {
+       "raw": "그레이",
+       "kind": "color",
+       "polarity": "include",
+       "suggestion": "그레이"
+      }
+     ],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h202",
+    "original_query": "꽈배기 니트 조끼랑 스트라이프 셔츠, 둘 다 그레이 컬러로 보여줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "조끼",
+       "major": "아우터",
+       "minor": "베스트",
+       "match": "alias"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [
+         {
+          "raw": "그레이",
+          "value": "그레이",
+          "match": "exact"
+         }
+        ],
+        "material": [
+         {
+          "raw": "니트",
+          "value": "니트",
+          "match": "exact"
+         }
+        ],
+        "pattern": [],
+        "detail": [
+         {
+          "raw": "꽈배기",
+          "value": "니트꽈배기",
+          "match": "alias"
+         }
+        ],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     },
+     {
+      "item_id": "i2",
+      "category": {
+       "raw": "셔츠",
+       "major": "상의",
+       "minor": "셔츠",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [
+         {
+          "raw": "그레이",
+          "value": "그레이",
+          "match": "exact"
+         }
+        ],
+        "material": [],
+        "pattern": [
+         {
+          "raw": "스트라이프",
+          "value": "스트라이프",
+          "match": "exact"
+         }
+        ],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "IT-2: '꽈배기 니트'는 조끼에만, '스트라이프'는 셔츠에만. '둘 다 그레이' → common(IT-1, 코드가 두 품목에 복사). 조끼 → 베스트, 꽈배기 → 니트꽈배기(사전 별칭)."
+  },
+  {
+   "id": "h203",
+   "query": "올겨울 레더 재킷이랑 내년 여름 린넨 팬츠 트렌드 비교해줘",
+   "tags": [
+    "multi_item",
+    "several_seasons",
+    "season_without_year",
+    "material",
+    "alias"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [
+     {
+      "year": null,
+      "season": "FW",
+      "raw": "올겨울"
+     },
+     {
+      "year": null,
+      "season": "SS",
+      "raw": "내년 여름"
+     }
+    ],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "재킷",
+      "suggestion": "재킷",
+      "conditions": [
+       {
+        "raw": "레더",
+        "kind": "material",
+        "polarity": "include",
+        "suggestion": "가죽"
+       }
+      ],
+      "unsupported": []
+     },
+     {
+      "raw": "팬츠",
+      "suggestion": "팬츠",
+      "conditions": [
+       {
+        "raw": "린넨",
+        "kind": "material",
+        "polarity": "include",
+        "suggestion": "린넨"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h203",
+    "original_query": "올겨울 레더 재킷이랑 내년 여름 린넨 팬츠 트렌드 비교해줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "FW",
+       "raw": "올겨울",
+       "origin": "user_requested"
+      },
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": "내년 여름",
+       "origin": "user_requested"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "재킷",
+       "major": "아우터",
+       "minor": "재킷",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [
+         {
+          "raw": "레더",
+          "value": "가죽",
+          "match": "alias"
+         }
+        ],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     },
+     {
+      "item_id": "i2",
+      "category": {
+       "raw": "팬츠",
+       "major": "하의",
+       "minor": "팬츠",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [
+         {
+          "raw": "린넨",
+          "value": "린넨",
+          "match": "exact"
+         }
+        ],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [
+    "season_year_inferred"
+   ],
+   "notes": "IT-5″/SQ-2: 시즌은 질의 전체 목록 [FW, SS]이고 품목과 짝짓지 않는다(한계). 연도는 숫자로 쓰지 않았으므로 null. 코드(A-1)는 '올겨울'을 2027 FW로 정한다(사용자 뜻은 2026 FW일 수 있음, dev q002 '올여름'과 같은 한계). 레더 → 가죽(사전 별칭)."
+  },
+  {
+   "id": "h204",
+   "query": "내년 봄에 데님 소재로 뭐가 뜰지 정리해줘",
+   "tags": [
+    "no_item",
+    "season_without_year",
+    "material"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [
+     {
+      "year": null,
+      "season": "SS",
+      "raw": "내년 봄"
+     }
+    ],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [],
+    "common": {
+     "conditions": [
+      {
+       "raw": "데님 소재",
+       "kind": "material",
+       "polarity": "include",
+       "suggestion": "데님"
+      }
+     ],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h204",
+    "original_query": "내년 봄에 데님 소재로 뭐가 뜰지 정리해줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": "내년 봄",
+       "origin": "user_requested"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": null,
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [
+         {
+          "raw": "데님 소재",
+          "value": "데님",
+          "match": "exact"
+         }
+        ],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [
+    "season_year_inferred"
+   ],
+   "notes": "IT-6: 찾는 품목을 말하지 않음 → items [] + 조건은 common → 카테고리 없는 품목 1개(모든 카테고리 중 데님)."
+  },
+  {
+   "id": "h205",
+   "query": "블랙 첼시부츠랑 롱 스커트 같이 기획해줘",
+   "tags": [
+    "out_of_scope_item",
+    "multi_item",
+    "color",
+    "body_length"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "첼시부츠",
+      "suggestion": null,
+      "conditions": [
+       {
+        "raw": "블랙",
+        "kind": "color",
+        "polarity": "include",
+        "suggestion": "블랙"
+       }
+      ],
+      "unsupported": []
+     },
+     {
+      "raw": "스커트",
+      "suggestion": "스커트",
+      "conditions": [
+       {
+        "raw": "롱",
+        "kind": "body_length",
+        "polarity": "include",
+        "suggestion": "롱"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h205",
+    "original_query": "블랙 첼시부츠랑 롱 스커트 같이 기획해줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "스커트",
+       "major": "하의",
+       "minor": "스커트",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [
+         {
+          "raw": "롱",
+          "value": "롱",
+          "match": "exact"
+         }
+        ],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [
+     {
+      "raw": "첼시부츠",
+      "reason": "표준 카테고리(상분류 4·하분류 21)에 없음",
+      "conditions_raw": [
+       "블랙"
+      ]
+     }
+    ],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "IT-7: 첼시부츠는 범위 밖 → out_of_scope_items(conditions_raw [블랙]). 블랙은 부츠의 꾸밈말이라 스커트에 붙지 않는다(IT-2)."
+  },
+  {
+   "id": "h206",
+   "query": "남성 상품은 제외하고, 아우터 중에서 패딩만 빼고 보여줘",
+   "tags": [
+    "gender_exclude",
+    "exclude",
+    "major_only"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "아우터",
+      "suggestion": "아우터",
+      "conditions": [
+       {
+        "raw": "남성",
+        "kind": "gender",
+        "polarity": "exclude",
+        "suggestion": "남"
+       },
+       {
+        "raw": "패딩",
+        "kind": "category",
+        "polarity": "exclude",
+        "suggestion": "패딩"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h206",
+    "original_query": "남성 상품은 제외하고, 아우터 중에서 패딩만 빼고 보여줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "아우터",
+       "major": "아우터",
+       "minor": null,
+       "match": "exact"
+      },
+      "excluded_categories": [
+       {
+        "raw": "패딩",
+        "major": "아우터",
+        "minor": "패딩",
+        "match": "exact"
+       }
+      ],
+      "gender": {
+       "include": [],
+       "exclude": [
+        {
+         "raw": "남성",
+         "value": "남",
+         "match": "alias"
+        }
+       ]
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "품목 하나 → 조건은 모두 그 품목에. 상분류 아우터(exact) − 하분류 패딩(X3, 상분류는 남음). G-3: 성별 제외 [남] = 여·공용."
+  },
+  {
+   "id": "h207",
+   "query": "아르켓 스타일로 단정한 느낌의 울 코트, 가격은 30만원 이하로 잡아줘",
+   "tags": [
+    "unsupported_brand",
+    "abstract",
+    "unsupported_price",
+    "material",
+    "alias",
+    "minor"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "코트",
+      "suggestion": "코트",
+      "conditions": [
+       {
+        "raw": "울",
+        "kind": "material",
+        "polarity": "include",
+        "suggestion": "울/캐시미어"
+       }
+      ],
+      "unsupported": [
+       {
+        "type": "brand",
+        "raw": "아르켓",
+        "polarity": "include"
+       },
+       {
+        "type": "abstract",
+        "raw": "단정한 느낌",
+        "polarity": "include"
+       },
+       {
+        "type": "price",
+        "raw": "30만원 이하",
+        "polarity": "include"
+       }
+      ]
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h207",
+    "original_query": "아르켓 스타일로 단정한 느낌의 울 코트, 가격은 30만원 이하로 잡아줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "코트",
+       "major": "아우터",
+       "minor": "코트",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [
+         {
+          "raw": "울",
+          "value": "울/캐시미어",
+          "match": "alias"
+         }
+        ],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": [
+       {
+        "type": "brand",
+        "raw": "아르켓",
+        "reason": "Product 데이터는 Musinsa뿐",
+        "polarity": "include"
+       },
+       {
+        "type": "abstract",
+        "raw": "단정한 느낌",
+        "reason": "표준 어휘로 바꿀 수 없는 추상 표현",
+        "polarity": "include"
+       },
+       {
+        "type": "price",
+        "raw": "30만원 이하",
+        "reason": "현재 검색에서 지원하지 않는 조건",
+        "polarity": "include"
+       }
+      ]
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "'아르켓 스타일'은 트렌드명이 아니라 브랜드(raw '아르켓'). 울 → 울/캐시미어(사전 별칭)."
+  },
+  {
+   "id": "h208",
+   "query": "자사몰 단독으로 낼 셔링 롱 원피스, 메인 타깃은 30대야",
+   "tags": [
+    "unsupported_channel",
+    "unsupported_age",
+    "detail",
+    "body_length",
+    "onepiece"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "원피스",
+      "suggestion": "드레스",
+      "conditions": [
+       {
+        "raw": "셔링",
+        "kind": "detail",
+        "polarity": "include",
+        "suggestion": "셔링"
+       },
+       {
+        "raw": "롱",
+        "kind": "body_length",
+        "polarity": "include",
+        "suggestion": "롱"
+       }
+      ],
+      "unsupported": [
+       {
+        "type": "channel",
+        "raw": "자사몰",
+        "polarity": "include"
+       },
+       {
+        "type": "age",
+        "raw": "30대",
+        "polarity": "include"
+       }
+      ]
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h208",
+    "original_query": "자사몰 단독으로 낼 셔링 롱 원피스, 메인 타깃은 30대야",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "원피스",
+       "major": "원피스",
+       "minor": "드레스",
+       "match": "alias"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [
+         {
+          "raw": "셔링",
+          "value": "셔링",
+          "match": "exact"
+         }
+        ],
+        "fit": [],
+        "body_length": [
+         {
+          "raw": "롱",
+          "value": "롱",
+          "match": "exact"
+         }
+        ],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": [
+       {
+        "type": "channel",
+        "raw": "자사몰",
+        "reason": "현재 검색에서 지원하지 않는 조건",
+        "polarity": "include"
+       },
+       {
+        "type": "age",
+        "raw": "30대",
+        "reason": "현재 검색에서 지원하지 않는 조건",
+        "polarity": "include"
+       }
+      ]
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "OQ-5′: 원피스 = 하분류 드레스. 채널·연령은 unsupported."
+  },
+  {
+   "id": "h209",
+   "query": "아크릴 혼방 말고 울 함량 높은 가디건으로 기획해줘, 컬러는 그레이나 네이비",
+   "tags": [
+    "exclude_material",
+    "material",
+    "color",
+    "minor"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "가디건",
+      "suggestion": "가디건",
+      "conditions": [
+       {
+        "raw": "아크릴 혼방",
+        "kind": "material",
+        "polarity": "exclude",
+        "suggestion": "합성섬유"
+       },
+       {
+        "raw": "울",
+        "kind": "material",
+        "polarity": "include",
+        "suggestion": "울/캐시미어"
+       },
+       {
+        "raw": "그레이",
+        "kind": "color",
+        "polarity": "include",
+        "suggestion": "그레이"
+       },
+       {
+        "raw": "네이비",
+        "kind": "color",
+        "polarity": "include",
+        "suggestion": "네이비"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h209",
+    "original_query": "아크릴 혼방 말고 울 함량 높은 가디건으로 기획해줘, 컬러는 그레이나 네이비",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "가디건",
+       "major": "아우터",
+       "minor": "가디건",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [
+         {
+          "raw": "그레이",
+          "value": "그레이",
+          "match": "exact"
+         },
+         {
+          "raw": "네이비",
+          "value": "네이비",
+          "match": "exact"
+         }
+        ],
+        "material": [
+         {
+          "raw": "울",
+          "value": "울/캐시미어",
+          "match": "alias"
+         }
+        ],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [
+         {
+          "raw": "아크릴 혼방",
+          "value": "합성섬유",
+          "match": "llm"
+         }
+        ],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "'아크릴 혼방'은 사전에 없어 LLM 제안 합성섬유(llm). '울 함량 높은'의 raw는 '울'."
+  },
+  {
+   "id": "h210",
+   "query": "도트 무늬 들어간 건 빼고 7부 소매 티셔츠 트렌드 봐줘",
+   "tags": [
+    "exclude_pattern",
+    "sleeve_length",
+    "minor"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "티셔츠",
+      "suggestion": "티셔츠",
+      "conditions": [
+       {
+        "raw": "도트",
+        "kind": "pattern",
+        "polarity": "exclude",
+        "suggestion": "도트"
+       },
+       {
+        "raw": "7부 소매",
+        "kind": "sleeve_length",
+        "polarity": "include",
+        "suggestion": "7부소매"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h210",
+    "original_query": "도트 무늬 들어간 건 빼고 7부 소매 티셔츠 트렌드 봐줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "티셔츠",
+       "major": "상의",
+       "minor": "티셔츠",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": [
+         {
+          "raw": "7부 소매",
+          "value": "7부소매",
+          "match": "exact"
+         }
+        ]
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [
+         {
+          "raw": "도트",
+          "value": "도트",
+          "match": "exact"
+         }
+        ],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "OQ-9′: '7부 소매'는 소매 기장 7부소매(사전 exact)."
+  },
+  {
+   "id": "h211",
+   "query": "남성 와이드 청바지랑 여성 크롭 가디건 같이 기획해줘",
+   "tags": [
+    "multi_item",
+    "gender",
+    "fit",
+    "body_length"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "청바지",
+      "suggestion": "청바지",
+      "conditions": [
+       {
+        "raw": "남성",
+        "kind": "gender",
+        "polarity": "include",
+        "suggestion": "남"
+       },
+       {
+        "raw": "와이드",
+        "kind": "fit",
+        "polarity": "include",
+        "suggestion": "와이드"
+       }
+      ],
+      "unsupported": []
+     },
+     {
+      "raw": "가디건",
+      "suggestion": "가디건",
+      "conditions": [
+       {
+        "raw": "여성",
+        "kind": "gender",
+        "polarity": "include",
+        "suggestion": "여"
+       },
+       {
+        "raw": "크롭",
+        "kind": "body_length",
+        "polarity": "include",
+        "suggestion": "크롭"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h211",
+    "original_query": "남성 와이드 청바지랑 여성 크롭 가디건 같이 기획해줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "청바지",
+       "major": "하의",
+       "minor": "청바지",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [
+        {
+         "raw": "남성",
+         "value": "남",
+         "match": "alias"
+        }
+       ],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [
+         {
+          "raw": "와이드",
+          "value": "와이드",
+          "match": "exact"
+         }
+        ],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     },
+     {
+      "item_id": "i2",
+      "category": {
+       "raw": "가디건",
+       "major": "아우터",
+       "minor": "가디건",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [
+        {
+         "raw": "여성",
+         "value": "여",
+         "match": "alias"
+        }
+       ],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [
+         {
+          "raw": "크롭",
+          "value": "크롭",
+          "match": "exact"
+         }
+        ],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "IT-2·IT-3: 성별도 품목별. 청바지 = 남·와이드, 가디건 = 여·크롭. '같이'는 두 품목을 모두 원한다는 뜻(꾸밈말 아님)."
+  },
+  {
+   "id": "h212",
+   "query": "후드티랑 조거팬츠 세트로 볼 건데 둘 다 블랙은 빼줘",
+   "tags": [
+    "multi_item",
+    "common_condition",
+    "exclude_color"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "후드티",
+      "suggestion": "후드티",
+      "conditions": [],
+      "unsupported": []
+     },
+     {
+      "raw": "조거팬츠",
+      "suggestion": "조거팬츠",
+      "conditions": [],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [
+      {
+       "raw": "블랙",
+       "kind": "color",
+       "polarity": "exclude",
+       "suggestion": "블랙"
+      }
+     ],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h212",
+    "original_query": "후드티랑 조거팬츠 세트로 볼 건데 둘 다 블랙은 빼줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "후드티",
+       "major": "상의",
+       "minor": "후드티",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [
+         {
+          "raw": "블랙",
+          "value": "블랙",
+          "match": "exact"
+         }
+        ],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     },
+     {
+      "item_id": "i2",
+      "category": {
+       "raw": "조거팬츠",
+       "major": "하의",
+       "minor": "조거팬츠",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [
+         {
+          "raw": "블랙",
+          "value": "블랙",
+          "match": "exact"
+         }
+        ],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "'둘 다 블랙은 빼줘' → common 색 제외(코드가 두 품목에 복사). '세트로'는 조건이 아니다."
+  },
+  {
+   "id": "h213",
+   "query": "맨투맨이랑 트랙 팬츠, 오버사이즈 핏으로 2027년 SS 기획해줘",
+   "tags": [
+    "multi_item",
+    "common_condition",
+    "fit",
+    "season_with_year",
+    "alias",
+    "subtype"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [
+     {
+      "year": 2027,
+      "season": "SS",
+      "raw": "2027년 SS"
+     }
+    ],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "맨투맨",
+      "suggestion": "티셔츠",
+      "conditions": [],
+      "unsupported": []
+     },
+     {
+      "raw": "트랙 팬츠",
+      "suggestion": "팬츠",
+      "conditions": [],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [
+      {
+       "raw": "오버사이즈 핏",
+       "kind": "fit",
+       "polarity": "include",
+       "suggestion": "오버사이즈"
+      }
+     ],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h213",
+    "original_query": "맨투맨이랑 트랙 팬츠, 오버사이즈 핏으로 2027년 SS 기획해줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": "2027년 SS",
+       "origin": "user_requested"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "맨투맨",
+       "major": "상의",
+       "minor": "티셔츠",
+       "match": "alias"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [
+         {
+          "raw": "오버사이즈 핏",
+          "value": "오버사이즈",
+          "match": "exact"
+         }
+        ],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     },
+     {
+      "item_id": "i2",
+      "category": {
+       "raw": "트랙 팬츠",
+       "major": "하의",
+       "minor": "팬츠",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [
+         {
+          "raw": "오버사이즈 핏",
+          "value": "오버사이즈",
+          "match": "exact"
+         }
+        ],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "IT-2: 품목 나열 뒤의 '~으로'는 전체를 꾸민다 → common. 맨투맨 → 티셔츠(사전 별칭). '트랙 팬츠'는 하위 종류라 품목 raw 전체로 두고(h018 'MA-1 점퍼'와 같은 관례) 표현 안 단어 '팬츠'로 팬츠(exact)."
+  },
+  {
+   "id": "h214",
+   "query": "코티지코어 감성의 퍼프 소매 블라우스 트렌드 정리해줘",
+   "tags": [
+    "style_name",
+    "detail",
+    "minor"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [
+     {
+      "raw": "코티지코어"
+     }
+    ],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "블라우스",
+      "suggestion": "블라우스",
+      "conditions": [
+       {
+        "raw": "퍼프 소매",
+        "kind": "detail",
+        "polarity": "include",
+        "suggestion": "퍼프"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h214",
+    "original_query": "코티지코어 감성의 퍼프 소매 블라우스 트렌드 정리해줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [
+      {
+       "raw": "코티지코어",
+       "value": null
+      }
+     ],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "블라우스",
+       "major": "상의",
+       "minor": "블라우스",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [
+         {
+          "raw": "퍼프 소매",
+          "value": "퍼프",
+          "match": "exact"
+         }
+        ],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "트렌드명 raw는 '코티지코어'('감성' 제외). '퍼프 소매'는 디테일 퍼프(소매 기장 값이 아님)."
+  },
+  {
+   "id": "h215",
+   "query": "여름 상의 기획인데 브라탑이랑 민소매 탑은 제외해줘",
+   "tags": [
+    "season_without_year",
+    "major_only",
+    "exclude",
+    "sleeve_length"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [
+     {
+      "year": null,
+      "season": "SS",
+      "raw": "여름"
+     }
+    ],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "상의",
+      "suggestion": "상의",
+      "conditions": [
+       {
+        "raw": "브라탑",
+        "kind": "category",
+        "polarity": "exclude",
+        "suggestion": "브라탑"
+       },
+       {
+        "raw": "민소매",
+        "kind": "sleeve_length",
+        "polarity": "exclude",
+        "suggestion": "민소매"
+       },
+       {
+        "raw": "탑",
+        "kind": "category",
+        "polarity": "exclude",
+        "suggestion": "탑"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h215",
+    "original_query": "여름 상의 기획인데 브라탑이랑 민소매 탑은 제외해줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": "여름",
+       "origin": "user_requested"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "상의",
+       "major": "상의",
+       "minor": null,
+       "match": "exact"
+      },
+      "excluded_categories": [
+       {
+        "raw": "브라탑",
+        "major": "상의",
+        "minor": "브라탑",
+        "match": "exact"
+       },
+       {
+        "raw": "탑",
+        "major": "상의",
+        "minor": "탑",
+        "match": "exact"
+       }
+      ],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": [
+         {
+          "raw": "민소매",
+          "value": "민소매",
+          "match": "exact"
+         }
+        ]
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [
+    "season_year_inferred"
+   ],
+   "notes": "상분류 상의(exact) − 브라탑 − 탑. '민소매 탑' 제외 = 소매 기장 민소매 제외 + 탑 제외(dev q004 '크롭 티셔츠 말고'와 같은 한계: '민소매인 탑만 제외'라는 묶음은 표현하지 못하고 상의 전체에서 민소매가 빠진다)."
+  },
+  {
+   "id": "h216",
+   "query": "동남아 시장 겨냥해서 5만원 이하 린넨 반팔 셔츠 기획해줘",
+   "tags": [
+    "unsupported_market",
+    "unsupported_price",
+    "material",
+    "sleeve_length",
+    "minor"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "셔츠",
+      "suggestion": "셔츠",
+      "conditions": [
+       {
+        "raw": "린넨",
+        "kind": "material",
+        "polarity": "include",
+        "suggestion": "린넨"
+       },
+       {
+        "raw": "반팔",
+        "kind": "sleeve_length",
+        "polarity": "include",
+        "suggestion": "반팔"
+       }
+      ],
+      "unsupported": [
+       {
+        "type": "market",
+        "raw": "동남아 시장",
+        "polarity": "include"
+       },
+       {
+        "type": "price",
+        "raw": "5만원 이하",
+        "polarity": "include"
+       }
+      ]
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h216",
+    "original_query": "동남아 시장 겨냥해서 5만원 이하 린넨 반팔 셔츠 기획해줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "셔츠",
+       "major": "상의",
+       "minor": "셔츠",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [
+         {
+          "raw": "린넨",
+          "value": "린넨",
+          "match": "exact"
+         }
+        ],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": [
+         {
+          "raw": "반팔",
+          "value": "반팔",
+          "match": "exact"
+         }
+        ]
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": [
+       {
+        "type": "market",
+        "raw": "동남아 시장",
+        "reason": "현재 검색에서 지원하지 않는 조건",
+        "polarity": "include"
+       },
+       {
+        "type": "price",
+        "raw": "5만원 이하",
+        "reason": "현재 검색에서 지원하지 않는 조건",
+        "polarity": "include"
+       }
+      ]
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": []
+  },
+  {
+   "id": "h217",
+   "query": "우먼즈는 제외하고 코치 재킷 트렌드 정리해줘",
+   "tags": [
+    "gender_exclude",
+    "subtype"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "코치 재킷",
+      "suggestion": "재킷",
+      "conditions": [
+       {
+        "raw": "우먼즈",
+        "kind": "gender",
+        "polarity": "exclude",
+        "suggestion": "여"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h217",
+    "original_query": "우먼즈는 제외하고 코치 재킷 트렌드 정리해줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "코치 재킷",
+       "major": "아우터",
+       "minor": "재킷",
+       "match": "exact"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": [
+        {
+         "raw": "우먼즈",
+         "value": "여",
+         "match": "llm"
+        }
+       ]
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "G-3: 성별 제외 [여] = 남·공용. '우먼즈'는 성별 표에 없어 LLM 제안 여(llm). 품목 하나라 '~는 제외하고' 절도 그 품목에. '코치 재킷'은 하위 종류 → 표현 안 단어 '재킷'(exact)."
+  },
+  {
+   "id": "h218",
+   "query": "맥시스커트랑 크롭자켓 내년 SS 기준으로 정리 부탁해",
+   "tags": [
+    "multi_item",
+    "subtype",
+    "body_length",
+    "season_without_year"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [
+     {
+      "year": null,
+      "season": "SS",
+      "raw": "내년 SS"
+     }
+    ],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "맥시스커트",
+      "suggestion": "스커트",
+      "conditions": [
+       {
+        "raw": "맥시",
+        "kind": "body_length",
+        "polarity": "include",
+        "suggestion": "맥시"
+       }
+      ],
+      "unsupported": []
+     },
+     {
+      "raw": "크롭자켓",
+      "suggestion": "재킷",
+      "conditions": [
+       {
+        "raw": "크롭",
+        "kind": "body_length",
+        "polarity": "include",
+        "suggestion": "크롭"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h218",
+    "original_query": "맥시스커트랑 크롭자켓 내년 SS 기준으로 정리 부탁해",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": "내년 SS",
+       "origin": "user_requested"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "맥시스커트",
+       "major": "하의",
+       "minor": "스커트",
+       "match": "llm"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [
+         {
+          "raw": "맥시",
+          "value": "맥시",
+          "match": "exact"
+         }
+        ],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     },
+     {
+      "item_id": "i2",
+      "category": {
+       "raw": "크롭자켓",
+       "major": "아우터",
+       "minor": "재킷",
+       "match": "llm"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [
+         {
+          "raw": "크롭",
+          "value": "크롭",
+          "match": "exact"
+         }
+        ],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [
+    "season_year_inferred"
+   ],
+   "notes": "OQ-9′: 품목 이름 안의 기장은 기장 조건으로 따로(맥시 → 스커트에만, 크롭 → 재킷에만). 두 품목 모두 사전에 없어 llm. '내년'은 연도를 계산하지 않고 null(코드가 정함)."
+  },
+  {
+   "id": "h219",
+   "query": "스웨이드 소재 빼고 카멜 컬러 블루종 찾아줘",
+   "tags": [
+    "exclude_material",
+    "color",
+    "alias",
+    "subtype"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "블루종",
+      "suggestion": "점퍼",
+      "conditions": [
+       {
+        "raw": "스웨이드 소재",
+        "kind": "material",
+        "polarity": "exclude",
+        "suggestion": "스웨이드"
+       },
+       {
+        "raw": "카멜",
+        "kind": "color",
+        "polarity": "include",
+        "suggestion": "브라운"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h219",
+    "original_query": "스웨이드 소재 빼고 카멜 컬러 블루종 찾아줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2027,
+       "season": "SS",
+       "raw": null,
+       "origin": "default_next"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "블루종",
+       "major": "아우터",
+       "minor": "점퍼",
+       "match": "llm"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [
+         {
+          "raw": "카멜",
+          "value": "브라운",
+          "match": "alias"
+         }
+        ],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [
+         {
+          "raw": "스웨이드 소재",
+          "value": "스웨이드",
+          "match": "exact"
+         }
+        ],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "G-2: 블루종 → 점퍼(llm). 카멜 → 브라운(사전 별칭)."
+  },
+  {
+   "id": "h220",
+   "query": "2026 가을겨울 슬림핏 터틀넥 니트 블랙 계열로 보여줘",
+   "tags": [
+    "season_with_year",
+    "fit",
+    "detail",
+    "color",
+    "approx",
+    "minor"
+   ],
+   "source": "holdout",
+   "label_status": "silver",
+   "expected_draft": {
+    "seasons": [
+     {
+      "year": 2026,
+      "season": "FW",
+      "raw": "2026 가을겨울"
+     }
+    ],
+    "style_names": [],
+    "product_model_names": [],
+    "items": [
+     {
+      "raw": "니트",
+      "suggestion": "니트웨어",
+      "conditions": [
+       {
+        "raw": "슬림핏",
+        "kind": "fit",
+        "polarity": "include",
+        "suggestion": "타이트"
+       },
+       {
+        "raw": "터틀넥",
+        "kind": "detail",
+        "polarity": "include",
+        "suggestion": "터틀넥"
+       },
+       {
+        "raw": "블랙",
+        "kind": "color",
+        "polarity": "include",
+        "suggestion": "블랙"
+       }
+      ],
+      "unsupported": []
+     }
+    ],
+    "common": {
+     "conditions": [],
+     "unsupported": []
+    }
+   },
+   "expected_structured_query": {
+    "schema_version": "1.0",
+    "request_id": "h220",
+    "original_query": "2026 가을겨울 슬림핏 터틀넥 니트 블랙 계열로 보여줘",
+    "trend_terms": {
+     "seasons": [
+      {
+       "year": 2026,
+       "season": "FW",
+       "raw": "2026 가을겨울",
+       "origin": "user_requested"
+      }
+     ],
+     "style_names": [],
+     "product_model_names": []
+    },
+    "items": [
+     {
+      "item_id": "i1",
+      "category": {
+       "raw": "니트",
+       "major": "상의",
+       "minor": "니트웨어",
+       "match": "llm"
+      },
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [
+         {
+          "raw": "블랙",
+          "value": "블랙",
+          "match": "exact"
+         }
+        ],
+        "material": [],
+        "pattern": [],
+        "detail": [
+         {
+          "raw": "터틀넥",
+          "value": "터틀넥",
+          "match": "exact"
+         }
+        ],
+        "fit": [
+         {
+          "raw": "슬림핏",
+          "value": "타이트",
+          "match": "approx"
+         }
+        ],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
+    "out_of_scope_items": [],
+    "missing_fields": []
+   },
+   "expected_warnings": [],
+   "notes": "품목 '니트' = 니트웨어(카테고리 사전에는 없어 llm). '슬림핏' → 타이트(사전 근사 approx). '블랙 계열'의 raw는 '블랙'."
+  }
+ ]
+}

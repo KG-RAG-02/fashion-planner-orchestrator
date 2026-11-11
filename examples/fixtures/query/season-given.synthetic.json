@@ -14,6 +14,7 @@
     "attributes": [{"type": "color", "raw": "핑크색", "value": "핑크"}],
     "unsupported": []
   },
+  "structured_draft": {"seasons": [{"year": 2027, "season": "SS", "raw": "2027년 봄"}], "style_names": [{"raw": "발레코어"}], "product_model_names": [], "items": [{"raw": "상의", "suggestion": "상의"}], "conditions": [{"raw": "핑크색", "kind": "color", "polarity": "include", "suggestion": "핑크", "item": "상의"}], "unsupported": []},
   "expected_warnings": [],
   "expected_trend_query": {
     "request_id": "synthetic-query-001",

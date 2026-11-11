@@ -3,7 +3,13 @@
 ## 파일
 | 파일 | 내용 |
 |---|---|
-| [`user_queries.v1.json`](user_queries.v1.json) | 예상 사용자 질의 30개(합성)와 각 질의의 기대 draft. 프롬프트 `query-structuring-prompt/v1` 기준 |
+| [`user_queries.v1.json`](user_queries.v1.json) | 예상 사용자 질의 30개(합성)와 각 질의의 기대 draft. 프롬프트 `query-structuring-prompt/v1` 기준 (보관용, 고치지 않음) |
+| [`user_queries.v2.json`](user_queries.v2.json) | **(2026-11-10, 보관)** 30개: v1에서 24개(같은 id) + 새 6개(q031~q036), 평평한 형식(프롬프트 v2·v3). 2026-11-10 측정(`eval_runs/`)의 기록으로 **고치지 않는다**. 만든 스크립트(`build_query_dataset_v2.py`)는 2026-11-11 품목별 형식으로 바뀌면서 `build_query_dataset_v3.py`로 대체·삭제됨 |
+| [`user_queries.v3.json`](user_queries.v3.json) | **(2026-11-11) 현행 dev 30개**: v2와 **같은 질의**(같은 id·같은 문장, 작업 규칙 W-11)에 라벨만 품목별 형식으로(`expected_draft` = 프롬프트 v4 규칙대로 LLM이 내야 할 draft v3, `expected_structured_query` = 그 draft를 코드로 조립한 결과). 여러 품목 2개(q012·q029), 범위 밖 품목만 1개(q015), 품목 없는 질의 2개(q006·q020). **직접 고치지 말고** `scripts/build_query_dataset_v3.py`의 표를 고친 뒤 다시 만든다(`tests/test_query_structured_path.py`가 검사). silver |
+| [`user_queries.holdout.v1.json`](user_queries.holdout.v1.json) | **(2026-11-10) holdout 20개**(h001~h020). 프롬프트를 고치는 동안 보지 않는 확인용 세트: 사용자 지시로 **별도 Claude 에이전트**가 썼고(현실적인 기획자 질의, 허무맹랑한 입력 없음), 메인 세션은 v3를 고정한 뒤에 처음 열었다. 형식은 v2와 같다. (만든 스크립트 `build_query_holdout_v1.py`는 2026-11-11 `build_query_holdout_v2.py`로 대체·삭제, 이 파일은 보관.) 2026-11-10 v3 측정에 한 번 썼으므로 **다음 프롬프트 개선 때는 새 holdout을 만든다**(작업 규칙 W-10). silver |
+| [`user_queries.holdout.v2.json`](user_queries.holdout.v2.json) | **(2026-11-11)** holdout v1과 **같은 질의 20개**, 라벨만 품목별 형식. 이미 한 번 본 세트라 **최종 판단용이 아니라 회귀 확인용**이다. 프롬프트 v4의 최종 판단은 별도 에이전트가 쓰는 **새 holdout**으로 한다(계획 U3.6 할 일 6). `scripts/build_query_holdout_v2.py`가 만든다. silver |
+| [`user_queries.holdout.v3.json`](user_queries.holdout.v3.json) | **(2026-11-11) 새 holdout 20개**(h201~h220). 사용자 승인으로 **별도 Claude 에이전트**가 프롬프트 v4를 읽지 않고 작성(현실적인 기획자 질의, 품목 두 개 6개·시즌 두 개 2개·품목 없음 1개·범위 밖 품목 1개 포함). **메인 세션은 열어 보지 않는다** — 다음 프롬프트의 최종 확인용(W-10), 한 번 쓰면 다시 새로 만든다. 겹침 검사·코드 재현(20/20)은 테스트가 코드로만 한다. `scripts/build_query_holdout_v3.py`가 만든다. silver |
+| [`eval_runs/`](eval_runs/) | 평가 스크립트(`scripts/evaluate_query_structuring.py`) 결과. `2026-11-10_v2_gpt-4o-mini_baseline.json` = 기준 측정(30개 중 완전 일치 18, 형식 오류 4), `..._baseline_replay-code-fix.json` = 같은 LLM 답을 코드 수정 후 재채점(20/30), `2026-11-10_v3_gpt-4o-mini_t0_dev.json`(24/30)·`..._holdout.json`(15/20), `2026-11-11_v4_gpt-4o-mini_t0_dev.json`(품목별 형식 첫 측정, 17/30)·`..._dev_replay-IT9-BR1.json`(같은 답을 IT-9·BR-1 후 재채점, 18/30), `2026-11-11_v5_gpt-4o-mini_t0_dev.json`(평평한 출력 + item, 21/30), `2026-11-11_v6_gpt-4o-mini_t0_dev.json`(남은 실패를 겨냥한 v6, 21/30). 2026-11-11부터 브랜드는 채점하지 않는다(BR-1, 라벨에는 남김). 분석은 [docs/query-structuring.md §14](../docs/query-structuring.md). 2026-11-10의 네 파일은 평평한 형식(프롬프트 v2·v3)이라 품목별 형식의 `--provider replay`로는 다시 채점할 수 없다(기록용). 합성 질의만 들어 있다 |
 
 모든 질의는 Claude가 임의로 만든 합성 문장이다. 실제 사용자 로그나 기사 문장은 없다. 프롬프트의 few-shot 예시와 겹치지 않는다 (겹치면 정확도가 부풀려진다. `tests/test_query_data.py`가 검사).
 

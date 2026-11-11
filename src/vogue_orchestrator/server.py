@@ -69,7 +69,11 @@ def _synthetic_fixture_provider_factory() -> tuple[Callable[[Any], Any], dict[st
         value = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value, dict) or not isinstance(value.get("query"), str) or not isinstance(value.get("draft"), dict):
             raise LLMConfigurationError("synthetic query fixture is invalid")
-        drafts[value["query"]] = value["draft"]
+        # The UI runs the StructuredQuery path (prompt v6, draft_v4; FW-1), so the fixture's flat
+        # `structured_draft` is served; its `draft` (v1 format) stays for the archived v1 path tests.
+        if not isinstance(value.get("structured_draft"), dict):
+            raise LLMConfigurationError("synthetic query fixture has no structured_draft")
+        drafts[value["query"]] = value["structured_draft"]
     if not drafts:
         raise LLMConfigurationError("synthetic query fixtures are unavailable")
     return FixtureDraftProvider(drafts), {"provider": "synthetic_fixture", "model": "repository-fixture"}
@@ -84,10 +88,15 @@ def _query_provider_factory() -> tuple[Callable[[Any], Any], dict[str, Any]]:
 def structure_query_for_ui(
     query: str, request_id: str, *, enabled: bool, provider_factory: ProviderFactory | None = None,
 ) -> dict[str, Any]:
-    """Run the query-structuring module in-process (prompt -> LLM -> validate -> assemble) for the UI.
+    """Run the query-structuring module in-process for the UI: the StructuredQuery path
+    (`query.structured.structure_query_v2`, its current prompt - v6 since 2026-11-11, decision FW-1).
 
-    The caller decides whether the structured result is a preview or an orchestration input.
-    Failures never echo model output or exception text: only safe codes and messages are returned.
+    Output: `structured_query` (StructuredQuery 1.0, every item and season), `draft` (what the model
+    wrote), `warnings` (codes), and `trend_query` = what the trend stage receives: only the FIRST item and
+    the FIRST season (`query.to_trend.to_trend_query`, IT-4 / SQ-2 / FW-1; null when no item can be
+    forwarded). The caller decides whether the structured result is a preview or an orchestration input
+    (`trend_input_preview.sent`; the HTTP v0.1 run sends `trend_query` to Trend). Failures never echo the
+    query, the model output or exception text: only safe codes and messages (and an exception class name).
     """
     out: dict[str, Any] = {"status": "skipped", "request_id": request_id, "llm": None,
                            "error_code": None, "error_message": None, "provider_error": None}
@@ -100,8 +109,10 @@ def structure_query_for_ui(
         return out
 
     try:  # lazy: the query module needs pydantic (optional extra "query")
-        from .query import QueryStructuringError, structure_query
+        from .query import QueryStructuringError
         from .query.config import QueryConfigError
+        from .query.structured import structure_query_v2
+        from .query.to_trend import to_trend_query
     except ImportError:
         return fail("QUERY_MODULE_UNAVAILABLE", "질의 모듈을 불러오지 못했습니다 (pydantic 설치 확인).")
     try:
@@ -120,15 +131,21 @@ def structure_query_for_ui(
             raise
 
     try:
-        result = structure_query(query, request_id=request_id, draft_provider=guarded)
+        result = structure_query_v2(query, request_id=request_id, draft_provider=guarded)
+        conversion = to_trend_query(result.structured_query)  # first item + first season only (FW-1)
     except QueryStructuringError as exc:
         return fail(exc.code, str(exc), seen.get("provider_error"))
     except QueryConfigError:
         return fail("QUERY_CONFIG_INVALID", "질의 구조화 설정이 올바르지 않습니다.")
     data = result.to_dict()
+    data["warnings"] = list(dict.fromkeys((*data["warnings"], *conversion.warnings)))
     out.update(status="ok", **data)
+    out["trend_query"] = conversion.to_dict()
+    # What the trend stage receives; the caller marks it sent when the HTTP v0.1 run forwards it.
     out["trend_input_preview"] = {"sent": False, "request_id": request_id, "query": query,
-                                  "trend_query": data["trend_query"]}
+                                  "trend_query": out["trend_query"],
+                                  "forwarded": {"items": ["i1"] if out["trend_query"] else [],
+                                                "seasons": 1 if out["trend_query"] else 0}}
     return out
 
 
@@ -720,6 +737,9 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                         self._json(422, {"error": "query_structuring_failed", "query_structuring": structuring})
                         return
                     trend_query = structuring["trend_query"]
+                    if trend_query is None:  # FW-1: only out-of-scope items, nothing Trend can search
+                        self._json(422, {"error": "query_structuring_no_item", "query_structuring": structuring})
+                        return
                     structuring["trend_input_preview"]["sent"] = True
             elif structure:
                 request_id = request_id or str(uuid.uuid4())
@@ -728,6 +748,9 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                     self._json(422, {"error": "query_structuring_failed", "query_structuring": structuring})
                     return
                 trend_query = structuring["trend_query"]
+                if trend_query is None and mode == "agent_http_v01":  # FW-1: no item to forward
+                    self._json(422, {"error": "query_structuring_no_item", "query_structuring": structuring})
+                    return
                 structuring["trend_input_preview"]["sent"] = mode == "agent_http_v01"
             run_options: dict[str, Any] = {"request_id": request_id, "scope": scope}
             if mode == "agent_http_v01" and trend_query is not None:

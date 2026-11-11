@@ -127,13 +127,21 @@ class DetailAndRouteTests(unittest.TestCase):
         self.assertEqual(codes(result), [r.WARN_ATTRIBUTE_ROUTED])
 
     def test_route_out_of_the_contract_is_unsupported_attribute(self):
-        for raw, kind, target in (("플레어", "fit", "shape"), ("일자", "fit", "shape"), ("민소매", "detail", "sleeve_length")):
+        for raw, kind, target in (("플레어", "fit", "shape"), ("일자", "fit", "shape")):
             with self.subTest(raw=raw):
                 result = one(raw, kind, "exclude", suggestion="와이드")
                 self.assertEqual(result.values, ())
                 self.assertEqual(result.unsupported, (r.UnsupportedItem(
                     "attribute", raw, "exclude", r.REASON_ROUTE_NOT_IN_CONTRACT, target),))
                 self.assertEqual(codes(result), [r.WARN_ATTRIBUTE_ROUTED, r.WARN_LLM_SUGGESTION_OVERRIDDEN])
+
+    def test_route_into_a_length_kind_is_inside_the_contract(self):
+        # dictionary: detail 민소매 -> sleeve_length (decision OQ-9': lengths are contract kinds now)
+        result = one("민소매", "detail", "exclude")
+        self.assertEqual([(v.kind, v.polarity, v.value, v.match) for v in result.values],
+                         [("sleeve_length", "exclude", "민소매", "exact")])
+        self.assertEqual(result.unsupported, ())
+        self.assertEqual(codes(result), [r.WARN_ATTRIBUTE_ROUTED])
 
     def test_route_without_value_falls_back_to_a_suggestion_of_the_target_kind(self):
         # dictionary: detail "프린트" -> pattern, no value
@@ -163,14 +171,23 @@ class CategoryG2Tests(unittest.TestCase):
         self.check("블레이저", "재킷", [("아우터", "재킷", "llm")])
 
     def test_major_names_are_exact(self):
-        for major in ("상의", "하의", "아우터", "원피스"):
+        for major in ("상의", "하의", "아우터"):
             with self.subTest(major=major):
                 result = self.check(major, major, [(major, None, "exact")])
                 self.assertEqual(result.values[0].value, major)
 
-    def test_onepiece_is_the_major_not_the_dress_alias(self):
-        # the dictionary maps 원피스 -> 드레스 (alias), but major names are compared first (plan §2.1)
-        self.check("원피스", "드레스", [("원피스", None, "exact")])
+    def test_onepiece_is_the_dress_alias(self):
+        # decision OQ-5': the dictionary maps 원피스 -> 드레스 (alias) and the dictionary goes first
+        result = self.check("원피스", "드레스", [("원피스", "드레스", "alias")])
+        self.assertEqual(result.warnings, ())
+        result = self.check("원피스", "원피스", [("원피스", "드레스", "alias")])
+        self.assertEqual(codes(result), [r.WARN_LLM_SUGGESTION_OVERRIDDEN])
+
+    def test_spaced_category_words_are_each_a_category(self):
+        # decision OQ-10': "셔츠 원피스" = 셔츠 and 원피스(드레스); joined "셔츠원피스" is one dress (llm)
+        self.check("셔츠 원피스", None, [("상의", "셔츠", "exact"), ("원피스", "드레스", "alias")], polarity="exclude")
+        self.check("셔츠원피스", "드레스", [("원피스", "드레스", "llm")], polarity="exclude")
+        self.check("니트 원피스", None, [("원피스", "드레스", "alias")])  # 니트 is not a category word
 
     def test_major_suggestion_for_a_subtype_is_rejected(self):
         result = self.check("롱스커트", "하의", [])
@@ -195,6 +212,31 @@ class CategoryG2Tests(unittest.TestCase):
         # dictionary: category "무스탕" -> hint category_major 아우터 only; the hint is never applied
         self.check("무스탕", "코트", [("아우터", "코트", "llm")])
         self.check("무스탕", None, [])
+
+
+class LengthTests(unittest.TestCase):
+    """Decision OQ-9' (body_length, sleeve_length) and OQ-8' (숏패딩)."""
+
+    def test_length_values_from_the_dictionary(self):
+        cases = {("미니", "body_length"): ("미니", "exact"), ("긴", "body_length"): ("롱", "alias"),
+                 ("숏패딩", "body_length"): ("크롭", "approx"), ("반팔", "sleeve_length"): ("반팔", "exact"),
+                 ("반소매", "sleeve_length"): ("반팔", "alias")}
+        for (raw, kind), expected in cases.items():
+            with self.subTest(raw=raw):
+                result = one(raw, kind)
+                self.assertEqual([(v.kind, v.value, v.match) for v in result.values], [(kind, *expected)])
+
+    def test_unknown_length_uses_the_suggestion(self):
+        self.assertEqual([(v.value, v.match) for v in one("숏", "body_length", suggestion="크롭").values],
+                         [("크롭", "llm")])
+        self.assertEqual([(v.value, v.match) for v in one("짧은", "body_length", suggestion="반팔").values],
+                         [(None, "none")])  # a sleeve value is not a body length
+
+    def test_short_padding_is_padding_plus_crop(self):
+        result = r.resolve_conditions([Condition("숏패딩", "category", "include", "패딩"),
+                                       Condition("숏패딩", "body_length", "include", "크롭")])
+        self.assertEqual([(v.kind, v.minor, v.value, v.match) for v in result.values],
+                         [("category", "패딩", "패딩", "llm"), ("body_length", None, "크롭", "approx")])
 
 
 class GenderG1Tests(unittest.TestCase):
@@ -223,11 +265,52 @@ class GenderG1Tests(unittest.TestCase):
 
     def test_repository_table_is_used_by_default(self):
         cases = {"여성": "여", "여자": "여", "우먼": "여", "남성": "남", "남자": "남", "맨즈": "남",
-                 "남녀공용": "공용", "남녀 공용": "공용", "유니섹스": "공용"}
+                 "남녀공용": "공용", "남녀 공용": "공용", "남녀": "공용", "유니섹스": "공용"}
         for raw, value in cases.items():
             with self.subTest(raw=raw):
                 result = one(raw, "gender")
                 self.assertEqual([(v.value, v.match) for v in result.values], [(value, "alias")])
+
+
+class GenderG3Tests(unittest.TestCase):
+    """Decision G-3: gender include/exclude; included 남 + 여 = 공용 (OQ-7)."""
+
+    @staticmethod
+    def run_all(*conditions):
+        result = r.resolve_conditions([Condition(raw, "gender", polarity, s) for raw, polarity, s in conditions])
+        return [(v.raw, v.polarity, v.value, v.match) for v in result.values], codes(result)
+
+    def test_exclusion_is_kept_as_said(self):
+        # "남성 말고" stays exclude 남 (it means 여·공용 by the contract definition; code never complements)
+        self.assertEqual(self.run_all(("남성", "exclude", "남")), ([("남성", "exclude", "남", "alias")], []))
+
+    def test_included_men_and_women_become_unisex(self):
+        got, warnings = self.run_all(("남성", "include", "남"), ("여성", "include", "여"))
+        self.assertEqual(got, [("남성, 여성", "include", "공용", "alias")])
+        self.assertEqual(warnings, [r.WARN_GENDER_MERGED_TO_UNISEX])
+
+    def test_merged_match_is_the_least_certain(self):
+        got, _ = self.run_all(("남", "include", "남"), ("숙녀", "include", "여"))
+        self.assertEqual(got, [("남, 숙녀", "include", "공용", "llm")])
+
+    def test_existing_unisex_entry_is_kept(self):
+        got, warnings = self.run_all(("유니섹스", "include", "공용"), ("남성", "include", "남"), ("여성", "include", "여"))
+        self.assertEqual(got, [("유니섹스", "include", "공용", "alias")])
+        self.assertEqual(warnings, [r.WARN_GENDER_MERGED_TO_UNISEX])
+
+    def test_exclusions_are_never_merged(self):
+        got, warnings = self.run_all(("남성", "exclude", "남"), ("여성", "exclude", "여"))
+        self.assertEqual(got, [("남성", "exclude", "남", "alias"), ("여성", "exclude", "여", "alias")])
+        self.assertEqual(warnings, [])
+
+    def test_one_gender_is_not_merged(self):
+        got, warnings = self.run_all(("여성", "include", "여"), ("남성", "exclude", "남"))
+        self.assertEqual(got, [("여성", "include", "여", "alias"), ("남성", "exclude", "남", "alias")])
+        self.assertEqual(warnings, [])
+
+    def test_conflict_is_checked_after_the_merge(self):
+        _, warnings = self.run_all(("남성", "include", "남"), ("여성", "include", "여"), ("공용", "exclude", "공용"))
+        self.assertEqual(warnings, [r.WARN_GENDER_MERGED_TO_UNISEX, r.WARN_INCLUDE_EXCLUDE_CONFLICT])
 
 
 class ConflictTests(unittest.TestCase):

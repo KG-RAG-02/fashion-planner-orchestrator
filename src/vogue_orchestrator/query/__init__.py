@@ -1,6 +1,9 @@
-"""Query structuring: natural-language query -> TrendQuery (input of the trend-analysis-agent search).
+"""Query structuring: natural-language query -> StructuredQuery 1.0 (this repository's contract,
+contracts/structured-query.md), converted to TrendQuery for the trend-analysis-agent (first item and season
+only, to_trend.py). The archived v1 path (structure_query) produces a TrendQuery directly.
 
-Standalone module, not wired into the orchestrator pipeline. Read docs/query-structuring.md first.
+Called in-process by the UI server only (server.structure_query_for_ui, structured.structure_query_v2);
+not wired into the orchestrator pipeline: nothing is sent to an agent yet. Read docs/query-structuring.md first.
 Needs pydantic (`pip install -e ".[query]"`); `vocabulary`, `season` and `errors` are stdlib-only,
 so this package does not import pydantic until a name that needs it is requested.
 """

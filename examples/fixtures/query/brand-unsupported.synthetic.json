@@ -14,6 +14,7 @@
     "attributes": [],
     "unsupported": [{"type": "brand", "raw": "H&M"}]
   },
+  "structured_draft": {"seasons": [], "style_names": [], "product_model_names": [], "items": [{"raw": "블라우스", "suggestion": "블라우스"}], "conditions": [], "unsupported": [{"type": "brand", "raw": "H&M", "polarity": "include", "item": "블라우스"}]},
   "expected_warnings": [],
   "expected_trend_query": {
     "request_id": "synthetic-query-003",

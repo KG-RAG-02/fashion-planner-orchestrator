@@ -87,6 +87,7 @@ class SettingsTests(unittest.TestCase):
     def test_config_file_values_are_validated(self):
         loaded = self.load({"LLM_MODEL": "m", "LLM_API_KEY": "k"})
         self.assertEqual((loaded.timeout_seconds, loaded.max_tokens, loaded.max_retries), (60, 16000, 2))
+        self.assertEqual(loaded.temperature, 0)  # decision OQ-14
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "llm.json"
             path.write_text('{"timeout_seconds": "60", "max_tokens": 1, "max_retries": 0}', encoding="utf-8")
@@ -95,6 +96,16 @@ class SettingsTests(unittest.TestCase):
 
 
 class CallTests(unittest.TestCase):
+    def test_temperature_is_sent_only_when_configured(self):
+        # decision OQ-14: configs/llm.json temperature 0; null omits the parameter (provider default)
+        for provider, fake in (("anthropic", FakeAnthropic), ("openai", FakeOpenAI)):
+            with self.subTest(provider=provider):
+                client = fake()
+                llm.build_draft_provider(settings(provider, temperature=0), client=client)(BUNDLE)
+                self.assertEqual(client.calls[-1]["temperature"], 0)
+                llm.build_draft_provider(settings(provider), client=client)(BUNDLE)
+                self.assertNotIn("temperature", client.calls[-1])
+
     def test_anthropic_call_sends_system_and_user_and_returns_the_text_blocks(self):
         client = FakeAnthropic()
         text = llm.build_draft_provider(settings("anthropic"), client=client)(BUNDLE)

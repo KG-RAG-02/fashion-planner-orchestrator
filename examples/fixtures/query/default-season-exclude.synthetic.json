@@ -14,6 +14,7 @@
     "attributes": [],
     "unsupported": []
   },
+  "structured_draft": {"seasons": [], "style_names": [], "product_model_names": [], "items": [], "conditions": [{"raw": "하의", "kind": "category", "polarity": "exclude", "suggestion": "하의", "item": null}], "unsupported": []},
   "expected_warnings": [],
   "expected_trend_query": {
     "request_id": "synthetic-query-002",

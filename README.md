@@ -28,6 +28,7 @@ agent별 현재 구현과 fixture 기반 input/output은 [`docs/agent-io-contrac
 - Stock `/runs`는 Trend 1.1 source version과 hash를 provenance로 기록하고 내부 요청 변환본을 별도로 처리합니다. Stock 응답 payload는 schema 1.0입니다.
 - Sales Market HTTP runtime producer ID와 JSON Schema는 `sales-market-agent`로 정렬했습니다. result 1.0만 downstream으로 보내며 sibling artifacts는 전달하지 않습니다.
 - New Product의 legacy `/api/planning-draft`는 입력 버전 동등성을 요구하지만, canonical `/v1/agents/new-product-agent/runs`는 PlanningRequest `1.0` + Trend `1.1` + Stock `1.0` + Sales Market `1.0` 조합을 명시 adapter로 지원합니다. Project_08 HTTP v0.1 client는 canonical route를 사용합니다.
+- (질의 구조화, 2026-11-11 FW-1) 원문 → `StructuredQuery`(이 저장소의 질의 계약) → `TrendQuery`(첫 품목·첫 시즌) 변환은 `src/vogue_orchestrator/query/`에 구현돼 있고 화면 서버가 LLM(`llm_provider.py`)으로 호출합니다. HTTP v0.1 실행에서는 첫 품목·첫 시즌만 담은 `TrendQuery`가 Trend `/runs`로 전달되고, demo·connected 모드에서는 미리보기입니다(아래 "질의 구조화 모듈"). runner는 sales-market-agent/new-product-agent용 최소 PlanningRequest에 원문 쿼리만 담으며 시즌·카테고리를 추론하지 않습니다. 실제 trend 호출 adapter는 아직 연결할 수 없습니다.
 - `partial`과 `no_results`는 다음 단계에 전달하고, `error` 및 계약 검증 실패는 기본적으로 이후 호출을 멈춥니다. 앞선 성공 결과는 실행 기록에 남습니다.
 - 자동 재시도와 영속 중복 제거는 기본 비활성입니다. 선택 가능한 idempotency key 생성 함수만 제공합니다. 재시도·중복 저장은 운영 합의 후 외부 구현을 주입해야 합니다.
 - 실행 trace는 UI 응답에 포함되며, 전체 `error` 실행과 요청한 상품 이미지·기획서 보드 첨부가 실패한 실행은 저장하지 않습니다. 이미지 생성을 요청하지 않은 실행이나 이미지가 생성된 `partial` 실행은 저장합니다. UI 실행의 최근 20건은 저장소 루트의 `.local/runs/`에 로컬 보관됩니다. `.local/latest-run.json`에서 마지막 저장 실행을 페이지 로드 때 복원하고, 화면의 저장 기록 선택 메뉴에서 과거 실행을 불러오거나 개별 삭제할 수 있습니다. 이 파일은 Git에서 제외되며 UI에서 전체 기록도 삭제할 수 있습니다. Legacy mixed mode에는 공통 HTTP 인증 전달이 없습니다. HTTP v0.1 client는 Bearer token 전달, 3초 connect timeout, 60초 request timeout을 적용하며 자동 재시도는 하지 않습니다. 승인된 외부 자료원은 이 저장소에서 연결하지 않습니다.
@@ -114,20 +115,20 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integr
 
 ## 질의 구조화 모듈 (LLM 호출 전 단계)
 
-사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 구조화하는 단계입니다. UI는 이 모듈을 기본 실행하고, HTTP v0.1 mode는 결과를 Trend route에 전달합니다. `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`는 로컬 합성 E2E 전용 exact-match provider입니다. 일반 모드에서는 설정된 LLM provider를 사용합니다.
+사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 바꾸는 모듈입니다. 모듈 자체는 네트워크·LLM 호출과 키가 없고, 실제 LLM 호출은 모듈 밖 `llm_provider.py`가 맡습니다. UI 서버(`server.py`)만 이 모듈을 함수로 호출하며, 코어(core·connectors·demo)와는 서로 import하지 않습니다. 이 모듈만 pydantic이 필요합니다(optional extra `query`). 코어와 기존 테스트는 계속 표준 라이브러리만으로 실행되고, pydantic이 없으면 질의 테스트는 skip됩니다. 다음 출력 계약 `StructuredQuery` 1.0(이 저장소 소유)은 **2026-11-11 확정**되었고(받는 Agent용 요약: [`contracts/structured-query.md`](contracts/structured-query.md) §0), 이를 만드는 경로(`query/structured.py` `structure_query_v2`, 프롬프트 v6)도 구현되어 있습니다. 화면 서버(`server.py`)도 2026-11-11부터 이 경로를 쓰고, trend가 받을 입력은 첫 품목·첫 시즌만 담은 `TrendQuery`로 변환합니다(`query/to_trend.py`). HTTP v0.1 실행에서는 이 `TrendQuery`가 Trend로 실제 전송되고(위 HTTP mode 설명), demo·connected 모드에서는 미리보기입니다. (팀원 정리, `main`) UI는 이 모듈을 기본 실행하고, HTTP v0.1 mode는 결과를 Trend route에 전달합니다. `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`는 로컬 합성 E2E 전용 exact-match provider입니다(합성 질의 fixture의 `structured_draft`를 씀). 일반 모드에서는 설정된 LLM provider를 사용합니다.
 
 ```bash
 pip install -e ".[query]"
-PYTHONPATH=src python3 -m unittest discover -s tests -v          # 전체 233 (질의 176 + LLM 호출·UI 연결 15 + 오케스트레이터). 이 PC에서는 test_connectors 2개 실패: configs/README F-7
+PYTHONPATH=src python3 -m unittest discover -s tests -v          # 전체 307 (질의 248 + LLM 호출·UI 연결 17 + 오케스트레이터·팀원). 2026-11-11 기준. 이 PC에서는 test_connectors 2개 실패: configs/README F-7
 PYTHONPATH=src python3 examples/query_structuring_demo.py        # 합성 사례 6개 결과
 PYTHONPATH=src python3 examples/query_structuring_demo.py --show-prompt "가을 여성 코트"
 ```
 
 | 폴더 | 내용 |
 |---|---|
-| [`prompts/`](prompts/README.md) | LLM 프롬프트 원본, 버전별 텍스트 (실행 버전 `v1`, 다음 버전 `v2` 작성됨). 실제 전송 텍스트는 각 버전 폴더의 `rendered_system.md` |
+| [`prompts/`](prompts/README.md) | LLM 프롬프트 원본, 버전별 텍스트 (현행 `v6`, 화면 서버도 사용. `v1`~`v5`는 보관). 실제 전송 텍스트는 각 버전 폴더의 `rendered_system.md` |
 | [`configs/`](configs/README.md) | 질의 모듈 설정(`query_structuring.json`)과 저장소 전체 하드코딩 값·종속 관계 목록 |
-| [`data/`](data/README.md) | 예상 사용자 질의 30개와 기대 출력 (silver, 사용자 확인 전) |
+| [`data/`](data/README.md) | 예상 사용자 질의 30개(dev)·holdout과 기대 출력 (silver), 평가 결과 `eval_runs/` |
 
 사용자와 합의한 결정·작업 규칙·별칭 사전 정책은 [`docs/query-decisions.md`](docs/query-decisions.md)가 기준입니다(먼저 읽기). 확정된 다음 설계는 받는 쪽용 계약 정의서 [`contracts/structured-query.md`](contracts/structured-query.md)(`StructuredQuery` 1.0)와 구현 계획 [`docs/structured-query-plan.md`](docs/structured-query-plan.md)에 있습니다. 구현 내용, 코드 지도, 프롬프트, 가정, 한계와 향후 과제, 다음 할 일은 [`docs/query-structuring.md`](docs/query-structuring.md)에 있고, 설계 배경은 [`docs/query-preprocessing.md`](docs/query-preprocessing.md)에 있습니다.
 

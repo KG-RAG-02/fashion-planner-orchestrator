@@ -478,8 +478,12 @@ function renderStructuring(s) {
     if (s.provider_error) meta.push(`LLM 오류 종류: ${s.provider_error}`);
     if (meta.length) detail.append(el('p', '', meta.join(' · ')));
   } else {
-    for (const [name, text] of structuringSummary(s.trend_query)) {
-      detail.append(el('p', '', `${name}: ${text}`));
+    if (s.trend_query) {
+      for (const [name, text] of structuringSummary(s.trend_query)) {
+        detail.append(el('p', '', `${name}: ${text}`));
+      }
+    } else {
+      detail.append(el('p', '', 'trend로 넘길 품목이 없습니다 (표준 카테고리 밖 품목만 있음).'));
     }
     if (s.warnings?.length) detail.append(el('p', 'stage-counts', `경고: ${s.warnings.join(', ')}`));
     detail.append(el('p', '', s.trend_input_preview?.sent ? '구조화된 TrendQuery를 trend 단계 입력으로 전송했습니다.' : '구조화 결과는 미리보기이며 trend 단계로 전송하지 않았습니다.'));
