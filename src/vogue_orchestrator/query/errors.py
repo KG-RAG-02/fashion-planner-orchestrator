@@ -12,8 +12,10 @@ PROVIDER_FAILED = "PROVIDER_FAILED"
 DRAFT_NOT_JSON = "DRAFT_NOT_JSON"
 DRAFT_INVALID = "DRAFT_INVALID"
 TREND_QUERY_INVALID = "TREND_QUERY_INVALID"
+STRUCTURED_QUERY_INVALID = "STRUCTURED_QUERY_INVALID"  # v2 path (structured.py)
 
 _MESSAGES = {
+    STRUCTURED_QUERY_INVALID: "Assembled StructuredQuery failed contract validation.",
     INPUT_INVALID: "Query structuring input is invalid.",
     PROVIDER_FAILED: "Draft provider failed; details suppressed.",
     DRAFT_NOT_JSON: "Draft provider did not return a JSON object.",

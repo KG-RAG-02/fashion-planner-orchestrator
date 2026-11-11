@@ -63,20 +63,20 @@
     }
   },
   {
-    "title": "브랜드 제외·가격·추상 표현·길이·범위 밖 품목 제외·상분류 이름",
+    "title": "브랜드 제외·가격·추상 표현·기장·원피스는 드레스·범위 밖 품목 제외",
     "query": "자라 말고 10만원 이하로 하객룩 롱 원피스 찾아줘, 가방이랑 신발은 빼고",
     "draft": {
       "season": null,
       "style_names": [],
       "item_terms": [],
       "conditions": [
-        {"raw": "원피스", "kind": "category", "polarity": "include", "suggestion": "원피스"}
+        {"raw": "롱", "kind": "body_length", "polarity": "include", "suggestion": "롱"},
+        {"raw": "원피스", "kind": "category", "polarity": "include", "suggestion": "드레스"}
       ],
       "unsupported": [
         {"type": "brand", "raw": "자라", "polarity": "exclude"},
         {"type": "price", "raw": "10만원 이하", "polarity": "include"},
         {"type": "abstract", "raw": "하객룩", "polarity": "include"},
-        {"type": "attribute", "raw": "롱", "polarity": "include"},
         {"type": "category", "raw": "가방", "polarity": "exclude"},
         {"type": "category", "raw": "신발", "polarity": "exclude"}
       ]
@@ -95,6 +95,24 @@
         {"raw": "린넨", "kind": "material", "polarity": "include", "suggestion": "린넨"},
         {"raw": "셔츠", "kind": "category", "polarity": "include", "suggestion": "셔츠"},
         {"raw": "리본", "kind": "detail", "polarity": "include", "suggestion": "리본"}
+      ],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "성별 제외·줄임말 품목의 기장·소매 기장·소재 꾸밈말",
+    "query": "남성 제외하고 숏패딩이랑 반팔 니트 원피스 보여줘",
+    "draft": {
+      "season": null,
+      "style_names": [],
+      "item_terms": [],
+      "conditions": [
+        {"raw": "남성", "kind": "gender", "polarity": "exclude", "suggestion": "남"},
+        {"raw": "숏패딩", "kind": "category", "polarity": "include", "suggestion": "패딩"},
+        {"raw": "숏패딩", "kind": "body_length", "polarity": "include", "suggestion": "크롭"},
+        {"raw": "반팔", "kind": "sleeve_length", "polarity": "include", "suggestion": "반팔"},
+        {"raw": "니트", "kind": "material", "polarity": "include", "suggestion": "니트"},
+        {"raw": "원피스", "kind": "category", "polarity": "include", "suggestion": "드레스"}
       ],
       "unsupported": []
     }

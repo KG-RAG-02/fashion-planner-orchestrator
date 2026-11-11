@@ -1,0 +1,178 @@
+[
+  {
+    "title": "연도 있는 시즌·트렌드명·여러 색은 값마다 따로·품목 하나면 조건은 그 품목에",
+    "query": "2027년 봄 발레코어 무드의 블랙 화이트 블라우스 기획해줘",
+    "draft": {
+      "seasons": [{"year": 2027, "season": "SS", "raw": "2027년 봄"}],
+      "style_names": [{"raw": "발레코어"}],
+      "product_model_names": [],
+      "items": [{"raw": "블라우스", "suggestion": "블라우스"}],
+      "conditions": [
+        {"raw": "블랙", "kind": "color", "polarity": "include", "suggestion": "블랙", "item": "블라우스"},
+        {"raw": "화이트", "kind": "color", "polarity": "include", "suggestion": "화이트", "item": "블라우스"}
+      ],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "상분류 품목·빼고 싶은 품목은 조건(제외)",
+    "query": "슬랙스는 빼고 하의 위주로 트렌드 보여줘",
+    "draft": {
+      "seasons": [],
+      "style_names": [],
+      "product_model_names": [],
+      "items": [{"raw": "하의", "suggestion": "하의"}],
+      "conditions": [
+        {"raw": "슬랙스", "kind": "category", "polarity": "exclude", "suggestion": "팬츠", "item": "하의"}
+      ],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "추상 표현·그 값을 가리키는 색·줄임말 핏·색 제외",
+    "query": "꾸안꾸 느낌 나는 버터옐로우 오버핏 가디건, 네이비는 말고",
+    "draft": {
+      "seasons": [],
+      "style_names": [],
+      "product_model_names": [],
+      "items": [{"raw": "가디건", "suggestion": "가디건"}],
+      "conditions": [
+        {"raw": "버터옐로우", "kind": "color", "polarity": "include", "suggestion": "옐로우", "item": "가디건"},
+        {"raw": "오버핏", "kind": "fit", "polarity": "include", "suggestion": "오버사이즈", "item": "가디건"},
+        {"raw": "네이비", "kind": "color", "polarity": "exclude", "suggestion": "네이비", "item": "가디건"}
+      ],
+      "unsupported": [
+        {"type": "abstract", "raw": "꾸안꾸 느낌", "polarity": "include", "item": "가디건"}
+      ]
+    }
+  },
+  {
+    "title": "연도 없는 시즌·하위 종류는 포함하는 하분류로·품목마다 꾸밈말·\"둘 다\"는 모든 품목(item null)",
+    "query": "가을에 입을 체크 블레이저랑 트렌치코트, 둘 다 여성용으로",
+    "draft": {
+      "seasons": [{"year": null, "season": "FW", "raw": "가을"}],
+      "style_names": [],
+      "product_model_names": [],
+      "items": [{"raw": "블레이저", "suggestion": "재킷"}, {"raw": "트렌치코트", "suggestion": "코트"}],
+      "conditions": [
+        {"raw": "체크", "kind": "pattern", "polarity": "include", "suggestion": "체크", "item": "블레이저"},
+        {"raw": "여성용", "kind": "gender", "polarity": "include", "suggestion": "여", "item": null}
+      ],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "브랜드 제외·가격·추상 표현·기장·원피스는 드레스·범위 밖 품목 제외",
+    "query": "자라 말고 10만원 이하로 하객룩 롱 원피스 찾아줘, 가방이랑 신발은 빼고",
+    "draft": {
+      "seasons": [],
+      "style_names": [],
+      "product_model_names": [],
+      "items": [{"raw": "원피스", "suggestion": "드레스"}],
+      "conditions": [
+        {"raw": "롱", "kind": "body_length", "polarity": "include", "suggestion": "롱", "item": "원피스"},
+        {"raw": "가방", "kind": "category", "polarity": "exclude", "suggestion": null, "item": "원피스"},
+        {"raw": "신발", "kind": "category", "polarity": "exclude", "suggestion": null, "item": "원피스"}
+      ],
+      "unsupported": [
+        {"type": "brand", "raw": "자라", "polarity": "exclude", "item": "원피스"},
+        {"type": "price", "raw": "10만원 이하", "polarity": "include", "item": "원피스"},
+        {"type": "abstract", "raw": "하객룩", "polarity": "include", "item": "원피스"}
+      ]
+    }
+  },
+  {
+    "title": "같은 뜻 값이 없는 색은 null·성별·소재·디테일",
+    "query": "남녀공용 연두색 린넨 셔츠에 리본 디테일 있는 거 보여줘",
+    "draft": {
+      "seasons": [],
+      "style_names": [],
+      "product_model_names": [],
+      "items": [{"raw": "셔츠", "suggestion": "셔츠"}],
+      "conditions": [
+        {"raw": "남녀공용", "kind": "gender", "polarity": "include", "suggestion": "공용", "item": "셔츠"},
+        {"raw": "연두색", "kind": "color", "polarity": "include", "suggestion": null, "item": "셔츠"},
+        {"raw": "린넨", "kind": "material", "polarity": "include", "suggestion": "린넨", "item": "셔츠"},
+        {"raw": "리본", "kind": "detail", "polarity": "include", "suggestion": "리본", "item": "셔츠"}
+      ],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "별도 구절의 성별 제외는 모든 품목(item null)·줄임말 품목의 기장·품목마다 꾸밈말",
+    "query": "남성 제외하고 숏패딩이랑 반팔 니트 원피스 보여줘",
+    "draft": {
+      "seasons": [],
+      "style_names": [],
+      "product_model_names": [],
+      "items": [{"raw": "숏패딩", "suggestion": "패딩"}, {"raw": "원피스", "suggestion": "드레스"}],
+      "conditions": [
+        {"raw": "남성", "kind": "gender", "polarity": "exclude", "suggestion": "남", "item": null},
+        {"raw": "숏패딩", "kind": "body_length", "polarity": "include", "suggestion": "크롭", "item": "숏패딩"},
+        {"raw": "반팔", "kind": "sleeve_length", "polarity": "include", "suggestion": "반팔", "item": "원피스"},
+        {"raw": "니트", "kind": "material", "polarity": "include", "suggestion": "니트", "item": "원피스"}
+      ],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "품목 앞 꾸밈말은 바로 뒤 품목에만·첫 품목 앞 성별은 모든 품목(item null)·\"같이\"는 포함",
+    "query": "여성 스트라이프 블라우스랑 플리츠 스커트 같이 보여줘",
+    "draft": {
+      "seasons": [],
+      "style_names": [],
+      "product_model_names": [],
+      "items": [{"raw": "블라우스", "suggestion": "블라우스"}, {"raw": "스커트", "suggestion": "스커트"}],
+      "conditions": [
+        {"raw": "여성", "kind": "gender", "polarity": "include", "suggestion": "여", "item": null},
+        {"raw": "스트라이프", "kind": "pattern", "polarity": "include", "suggestion": "스트라이프", "item": "블라우스"},
+        {"raw": "플리츠", "kind": "detail", "polarity": "include", "suggestion": "플리츠", "item": "스커트"}
+      ],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "찾는 품목을 말하지 않음 → items는 비우고 item은 모두 null",
+    "query": "상의는 빼고 카키 컬러로 요즘 뭐가 뜨는지 보여줘",
+    "draft": {
+      "seasons": [],
+      "style_names": [],
+      "product_model_names": [],
+      "items": [],
+      "conditions": [
+        {"raw": "상의", "kind": "category", "polarity": "exclude", "suggestion": "상의", "item": null},
+        {"raw": "카키", "kind": "color", "polarity": "include", "suggestion": "카키", "item": null}
+      ],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "표준 카테고리에 없는 품목도 찾으면 items에(suggestion null)·꾸밈말은 그 품목에",
+    "query": "스웨이드 부츠랑 니트 가디건 보여줘",
+    "draft": {
+      "seasons": [],
+      "style_names": [],
+      "product_model_names": [],
+      "items": [{"raw": "부츠", "suggestion": null}, {"raw": "가디건", "suggestion": "가디건"}],
+      "conditions": [
+        {"raw": "스웨이드", "kind": "material", "polarity": "include", "suggestion": "스웨이드", "item": "부츠"},
+        {"raw": "니트", "kind": "material", "polarity": "include", "suggestion": "니트", "item": "가디건"}
+      ],
+      "unsupported": []
+    }
+  },
+  {
+    "title": "시즌 여러 개는 나온 순서대로 하나씩",
+    "query": "올봄이랑 가을 시즌 데님 재킷 트렌드 비교해줘",
+    "draft": {
+      "seasons": [{"year": null, "season": "SS", "raw": "올봄"}, {"year": null, "season": "FW", "raw": "가을"}],
+      "style_names": [],
+      "product_model_names": [],
+      "items": [{"raw": "재킷", "suggestion": "재킷"}],
+      "conditions": [
+        {"raw": "데님", "kind": "material", "polarity": "include", "suggestion": "데님", "item": "재킷"}
+      ],
+      "unsupported": []
+    }
+  }
+]

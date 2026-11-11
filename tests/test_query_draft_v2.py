@@ -80,9 +80,12 @@ class DraftV2Tests(unittest.TestCase):
     def test_every_kind_is_accepted(self):
         self.assertEqual(
             self.draft.CONDITION_KINDS,
-            ("category", "color", "material", "pattern", "detail", "fit", "gender"),
+            ("category", "color", "material", "pattern", "detail", "fit", "body_length", "sleeve_length",
+             "gender"),
         )
         self.assertEqual(self.draft.CONDITION_KINDS[1:6], self.vocab.ATTRIBUTE_TYPES)
+        self.assertEqual(self.draft.UNSUPPORTED_TYPES, (
+            "brand", "category", "attribute", "abstract", "price", "market", "channel", "age", "other"))
         for kind in self.draft.CONDITION_KINDS:
             with self.subTest(kind=kind):
                 self.assertEqual(self.validate({"conditions": [condition(kind=kind)]}).conditions[0].kind, kind)
@@ -157,6 +160,68 @@ class DraftV2Tests(unittest.TestCase):
 
     def test_format_marker(self):
         self.assertEqual(self.draft.DRAFT_FORMAT, "draft_v2")
+
+
+@unittest.skipUnless(HAS_PYDANTIC, SKIP_REASON)
+class LabelRepairTests(unittest.TestCase):
+    """Decision OQ-12: only the two closed label sets are repaired, never the structure.
+    Cases use words that are not in data/user_queries.v2.json (the rules are about labels, not words)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.draft = importlib.import_module("vogue_orchestrator.query.draft")
+
+    def repair(self, conditions=(), unsupported=()):
+        payload = {"season": None, "style_names": [], "item_terms": [],
+                   "conditions": list(conditions), "unsupported": list(unsupported)}
+        fixed, warnings = self.draft.repair_draft_labels(payload)
+        self.draft.QueryDraft.model_validate(fixed)  # the repaired draft is valid
+        return fixed, list(warnings)
+
+    def test_unsupported_type_written_as_kind_moves_to_unsupported(self):
+        fixed, warnings = self.repair(conditions=[
+            {"raw": "고급스러운", "kind": "abstract", "polarity": "include"},
+            {"raw": "백화점", "kind": "channel", "polarity": "exclude", "suggestion": None},
+            {"raw": "코듀로이", "kind": "material", "polarity": "include", "suggestion": "코듀로이"},
+        ])
+        self.assertEqual(fixed["conditions"], [{"raw": "코듀로이", "kind": "material", "polarity": "include", "suggestion": "코듀로이"}])
+        self.assertEqual(fixed["unsupported"], [{"type": "abstract", "raw": "고급스러운", "polarity": "include"},
+                                                {"type": "channel", "raw": "백화점", "polarity": "exclude"}])
+        self.assertEqual(warnings, [self.draft.WARN_DRAFT_KIND_MOVED_TO_UNSUPPORTED])
+
+    def test_unknown_kind_becomes_other(self):
+        fixed, warnings = self.repair(conditions=[{"raw": "세미정장", "kind": "occasion", "polarity": "include"}])
+        self.assertEqual(fixed["unsupported"], [{"type": "other", "raw": "세미정장", "polarity": "include"}])
+        self.assertEqual(warnings, [self.draft.WARN_DRAFT_UNKNOWN_KIND])
+
+    def test_condition_kind_written_as_unsupported_type_moves_to_conditions(self):
+        fixed, warnings = self.repair(unsupported=[{"type": "sleeve_length", "raw": "칠부", "polarity": "include"},
+                                                   {"type": "category", "raw": "부츠", "polarity": "exclude"}])
+        self.assertEqual(fixed["conditions"], [{"raw": "칠부", "kind": "sleeve_length", "polarity": "include", "suggestion": None}])
+        self.assertEqual(fixed["unsupported"], [{"type": "category", "raw": "부츠", "polarity": "exclude"}])
+        self.assertEqual(warnings, [self.draft.WARN_DRAFT_TYPE_MOVED_TO_CONDITIONS])
+
+    def test_unknown_unsupported_type_becomes_other(self):
+        fixed, warnings = self.repair(unsupported=[{"type": "size", "raw": "XL", "polarity": "include"}])
+        self.assertEqual(fixed["unsupported"], [{"type": "other", "raw": "XL", "polarity": "include"}])
+        self.assertEqual(warnings, [self.draft.WARN_DRAFT_UNKNOWN_UNSUPPORTED_TYPE])
+
+    def test_a_valid_draft_is_returned_unchanged(self):
+        payload = {"conditions": [{"raw": "셔츠", "kind": "category", "polarity": "include", "suggestion": "셔츠"}]}
+        self.assertEqual(self.draft.repair_draft_labels(payload), (payload, ()))
+
+    def test_structural_errors_are_not_repaired(self):
+        for entry in ({"raw": "x", "kind": "abstract", "polarity": "maybe"},   # bad polarity
+                      {"raw": " ", "kind": "abstract", "polarity": "include"},  # blank raw
+                      {"kind": "abstract", "polarity": "include"},              # no raw
+                      "abstract"):                                               # not an object
+            with self.subTest(entry=entry):
+                payload = {"conditions": [entry]}
+                fixed, warnings = self.draft.repair_draft_labels(payload)
+                self.assertEqual((fixed, warnings), (payload, ()))
+                with self.assertRaises(importlib.import_module("pydantic").ValidationError):
+                    self.draft.QueryDraft.model_validate(fixed)
+        self.assertEqual(self.draft.repair_draft_labels("text"), ("text", ()))
 
 
 if __name__ == "__main__":

@@ -21,6 +21,13 @@
       "additionalProperties": false,
       "description": "One side (include or exclude) of the requested attributes: every kind is always present.",
       "properties": {
+        "body_length": {
+          "items": {
+            "$ref": "#/$defs/BodyLengthRef"
+          },
+          "title": "Body Length",
+          "type": "array"
+        },
         "color": {
           "items": {
             "$ref": "#/$defs/ColorRef"
@@ -55,6 +62,13 @@
           },
           "title": "Pattern",
           "type": "array"
+        },
+        "sleeve_length": {
+          "items": {
+            "$ref": "#/$defs/SleeveLengthRef"
+          },
+          "title": "Sleeve Length",
+          "type": "array"
         }
       },
       "required": [
@@ -62,34 +76,62 @@
         "material",
         "pattern",
         "detail",
-        "fit"
+        "fit",
+        "body_length",
+        "sleeve_length"
       ],
       "title": "AttributeValues",
       "type": "object"
     },
-    "CategoryFilter": {
+    "BodyLengthRef": {
       "additionalProperties": false,
+      "description": "Body length (기장), trend's BodyLength values (decision OQ-9′).",
       "properties": {
-        "exclude": {
-          "items": {
-            "$ref": "#/$defs/CategoryRef"
-          },
-          "title": "Exclude",
-          "type": "array"
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm",
+            "none"
+          ],
+          "title": "Match",
+          "type": "string"
         },
-        "include": {
-          "items": {
-            "$ref": "#/$defs/CategoryRef"
-          },
-          "title": "Include",
-          "type": "array"
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "크롭",
+                "노멀",
+                "하프",
+                "롱",
+                "미니",
+                "니렝스",
+                "미디",
+                "발목",
+                "맥시"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
         }
       },
       "required": [
-        "include",
-        "exclude"
+        "raw",
+        "value",
+        "match"
       ],
-      "title": "CategoryFilter",
+      "title": "BodyLengthRef",
       "type": "object"
     },
     "CategoryRef": {
@@ -379,8 +421,35 @@
       "title": "FitRef",
       "type": "object"
     },
+    "GenderFilter": {
+      "additionalProperties": false,
+      "description": "Decision G-3. Genders to select = the include values when there are any (minus excluded ones),\notherwise all three standard genders minus the excluded ones; both empty = no gender filter.\nEntries with value null (match none) take no part in that. Code never rewrites an exclusion into the\ncomplement (\"남성 말고\" stays exclude [남]; it means 여·공용 by this definition).",
+      "properties": {
+        "exclude": {
+          "items": {
+            "$ref": "#/$defs/GenderRef"
+          },
+          "title": "Exclude",
+          "type": "array"
+        },
+        "include": {
+          "items": {
+            "$ref": "#/$defs/GenderRef"
+          },
+          "title": "Include",
+          "type": "array"
+        }
+      },
+      "required": [
+        "include",
+        "exclude"
+      ],
+      "title": "GenderFilter",
+      "type": "object"
+    },
     "GenderRef": {
       "additionalProperties": false,
+      "description": "Same shape as AttributeRef; `value` is one of the three standard genders or null.",
       "properties": {
         "match": {
           "enum": [
@@ -490,6 +559,37 @@
       "title": "MaterialRef",
       "type": "object"
     },
+    "OutOfScopeItem": {
+      "additionalProperties": false,
+      "description": "An item the user asked for that is not a standard category (\"블랙 부츠\" -> 부츠), decision IT-7.\nIt is not turned into an item (that would widen the search to every category); its own conditions are\nkept as raw text in `conditions_raw` (the 블랙 of \"블랙 부츠랑 셔츠\" belongs to 부츠, not to 셔츠).",
+      "properties": {
+        "conditions_raw": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Conditions Raw",
+          "type": "array"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw",
+        "reason",
+        "conditions_raw"
+      ],
+      "title": "OutOfScopeItem",
+      "type": "object"
+    },
     "PatternRef": {
       "additionalProperties": false,
       "properties": {
@@ -550,33 +650,56 @@
       "title": "PatternRef",
       "type": "object"
     },
-    "Requested": {
+    "QueryItem": {
       "additionalProperties": false,
+      "description": "One item to look for, with every condition that applies to it (decisions IT-1, IT-3).\n\nAn item is complete on its own, so the same process can run once per item: conditions that the user\ngave for the whole query are copied into every item. `category` null = the user named no item to look\nfor (IT-6): every category minus `excluded_categories` (\"아우터는 빼고 블랙\" = 상의·하의·원피스 중 블랙).\n`excluded_categories` keeps the exclusion form (like gender, G-3); code never rewrites it into the\nremaining categories.\n\n`item_id` (decision IT-8, 2026-11-11): \"i1\", \"i2\", ... in `items` order, so a result produced for one\nitem (for example by a per-item Agent) can be joined back to it after the items are sent apart.",
       "properties": {
         "attributes": {
           "$ref": "#/$defs/AttributeFilter"
         },
-        "categories": {
-          "$ref": "#/$defs/CategoryFilter"
-        },
-        "gender": {
+        "category": {
           "anyOf": [
             {
-              "$ref": "#/$defs/GenderRef"
+              "$ref": "#/$defs/CategoryRef"
             },
             {
               "type": "null"
             }
           ],
           "default": null
+        },
+        "excluded_categories": {
+          "items": {
+            "$ref": "#/$defs/CategoryRef"
+          },
+          "title": "Excluded Categories",
+          "type": "array"
+        },
+        "gender": {
+          "$ref": "#/$defs/GenderFilter"
+        },
+        "item_id": {
+          "pattern": "^i[1-9][0-9]*$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "unsupported": {
+          "items": {
+            "$ref": "#/$defs/UnsupportedCondition"
+          },
+          "title": "Unsupported",
+          "type": "array"
         }
       },
       "required": [
-        "categories",
+        "item_id",
+        "category",
+        "excluded_categories",
         "gender",
-        "attributes"
+        "attributes",
+        "unsupported"
       ],
-      "title": "Requested",
+      "title": "QueryItem",
       "type": "object"
     },
     "SeasonRequest": {
@@ -625,9 +748,56 @@
       "title": "SeasonRequest",
       "type": "object"
     },
+    "SleeveLengthRef": {
+      "additionalProperties": false,
+      "description": "Sleeve length (소매 기장), trend's SleeveLength values (decision OQ-9′).",
+      "properties": {
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm",
+            "none"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "민소매",
+                "반팔",
+                "캡",
+                "7부소매",
+                "긴팔"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "raw",
+        "value",
+        "match"
+      ],
+      "title": "SleeveLengthRef",
+      "type": "object"
+    },
     "TermRef": {
       "additionalProperties": false,
-      "description": "Trend name or product term. No normalised vocabulary exists yet, so `value` is always null.",
+      "description": "Trend name or product model name. No normalised vocabulary exists yet, so `value` is always null.",
       "properties": {
         "raw": {
           "minLength": 1,
@@ -649,16 +819,22 @@
     },
     "TrendTerms": {
       "additionalProperties": false,
+      "description": "Query-wide terms (decision IT-5″).\n\n`seasons` (decision SQ-2, 2026-11-11): every season the user named, in query order, never empty - a query\nnaming no season gets the one `default_next` season. Duplicates (same year and season) are removed.\n`product_model_names` (decision SQ-1, renamed from `item_terms`): specific product / model names that no\nstandard category or attribute can express (e.g. a model name); items the user asks for are in `items`.",
       "properties": {
-        "item_terms": {
+        "product_model_names": {
           "items": {
             "$ref": "#/$defs/TermRef"
           },
-          "title": "Item Terms",
+          "title": "Product Model Names",
           "type": "array"
         },
-        "season": {
-          "$ref": "#/$defs/SeasonRequest"
+        "seasons": {
+          "items": {
+            "$ref": "#/$defs/SeasonRequest"
+          },
+          "minItems": 1,
+          "title": "Seasons",
+          "type": "array"
         },
         "style_names": {
           "items": {
@@ -669,9 +845,9 @@
         }
       },
       "required": [
-        "season",
+        "seasons",
         "style_names",
-        "item_terms"
+        "product_model_names"
       ],
       "title": "TrendTerms",
       "type": "object"
@@ -699,7 +875,17 @@
           "type": "string"
         },
         "type": {
-          "minLength": 1,
+          "enum": [
+            "brand",
+            "category",
+            "attribute",
+            "abstract",
+            "price",
+            "market",
+            "channel",
+            "age",
+            "other"
+          ],
           "title": "Type",
           "type": "string"
         }
@@ -716,8 +902,15 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard\nvocabulary. Definition: contracts/structured-query.md (owner: vogue-orchestrator).",
+  "description": "StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard\nvocabulary. Definition: contracts/structured-query.md (owner: vogue-orchestrator).\n\n`items` are in the order the user named them (decision IT-4: the pipeline takes one item today, so\nonly `items[0]` is forwarded to trend). Season and trend names are query-wide (`trend_terms`,\ndecision IT-5″). `items` is empty only when every item the user named is out of scope.",
   "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/QueryItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
     "missing_fields": {
       "items": {
         "type": "string"
@@ -730,13 +923,17 @@
       "title": "Original Query",
       "type": "string"
     },
+    "out_of_scope_items": {
+      "items": {
+        "$ref": "#/$defs/OutOfScopeItem"
+      },
+      "title": "Out Of Scope Items",
+      "type": "array"
+    },
     "request_id": {
       "minLength": 1,
       "title": "Request Id",
       "type": "string"
-    },
-    "requested": {
-      "$ref": "#/$defs/Requested"
     },
     "schema_version": {
       "const": "1.0",
@@ -746,13 +943,6 @@
     },
     "trend_terms": {
       "$ref": "#/$defs/TrendTerms"
-    },
-    "unsupported": {
-      "items": {
-        "$ref": "#/$defs/UnsupportedCondition"
-      },
-      "title": "Unsupported",
-      "type": "array"
     }
   },
   "required": [
@@ -760,8 +950,8 @@
     "request_id",
     "original_query",
     "trend_terms",
-    "requested",
-    "unsupported",
+    "items",
+    "out_of_scope_items",
     "missing_fields"
   ],
   "title": "StructuredQuery",

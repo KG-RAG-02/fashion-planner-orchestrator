@@ -12,19 +12,25 @@ Rules (docs/structured-query-plan.md §2.1, contracts/structured-query.md §4):
   2. Only when the dictionary has nothing, a suggestion inside that kind's standard list -> `llm`;
      otherwise value None -> `none` (with `suggestion_not_in_vocabulary` if one was given).
   3. Lookup targets: detail -> dictionary detail, then neckline, then collar (the contract's detail
-     holds all three); color -> `normalize_color`; category -> the 4 major names first (`exact`; the
-     dictionary only has hints for them), then the dictionary category (= minor) table;
+     holds all three); color -> `normalize_color`; body_length / sleeve_length -> the dictionary length
+     tables (decision OQ-9′); category -> the dictionary category (= minor) table first, then the 4
+     major names (`exact`; the dictionary only has hints for 상의·하의·아우터, and it maps 원피스 to
+     the minor 드레스, so "원피스" is 드레스 `alias`, decision OQ-5′);
      gender -> the fixed table in configs/query_structuring.json (decision G-1).
   4. Within-span fallback: if the whole `raw` gives nothing, retry with its whitespace tokens. The
      query sentence itself is never scanned (that caused "겨울" -> 울). Each distinct value found in
      one span becomes its own output with the same `raw`.
-  5. Routes are followed (H5): the expression is re-resolved in the target attribute; a target that
-     is not in the contract (shape, lengths) -> unsupported type `attribute`. Hints are never used.
+  5. Routes are followed (H5): the expression is re-resolved in the target attribute (e.g. detail
+     민소매 -> sleeve_length); a target that is not in the contract (shape) -> unsupported type
+     `attribute`. Hints are never used.
   6. Categories (decision G-2): a minor the dictionary resolves is kept and never widened to its
      major. Without a dictionary answer only a *minor* suggestion is accepted (`llm`); a major
      suggestion is rejected (a major name in `raw` was already matched in step 3). Out-of-scope
      items (dictionary null value, e.g. 가방) and unresolved categories -> unsupported type `category`.
   7. A dictionary "null value" (no standard value on purpose) is a dictionary answer: no LLM fallback.
+  8. Gender (decision G-3, `resolve_conditions` only): when the included genders contain both 남 and 여,
+     those entries become one 공용 entry (raw = the raws joined by ", ", match = the least certain one)
+     with warning `gender_merged_to_unisex`. Exclusions are never merged or complemented.
 """
 
 from __future__ import annotations
@@ -32,6 +38,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Mapping, Optional, Sequence
 
+from . import contract_vocabulary as cvocab
 from . import vocabulary as vocab
 from .lexicon import Lexicon, Normalized, default_lexicon, norm_key
 
@@ -44,11 +51,12 @@ __all__ = [
     "ResolvedValue",
     "UnsupportedItem",
     "include_exclude_conflicts",
+    "merge_genders",
     "resolve_condition",
     "resolve_conditions",
 ]
 
-KINDS: tuple[str, ...] = ("category", "color", "material", "pattern", "detail", "fit", "gender")
+KINDS: tuple[str, ...] = ("category", *cvocab.ATTRIBUTE_TYPES, "gender")
 POLARITIES: tuple[str, ...] = ("include", "exclude")
 
 # match values (contract §4)
@@ -64,7 +72,7 @@ UNSUPPORTED_CATEGORY = "category"
 UNSUPPORTED_ATTRIBUTE = "attribute"
 REASON_NULL_VALUE = "null_value"            # dictionary says: no standard value (out of scope, e.g. 가방)
 REASON_NOT_IN_DICTIONARY = "not_in_dictionary"  # dictionary has nothing and no usable suggestion
-REASON_ROUTE_NOT_IN_CONTRACT = "route_not_in_contract"  # dictionary routes to shape / a length
+REASON_ROUTE_NOT_IN_CONTRACT = "route_not_in_contract"  # dictionary routes to shape
 
 # warning codes (developer-facing, no user text)
 WARN_LLM_SUGGESTION_OVERRIDDEN = "llm_suggestion_overridden"
@@ -74,6 +82,7 @@ WARN_ATTRIBUTE_ROUTED = "attribute_routed"
 WARN_MULTIPLE_VALUES_IN_SPAN = "multiple_values_in_span"
 WARN_DICTIONARY_VALUE_NOT_IN_VOCABULARY = "dictionary_value_not_in_vocabulary"
 WARN_INCLUDE_EXCLUDE_CONFLICT = "include_exclude_conflict"
+WARN_GENDER_MERGED_TO_UNISEX = "gender_merged_to_unisex"
 
 # contract kind -> dictionary attributes to try, in order
 _DICTIONARY_ATTRIBUTES: dict[str, tuple[str, ...]] = {
@@ -83,11 +92,14 @@ _DICTIONARY_ATTRIBUTES: dict[str, tuple[str, ...]] = {
     "pattern": ("pattern",),
     "detail": ("detail", "neckline", "collar"),
     "fit": ("fit",),
+    "body_length": ("body_length",),
+    "sleeve_length": ("sleeve_length",),
 }
 # dictionary attribute -> contract kind (attributes missing here are not in the contract)
 _CONTRACT_KIND: dict[str, str] = {
     "category": "category", "color": "color", "material": "material", "pattern": "pattern",
     "detail": "detail", "neckline": "detail", "collar": "detail", "fit": "fit",
+    "body_length": "body_length", "sleeve_length": "sleeve_length",
 }
 _MAX_ROUTE_HOPS = 3
 
@@ -181,7 +193,7 @@ class _Hit:
 
 @dataclass(frozen=True)
 class _RoutedOut:
-    """Routed to an attribute the contract does not have (shape, lengths)."""
+    """Routed to an attribute the contract does not have (shape)."""
 
     target: str
     text: str
@@ -209,10 +221,11 @@ def resolve_conditions(
     lexicon: Optional[Lexicon] = None,
     gender_aliases: Optional[Mapping[str, Sequence[str]]] = None,
 ) -> Resolution:
-    """Resolve every condition (in order) and add `include_exclude_conflict` warnings.
+    """Resolve every condition (in order), merge included 남+여 into 공용 (rule 8) and add
+    `include_exclude_conflict` warnings.
 
     No de-duplication across conditions (the assembler does it); conflicts are computed on the
-    resolved values (see `include_exclude_conflicts`).
+    resolved values after the gender merge (see `include_exclude_conflicts`).
     """
     values: list[ResolvedValue] = []
     unsupported: list[UnsupportedItem] = []
@@ -222,6 +235,8 @@ def resolve_conditions(
         values.extend(result.values)
         unsupported.extend(result.unsupported)
         warnings.extend(result.warnings)
+    values, merge_warnings = merge_genders(values)
+    warnings.extend(merge_warnings)
     warnings.extend(include_exclude_conflicts(values))
     return Resolution(tuple(values), tuple(unsupported), tuple(warnings))
 
@@ -260,6 +275,39 @@ def include_exclude_conflicts(values: Iterable[ResolvedValue]) -> tuple[Resoluti
             detail = f"{key[0]}:{key[1]}/{key[2]}" if key[0] == "category" else f"{key[0]}:{key[1]}"
             warnings.append(ResolutionWarning(WARN_INCLUDE_EXCLUDE_CONFLICT, detail=detail))
     return tuple(warnings)
+
+
+# when entries are merged, the least certain match wins (exact is the most certain)
+_MATCH_CERTAINTY = {MATCH_EXACT: 0, MATCH_ALIAS: 1, MATCH_APPROX: 2, MATCH_LLM: 3}
+
+
+def merge_genders(values: Iterable[ResolvedValue]) -> tuple[list[ResolvedValue], tuple[ResolutionWarning, ...]]:
+    """Decision G-3 / OQ-7: included 남 and 여 together mean 공용 ("남성·여성 모두 셔츠").
+
+    The 남/여 include entries are replaced, at the position of the first one, by a single 공용 entry
+    (raw = their raws joined by ", ", match = the least certain of them); when a 공용 include entry
+    already exists it is kept instead. Exclusions are left alone ("남성·여성 말고" = exclude 남, 여,
+    which means 공용 by the contract definition).
+    """
+    values = list(values)
+    merged = [v for v in values if v.kind == "gender" and v.polarity == "include" and v.value in ("남", "여")]
+    if {v.value for v in merged} != {"남", "여"}:
+        return values, ()
+    raws: list[str] = []
+    for v in merged:
+        if v.raw not in raws:
+            raws.append(v.raw)
+    match = max((v.match for v in merged), key=lambda m: _MATCH_CERTAINTY.get(m, len(_MATCH_CERTAINTY)))
+    placed = any(v.kind == "gender" and v.polarity == "include" and v.value == "공용" for v in values)
+    out: list[ResolvedValue] = []
+    for v in values:
+        if v in merged:
+            if not placed:
+                out.append(ResolvedValue("gender", "include", ", ".join(raws), "공용", match))
+                placed = True
+            continue
+        out.append(v)
+    return out, (ResolutionWarning(WARN_GENDER_MERGED_TO_UNISEX, detail=str(len(merged))),)
 
 
 # ---------------------------------------------------------------------------- gender (G-1)
@@ -351,10 +399,6 @@ class _Resolver:
 
     def _lookup_text(self, text: str) -> list[_Outcome]:
         kind = self.c.kind
-        if kind == "category":
-            major = _major_name(text)
-            if major is not None:  # the dictionary only returns a hint for these (never used, H5)
-                return [_Hit("category", major, "standard", text, SOURCE_CATEGORY_MAJOR, major=major)]
         if kind == "color":
             return self._from_color(text)
         null_seen = False
@@ -364,6 +408,12 @@ class _Resolver:
                 null_seen = True
             elif outcome is not None:
                 return [outcome]
+        if kind == "category":
+            # Dictionary first: it maps 원피스 -> 드레스 (decision OQ-5′). For 상의·하의·아우터 it only
+            # returns a hint (never used, H5), so the major name itself is compared here.
+            major = _major_name(text)
+            if major is not None:
+                return [_Hit("category", major, "standard", text, SOURCE_CATEGORY_MAJOR, major=major)]
         return [_NULL] if null_seen else []
 
     def _from_color(self, text: str) -> list[_Outcome]:
@@ -453,8 +503,8 @@ class _Resolver:
                 self._value("category", s, MATCH_LLM, major=vocab.CATEGORY_MINOR_TO_MAJOR[s], minor=s)
                 return
             if s in vocab.CATEGORY_MAJOR:
-                # a major name in raw is matched before the dictionary (exact), so a major suggestion
-                # here would widen a subtype to its major: rejected (decision G-2)
+                # a major name in raw was already matched (exact), so a major suggestion here would
+                # widen a subtype to its major: rejected (decision G-2)
                 self._warn(WARN_CATEGORY_MAJOR_SUGGESTION_REJECTED)
             elif s is not None:
                 self._warn(WARN_SUGGESTION_NOT_IN_VOCABULARY, kind)
@@ -513,7 +563,7 @@ def _in_vocabulary(kind: str, value: str) -> bool:
         return value in vocab.CATEGORY_MINOR or value in vocab.CATEGORY_MAJOR
     if kind == "gender":
         return value in vocab.GENDERS
-    return value in vocab.ATTRIBUTE_VALUES.get(kind, ())
+    return value in cvocab.ATTRIBUTE_VALUES.get(kind, ())
 
 
 def _unique(values: Iterable[ResolvedValue]) -> list[ResolvedValue]:

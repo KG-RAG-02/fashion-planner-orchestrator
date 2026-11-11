@@ -9,7 +9,9 @@ configs/query_structuring.json):
   rendered_system.md  GENERATED full system text, for reading only (scripts/render_query_prompt.py)
 
 `format` names the shape of the JSON the version asks the model for, so callers and tests pick the
-matching draft model: "draft_v1" -> legacy_v1.QueryDraft (archived), "draft_v2" -> draft.QueryDraft.
+matching draft model: "draft_v1" -> legacy_v1.QueryDraft (archived), "draft_v2" -> draft.QueryDraft
+(prompts v2, v3), "draft_v3" -> draft_v3.QueryDraftV3 (prompt v4, conditions grouped per item), "draft_v4" ->
+draft_v4.QueryDraftV4 (prompt v5, flat conditions with an `item` field, grouped by code; FL-1).
 `status` is documentation of the folder's life cycle ("current" = the format new work targets,
 "archived" = kept only to trace old results; never edited again, QD-4). Which version actually runs is
 chosen by the config, not by `status`.
@@ -25,13 +27,14 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
+from . import contract_vocabulary as cvocab
 from . import vocabulary as vocab
 from .config import CONFIG, QueryConfigError, prompt_version_dir
 
 PROMPT_ID_PREFIX = "query-structuring-prompt"
 PLACEHOLDERS = ("{{VOCABULARY}}", "{{EXAMPLES}}", "{{QUERY}}")
 META_FILE = "meta.json"
-DRAFT_FORMATS = ("draft_v1", "draft_v2")  # legacy_v1.DRAFT_FORMAT, draft.DRAFT_FORMAT
+DRAFT_FORMATS = ("draft_v1", "draft_v2", "draft_v3", "draft_v4")  # legacy_v1, draft, draft_v3, draft_v4 .DRAFT_FORMAT
 PROMPT_STATUSES = ("current", "archived")
 
 
@@ -49,15 +52,21 @@ class PromptTemplate:
         return f"{PROMPT_ID_PREFIX}/{self.version}"
 
 
-def vocabulary_section() -> str:
+def vocabulary_section(draft_format: str = "draft_v1") -> str:
+    """The [표준 ...] block. draft_v1 prompts get the five TrendQuery attribute kinds (unchanged text);
+    draft_v2 / draft_v3 prompts also get the two StructuredQuery length kinds (decision OQ-9′)."""
     lines = ["[표준 카테고리]", "상분류(major): " + ", ".join(vocab.CATEGORY_MAJOR), "하분류(minor), 상분류별:"]
     for major in vocab.CATEGORY_MAJOR:
         minors = [m for m in vocab.CATEGORY_MINOR if vocab.CATEGORY_MINOR_TO_MAJOR[m] == major]
         if minors:
             lines.append(f"- {major}: " + ", ".join(minors))
     lines += ["", "[표준 속성 값]"]
-    for attribute_type in vocab.ATTRIBUTE_TYPES:
-        lines.append(f"- {attribute_type}: " + ", ".join(vocab.ATTRIBUTE_VALUES[attribute_type]))
+    if draft_format == "draft_v1":
+        attribute_types, attribute_values = vocab.ATTRIBUTE_TYPES, vocab.ATTRIBUTE_VALUES
+    else:
+        attribute_types, attribute_values = cvocab.ATTRIBUTE_TYPES, cvocab.ATTRIBUTE_VALUES
+    for attribute_type in attribute_types:
+        lines.append(f"- {attribute_type}: " + ", ".join(attribute_values[attribute_type]))
     lines += ["", "[표준 성별 값]", ", ".join(vocab.GENDERS)]
     return "\n".join(lines)
 
@@ -111,7 +120,7 @@ def load_prompt(version: str | None = None) -> PromptTemplate:
         raise QueryConfigError(f"examples.json is not valid JSON in {directory}") from exc
     system = (
         _read(directory, "system_template.md")
-        .replace("{{VOCABULARY}}", vocabulary_section())
+        .replace("{{VOCABULARY}}", vocabulary_section(draft_format))
         .replace("{{EXAMPLES}}", examples_section(examples))
     )
     user_template = _read(directory, "user_template.md")

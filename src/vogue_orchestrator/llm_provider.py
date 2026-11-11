@@ -10,7 +10,9 @@ Settings
     process environment or the repository `.env` file; the environment wins. The key is never logged,
     printed or put in an error message.
   - Without `LLM_PROVIDER`, a model name starting with "claude" uses Anthropic, anything else OpenAI.
-  - Timeout, output limit and retries: `configs/llm.json`.
+  - Timeout, output limit, retries and temperature: `configs/llm.json` (temperature 0 since 2026-11-10,
+    decision OQ-14: structuring is extraction, so the output should not vary between runs; null = omit
+    the parameter and use the provider default).
 
 SDKs are imported only when a call is made (`pip install anthropic` or `pip install openai`), so the
 orchestrator core keeps working without them.
@@ -46,6 +48,7 @@ class LLMSettings:
     timeout_seconds: float = 60.0
     max_tokens: int = 16000
     max_retries: int = 2
+    temperature: float | None = None
 
 
 def read_env_file(path: Path | None = None) -> dict[str, str]:
@@ -85,6 +88,11 @@ def _read_config(path: Path) -> dict[str, Any]:
         if not isinstance(value, kind) or isinstance(value, bool) or value < 0:
             raise LLMConfigurationError(f"{path.name}: {key} must be a non-negative number")
         out[key] = value
+    temperature = raw.get("temperature")
+    if temperature is not None and (not isinstance(temperature, (int, float)) or isinstance(temperature, bool)
+                                    or not 0 <= temperature <= 1):
+        raise LLMConfigurationError(f"{path.name}: temperature must be null or a number from 0 to 1")
+    out["temperature"] = temperature
     return out
 
 
@@ -137,12 +145,17 @@ def _openai_client(settings: LLMSettings) -> Any:
                          max_retries=settings.max_retries)
 
 
+def _sampling(settings: LLMSettings) -> dict[str, Any]:
+    return {} if settings.temperature is None else {"temperature": settings.temperature}
+
+
 def _call_anthropic(client: Any, settings: LLMSettings, system: str, user: str) -> str:
     response = client.messages.create(
         model=settings.model,
         max_tokens=settings.max_tokens,
         system=system,
         messages=[{"role": "user", "content": user}],
+        **_sampling(settings),
     )
     if response.stop_reason == "refusal":
         raise LLMCallError("the model declined the request")
@@ -159,6 +172,7 @@ def _call_openai(client: Any, settings: LLMSettings, system: str, user: str) -> 
         model=settings.model,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         response_format={"type": "json_object"},  # the prompt asks for one JSON object
+        **_sampling(settings),
     )
     choice = response.choices[0]
     if choice.finish_reason == "length":
