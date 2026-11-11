@@ -76,8 +76,42 @@ class StructuringTests(unittest.TestCase):
         self.assertIn("no_item_to_forward", out["warnings"])
         self.assertEqual(out["trend_input_preview"]["forwarded"], {"items": [], "seasons": 0})
 
-    def test_status_reports_the_prompt_of_the_structured_path(self):
-        self.assertEqual(server.query_structuring_status()["prompt_version"], "query-structuring-prompt/v6")
+    def test_synthetic_fixtures_give_the_trend_query_of_the_v1_path(self):
+        # main's offline E2E mode (VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture) serves each fixture's
+        # `structured_draft`; the first-item TrendQuery must match the fixture's expected_trend_query
+        # (categories, gender, attributes, user-named season), except the three documented differences.
+        from _query_support import load_fixtures
+
+        for case in load_fixtures():
+            with self.subTest(case=case["case"]):
+                out = server.structure_query_for_ui(case["query"], case["request_id"], enabled=True,
+                                                    provider_factory=fixed(case["structured_draft"]))
+                self.assertEqual(out["status"], "ok", out.get("error_code"))
+                tq, expected = out["trend_query"], case["expected_trend_query"]
+                requested = expected["requested"]
+                if case["case"] == "nonstandard-values":  # γ: the alias dictionary answers first (approx 베이지)
+                    requested = {**requested, "attributes": [{"type": "color", "raw": "카키베이지", "value": "베이지"}]}
+                    color = out["structured_query"]["items"][0]["attributes"]["include"]["color"][0]
+                    self.assertEqual((color["value"], color["match"]), ("베이지", "approx"))
+                self.assertEqual(tq["requested"], requested)
+                if expected["trend_terms"]["season"]["origin"] == "user_requested":
+                    self.assertEqual(tq["trend_terms"], expected["trend_terms"])
+                got = [(u["type"], u["raw"]) for u in tq["unsupported"]]
+                want = [(u["type"], u["raw"]) for u in expected["unsupported"]]
+                if case["case"] == "abstract-and-length":  # a length is a body_length condition now (OQ-9′)
+                    want = [("abstract", "포멀한 느낌"), ("body_length", "길이가 긴")]
+                if case["case"] == "nonstandard-values":  # 가방 is an out-of-scope item now (IT-7), not sent
+                    want = []
+                    self.assertEqual([o["raw"] for o in out["structured_query"]["out_of_scope_items"]], ["가방"])
+                self.assertEqual(sorted(got), sorted(want))
+
+    def test_synthetic_fixture_mode_serves_the_structured_drafts(self):
+        provider, info = server._synthetic_fixture_provider_factory()
+        self.assertEqual(info["provider"], "synthetic_fixture")
+        out = server.structure_query_for_ui("하의 빼고 해줘", "rid-9", enabled=True,
+                                            provider_factory=lambda: (provider, info))
+        self.assertEqual(out["status"], "ok")
+        self.assertEqual(out["trend_query"]["requested"]["categories"]["exclude"][0]["major"], "하의")
 
     def test_provider_failure_keeps_only_the_exception_class_name(self):
         def factory():

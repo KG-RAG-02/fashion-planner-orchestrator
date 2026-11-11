@@ -14,6 +14,7 @@
     "attributes": [{"type": "color", "raw": "카키베이지", "value": null}],
     "unsupported": [{"type": "category", "raw": "가방"}]
   },
+  "structured_draft": {"seasons": [], "style_names": [], "product_model_names": [], "items": [{"raw": "가방", "suggestion": null}, {"raw": "니트웨어", "suggestion": "니트웨어"}], "conditions": [{"raw": "카키베이지", "kind": "color", "polarity": "include", "suggestion": null, "item": "니트웨어"}], "unsupported": []},
   "expected_warnings": [],
   "expected_trend_query": {
     "request_id": "synthetic-query-005",

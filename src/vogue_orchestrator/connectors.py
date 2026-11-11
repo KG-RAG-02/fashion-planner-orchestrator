@@ -219,28 +219,43 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
     p07_package_available = (p07_root / "src" / "market_research_agent").is_dir()
     configuration_complete = bool(trend_spec and stock_url and p06_url and p07_package_available and p07_source_spec)
     known_blockers = [
-        "The legacy mixed runner uses temporary {request_id, query}; the v0.1 HTTP route requires explicit TrendQuery and no structuring provider is connected.",
-        "The v0.1 HTTP route is not ready: Trend/Stock common endpoints are unconfirmed, Sales/Market currently exposes an incompatible proposal version, and New Product has no /runs adapter."
+        "Trend local HTTP requires the shared Bearer token and a connected Neo4j graph; loopback has no TLS and production readiness is not provided here.",
+        "Stock local HTTP requires a synthetic or approved DuckDB and a Bearer token; URL configuration does not establish either dependency's readiness.",
+        "Endpoint health, runtime schema compatibility, source permission, and operational approval must be checked independently of URL configuration.",
     ]
     dev_mode = env.get("VOGUE_AGENT_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
+    # These capabilities were checked against the sibling local checkouts on
+    # 2026-11-10. They describe source support only; no remote health request is
+    # made here, and schema/runtime readiness remains an independent check.
     v01_vars = (
-        (StageName.TREND, "VOGUE_TREND_AGENT_URL", "no_common_route_confirmed"),
-        (StageName.STOCK, "VOGUE_STOCK_AGENT_URL", "legacy_endpoint_only"),
-        (StageName.PROJECT_07, "VOGUE_SALES_MARKET_AGENT_URL", "proposal_incompatible"),
-        (StageName.PROJECT_06, "VOGUE_NEW_PRODUCT_AGENT_URL", "legacy_endpoint_only"),
+        (StageName.TREND, "VOGUE_TREND_AGENT_URL", "local_development_route", True,
+         "http://127.0.0.1:8768", "TrendQuery (no schema_version field)", "1.1",
+         "shared Bearer token required; loopback development only; no HTTPS"),
+        (StageName.STOCK, "VOGUE_STOCK_AGENT_URL", "source_adapter_verified", True,
+         "http://127.0.0.1:8002", "TrendAnalysisResult 1.1 (explicit Stock adapter; source version/hash recorded)", "1.0",
+         "Bearer token required; local DuckDB required; loopback HTTP is test-only"),
+        (StageName.PROJECT_07, "VOGUE_SALES_MARKET_AGENT_URL", "runtime_schema_aligned", True,
+         "http://127.0.0.1:8766", "PlanningRequest 1.0, Trend 1.0/1.1, Stock 1.0", "1.0",
+         "runtime is loopback-only with shared Bearer auth and no HTTPS; producer ID aligned to sales-market-agent"),
+        (StageName.PROJECT_06, "VOGUE_NEW_PRODUCT_AGENT_URL", "local_development_route", True,
+         "http://127.0.0.1:8767", "PlanningRequest 1.0, Trend 1.1, Stock 1.0, Sales Market 1.0", "1.0",
+         "shared Bearer token required in local and service modes; service mode also requires HTTPS"),
     )
     v01_routes = [
         {"route_agent_id": ROUTE_PRODUCERS[stage][0], "producer_id": ROUTE_PRODUCERS[stage][1],
          "configured": bool(env.get(env_var)), "target": _safe_origin(env.get(env_var)),
          "endpoint_health": "not_checked", "schema_compatibility": "not_verified",
-         "implemented": False,
-         "known_status": known_status}
-        for stage, env_var, known_status in v01_vars
+         "implemented": implemented, "known_status": known_status,
+         "local_development_base_url": local_base_url,
+         "expected_input": expected_input, "producer_result_schema_version": result_version,
+         "authentication": authentication}
+        for (stage, env_var, known_status, implemented, local_base_url,
+             expected_input, result_version, authentication) in v01_vars
     ]
     mixed_mode = {
         "configured": configuration_complete,
         "operational_ready": False,
-        "description": "Trend callable + Stock legacy HTTP + sales-market in-process + new-product legacy HTTP.",
+        "description": "Legacy mixed mode: Trend callable + Stock legacy HTTP + Sales Market in-process + New Product legacy HTTP.",
     }
     v01_mode = {
         "contract_version": CONTRACT_VERSION,
@@ -250,8 +265,7 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
         "schema_compatibility": "not_verified",
         "operational_approval": "not_verified",
         "dev_loopback_mode": dev_mode,
-        "authentication": "development_only" if dev_mode else
-                          ("bearer_token_configured" if env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN") else "missing_service_bearer_token"),
+        "authentication": "bearer_token_configured" if env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN") else "missing_service_bearer_token",
         "ready": False,
         "readiness_note": "Configuration presence is not endpoint health, schema compatibility, or operational approval.",
     }
@@ -271,7 +285,7 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
                 "id": "trend", "name": "trend-analysis-agent",
                 "configured": bool(trend_spec),
                 "target": "custom adapter" if trend_spec else None,
-                "detail": "현재 저장소에 query parser/API가 없어 승인된 module:function 어댑터가 필요합니다.",
+                "detail": "Legacy mixed mode uses a configured module:function adapter. HTTP v0.1 mode uses Trend /runs and can structure an opted-in query before the call.",
             },
             {
                 "id": "stock", "name": "stock-agent",
@@ -291,7 +305,8 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
                 "id": "project_06", "name": "Project_06",
                 "configured": bool(p06_url), "target": _safe_origin(p06_url),
                 "detail": ("Legacy POST /api/planning-draft requires matching versions. The separate v0.1 route needs "
-                           "an explicit PlanningRequest 1.0 / Trend 1.1 / Stock 1.0 adapter; no compatible /runs route confirmed."),
+                           "an explicit PlanningRequest 1.0 / Trend 1.1 / Stock 1.0 / Sales Market 1.0 adapter; "
+                           "the local canonical /runs route supports this combination."),
             },
         ],
     }
@@ -356,3 +371,12 @@ def build_v01_http_orchestrator(environ: Mapping[str, str] | None = None) -> Orc
         require_envelopes=True,
         project06_version_policy="v01_supported_sources",
     )
+
+
+def request_project06_review_images(
+    payload: Mapping[str, Any], environ: Mapping[str, str] | None = None,
+) -> Mapping[str, Any]:
+    """Call Project_06's separate opt-in image adapter, leaving HTTP v0.1 untouched."""
+    env = environ or os.environ
+    url = _service_url(env, "VOGUE_NEW_PRODUCT_AGENT_URL", "/api/planning-draft")
+    return _post_json(url, payload, bearer_token=env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN"))

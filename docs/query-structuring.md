@@ -731,3 +731,17 @@ q033 "남성 여성 모두 입을 수 있는"은 형식 오류 외에도 LLM이 
 **3) 확인**: 테스트 307개 중 305 통과(2 = F-7). 데모 서버를 띄워 `GET /api/query-structuring` → `query-structuring-prompt/v6`, `POST /api/run`(동의 없음, LLM 호출 없음) → 파이프라인 4단계 정상. LLM 호출은 하지 않았다.
 
 **4) 그대로인 것**: 실제 trend 전송(UI-1·D2, `sent: false`), v1 경로 코드(`structure_query`, 보관), 공개 API `POST /v1/orchestrations`(호출자가 `trend_query`를 줌), 재고·시장성·새 상품 기획의 입력.
+
+### 15.11 `main` 병합 (2026-11-11, 팀원 HTTP v0.1 E2E와 합침)
+팀원(5aro)이 `main`에서 질의 구조화를 HTTP v0.1 실행에 연결했다(그때는 v1 경로 `structure_query`). 병합하며 이 저장소의 새 경로와 합쳤다.
+
+| 항목 | 병합 결과 |
+|---|---|
+| `structure_query_for_ui` | 새 경로 유지(`structure_query_v2` 프롬프트 v6 → `to_trend_query()`), 기본 공급자는 팀원의 `_query_provider_factory`(환경변수 `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`면 합성 fixture, 아니면 실제 LLM) |
+| Trend 전송 | HTTP v0.1 실행(화면 `agent_http_v01` + 구조화 동의, 공개 API `input.structure_query: true`)에서 `trend_query` = **첫 품목·첫 시즌** `TrendQuery`를 Trend `/runs`에 보냄(`sent: true`). demo·connected는 미리보기 |
+| 보낼 품목 없음 | 새로: 찾는 품목이 모두 범위 밖이면 HTTP v0.1 실행은 Agent를 부르지 않고 422 `query_structuring_no_item`(구조화 실패 422 `query_structuring_failed`와 같은 방식) |
+| 합성 fixture | `examples/fixtures/query/*.synthetic.json` 6개에 `structured_draft`(draft_v4) 추가. 합성 모드는 이것을 쓰고, 기존 `draft`(v1 형식)는 보관 v1 경로 테스트용으로 남음. 첫 품목 `TrendQuery`는 v1 기대값과 같고 차이 3개만 문서화(`tests/test_ui_query_structuring.py`): 길이 표현이 `body_length` 조건이 되어 `unsupported` type이 바뀜(OQ-9′), 범위 밖 품목 "가방"은 `out_of_scope_items`로 가고 Trend에 안 감(IT-7), "카키베이지"는 사전이 먼저 답해 베이지(`approx`)(γ) |
+| `GET /api/query-structuring` | 팀원이 없앴으므로 없앤 그대로(이 저장소의 `query_structuring_status`도 삭제). 화면은 구조화 결과의 `prompt_version`을 표시 |
+| 화면 `web/app.js` | 자동 병합. 팀원의 조건 표시(`conditionEntries`)와 구조화 카드는 `trend_query`(첫 품목·첫 시즌)를 읽고, `trend_query`가 `null`이면 원문만 표시 |
+
+확인: 테스트 311개 중 308 통과. 실패 3개는 이 PC 환경 문제로 **`origin/main`만 따로 돌려도 똑같이 실패**한다(F-7 `test_connectors` 2개, `test_public_api.test_agent_v01_ui_mode_requires_query_structuring_opt_in` — 연결 설정이 없어 400 대신 409). 스키마·프롬프트 파일 최신 검사 통과.

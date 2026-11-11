@@ -14,6 +14,7 @@
     "attributes": [{"type": "fit", "raw": "오버사이즈", "value": "오버사이즈"}],
     "unsupported": []
   },
+  "structured_draft": {"seasons": [{"year": null, "season": "FW", "raw": "가을"}], "style_names": [], "product_model_names": [], "items": [{"raw": "코트", "suggestion": "코트"}], "conditions": [{"raw": "여성", "kind": "gender", "polarity": "include", "suggestion": "여", "item": "코트"}, {"raw": "오버사이즈", "kind": "fit", "polarity": "include", "suggestion": "오버사이즈", "item": "코트"}], "unsupported": []},
   "expected_warnings": ["season_year_inferred"],
   "expected_trend_query": {
     "request_id": "synthetic-query-004",

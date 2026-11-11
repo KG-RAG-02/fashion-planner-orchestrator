@@ -312,9 +312,46 @@ class Orchestrator:
                         raise ContractError("unknown Project_06 producer-version policy")
                     if not compatible:
                         raise ContractError("Project_06 input producer schema versions are incompatible.")
+                    # Project_06 needs explicit season/category scope before it
+                    # can generate a review image. Keep the Sales Market request
+                    # unchanged; enrich only this consumer-specific copy, and
+                    # only with values the user explicitly supplied in the
+                    # validated TrendQuery. Producer result payloads stay raw.
+                    p06_planning_request = dict(planning_request)
+                    p06_context = dict(planning_request.get("context", {}))
+                    trend_terms = trend_payload.get("trend_terms", {})
+                    requested_season = trend_terms.get("season", {}) if isinstance(trend_terms, Mapping) else {}
+                    if (isinstance(requested_season, Mapping)
+                            and requested_season.get("origin") == "user_requested"):
+                        year = requested_season.get("year")
+                        season_code = requested_season.get("season")
+                        if (isinstance(year, int) and not isinstance(year, bool)
+                                and season_code in {"SS", "FW"}):
+                            # Project_06 inventory values use the four-digit
+                            # season form (for example, 2027SS). This scoped
+                            # adapter value comes from explicit user input;
+                            # the original query and Trend payload stay raw.
+                            p06_context["season"] = {
+                                "value": f"{year}{season_code}", "source": "user",
+                            }
+                    requested = trend_payload.get("requested", {})
+                    requested = requested if isinstance(requested, Mapping) else {}
+                    categories = requested.get("categories", {})
+                    categories = categories if isinstance(categories, Mapping) else {}
+                    requested_categories = categories.get("include", [])
+                    if isinstance(requested_categories, list) and len(requested_categories) == 1:
+                        category = requested_categories[0]
+                        if isinstance(category, Mapping):
+                            category_value = category.get("minor") or category.get("major")
+                            if isinstance(category_value, str) and category_value.strip():
+                                p06_context["category"] = {
+                                    "value": category_value, "source": "user",
+                                }
+                    if p06_context:
+                        p06_planning_request["context"] = p06_context
                     payload = {
                         "request_id": rid,
-                        "planning_request": planning_request,
+                        "planning_request": p06_planning_request,
                         "trend_result": trend_result,
                         "inventory_product_result": inventory_result,
                         "sales_market_result": p07_body,
@@ -372,8 +409,19 @@ class Orchestrator:
                 if stage == StageName.TREND:
                     planning_request = {"schema_version": P07_INPUT_SCHEMA_VERSION,
                                         "request_id": rid, "query": query}
-                    if normalized_scope:
-                        planning_request["context"] = normalized_scope
+                    planning_context = dict(normalized_scope)
+                    # The query structurer already resolved explicit season data
+                    # for Trend. Preserve that same value for Sales Market so a
+                    # source can select its period without re-parsing shorthand
+                    # such as "27년도" from the raw query.
+                    trend_terms = trend_payload.get("trend_terms")
+                    season = trend_terms.get("season") if isinstance(trend_terms, Mapping) else None
+                    if isinstance(season, Mapping):
+                        year = season.get("year")
+                        if isinstance(year, int) and not isinstance(year, bool):
+                            planning_context.setdefault("season_year", year)
+                    if planning_context:
+                        planning_request["context"] = planning_context
                 record = StageRecord(stage, status, rid, agent_id, version, raw_response=raw)
                 result.stages.append(record)
                 if status == "error":

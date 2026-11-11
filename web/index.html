@@ -11,7 +11,7 @@
 <body>
   <header class="topbar">
     <a class="wordmark" href="/" aria-label="VOGUE Orchestrator 홈">VOGUE<span> / SYSTEMS</span></a>
-    <div class="mode"><span class="mode-dot"></span><label class="sr-only" for="run-mode">실행 모드</label><select id="run-mode"><option value="demo">SYNTHETIC PREVIEW</option><option value="connected">CONNECTED AGENTS</option></select></div>
+    <div class="mode"><span class="mode-dot"></span><label class="sr-only" for="run-mode">분석 방식</label><select id="run-mode" aria-label="분석 방식"><option value="demo">미리보기 · 샘플 결과</option><option value="connected">기존 연결로 분석</option><option value="agent_http_v01" selected>에이전트 API로 분석</option></select><details class="connection-popover"><summary id="connections-ready" aria-label="에이전트 연결 설정 확인">연결 확인 중</summary><div class="connection-popover-panel"><div id="connection-summary" class="connection-summary"></div><p class="connections-footnote">주소 설정 현황입니다. 실제 DB 연결과 데이터 조회는 실행 후 확인하세요.</p><details class="connection-details"><summary>기술 정보 보기</summary><div id="connector-list" class="connector-list"></div><p id="connection-technical-note" class="connections-footnote">실행 전에는 endpoint 상태나 데이터 권한을 조회하지 않습니다.</p></details></div></details><span id="local-services-status" class="local-services-status" aria-live="polite">서버 확인 중</span><button id="restart-local-services" class="server-restart-button" type="button">서버 재시작</button></div>
   </header>
 
   <main>
@@ -29,33 +29,56 @@
           <span id="query-count">0 / 1,000</span>
           <button id="run-button" type="submit"><span>파이프라인 실행</span><span aria-hidden="true">↗</span></button>
         </div>
-        <p class="demo-note"><strong>합성 데모</strong> 실제 트렌드·재고·판매 자료나 운영 서비스는 호출하지 않습니다.</p>
-        <label id="structuring-consent" class="connected-consent"><input id="allow-structuring" type="checkbox"><span id="structuring-consent-copy">00 질의 구조화: 질의를 외부 LLM에 보내 구조화합니다.</span></label>
-        <label id="connected-consent" class="connected-consent" hidden><input id="allow-connected" type="checkbox"><span id="connected-consent-copy">연결된 서비스에 요청과 앞 단계 결과를 보냅니다.</span></label>
+        <p class="demo-note"><strong>미리보기 · 샘플 결과</strong> 질의는 외부 LLM으로 구조화합니다. 실제 트렌드·재고·판매 자료나 운영 서비스는 호출하지 않습니다.</p>
       </form>
-
-      <section class="connections" aria-label="저장소 연결 상태">
-        <div class="connections-heading"><div><p class="eyebrow">REPOSITORY CONNECTIONS</p><h2>연결 상태 · 혼합 연결과 HTTP v0.1</h2></div><span id="connections-ready">확인 중</span></div>
-        <div id="connector-list" class="connector-list"></div>
-        <p class="connections-footnote">설정 여부와 endpoint health, schema 호환성, 운영 승인은 각각 따로 확인합니다. 이 화면은 agent endpoint를 호출하지 않습니다.</p>
-      </section>
 
       <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
 
+      <details id="history-toolbar" class="saved-runs" hidden><summary>저장된 실행 보기</summary><div class="history-toolbar"><select id="history-select" aria-label="저장된 실행 선택"><option value="">기록 선택</option></select><button id="load-history" type="button" class="clear-run-button" disabled>불러오기</button><button id="delete-run" type="button" class="clear-run-button" disabled>선택 기록 삭제</button><button id="clear-history" type="button" class="clear-run-button">전체 기록 삭제</button></div></details>
+
       <section id="results" class="results" hidden aria-label="파이프라인 결과">
         <div class="run-heading">
-          <div><p class="eyebrow">EXECUTION TRACE</p><h2>실행 기록</h2></div>
-          <div id="overall-status" class="overall-status"></div>
+          <div><h2>기획안 검토</h2></div>
+          <div class="run-heading-actions"><div id="overall-status" class="overall-status"></div></div>
         </div>
-        <div class="request-line"><span>REQUEST ID</span><code id="request-id"></code></div>
-        <div id="stage-list" class="stage-list"></div>
-        <section id="draft-card" class="draft-card" hidden>
-          <div class="draft-kicker"><span>04 · PROJECT_06</span><span>MD REVIEW REQUIRED</span></div>
-          <h3 id="draft-title">기획 초안</h3>
-          <p id="draft-summary"></p>
-          <p class="human-note">최종 상품 채택과 가격·원가·수량·발주 결정은 MD가 합니다.</p>
+        <p id="history-note" class="history-note" hidden></p>
+        <section id="plan-conditions" class="plan-conditions" aria-label="기획 조건">
+          <div class="section-heading"><h3>기획 조건</h3><button id="edit-plan-request" type="button" class="text-action">조건 수정</button></div>
+          <div id="plan-condition-chips" class="plan-condition-chips"><span class="condition-empty">조건 정보를 확인하는 중입니다.</span></div>
         </section>
-        <p class="trace-footnote">00 질의 구조화 결과는 화면에만 표시되며 trend 단계로 아직 전달되지 않습니다. 상세 응답은 단계별 기록에서 확인할 수 있습니다. 이 실행은 합성 fixture를 사용한 UI 미리보기입니다.</p>
+        <section id="draft-card" class="draft-card" hidden>
+          <div class="draft-kicker"><span>시각 시안</span><span>MD 검토 초안</span></div>
+          <div class="saved-image-actions"><button id="generate-saved-images" type="button" class="clear-run-button" hidden>이미지 생성</button><span id="saved-image-cost-note" hidden>저장된 실행 입력으로 이미지 API를 호출합니다. 비용이 발생할 수 있습니다.</span></div>
+          <section id="draft-images" class="draft-images" hidden aria-label="Project_06 생성 이미지">
+            <figure id="product-image-figure" hidden><img id="product-image" alt="생성된 상품 콘셉트 시안" role="button" tabindex="0" aria-label="상품 콘셉트 시안 크게 보기"><figcaption>상품 콘셉트 시안</figcaption></figure>
+            <figure id="planning-board-figure" hidden><img id="planning-board-image" alt="생성된 기획서 검토 보드" role="button" tabindex="0" aria-label="기획서 보드 크게 보기"><figcaption>기획 구성 보드</figcaption></figure>
+            <div id="draft-images-placeholder" class="draft-images-placeholder" hidden>상품 시안과 기획서 보드는 이미지 생성 후 여기에 표시됩니다.</div>
+          </section>
+          <p id="image-generation-note" class="image-generation-note" hidden></p>
+          <button id="open-planning-draft" class="planning-content-button" type="button" hidden>기획안 보기 <span aria-hidden="true">↗</span></button>
+          <dialog id="planning-draft-dialog" class="planning-draft-dialog" aria-labelledby="draft-title">
+            <div class="planning-draft-dialog-header"><span>상품 기획안 · 검토 초안</span><button id="close-planning-draft" class="planning-draft-close" type="button" aria-label="기획서 닫기">닫기 ×</button></div>
+            <h3 id="draft-title">기획 초안</h3>
+            <p id="draft-summary"></p>
+            <div id="draft-details" class="draft-details"></div>
+            <p class="human-note">최종 상품 채택과 가격·원가·수량·발주 결정은 MD가 합니다.</p>
+          </dialog>
+          <dialog id="image-viewer-dialog" class="image-viewer-dialog" aria-label="생성 이미지 크게 보기">
+            <button id="close-image-viewer" class="image-viewer-close" type="button" aria-label="이미지 닫기">닫기 ×</button>
+            <img id="expanded-image" alt="">
+            <p id="image-viewer-caption" class="image-viewer-caption"></p>
+          </dialog>
+        </section>
+        <section id="evidence-overview" class="evidence-overview" aria-label="데이터 근거 상태">
+          <div class="section-heading"><h3>자료 근거</h3></div>
+          <div id="evidence-cards" class="evidence-cards"></div>
+        </section>
+        <details class="execution-details">
+          <summary>연결 상세 보기 <span>에이전트별 상태 · Request ID</span></summary>
+          <div class="request-line"><span>REQUEST ID</span><code id="request-id"></code></div>
+          <p id="run-query" class="run-query" hidden></p>
+          <div id="stage-list" class="stage-list"></div>
+        </details>
       </section>
     </section>
   </main>

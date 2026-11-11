@@ -1,25 +1,35 @@
-"""Loopback-only stdlib web UI for the synthetic orchestrator demo."""
+"""Loopback-only stdlib web UI for VOGUE orchestration modes."""
 
 from __future__ import annotations
 
 import json
 import hashlib
+import http.client
+import copy
+import ipaddress
 import mimetypes
 import os
+import subprocess
+import ssl
+import sys
 import uuid
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse, urlsplit
 
 from .demo import build_demo_orchestrator
 from .connectors import (
     ConnectorConfigurationError,
+    _service_url,
     build_connected_orchestrator,
     build_v01_http_orchestrator,
     connection_status,
+    request_project06_review_images,
 )
-from .llm_provider import LLMConfigurationError, build_draft_provider, llm_status, load_settings
+from .llm_provider import LLMConfigurationError, build_draft_provider, load_settings
 
 
 WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
@@ -27,6 +37,18 @@ MAX_BODY_BYTES = 32_000
 MAX_QUERY_CHARS = 1_000
 MAX_REQUEST_ID_CHARS = 128
 MAX_SCOPE_FIELDS = {"season", "category", "market", "geography", "channel", "period"}
+MAX_IMAGE_BYTES = 25 * 1024 * 1024
+MAX_LATEST_RUN_BYTES = 12 * 1024 * 1024
+LATEST_RUN_PATH = Path(__file__).resolve().parents[2] / ".local" / "latest-run.json"
+RUN_HISTORY_DIR = LATEST_RUN_PATH.parent / "runs"
+MAX_SAVED_RUNS = 20
+LOCAL_SERVICE_ENDPOINTS = (
+    ("trend", "트렌드", "VOGUE_TREND_AGENT_URL", "http://127.0.0.1:8768", "/health"),
+    ("stock", "상품·재고", "VOGUE_STOCK_AGENT_URL", "http://127.0.0.1:8769", "/health"),
+    ("market", "시장 조사", "VOGUE_SALES_MARKET_AGENT_URL", "http://127.0.0.1:8766", "/api/health"),
+    ("planning", "기획 초안", "VOGUE_NEW_PRODUCT_AGENT_URL", "http://127.0.0.1:8767", "/api/health"),
+    ("orchestrator", "기획 UI", "", "http://127.0.0.1:8765", "/api/health"),
+)
 
 
 ProviderFactory = Callable[[], tuple[Callable[[Any], Any], dict[str, Any]]]
@@ -37,6 +59,32 @@ def _default_provider_factory() -> tuple[Callable[[Any], Any], dict[str, Any]]:
     return build_draft_provider(settings), {"provider": settings.provider, "model": settings.model}
 
 
+def _synthetic_fixture_provider_factory() -> tuple[Callable[[Any], Any], dict[str, Any]]:
+    """Load repository-owned synthetic drafts for offline end-to-end tests."""
+    from .query.synthetic import FixtureDraftProvider
+
+    fixture_root = Path(__file__).resolve().parents[2] / "examples" / "fixtures" / "query"
+    drafts: dict[str, Any] = {}
+    for path in sorted(fixture_root.glob("*.synthetic.json")):
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(value, dict) or not isinstance(value.get("query"), str) or not isinstance(value.get("draft"), dict):
+            raise LLMConfigurationError("synthetic query fixture is invalid")
+        # The UI runs the StructuredQuery path (prompt v6, draft_v4; FW-1), so the fixture's flat
+        # `structured_draft` is served; its `draft` (v1 format) stays for the archived v1 path tests.
+        if not isinstance(value.get("structured_draft"), dict):
+            raise LLMConfigurationError("synthetic query fixture has no structured_draft")
+        drafts[value["query"]] = value["structured_draft"]
+    if not drafts:
+        raise LLMConfigurationError("synthetic query fixtures are unavailable")
+    return FixtureDraftProvider(drafts), {"provider": "synthetic_fixture", "model": "repository-fixture"}
+
+
+def _query_provider_factory() -> tuple[Callable[[Any], Any], dict[str, Any]]:
+    if os.environ.get("VOGUE_QUERY_STRUCTURING_MODE", "").strip() == "synthetic_fixture":
+        return _synthetic_fixture_provider_factory()
+    return _default_provider_factory()
+
+
 def structure_query_for_ui(
     query: str, request_id: str, *, enabled: bool, provider_factory: ProviderFactory | None = None,
 ) -> dict[str, Any]:
@@ -44,16 +92,16 @@ def structure_query_for_ui(
     (`query.structured.structure_query_v2`, its current prompt - v6 since 2026-11-11, decision FW-1).
 
     Output: `structured_query` (StructuredQuery 1.0, every item and season), `draft` (what the model
-    wrote), `warnings` (codes), and `trend_query` = what the trend stage would receive: only the FIRST
-    item and the FIRST season (`query.to_trend.to_trend_query`, IT-4 / SQ-2; null when no item can be
-    forwarded). The result is only added to the /api/run response; it is NOT passed to the trend stage
-    (`trend_input_preview.sent` is false, decisions D2 / UI-1). Failures never stop the pipeline and never
-    echo the query, the model output or exception text: only codes (and an exception class name).
+    wrote), `warnings` (codes), and `trend_query` = what the trend stage receives: only the FIRST item and
+    the FIRST season (`query.to_trend.to_trend_query`, IT-4 / SQ-2 / FW-1; null when no item can be
+    forwarded). The caller decides whether the structured result is a preview or an orchestration input
+    (`trend_input_preview.sent`; the HTTP v0.1 run sends `trend_query` to Trend). Failures never echo the
+    query, the model output or exception text: only safe codes and messages (and an exception class name).
     """
     out: dict[str, Any] = {"status": "skipped", "request_id": request_id, "llm": None,
                            "error_code": None, "error_message": None, "provider_error": None}
     if not enabled:
-        out["error_message"] = "외부 LLM 전송에 동의하지 않아 질의 구조화를 건너뛰었습니다."
+        out["error_message"] = "질의 구조화가 요청되지 않아 건너뛰었습니다."
         return out
 
     def fail(code: str, message: str, provider_error: str | None = None) -> dict[str, Any]:
@@ -68,7 +116,7 @@ def structure_query_for_ui(
     except ImportError:
         return fail("QUERY_MODULE_UNAVAILABLE", "질의 모듈을 불러오지 못했습니다 (pydantic 설치 확인).")
     try:
-        provider, info = (provider_factory or _default_provider_factory)()
+        provider, info = (provider_factory or _query_provider_factory)()
     except LLMConfigurationError as exc:  # message names settings/SDK only, never the key
         return fail("LLM_NOT_CONFIGURED", str(exc))
     out["llm"] = info
@@ -93,7 +141,7 @@ def structure_query_for_ui(
     data["warnings"] = list(dict.fromkeys((*data["warnings"], *conversion.warnings)))
     out.update(status="ok", **data)
     out["trend_query"] = conversion.to_dict()
-    # What the trend stage would receive once the pipeline is wired (D2). Shown, not sent.
+    # What the trend stage receives; the caller marks it sent when the HTTP v0.1 run forwards it.
     out["trend_input_preview"] = {"sent": False, "request_id": request_id, "query": query,
                                   "trend_query": out["trend_query"],
                                   "forwarded": {"items": ["i1"] if out["trend_query"] else [],
@@ -101,14 +149,344 @@ def structure_query_for_ui(
     return out
 
 
-def query_structuring_status() -> dict[str, Any]:
-    try:  # the UI runs the StructuredQuery path (FW-1); report the prompt that path uses
-        from .query.prompt import load_prompt
-        from .query.structured import STRUCTURED_PROMPT_VERSION
-        prompt_version = load_prompt(STRUCTURED_PROMPT_VERSION).prompt_id
-    except Exception:
-        prompt_version = None
-    return {"llm": llm_status(), "prompt_version": prompt_version}
+def _write_private_json(path: Path, data: bytes) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(data)
+    os.replace(temporary, path)
+
+
+def _image_attachment_failed(result: dict[str, Any]) -> bool:
+    image_generation = result.get("image_generation")
+    if not isinstance(image_generation, dict):
+        return False
+    if image_generation.get("status") in {
+        "blocked", "failed", "partial", "error", "not_available", "not_supported",
+    }:
+        return True
+    image = image_generation.get("image")
+    board = image_generation.get("planning_board")
+    return not (
+        isinstance(image, dict) and image.get("status") == "generated"
+        and isinstance(board, dict) and board.get("status") == "generated"
+    )
+
+
+def _run_save_exclusion_reason(result: dict[str, Any]) -> str | None:
+    if result.get("status") == "error":
+        return "전체 실행이 오류로 끝나 저장하지 않았습니다."
+    if _image_attachment_failed(result):
+        return "이미지 또는 기획서 보드 첨부에 실패해 실행 기록에 저장하지 않았습니다."
+    return None
+
+
+def _save_latest_run(mode: str, result: dict[str, Any]) -> str | None:
+    """Archive a UI run and keep the latest run available for page restore."""
+    if _run_save_exclusion_reason(result):
+        result.pop("history_id", None)
+        return None
+    try:
+        history_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:8]}"
+        record = {
+            "id": history_id, "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "mode": mode, "result": result,
+        }
+        result["history_id"] = history_id
+        data = json.dumps(record, ensure_ascii=False).encode("utf-8")
+        if len(data) > MAX_LATEST_RUN_BYTES:
+            result.pop("history_id", None)
+            return None
+        LATEST_RUN_PATH.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        RUN_HISTORY_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _write_private_json(RUN_HISTORY_DIR / f"{history_id}.json", data)
+        _write_private_json(LATEST_RUN_PATH, data)
+        old_runs = sorted(RUN_HISTORY_DIR.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
+        for old in old_runs[MAX_SAVED_RUNS:]:
+            old.unlink(missing_ok=True)
+        return history_id
+    except OSError:
+        result.pop("history_id", None)
+        return None
+
+
+def _load_latest_run() -> dict[str, Any] | None:
+    try:
+        if not LATEST_RUN_PATH.is_file() or LATEST_RUN_PATH.stat().st_size > MAX_LATEST_RUN_BYTES:
+            return None
+        value = json.loads(LATEST_RUN_PATH.read_text(encoding="utf-8"))
+        if not isinstance(value, dict) or not isinstance(value.get("result"), dict):
+            return None
+        return None if _run_save_exclusion_reason(value["result"]) else value
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _local_services_status() -> dict[str, Any]:
+    services = []
+    for service_id, label, env_key, default_url, health_path in LOCAL_SERVICE_ENDPOINTS:
+        base_url = os.environ.get(env_key, default_url) if env_key else default_url
+        parsed = urlsplit(base_url)
+        try:
+            is_loopback = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+            if parsed.scheme != "http" or not is_loopback:
+                status = "remote_or_unmanaged"
+            else:
+                connection = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=1.5)
+                try:
+                    path = parsed.path.rstrip("/") + health_path
+                    connection.request("GET", path or health_path)
+                    response = connection.getresponse()
+                    response.read(1024)
+                    status = "running" if response.status == 200 else "unavailable"
+                finally:
+                    connection.close()
+        except (OSError, ValueError, http.client.HTTPException):
+            status = "unavailable"
+        services.append({"id": service_id, "name": label, "status": status})
+    return {"services": services, "healthy": sum(item["status"] == "running" for item in services),
+            "total": len(services), "all_healthy": all(item["status"] == "running" for item in services)}
+
+
+def _request_is_loopback(handler: BaseHTTPRequestHandler) -> bool:
+    try:
+        if not ipaddress.ip_address(handler.client_address[0]).is_loopback:
+            return False
+    except (ValueError, IndexError):
+        return False
+    origin = handler.headers.get("Origin")
+    if origin:
+        parsed = urlsplit(origin)
+        if parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            return False
+    return True
+
+
+def _history_id_is_safe(history_id: str) -> bool:
+    return bool(history_id) and Path(history_id).name == history_id and all(
+        char.isalnum() or char in "_-" for char in history_id
+    )
+
+
+def _load_history_record(history_id: str) -> dict[str, Any] | None:
+    if not _history_id_is_safe(history_id):
+        return None
+    path = RUN_HISTORY_DIR / f"{history_id}.json"
+    try:
+        if not path.is_file() or path.stat().st_size > MAX_LATEST_RUN_BYTES:
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) and isinstance(value.get("result"), dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _list_run_history() -> list[dict[str, Any]]:
+    try:
+        paths = sorted(RUN_HISTORY_DIR.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
+    except OSError:
+        return []
+    history = []
+    for path in paths:
+        record = _load_history_record(path.stem)
+        if record:
+            result = record["result"]
+            if _run_save_exclusion_reason(result):
+                continue
+            history.append({
+                "id": record.get("id", path.stem), "saved_at": record.get("saved_at"),
+                "mode": record.get("mode"), "query": result.get("query"),
+                "status": result.get("status"), "historical_preview": result.get("historical_preview", False),
+            })
+            if len(history) >= MAX_SAVED_RUNS:
+                break
+    return history
+
+
+def _image_generation_followup(execution: Any) -> dict[str, Any]:
+    """Ask Project_06's opt-in legacy image adapter using the exact saved upstream bodies."""
+    final = next((stage for stage in execution.stages if stage.stage.value == "project_06"), None)
+    response = final.raw_response if final is not None else None
+    body = response.get("result") if isinstance(response, dict) else None
+    evidence = body.get("input_evidence") if isinstance(body, dict) else None
+    if not isinstance(evidence, dict):
+        return {"status": "not_available", "error_code": "PROJECT_06_INPUT_TRACE_MISSING"}
+    inputs = {
+        name: (evidence.get(name) or {}).get("payload")
+        for name in ("planning_request", "trend_result", "inventory_product_result", "sales_market_result")
+    }
+    if not all(isinstance(value, dict) for value in inputs.values()):
+        return {"status": "not_available", "error_code": "PROJECT_06_IMAGE_INPUT_MISSING"}
+    source_trend_version = inputs["trend_result"].get("schema_version")
+    legacy_inputs = copy.deepcopy(inputs)
+    visual_season = None
+    visual_season_source = None
+    planning_request = legacy_inputs.get("planning_request")
+    planning_context = planning_request.get("context") if isinstance(planning_request, dict) else None
+    if not isinstance(planning_context, dict):
+        planning_context = {}
+        if isinstance(planning_request, dict):
+            planning_request["context"] = planning_context
+    season_context = planning_context.get("season")
+    if isinstance(season_context, dict) and season_context.get("value"):
+        visual_season = season_context.get("value")
+        visual_season_source = season_context.get("source")
+    else:
+        # A query without an explicit season may still have one season grounded
+        # in its Trend result. Use it only in this separate visual request and
+        # label the provenance; the canonical run and saved producer payloads
+        # remain unchanged.
+        trend_seasons = {
+            season
+            for trend in (inputs["trend_result"].get("trends") or [])
+            if isinstance(trend, dict)
+            for season in ((trend.get("style") or {}).get("seasons") or [])
+            if isinstance(season, str) and len(season) > 2
+            and season[:-2].isdigit() and season[-2:] in {"SS", "FW"}
+        }
+        if len(trend_seasons) == 1:
+            visual_season = next(iter(trend_seasons))
+            visual_season_source = "trend_result"
+            planning_context["season"] = {"value": visual_season, "source": visual_season_source}
+    if source_trend_version == "1.1":
+        # The separate legacy image endpoint requires all producer schemas to
+        # match PlanningRequest 1.0. Adapt a copy only; the canonical v0.1 raw
+        # response and original Trend 1.1 payload remain untouched in the trace.
+        legacy_inputs["trend_result"]["schema_version"] = "1.0"
+    elif source_trend_version not in {None, "1.0"}:
+        return {"status": "not_supported", "error_code": "UNSUPPORTED_TREND_IMAGE_INPUT_VERSION"}
+    image_request = {
+        "request_id": execution.request_id,
+        **legacy_inputs,
+        "generate_image": True,
+        "generate_planning_board": True,
+    }
+    image_response = request_project06_review_images(image_request)
+    actual_image_response = image_response
+    image = image_response.get("image") if isinstance(image_response, dict) else None
+    board = image_response.get("planning_board") if isinstance(image_response, dict) else None
+    fallback_response = None
+    fallback_used = False
+    conflicts = image_response.get("conflicts") if isinstance(image_response, dict) else None
+    context = inputs["planning_request"].get("context")
+    context = context if isinstance(context, dict) else {}
+    explicit_season = context.get("season")
+    explicit_category = context.get("category")
+    has_user_scope = all(
+        isinstance(value, dict) and value.get("source") == "user"
+        and isinstance(value.get("value"), str) and value.get("value").strip()
+        for value in (explicit_season, explicit_category)
+    )
+    if (isinstance(image, dict) and image.get("status") == "blocked"
+            and isinstance(conflicts, list) and conflicts and has_user_scope):
+        # User-authorized visual fallback: keep the actual canonical run intact,
+        # but make a separate Project_06 image request with an explicit
+        # synthetic no-results inventory input. Never represent it as real
+        # stock data or alter the recorded agent response.
+        fallback_inputs = copy.deepcopy(legacy_inputs)
+        fallback_inputs["inventory_product_result"] = {
+            "agent_id": "stock-agent",
+            "schema_version": "1.0",
+            "request_id": execution.request_id,
+            "status": "no_results",
+            "products": [],
+            "evidence": [],
+            "limitations": [
+                "SYNTHETIC IMAGE FALLBACK: conflicting inventory was excluded from this separate visual request; this does not mean actual inventory is empty."
+            ],
+            "errors": [],
+        }
+        fallback_request = {
+            "request_id": execution.request_id,
+            **fallback_inputs,
+            "generate_image": True,
+            "generate_planning_board": True,
+        }
+        fallback_response = request_project06_review_images(fallback_request)
+        fallback_image = fallback_response.get("image") if isinstance(fallback_response, dict) else None
+        if isinstance(fallback_image, dict) and fallback_image.get("status") == "generated":
+            image_response, image, board = fallback_response, fallback_image, fallback_response.get("planning_board")
+            fallback_used = True
+    return {
+        "status": ("generated_synthetic_fallback" if fallback_used else
+                  "generated" if isinstance(image, dict) and image.get("status") == "generated" else
+                  (image.get("status") if isinstance(image, dict) else "failed")),
+        "image": image,
+        "planning_board": board,
+        "synthetic_fallback": {
+            "used": fallback_used,
+            "reason": "Project_06 blocked visual generation because actual upstream inventory conflicts with the explicitly requested season/category." if conflicts else None,
+            "excluded_input": "inventory_product_result" if fallback_used else None,
+            "limitations": ([
+                "가상 보완 입력으로 별도 생성한 이미지입니다. 실제 재고 근거가 아니며, 실제 Project_08 단계 응답과 MD 검토 필요 상태는 그대로 유지됩니다."
+            ] if fallback_used else []),
+            "blocked_actual_attempt": ({
+                "status": actual_image_response.get("image", {}).get("status"),
+                "conflicts": conflicts,
+                "raw_response": actual_image_response,
+            } if fallback_used else None),
+        },
+        "input_compatibility": {
+            "adapter_version": "project08-project06-image-legacy/0.1",
+            "trend_source_schema_version": source_trend_version,
+            "trend_legacy_input_schema_version": legacy_inputs["trend_result"].get("schema_version"),
+            "original_trend_payload_preserved": True,
+        },
+        "visual_request_scope": {
+            "season": visual_season,
+            "season_source": visual_season_source,
+            "category_source": ((planning_context.get("category") or {}).get("source")
+                                if isinstance(planning_context.get("category"), dict) else None),
+        },
+        "raw_response": image_response,
+    }
+
+
+def _image_display_urls(image_generation: dict[str, Any]) -> dict[str, Any]:
+    images = copy.deepcopy(image_generation)
+    for name, key in (("image", "image_display_url"),
+                      ("planning_board", "planning_board_display_url")):
+        item = images.get(name)
+        image_url = item.get("image_url") if isinstance(item, dict) else None
+        filename = Path(urlparse(image_url).path).name if isinstance(image_url, str) else ""
+        if (isinstance(image_url, str) and image_url.startswith("/api/generated-images/")
+                and Path(image_url).name == filename and filename):
+            images[key] = "/api/new-product/images/" + quote(filename)
+    return images
+
+
+def _fetch_project06_image(filename: str) -> tuple[bytes, str]:
+    """Proxy one generated image from the configured Project_06 host to the same-origin UI."""
+    if Path(filename).name != filename or not filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+        raise ValueError("invalid image filename")
+    image_url = _service_url(os.environ, "VOGUE_NEW_PRODUCT_AGENT_URL",
+                             "/api/generated-images/" + quote(filename))
+    parts = urlsplit(image_url)
+    path = parts.path
+    headers = {"Accept": "image/png,image/jpeg,image/webp"}
+    token = os.environ.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    conn: http.client.HTTPConnection | http.client.HTTPSConnection
+    if parts.scheme == "https":
+        conn = http.client.HTTPSConnection(parts.hostname, parts.port, timeout=10,
+                                           context=ssl.create_default_context())
+    else:
+        conn = http.client.HTTPConnection(parts.hostname, parts.port, timeout=10)
+    try:
+        conn.request("GET", path, headers=headers)
+        response = conn.getresponse()
+        if response.status != 200:
+            raise FileNotFoundError("Project_06 image is unavailable")
+        content_type = response.getheader("Content-Type", "application/octet-stream").split(";", 1)[0]
+        if content_type not in {"image/png", "image/jpeg", "image/webp"}:
+            raise ValueError("unsupported image content type")
+        data = response.read(MAX_IMAGE_BYTES + 1)
+        if len(data) > MAX_IMAGE_BYTES:
+            raise ValueError("generated image exceeds the UI size limit")
+        return data, content_type
+    finally:
+        conn.close()
 
 
 class OrchestratorHandler(BaseHTTPRequestHandler):
@@ -135,13 +513,40 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path == "/api/health":
-            self._json(200, {"status": "ok", "mode": "synthetic-demo"})
+            self._json(200, {"status": "ok", "mode": "local-orchestrator-ui"})
+            return
+        if path == "/api/local-services/status":
+            self._json(200, _local_services_status())
             return
         if path == "/api/connections":
             self._json(200, connection_status())
             return
-        if path == "/api/query-structuring":
-            self._json(200, query_structuring_status())
+        if path == "/api/latest-run":
+            value = _load_latest_run()
+            self._json(200, {"available": value is not None, **(value or {})})
+            return
+        if path == "/api/run-history":
+            self._json(200, {"runs": _list_run_history()})
+            return
+        if path.startswith("/api/run-history/"):
+            history_id = path.removeprefix("/api/run-history/")
+            record = _load_history_record(history_id)
+            self._json(200 if record else 404, record or {"error": "run_not_found"})
+            return
+        if path.startswith("/api/new-product/images/"):
+            filename = path.removeprefix("/api/new-product/images/")
+            try:
+                content, content_type = _fetch_project06_image(filename)
+            except FileNotFoundError:
+                self._json(404, {"error": "generated_image_not_found"})
+                return
+            except ValueError:
+                self._json(400, {"error": "invalid_generated_image"})
+                return
+            except Exception:
+                self._json(502, {"error": "generated_image_unavailable"})
+                return
+            self._send(200, content, content_type)
             return
         relative = "index.html" if path == "/" else path.removeprefix("/")
         target = (WEB_ROOT / relative).resolve()
@@ -154,8 +559,105 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             content_type += "; charset=utf-8"
         self._send(200, target.read_bytes(), content_type)
 
+    def do_DELETE(self) -> None:
+        path = urlparse(self.path).path
+        if path == "/api/run-history":
+            try:
+                for item in RUN_HISTORY_DIR.glob("*"):
+                    if item.is_file():
+                        item.unlink(missing_ok=True)
+                LATEST_RUN_PATH.unlink(missing_ok=True)
+            except OSError:
+                self._json(500, {"error": "run_history_clear_failed"})
+                return
+            self._json(200, {"cleared": True})
+            return
+        if path.startswith("/api/run-history/"):
+            history_id = path.removeprefix("/api/run-history/")
+            if not _history_id_is_safe(history_id):
+                self._json(400, {"error": "invalid_run_id"})
+                return
+            try:
+                (RUN_HISTORY_DIR / f"{history_id}.json").unlink(missing_ok=True)
+                latest = _load_latest_run()
+                if latest and latest.get("id") == history_id:
+                    LATEST_RUN_PATH.unlink(missing_ok=True)
+            except OSError:
+                self._json(500, {"error": "run_delete_failed"})
+                return
+            self._json(200, {"deleted": True})
+            return
+        if path != "/api/latest-run":
+            self._json(404, {"error": "not_found"})
+            return
+        try:
+            LATEST_RUN_PATH.unlink(missing_ok=True)
+        except OSError:
+            self._json(500, {"error": "latest_run_clear_failed"})
+            return
+        self._json(200, {"cleared": True})
+
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if path == "/api/local-services/restart":
+            if not _request_is_loopback(self):
+                self._json(403, {"error": "local_restart_only"})
+                return
+            root = Path(__file__).resolve().parents[2]
+            script = root / "scripts" / "local_servers.py"
+            state_dir = LATEST_RUN_PATH.parent / "services"
+            log_path = state_dir / "ui-triggered-restart.log"
+            try:
+                state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+                with log_path.open("ab", buffering=0) as log:
+                    subprocess.Popen(
+                        [sys.executable, str(script), "restart", "--no-open"],
+                        cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                        start_new_session=True,
+                    )
+            except OSError:
+                self._json(500, {"error": "local_restart_failed"})
+                return
+            self._json(202, {"status": "restarting"})
+            return
+        if path.startswith("/api/run-history/") and path.endswith("/images"):
+            history_id = path.removeprefix("/api/run-history/").removesuffix("/images")
+            if not _history_id_is_safe(history_id):
+                self._json(400, {"error": "invalid_run_id"})
+                return
+            record = _load_history_record(history_id)
+            if not record:
+                self._json(404, {"error": "run_not_found"})
+                return
+            result = record["result"]
+            final_stage = next((stage for stage in result.get("stages", [])
+                                if stage.get("stage") == "project_06"), None)
+            if not isinstance(final_stage, dict) or not isinstance(final_stage.get("raw_response"), dict):
+                self._json(409, {"error": "project06_response_unavailable"})
+                return
+            execution = SimpleNamespace(
+                request_id=result.get("request_id"),
+                stages=[SimpleNamespace(
+                    stage=SimpleNamespace(value="project_06"),
+                    raw_response=final_stage["raw_response"],
+                )],
+            )
+            try:
+                image_generation = _image_display_urls(dict(_image_generation_followup(execution)))
+                result["image_generation"] = image_generation
+                data = json.dumps(record, ensure_ascii=False).encode("utf-8")
+                if len(data) > MAX_LATEST_RUN_BYTES:
+                    self._json(413, {"error": "run_record_too_large"})
+                    return
+                RUN_HISTORY_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+                _write_private_json(RUN_HISTORY_DIR / f"{history_id}.json", data)
+                latest = _load_latest_run()
+                if latest and latest.get("id") == history_id:
+                    _write_private_json(LATEST_RUN_PATH, data)
+                self._json(200, {"image_generation": image_generation})
+            except Exception as exc:
+                self._json(502, {"error": "image_generation_failed", "error_type": type(exc).__name__})
+            return
         if path not in {"/api/run", "/v1/orchestrations"}:
             self._json(404, {"error": "not_found"})
             return
@@ -165,6 +667,7 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             if length <= 0 or length > MAX_BODY_BYTES:
                 raise ValueError("요청 크기를 확인해 주세요.")
             value = json.loads(self.rfile.read(length))
+            structure = False
             if public_api:
                 if not isinstance(value, dict):
                     raise ValueError("요청 본문은 JSON 객체여야 합니다.")
@@ -175,6 +678,12 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 request_id = value.get("request_id")
                 scope = input_value.get("scope", {})
                 trend_query = input_value.get("trend_query")
+                structure = input_value.get("structure_query", False)
+                generate_images = False  # image generation is a separate Project_06 opt-in API
+                if not isinstance(structure, bool):
+                    raise ValueError("input.structure_query는 true/false여야 합니다.")
+                if structure and trend_query is not None:
+                    raise ValueError("input.trend_query와 input.structure_query는 동시에 사용할 수 없습니다.")
                 if trend_query is not None and not isinstance(trend_query, dict):
                     raise ValueError("trend_query는 객체여야 합니다.")
                 if trend_query is not None:
@@ -189,23 +698,25 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 if not isinstance(scope, dict) or set(scope) - MAX_SCOPE_FIELDS:
                     raise ValueError("scope는 허용된 범위 필드만 포함하는 객체여야 합니다.")
                 scope = _validate_scope(scope)
-                structure = False
             else:
                 query = value.get("query") if isinstance(value, dict) else None
                 request_id = None
                 scope = {}
                 trend_query = None
                 mode = value.get("mode", "demo") if isinstance(value, dict) else "demo"
-                # UI only: run 00 query structuring (external LLM) when the user ticked the consent box.
-                structure = value.get("structure", False) if isinstance(value, dict) else False
+                # UI runs query structuring by default; public API callers can opt in explicitly.
+                structure = value.get("structure", not public_api) if isinstance(value, dict) else not public_api
+                generate_images = value.get("generate_images", False) if isinstance(value, dict) else False
             if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
                 raise ValueError(f"쿼리는 1~{MAX_QUERY_CHARS}자로 입력해 주세요.")
             if mode not in {"demo", "connected", "agent_http_v01"}:
                 raise ValueError("지원하지 않는 실행 모드입니다.")
-            if not public_api and mode == "agent_http_v01":
-                raise ValueError("agent_http_v01은 POST /v1/orchestrations에서만 호출할 수 있습니다.")
             if not isinstance(structure, bool):
                 raise ValueError("structure 값은 true/false여야 합니다.")
+            if not isinstance(generate_images, bool):
+                raise ValueError("generate_images 값은 true/false여야 합니다.")
+            if generate_images and (public_api or mode != "agent_http_v01"):
+                raise ValueError("기획 이미지 생성은 UI의 HTTP v0.1 실행에서만 요청할 수 있습니다.")
         except (ValueError, json.JSONDecodeError) as exc:
             self._json(400, {"error": "invalid_request", "message": str(exc)})
             return
@@ -213,25 +724,56 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             if mode == "connected":
                 orchestrator = build_connected_orchestrator()
             elif mode == "agent_http_v01":
-                if not public_api:
-                    raise ValueError("agent_http_v01은 POST /v1/orchestrations에서만 호출할 수 있습니다.")
                 orchestrator = build_v01_http_orchestrator()
             else:
                 orchestrator = build_demo_orchestrator()
             structuring = None
             if not public_api:
-                # UI: 00 query structuring (in-process call of the query module) first, then the
-                # pipeline with the same request_id. The structured query is added to the output only
-                # (not sent to the trend stage; docs/query-decisions.md UI-1).
+                # Keep one request ID from query structuring through all pipeline stages.
                 request_id = str(uuid.uuid4())
                 structuring = structure_query_for_ui(query.strip(), request_id, enabled=structure)
+                if mode == "agent_http_v01" and structure:
+                    if structuring.get("status") != "ok":
+                        self._json(422, {"error": "query_structuring_failed", "query_structuring": structuring})
+                        return
+                    trend_query = structuring["trend_query"]
+                    if trend_query is None:  # FW-1: only out-of-scope items, nothing Trend can search
+                        self._json(422, {"error": "query_structuring_no_item", "query_structuring": structuring})
+                        return
+                    structuring["trend_input_preview"]["sent"] = True
+            elif structure:
+                request_id = request_id or str(uuid.uuid4())
+                structuring = structure_query_for_ui(query.strip(), request_id, enabled=True)
+                if structuring.get("status") != "ok":
+                    self._json(422, {"error": "query_structuring_failed", "query_structuring": structuring})
+                    return
+                trend_query = structuring["trend_query"]
+                if trend_query is None and mode == "agent_http_v01":  # FW-1: no item to forward
+                    self._json(422, {"error": "query_structuring_no_item", "query_structuring": structuring})
+                    return
+                structuring["trend_input_preview"]["sent"] = mode == "agent_http_v01"
             run_options: dict[str, Any] = {"request_id": request_id, "scope": scope}
-            if mode == "agent_http_v01":
+            if mode == "agent_http_v01" and trend_query is not None:
                 run_options["trend_query"] = trend_query
             execution = orchestrator.run(query.strip(), **run_options)
             result = execution.to_dict()
+            if generate_images:
+                try:
+                    result["image_generation"] = _image_display_urls(
+                        dict(_image_generation_followup(execution)))
+                except Exception as exc:
+                    result["image_generation"] = {
+                        "status": "failed", "error_code": "PROJECT_06_IMAGE_REQUEST_FAILED",
+                        "error_type": type(exc).__name__,
+                        "error_message": (str(exc) if isinstance(exc, (ConnectorConfigurationError,))
+                                         or type(exc).__name__ == "TransportError" else None),
+                    }
             if public_api:
                 result["input"] = {"original_query": query.strip(), "scope": scope}
+                if trend_query is not None:
+                    result["input"]["trend_query"] = trend_query
+                if structure:
+                    result["input"]["structure_query"] = True
                 fingerprint = json.dumps({"request_id": execution.request_id, "input": result["input"]},
                                          sort_keys=True, ensure_ascii=False, separators=(",", ":"))
                 result["run_id"] = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
@@ -240,9 +782,17 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                     last = last["result"]
                 if isinstance(last, dict):
                     result["final_result"] = last.get("draft")
+                if structuring is not None:
+                    result["query_structuring"] = structuring
                 self._json(200 if result["status"] != "error" else 502, result)
             else:
                 result["query_structuring"] = structuring
+                result["query"] = query.strip()
+                if _save_latest_run(mode, result) is None:
+                    result["save_warning"] = _run_save_exclusion_reason(result) or (
+                        "실행 결과는 표시됐지만 로컬 기록에 저장하지 못했습니다. "
+                        "기록 크기 제한을 넘었거나 저장 경로를 쓸 수 없습니다."
+                    )
                 self._json(200, result)
         except ConnectorConfigurationError as exc:
             self._json(409, {"error": "connectors_not_ready", "message": str(exc), "connections": connection_status()})
@@ -259,7 +809,7 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
     if host not in {"127.0.0.1", "localhost"} and os.environ.get("VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND") != "1":
         raise ValueError("Binding outside loopback requires VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND=1.")
     server = ThreadingHTTPServer((host, port), OrchestratorHandler)
-    print(f"VOGUE synthetic demo UI: http://{host}:{port}")
+    print(f"VOGUE orchestrator UI: http://{host}:{port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

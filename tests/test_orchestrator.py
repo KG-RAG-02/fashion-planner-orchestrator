@@ -358,7 +358,11 @@ class OrchestratorTests(unittest.TestCase):
             if artifacts is not None:
                 value["artifacts"] = artifacts
             return value
-        tq = {"request_id": RID, "original_query": "synthetic", "requested": {}}
+        tq = {
+            "request_id": RID, "original_query": "synthetic",
+            "trend_terms": {"season": {"year": 2027, "season": "SS", "origin": "user_requested"}},
+            "requested": {"categories": {"include": [{"major": "상의", "minor": "니트웨어"}]}},
+        }
         trend_body = {"schema_version": "1.1", "request_id": RID, "status": "no_results",
                       "trends": [], "evidence": [], "limitations": ["synthetic"]}
         stock_body = {"schema_version": "1.0", "request_id": RID, "agent_id": "stock-agent",
@@ -387,6 +391,12 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(seen["trend_input"], tq)
         self.assertEqual(seen["stock_input"], trend_body)
         self.assertEqual(seen["p06_input"]["sales_market_result"], p07_body)
+        self.assertEqual(seen["p07_input"]["planning_request"]["context"], {"season_year": 2027})
+        self.assertEqual(seen["p06_input"]["planning_request"]["context"]["season"],
+                         {"value": "2027SS", "source": "user"})
+        self.assertEqual(seen["p06_input"]["planning_request"]["context"]["category"],
+                         {"value": "니트웨어", "source": "user"})
+        self.assertNotIn("season", seen["p07_input"]["planning_request"]["context"])
         self.assertNotIn("artifacts", seen["p06_input"])
         self.assertEqual(result.stages[2].raw_response, p07_envelope)
         self.assertEqual(result.stages[0].producer_schema_version, "1.1")
