@@ -24,7 +24,7 @@ agent별 현재 구현과 fixture 기반 input/output은 [`docs/agent-io-contrac
 - sales-market-agent에는 요청·trend·stock raw payload를 전달합니다. sales-market-agent의 `1.3-proposal`을 포함한 제안 schema는 producer schema version으로만 기록하며 공통 계약 버전으로 사용하지 않습니다.
 - 현재 new-product-agent prototype 입력에는 sales-market-agent raw 결과 객체를 `sales_market_result`로 전달합니다. v0.1 응답을 받으면 전체 envelope를 기록하고 `result` body만 전달하며, sibling `artifacts`는 별도 계약 전까지 보내지 않습니다.
 - 실제 계약 대조 결과 trend producer는 `TrendAnalysisResult` v1.1에서 `schema_version`을 반환하지만 `agent_id`는 내보내지 않습니다. 이전 v1.0 결과에는 버전 필드가 없을 수 있습니다. runner는 raw 결과와 producer 버전을 그대로 보존하고, ID는 저장소 정체성으로 별도 기록합니다.
-- trend 검색은 `TrendQuery`의 정규화 입력을 요구합니다. 원문 → `TrendQuery` 변환은 독립 모듈 `src/vogue_orchestrator/query/`에 LLM 호출 전 단계(모델·프롬프트·조립·검증)까지 구현돼 있으나, LLM 어댑터가 없고 runner에 연결되지 않았습니다(아래 "질의 구조화 모듈"). runner는 sales-market-agent/new-product-agent용 최소 PlanningRequest에 원문 쿼리만 담으며 시즌·카테고리를 추론하지 않습니다. 실제 trend 호출 adapter는 아직 연결할 수 없습니다.
+- trend 검색은 `TrendQuery`의 정규화 입력을 요구합니다. 원문 → `StructuredQuery`(이 저장소의 질의 계약) → `TrendQuery`(첫 품목·첫 시즌) 변환은 `src/vogue_orchestrator/query/`에 구현돼 있고 화면 서버가 LLM(`llm_provider.py`)으로 호출하지만, 결과는 미리보기일 뿐 runner(파이프라인)의 trend 단계에는 아직 전달하지 않습니다(아래 "질의 구조화 모듈"). runner는 sales-market-agent/new-product-agent용 최소 PlanningRequest에 원문 쿼리만 담으며 시즌·카테고리를 추론하지 않습니다. 실제 trend 호출 adapter는 아직 연결할 수 없습니다.
 - stock producer의 계약은 `POST /v1/inventory-products`에 TrendAnalysisResult를 그대로 보내는 방식이며 응답에는 `schema_version`, `request_id`, `agent_id`, `status`, `products`, `trend_results`, `evidence`, `errors`가 있습니다. runner는 이 구조를 바꾸지 않고 stock adapter 호출을 주입받습니다. 실제 API는 sample DB/LLM 의존이 있어 여기서 호출하지 않습니다.
 - sales-market-agent connector는 CLI를 subprocess로 부르지 않고 `MarketResearchAgent`를 in-process 호출하므로 trend 입력을 원본 그대로 넘깁니다. sales-market-agent의 별도 CLI는 PlanningRequest에 `schema_version: 1.0`을 요구합니다.
 - 현재 new-product-agent endpoint는 planning request, trend, stock 입력의 schema version이 같아야 합니다. orchestrator가 만드는 planning request는 `1.0`, stock 결과도 `1.0`이지만 최신 trend 결과는 `1.1`이므로 new-product-agent 단계에서 멈춥니다. 버전을 바꿔 끼우지 않았으며, new-product-agent의 교차 버전 허용 또는 담당자 합의된 adapter mapping이 필요합니다.
@@ -110,20 +110,20 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integr
 
 ## 질의 구조화 모듈 (LLM 호출 전 단계)
 
-사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 바꾸는 모듈입니다. 모듈 자체는 네트워크·LLM 호출과 키가 없고, 실제 LLM 호출은 모듈 밖 `llm_provider.py`가 맡습니다. UI 서버(`server.py`)만 이 모듈을 함수로 호출하며, 코어(core·connectors·demo)와는 서로 import하지 않습니다. 이 모듈만 pydantic이 필요합니다(optional extra `query`). 코어와 기존 테스트는 계속 표준 라이브러리만으로 실행되고, pydantic이 없으면 질의 테스트는 skip됩니다. 다음 출력 계약 `StructuredQuery` 1.0(이 저장소 소유) 모델, 값 확정 코드, 프롬프트 v2는 만들어졌고 실행 흐름 연결은 다음 단계입니다.
+사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 바꾸는 모듈입니다. 모듈 자체는 네트워크·LLM 호출과 키가 없고, 실제 LLM 호출은 모듈 밖 `llm_provider.py`가 맡습니다. UI 서버(`server.py`)만 이 모듈을 함수로 호출하며, 코어(core·connectors·demo)와는 서로 import하지 않습니다. 이 모듈만 pydantic이 필요합니다(optional extra `query`). 코어와 기존 테스트는 계속 표준 라이브러리만으로 실행되고, pydantic이 없으면 질의 테스트는 skip됩니다. 다음 출력 계약 `StructuredQuery` 1.0(이 저장소 소유)은 **2026-11-11 확정**되었고(받는 Agent용 요약: [`contracts/structured-query.md`](contracts/structured-query.md) §0), 이를 만드는 경로(`query/structured.py` `structure_query_v2`, 프롬프트 v6)도 구현되어 있습니다. 화면 서버(`server.py`)도 2026-11-11부터 이 경로를 쓰고, trend가 받을 입력은 첫 품목·첫 시즌만 담은 `TrendQuery`로 변환합니다(`query/to_trend.py`). 다만 trend로 실제 전송은 아직 하지 않습니다(미리보기).
 
 ```bash
 pip install -e ".[query]"
-PYTHONPATH=src python3 -m unittest discover -s tests -v          # 전체 233 (질의 176 + LLM 호출·UI 연결 15 + 오케스트레이터). 이 PC에서는 test_connectors 2개 실패: configs/README F-7
+PYTHONPATH=src python3 -m unittest discover -s tests -v          # 전체 307 (질의 248 + LLM 호출·UI 연결 17 + 오케스트레이터·팀원). 2026-11-11 기준. 이 PC에서는 test_connectors 2개 실패: configs/README F-7
 PYTHONPATH=src python3 examples/query_structuring_demo.py        # 합성 사례 6개 결과
 PYTHONPATH=src python3 examples/query_structuring_demo.py --show-prompt "가을 여성 코트"
 ```
 
 | 폴더 | 내용 |
 |---|---|
-| [`prompts/`](prompts/README.md) | LLM 프롬프트 원본, 버전별 텍스트 (실행 버전 `v1`, 다음 버전 `v2` 작성됨). 실제 전송 텍스트는 각 버전 폴더의 `rendered_system.md` |
+| [`prompts/`](prompts/README.md) | LLM 프롬프트 원본, 버전별 텍스트 (현행 `v6`, 화면 서버도 사용. `v1`~`v5`는 보관). 실제 전송 텍스트는 각 버전 폴더의 `rendered_system.md` |
 | [`configs/`](configs/README.md) | 질의 모듈 설정(`query_structuring.json`)과 저장소 전체 하드코딩 값·종속 관계 목록 |
-| [`data/`](data/README.md) | 예상 사용자 질의 30개와 기대 출력 (silver, 사용자 확인 전) |
+| [`data/`](data/README.md) | 예상 사용자 질의 30개(dev)·holdout과 기대 출력 (silver), 평가 결과 `eval_runs/` |
 
 사용자와 합의한 결정·작업 규칙·별칭 사전 정책은 [`docs/query-decisions.md`](docs/query-decisions.md)가 기준입니다(먼저 읽기). 확정된 다음 설계는 받는 쪽용 계약 정의서 [`contracts/structured-query.md`](contracts/structured-query.md)(`StructuredQuery` 1.0)와 구현 계획 [`docs/structured-query-plan.md`](docs/structured-query-plan.md)에 있습니다. 구현 내용, 코드 지도, 프롬프트, 가정, 한계와 향후 과제, 다음 할 일은 [`docs/query-structuring.md`](docs/query-structuring.md)에 있고, 설계 배경은 [`docs/query-preprocessing.md`](docs/query-preprocessing.md)에 있습니다.
 

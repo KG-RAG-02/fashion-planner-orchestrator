@@ -18,12 +18,12 @@
 | 키 | 현재 값 | 쓰는 곳 | 뜻 |
 |---|---|---|---|
 | `prompt.name` | `query_structuring` | `prompt.py` | `prompts/` 아래 프롬프트 폴더 이름 |
-| `prompt.version` | `v1` | `prompt.py` | 사용할(실행할) 프롬프트 버전 폴더. 결과의 `prompt_version`은 `query-structuring-prompt/v1`. 프롬프트 v2는 작성됐지만 실행 버전 전환은 U4 ([structured-query-plan.md](../docs/structured-query-plan.md)). 폴더의 `meta.json` `status`는 문서용 표시이고 실행 버전은 이 값이 정한다 |
+| `prompt.version` | `v1` | `prompt.py` | 사용할(실행할) 프롬프트 버전 폴더. **보관된 v1 경로(`structure_query` → `TrendQuery`)에만 쓰인다.** 2026-11-11(FW-1)부터 화면 서버는 `StructuredQuery` 경로를 쓰며, 그 프롬프트 버전은 이 설정이 아니라 코드 상수 `query/structured.py`의 `STRUCTURED_PROMPT_VERSION`(`v6`)이 정한다(평가 스크립트 기본값도 `v6`). 두 값을 하나로 합치는 것은 U4 남은 일 ([structured-query-plan.md](../docs/structured-query-plan.md)). 폴더의 `meta.json` `status`는 문서용 표시이고 실행 버전은 이 값이 정한다 |
 | `input.max_query_chars` | `1000` | `structure.py` | 질의 최대 길이. 넘으면 `INPUT_INVALID` |
 | `draft.year_min` / `draft.year_max` | `2000` / `2100` | `draft.py`(v2), `legacy_v1.py`(v1) | LLM이 준 연도의 허용 범위. 밖이면 `DRAFT_INVALID` |
 | `unsupported.reasons` | brand·category·attribute·abstract 4개 | `assemble.py` | `unsupported.reason`에 들어갈 고정 문장. `{major_count}`/`{minor_count}`는 어휘 개수로 채운다 |
 | `unsupported.generic_reason` | "현재 검색에서 지원하지 않는 조건" | `assemble.py` | 표에 없는 종류의 사유 |
-| `gender.aliases` | 여: 여성·여자·여성용·우먼·위민즈·women·womens / 남: 남성·남자·남성용·맨즈·men·mens / 공용: 남녀공용·유니섹스·unisex | `resolve.py` (`config.py`가 검증) | 성별 고정 표(결정 G-1). 표에 있으면 `match: alias`, 표준 값 그대로면 `exact`. 키는 표준 성별 3개만, 표기 하나는 한 값에만, 비교는 사전과 같은 `norm_key`(소문자, 공백·`-`·`_` 무시). trend 사전에 성별이 생기면 지운다. **2026-11-10부터 필수 키**: `VOGUE_QUERY_CONFIG`로 다른 설정 파일을 쓰면 이 절이 없을 때 import에서 실패한다. 정규화하면 빈 문자열이 되는 표기(`"-"` 등)는 거부한다 |
+| `gender.aliases` | 여: 여성·여자·여성용·우먼·위민즈·women·womens / 남: 남성·남자·남성용·맨즈·men·mens / 공용: 남녀공용·남녀·유니섹스·unisex ("남녀"는 2026-11-10 결정 G-3(OQ-7)으로 추가) | `resolve.py` (`config.py`가 검증) | 성별 고정 표(결정 G-1). 표에 있으면 `match: alias`, 표준 값 그대로면 `exact`. 키는 표준 성별 3개만, 표기 하나는 한 값에만, 비교는 사전과 같은 `norm_key`(소문자, 공백·`-`·`_` 무시). trend 사전에 성별이 생기면 지운다. **2026-11-10부터 필수 키**: `VOGUE_QUERY_CONFIG`로 다른 설정 파일을 쓰면 이 절이 없을 때 import에서 실패한다. 정규화하면 빈 문자열이 되는 표기(`"-"` 등)는 거부한다 |
 
 ### `llm.json` 키 (2026-11-10)
 | 키 | 현재 값 | 뜻 |
@@ -31,6 +31,7 @@
 | `timeout_seconds` | `60` | LLM 요청 하나의 시간 제한(초) |
 | `max_tokens` | `16000` | Anthropic 호출의 출력 상한 (OpenAI 호출에는 보내지 않음: 모델마다 매개변수 이름이 달라서) |
 | `max_retries` | `2` | SDK 자체 재시도 횟수 |
+| `temperature` | `0` | (2026-11-10, 결정 OQ-14′) 출력의 무작위성. 0 = 같은 질의에 같은 결과(제공자가 허용하는 한). `null`이면 매개변수를 보내지 않고 제공자 기본값(OpenAI는 1). 0~1만 허용 |
 
 모델·키·제공자는 이 파일에 두지 않는다 (`.env`의 `LLM_*`, §4.3).
 

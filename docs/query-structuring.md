@@ -1,12 +1,13 @@
 # 질의 구조화 모듈 — 구현 문서 (LLM 호출 전 단계)
 
-> 상태: **1차 구현 완료 (2026-11-09). 2026-11-10 다음 설계의 부품(U1~U3: `StructuredQuery` 모델, 값 확정 `resolve.py`, LLM 출력 v2·프롬프트 v2) 추가, 실행 흐름 연결(U4)은 아직. 2026-11-10 UI 연결과 실제 LLM 호출(프롬프트 v1) 확인(§13). trend 단계로의 전달은 아직 없다.**
+> **최신 (2026-11-11)**: 계약 `StructuredQuery` 1.0 **확정**(SQ-F, 받는 Agent용 요약은 [정의서 §0](../contracts/structured-query.md)). 생산 경로 `structure_query_v2` + 프롬프트 v6(§15.7·§15.8), dev 21/30. **화면 서버도 이 경로를 쓰고 trend 입력은 첫 품목·첫 시즌만(FW-1, §15.10)**, 실제 전송은 아직 없음. 아래 상태 줄은 이전 기록이다.
+> 상태: **1차 구현 완료 (2026-11-09). 2026-11-10 다음 설계의 부품(U1~U3: `StructuredQuery` 모델, 값 확정 `resolve.py`, LLM 출력 v2·프롬프트 v2) 추가, 실행 흐름 연결(U4)은 아직. 2026-11-10 UI 연결과 실제 LLM 호출(프롬프트 v1) 확인(§13). 2026-11-10 형식 갱신(U3.5)과 v2 경로·기준 측정(§14) — v2는 아직 화면·서버에 연결하지 않았다. trend 단계로의 전달은 아직 없다.**
 > 설계·결정 배경은 [query-preprocessing.md](query-preprocessing.md). **지금 코드의 출력 계약**은 trend 형식 스냅샷 [contracts/trend-query.md](../contracts/trend-query.md)(`TrendQuery`)이고, **확정된 다음 계약**은 [contracts/structured-query.md](../contracts/structured-query.md)(`StructuredQuery` 1.0, 이 저장소 소유)다. 이 문서는 **무엇이 구현됐고 어떻게 이어서 작업하는지**를 다룬다.
 
 ## 0. 새로 이어받는 사람을 위한 시작 순서
-0. **[query-decisions.md](query-decisions.md)를 먼저 읽는다.** 사용자와 합의한 결정·작업 규칙·별칭 사전 정책이 있고, 다른 문서와 다르면 그 문서가 우선이다. **이 문서는 지금 코드를 설명한다: 실행 흐름은 여전히 v1(LLM이 값을 고르는 방식 → `TrendQuery`)이고, 다음 설계의 부품(U1~U3)은 만들어졌지만 아직 실행 흐름에 연결되지 않았다(§3 표의 "미연결").** 확정된 다음 설계(`StructuredQuery` 1.0 + γ)는 [contracts/structured-query.md](../contracts/structured-query.md)(받는 쪽용 정의서)와 [structured-query-plan.md](structured-query-plan.md)(구현 계획)에 있다.
+0. **[query-decisions.md](query-decisions.md)를 먼저 읽는다.** 사용자와 합의한 결정·작업 규칙·별칭 사전 정책이 있고, 다른 문서와 다르면 그 문서가 우선이다. **(2026-11-11 현재) 화면 서버는 `StructuredQuery` 경로(`structure_query_v2`, 프롬프트 v6 → `to_trend_query()`)를 쓴다 — 최신 내용은 §15(특히 §15.7~§15.10)와 [정의서 §0](../contracts/structured-query.md). 아래 §1~§14는 대부분 2026-11-09~10 시점의 기록이다. 그때는: 실행 흐름은 여전히 v1(LLM이 값을 고르는 방식 → `TrendQuery`)이고, 다음 설계의 부품(U1~U3)은 만들어졌지만 아직 실행 흐름에 연결되지 않았다(§3 표의 "미연결").** 확정된 다음 설계(`StructuredQuery` 1.0 + γ)는 [contracts/structured-query.md](../contracts/structured-query.md)(받는 쪽용 정의서)와 [structured-query-plan.md](structured-query-plan.md)(구현 계획)에 있다.
 1. 이 문서 §1~§3을 읽는다 (무엇을, 어디에, 어떤 흐름으로).
-2. 테스트를 돌려 현재 상태를 확인한다 (§8). 기대값: **질의 테스트 176개 통과**. 저장소 전체는 233개(LLM 호출·UI 연결 15개, 팀원 테스트 포함)이며, 이 PC에서는 `test_connectors.py` 2개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7).
+2. 테스트를 돌려 현재 상태를 확인한다 (§8). 기대값(2026-11-11): **질의 테스트 248개(15개 파일) 통과**. 저장소 전체는 307개(LLM 호출·UI 연결 17개, 팀원 테스트 포함)이며, 이 PC에서는 `test_connectors.py` 2개가 작업 공간의 `project_07` 폴더가 없어 실패한다(질의와 무관, [configs/README.md](../configs/README.md) F-7).
 3. 결과를 눈으로 본다: `examples/query_structuring_demo.py` (§8).
 4. 프롬프트는 [`prompts/`](../prompts/README.md), 설정과 하드코딩 목록은 [`configs/`](../configs/README.md), 예상 질의 30개는 [`data/`](../data/README.md)에 있다.
 5. **다음 할 일과 결정 대기 목록의 기준은 [query-decisions.md §0·§6](query-decisions.md)이다** (이 문서 §10은 요약). 확인이 필요한 가정은 §6이다. **§6의 가정을 바꾸려면 사용자(소유자) 확인이 먼저다.**
@@ -22,7 +23,7 @@
 | **버전별 프롬프트 파일** (`prompts/query_structuring/v1/`) + 렌더 스크립트 | 실제 LLM으로 정확도 측정 (QP-8, 데이터는 준비됨) |
 | **설정 파일** (`configs/query_structuring.json`)과 저장소 전체 하드코딩·종속 목록 | 다중 턴·영어 (QP-9) |
 | **예상 사용자 질의 30개**와 기대 draft (`data/user_queries.v1.json`, silver) | 이 모듈을 다른 레포로 옮기는 작업 |
-| **2026-11-10 U1~U3**: `StructuredQuery` 1.0 모델·JSON Schema, 값 확정 `resolve.py`, draft v2·프롬프트 v2, 테스트 176개 (**실행 흐름 미연결**, U4) | |
+| **2026-11-10 U1~U3**: `StructuredQuery` 1.0 모델·JSON Schema, 값 확정 `resolve.py`, draft v2·프롬프트 v2, 테스트 176개 (그 시점 실행 흐름 미연결 → 2026-11-11 FW-1로 화면 서버 연결) | |
 | 진입점 `structure_query()`와 LLM을 끼울 자리 (`DraftProvider`), 오류 처리, 합성 fixture 6개, 테스트(2026-11-09 63개 → 2026-11-10 별칭 사전 포함 88개), 데모 | |
 
 결정 기록 (사용자, 2026-11-09): D1 = **이 저장소에 Pydantic 모델을 직접 구현하고 저장소 사이는 JSON(API)으로 주고받는다.** pydantic은 **질의 모듈에만** 쓴다 (optional extra). D6(파이프라인 실패 의미)는 이번 범위가 아니다. D2(파이프라인 연결 위치)는 보류하고 독립 모듈로 먼저 만든다. 받는 쪽은 trend-analysis-agent이고 다른 레포도 받을 예정이지만 지금은 고려하지 않는다. 프롬프트는 `prompts/`에 버전별 텍스트로, 하드코딩 값은 `configs/`로, 예상 질의는 `data/`에 둔다.
@@ -56,11 +57,16 @@ QueryStructuringResult {trend_query, draft, warnings, prompt_version}  → trend
 | `vocabulary.py` | **생성 파일 (직접 수정 금지).** 표준 어휘 상수와 출처(커밋·해시) | `SEASONS`, `GENDERS`, `CATEGORY_MAJOR`(4), `CATEGORY_MINOR`(21), `CATEGORY_MINOR_TO_MAJOR`, `ATTRIBUTE_TYPES`(5), `ATTRIBUTE_VALUES`(21/26/19/61/7), `PROVENANCE` | ○ |
 | `season.py` | 다음 패션 시즌 계산, 연도 없는 시즌의 연도 결정(가정 A-1) | `next_fashion_season`, `resolve_season_year` | ○ |
 | `errors.py` | 오류 코드와 고정 메시지 | `QueryStructuringError`, `INPUT_INVALID` 등 5개 | ○ |
-| `models.py` | **다음 출력 계약** `StructuredQuery` 1.0 (이 저장소 소유, Y1. 정의서 [contracts/structured-query.md](../contracts/structured-query.md)). 속성 종류마다 허용 값이 걸린 참조 타입. **미연결** (U4) | `StructuredQuery`, `CategoryRef`, `GenderRef`, `AttributeRef`·`ColorRef`…`FitRef`, `ATTRIBUTE_REF_TYPES`, `export_json_schema`, `SCHEMA_VERSION` | ⚙ |
+| `models.py` | **다음 출력 계약** `StructuredQuery` 1.0 (이 저장소 소유, Y1. 정의서 [contracts/structured-query.md](../contracts/structured-query.md)). 속성 종류마다 허용 값이 걸린 참조 타입. 화면 서버가 사용(2026-11-11 FW-1) | `StructuredQuery`, `CategoryRef`, `GenderRef`, `AttributeRef`·`ColorRef`…`FitRef`, `ATTRIBUTE_REF_TYPES`, `export_json_schema`, `SCHEMA_VERSION` | ⚙ |
+| `structured.py` | **`StructuredQuery` 경로** (2026-11-11 화면 서버가 사용): `structure_query_v2`(입력 검사 → 프롬프트 → LLM → 초안 검증·묶기 → 조립), `assemble_structured_query`(품목별 조립 IT-1~IT-9), `STRUCTURED_PROMPT_VERSION`(`v6`) | `structure_query_v2`, `assemble_structured_query`, `StructuredQueryResult` | `draft_v3`, `draft_v4`, `resolve`, `models`, `prompt` |
+| `draft_v4.py` | 프롬프트 v5·v6의 LLM 초안(평평한 조건 + `item`)과 품목별 묶기(FL-1) | `QueryDraftV4`, `group_draft`, `repair_draft_v4_labels`, `from_draft_v3` | `draft`, `draft_v3`, `lexicon` |
+| `draft_v3.py` | 프롬프트 v4(보관)의 LLM 초안(품목 안에 조건)이자 묶은 뒤의 내부 형식 | `QueryDraftV3`, `DraftItem`, `DraftCommon` | `draft` |
+| `to_trend.py` | `StructuredQuery` → `TrendQuery`(첫 품목·첫 시즌만, FW-1) | `to_trend_query`, `TrendConversion` | `models`, `trend_query`, `vocabulary` |
+| `contract_vocabulary.py` | 계약의 속성 종류 7개와 값(기장 2종 포함, OQ-9′) | `ATTRIBUTE_TYPES`, `ATTRIBUTE_VALUES` | `vocabulary`, `alias_data` |
 | `trend_query.py` | **지금 실행 흐름의 출력 계약** `TrendQuery` (trend 스냅샷과 같은 필드·검증 규칙). v1 조립 경로와 나중의 `to_trend_query()`용으로 보관 (2026-11-10 `models.py`에서 이름만 옮김) | `TrendQuery`, `SeasonRequest`, `CategoryRef`, `RequestedAttribute` … | ⚙ |
 | `legacy_v1.py` | **보관** draft v1: 프롬프트 v1에서 LLM이 반환하는 중간 스키마(LLM이 값까지 고름). 지금의 실행 경로(`assemble.py`·`structure.py`)와 v1 자산(프롬프트 v1 예시, `data/user_queries.v1.json`) 검증용. 연도 범위는 설정에서. v1 자산 정리 때 삭제 | `QueryDraft`, `DraftSeason`, `DraftCategory`, `DRAFT_FORMAT` … | ⚙ |
-| `draft.py` | **draft v2**: 프롬프트 v2에서 LLM이 반환할 형식 (조건 표현·종류·포함/제외·표준 목록 안 제안 값). 모양만 검증하고 제안 값의 표준 목록 확인은 resolver가 한다. **미연결** (U4) | `QueryDraft`, `DraftCondition`, `DraftUnsupported`, `DraftSeason`, `DRAFT_FORMAT`, `CONDITION_KINDS`, `UNSUPPORTED_TYPES` | ⚙ |
-| `resolve.py` | **값 확정** (γ): 조건마다 별칭 사전 우선 → 없을 때만 표준 목록 안 LLM 제안 → `match` 결정. 성별 표(G-1), 하분류 규칙(G-2), 이동, 표현 안 단어 조회, 포함·제외 모순 검사. pydantic 모델과 독립. 규칙은 [structured-query-plan.md §2.1](structured-query-plan.md). **미연결** (U4) | `Condition`, `resolve_condition`, `resolve_conditions`, `include_exclude_conflicts`, `ResolvedValue`, `UnsupportedItem`, `ResolutionWarning`, `Resolution` | ○ |
+| `draft.py` | **draft v2**: 프롬프트 v2에서 LLM이 반환할 형식 (조건 표현·종류·포함/제외·표준 목록 안 제안 값). 모양만 검증하고 제안 값의 표준 목록 확인은 resolver가 한다. 프롬프트 v2·v3(보관)용, 라벨 고쳐 받기 `repair_label_lists`는 v3·v4 초안도 사용 | `QueryDraft`, `DraftCondition`, `DraftUnsupported`, `DraftSeason`, `DRAFT_FORMAT`, `CONDITION_KINDS`, `UNSUPPORTED_TYPES` | ⚙ |
+| `resolve.py` | **값 확정** (γ): 조건마다 별칭 사전 우선 → 없을 때만 표준 목록 안 LLM 제안 → `match` 결정. 성별 표(G-1), 하분류 규칙(G-2), 이동, 표현 안 단어 조회, 포함·제외 모순 검사. pydantic 모델과 독립. 규칙은 [structured-query-plan.md §2.1](structured-query-plan.md). `StructuredQuery` 경로(`structured.py`)에서 사용 | `Condition`, `resolve_condition`, `resolve_conditions`, `include_exclude_conflicts`, `ResolvedValue`, `UnsupportedItem`, `ResolutionWarning`, `Resolution` | ○ |
 | `assemble.py` | draft → `TrendQuery` 조립 (코드가 맡는 규칙 전부). 사유 문장은 설정에서 | `assemble_trend_query`, `UNSUPPORTED_REASONS`, `WARN_*` | ⚙ |
 | `prompt.py` | 프롬프트 파일을 읽어 렌더링. 버전 폴더의 `meta.json`(형식·상태)을 읽고 검증한다. 어느 버전이든 읽을 수 있다(`version=`). **코드에 프롬프트 문장이 없다** | `load_prompt`, `build_prompt`, `PromptBundle`, `PROMPT_VERSION`, `PROMPT_FORMAT`, `DRAFT_FORMATS`, `SYSTEM_PROMPT`, `EXAMPLES` | ○ |
 | `structure.py` | 진입점. 입력 검증 → 프롬프트 → provider → 검증 → 조립 | `structure_query`, `DraftProvider`, `QueryStructuringResult`, `MAX_QUERY_CHARS` | ⚙ |
@@ -72,8 +78,9 @@ QueryStructuringResult {trend_query, draft, warnings, prompt_version}  → trend
 
 | 경로 | 역할 |
 |---|---|
-| `prompts/query_structuring/v1/` | 프롬프트 v1 (보관, 형식 `draft_v1`, **지금 실행 버전**): `meta.json`, `system_template.md`, `user_template.md`, `examples.json`, `rendered_system.md`(생성, 읽기용). 설명은 [prompts/README.md](../prompts/README.md) |
-| `prompts/query_structuring/v2/` | 프롬프트 v2 (현행, 형식 `draft_v2`, 실행 전환은 U4): 같은 파일 구성 (§4.4) |
+| `prompts/query_structuring/v1/` | 프롬프트 v1 (보관, 형식 `draft_v1`, 보관된 v1 경로 `structure_query`만 사용): `meta.json`, `system_template.md`, `user_template.md`, `examples.json`, `rendered_system.md`(생성, 읽기용). 설명은 [prompts/README.md](../prompts/README.md) |
+| `prompts/query_structuring/v2/` | 프롬프트 v2 (보관, 형식 `draft_v2`): 같은 파일 구성 (§4.4) |
+| `prompts/query_structuring/v3/`~`v6/` | v3(draft_v2), v4(draft_v3), v5·**v6(현행, draft_v4)** — [prompts/README.md](../prompts/README.md), §14~§15 |
 | `configs/query_structuring.json` | 질의 모듈 설정. 키 설명과 저장소 전체 하드코딩·종속 목록은 [configs/README.md](../configs/README.md) |
 | `data/user_queries.v1.json` | 예상 사용자 질의 30개와 기대 draft (silver). 설명은 [data/README.md](../data/README.md) |
 | `scripts/generate_query_vocabulary.py` | 스냅샷 JSON → `vocabulary.py` 생성. `--check`로 최신 여부만 확인 |
@@ -85,11 +92,11 @@ QueryStructuringResult {trend_query, draft, warnings, prompt_version}  → trend
 | `contracts/alias-map.*` | 별칭 사전 스냅샷과 golden(원본 출력 약 1.1MB), 설명 [alias-map.md](../contracts/alias-map.md) (원본 동작 중 이상해 보이는 것 목록 포함) |
 | `examples/fixtures/query/*.synthetic.json` | 합성 사례 6개: `{case, description, today, request_id, query, draft, expected_warnings, expected_trend_query}`. 기대값은 계약 규칙을 보고 **손으로** 썼다 |
 | `examples/query_structuring_demo.py` | 사례 요약·상세 출력, 프롬프트 출력 |
-| `tests/_query_support.py`, `tests/test_query_*.py` | 공용 경로 + 12개 파일, 176개 테스트 (§8) |
+| `tests/_query_support.py`, `tests/test_query_*.py` | 공용 경로 + 15개 파일, 248개 테스트 (2026-11-11, §8) |
 | `pyproject.toml` | `[project.optional-dependencies] query = ["pydantic>=2.0"]` 추가 (기본 의존성은 여전히 없음) |
 
 ## 4. 프롬프트
-실행 버전: **`query-structuring-prompt/v1`** (`configs/query_structuring.json`의 `prompt.version = "v1"`). 다음 버전 v2(γ)는 작성됐고 U4에서 실행 버전으로 바꾼다 (§4.4). 둘 다 실제 LLM에 보낸 적은 없다.
+(2026-11-11) 화면 서버·평가 스크립트의 실행 버전: **`query-structuring-prompt/v6`** (`query/structured.py`의 `STRUCTURED_PROMPT_VERSION`, §15.8). 보관된 v1 경로는 `configs/query_structuring.json`의 `prompt.version = "v1"`. (2026-11-09~10 기록: 실행 버전 v1, 다음 버전 v2(γ) 작성, §4.4.)
 - 실제로 LLM에 가는 시스템 프롬프트 전체: [`prompts/query_structuring/v1/rendered_system.md`](../prompts/query_structuring/v1/rendered_system.md) (5,001자)
 - 고치는 곳: 같은 폴더의 `system_template.md`, `user_template.md`, `examples.json`
 - 버전 관리 절차: [prompts/README.md](../prompts/README.md). 이미 쓰인 버전은 고치지 않고 새 버전 폴더를 만든다.
@@ -171,7 +178,7 @@ v1은 처음에 코드 안 문자열(당시 이름 `0.1`)로 만들었다가 파
 v2 예시는 `data/user_queries.v1.json`과 겹치지 않고, 정의서 §6 예 1~4 문장도 쓰지 않았다(데이터 v2·fixture용으로 남김).
 
 ## 5. 책임 분리와 출력 규칙
-> 이 절은 **지금 실행 흐름(v1)** 기준이다. 다음 흐름의 값 확정 규칙은 `resolve.py`에 구현됐고(U2) 연결은 U4다. 결정 Q3(γ)로 바뀔 내용: LLM은 조건 표현·종류·포함/제외·표준 목록 안 제안 값을 내고, 코드가 별칭 사전으로 값을 확정하며 모든 값에 `match`를 붙인다. 근사 값은 `null`로 바꾸지 않고 `match: approx`로 전달한다. 세부는 [structured-query-plan.md §2](structured-query-plan.md).
+> 이 절은 **v1 흐름**(보관, 2026-11-11부터 화면은 §15 경로) 기준이다. 다음 흐름의 값 확정 규칙은 `resolve.py`에 구현됐고(U2) 연결은 U4다. 결정 Q3(γ)로 바뀔 내용: LLM은 조건 표현·종류·포함/제외·표준 목록 안 제안 값을 내고, 코드가 별칭 사전으로 값을 확정하며 모든 값에 `match`를 붙인다. 근사 값은 `null`로 바꾸지 않고 `match: approx`로 전달한다. 세부는 [structured-query-plan.md §2](structured-query-plan.md).
 
 ### 5.1 LLM이 하는 일 / 코드가 하는 일
 | 항목 | LLM (draft) | 코드 (`assemble.py`) |
@@ -257,7 +264,7 @@ Windows PowerShell: `$env:PYTHONPATH="src"; py -m unittest discover -s tests -v`
 | `test_query_vocabulary.py` | 7 | 어휘·출처가 스냅샷과 같음, `vocabulary.py`가 생성기 출력과 같음, 시즌 표, A-1 | 불필요 |
 | `test_query_config.py` | 6 | 설정 로드 값, 성별 표(G-1), 깨진 설정은 바로 실패(성별 표 오류 포함), 설정 폴더 존재, 옮긴 값·프롬프트 문장이 코드에 남지 않음 | 불필요 |
 | `test_query_trend_query.py` | 6 | (이전 이름 `test_query_models.py`) `TrendQuery` JSON Schema가 스냅샷과 같음, 상분류 도출, 닫힌 값 거부, fixture 기대값이 유효한 계약 | 필요 |
-| `test_query_structured_models.py` | 24 | 정의서 §2·§6 예시 왕복, 종류별 어휘·`match`/`value` 규칙·카테고리 규칙·모르는 필드·버전·polarity 거부, 스키마 파일 = 생성 결과, 모든 객체 닫힘·전부 required, jsonschema로 예시 검증, `TrendQuery` 스냅샷과의 차이 = 의도된 차이 목록(`INTENDED_DIFFERENCES`) | 필요 |
+| `test_query_structured_models.py` | 33 | 정의서 §2·§6 예시 왕복, 종류별 어휘·`match`/`value` 규칙·카테고리 규칙·모르는 필드·버전·polarity 거부, 스키마 파일 = 생성 결과, 모든 객체 닫힘·전부 required, jsonschema로 예시 검증, `TrendQuery` 스냅샷과의 차이 = 의도된 차이 목록(`INTENDED_DIFFERENCES`) | 필요 |
 | `test_query_resolve.py` | 39 | 값 확정 규칙 전부: 정의서 예 3 표, G-1 성별, G-2 하분류(스커트는 하의 아님, 미니스커트·블레이저 `llm`, 상분류 제안 거부), 범위 밖 품목, 표현 안 단어, 이동, 제안 검증, 사전 우선 경고, 모순 | 불필요 |
 | `test_query_draft_v2.py` | 12 | draft v2: 목록 밖 제안 수용, 닫힌 집합(kind·polarity·unsupported type), 필수 필드, 모르는 키(`match`·`value` 등) 거부, 연도 범위 | 필요 |
 | `test_query_assemble.py` | 13 | §5.1 규칙과 §5.2 경고 전부 | 필요 |
@@ -277,7 +284,7 @@ Windows PowerShell: `$env:PYTHONPATH="src"; py -m unittest discover -s tests -v`
 4. 필요하면 `draft.py`, `assemble.py`, 프롬프트, fixture, `data/`를 고친다.
 5. 전체 테스트 통과 확인.
 
-**`StructuredQuery`를 바꿀 때**: `models.py` 수정 → `py scripts/export_structured_query_schema.py` → 정의서 §3·§7과 `INTENDED_DIFFERENCES` 갱신 → 필드 추가는 `schema_version` 1.x, 깨지는 변경은 2.0.
+**`StructuredQuery`를 바꿀 때**: 전체 절차(12단계 체크리스트와 단계별 테스트)는 [정의서 §0.5](../contracts/structured-query.md)를 따른다. 요약: 사용자 결정 기록 → `models.py` 수정 → `py scripts/export_structured_query_schema.py` → 정의서(§0·§2·§3·§6·§7·§8)와 테스트 예시 상수·`INTENDED_DIFFERENCES` 갱신 → 조립·변환·프롬프트(새 폴더)·데이터·화면 → 필드 추가는 `schema_version` 1.x, 깨지는 변경은 2.0.
 
 **별칭 사전이 바뀔 때** (trend `configs/alias_map/*.yaml` 변경, 예: 승인된 표기 변형 추가): trend `.venv`로 `scripts/export_alias_snapshot.py --trend-repo ../trend-analysis-agent`를 실행해 스냅샷·golden·`alias_data.py`를 다시 만들고 전체 테스트를 돌린다. 세부는 [contracts/alias-map.md](../contracts/alias-map.md).
 
@@ -335,6 +342,10 @@ trend_query_json = result.trend_query.model_dump(mode="json")   # trend 검색 �
 | 2026-11-10 (5차) | **UI 연결**(§13): `llm_provider.py`(실제 LLM 호출), `server.py`의 00 질의 구조화와 `/api/query-structuring`, 화면 카드·동의 체크, `configs/llm.json`, 테스트 15개(`test_llm_provider.py`·`test_ui_query_structuring.py`), 격리 규칙 예외(`server.py`) |
 | 2026-11-10 (6차) | 실제 LLM 호출 1회 확인(openai `gpt-4o-mini`, "가을 여성 코트" → 2027 FW·아우터/코트·여, 4초), §13에 기록 |
 | 2026-11-10 (7차) | 팀원 `main` 병합: 계약 폴더 `contracts/`로 경로 변경, `server.py` 병합(00 구조화는 `/api/run`만), 테스트 수 갱신 |
+| 2026-11-10 (8차) | **U3.5 형식 갱신**과 **v2 경로·기준 측정**(§14): `contract_vocabulary.py`, `structured.py`, 데이터 v2, 평가 스크립트, gpt-4o-mini 30개 측정 |
+| 2026-11-10 (9차) | OQ-12′(라벨 고쳐 받기)·OQ-13′(카테고리 재확인)·OQ-14′(temperature 0), 평가 `replay` 모드, 재채점 결과(§14.5) |
+| 2026-11-10 (10차) | 프롬프트 v3, temperature 0으로 dev 재측정(24/30)과 별도 에이전트가 쓴 holdout 20개 측정(15/20), §14.6 |
+| 2026-11-11 (11차) | §15 품목별 묶음(U3.6): 흐름, 조립 규칙, 만든 파일, 확인 결과, 한계 |
 
 ## 13. UI 연결 (2026-11-10, 결정 UI-1·UI-2·D5′)
 사용자가 화면에서 질의를 입력하면 이 모듈의 프롬프트와 코드가 실제 LLM과 함께 실행된다. **새 POST API나 저장소 사이 통신은 없다**: 브라우저 → 같은 PC의 기존 `/api/run` → `server.py`가 질의 모듈을 **함수로 호출**한다.
@@ -395,3 +406,328 @@ trend_query_json = result.trend_query.model_dump(mode="json")   # trend 검색 �
 **공개 API와의 관계** (2026-11-10 팀원 `main` 병합 후): 00 질의 구조화는 화면 경로 `/api/run`에서만 실행한다. 팀원의 공개 API `POST /v1/orchestrations`는 호출자가 `input.trend_query`를 직접 넣는 방식이라 구조화를 실행하지 않는다(OQ-11).
 
 **지금의 한계**: 실행 프롬프트가 v1이라 결과는 `TrendQuery`(속성 제외·`match` 없음)다. v2(γ) 결과를 보려면 U4가 먼저다. trend로 실제 전달할 형식은 OQ-11([query-decisions.md §6](query-decisions.md)).
+
+## 14. v2 경로와 기준 측정 (2026-11-10, U3.5·U5 일부)
+
+### 14.1 무엇을 만들었나
+사용자 지시: "실제 결과를 확인해 보고, 쓸 만하면 U4(화면·서버를 v2로 전환)를 진행한다. 지금은 모든 파이프라인이 v1에 연결돼 있기 때문이다." 그래서 **화면·서버·`structure_query`는 v1 그대로** 두고, v2를 따로 돌릴 수 있는 함수와 평가 도구를 만들었다.
+
+| 구분 | 파일 | 내용 |
+|---|---|---|
+| 코드 (형식) | `query/contract_vocabulary.py` (새) | `StructuredQuery`만의 닫힌 목록: 속성 7종(5종 + `body_length`·`sleeve_length`), 기장 표준 값(별칭 사전 스냅샷의 trend 표준 목록, 새 값 없음), `unsupported.type` 9개 |
+| 코드 (형식) | `query/models.py` | `GenderFilter{include, exclude}`(G-3), `BodyLengthRef`·`SleeveLengthRef`, `unsupported.type`을 9개 `Literal`로 |
+| 코드 (값 확정) | `query/resolve.py` | 기장 2종을 사전으로 조회(사전 이동 "디테일 민소매 → 소매 기장"이 이제 계약 안), 카테고리는 **사전 먼저**(원피스 → 드레스 `alias`, 상의·하의·아우터는 힌트뿐이라 상분류 이름으로 `exact`), `merge_genders`(포함에 남+여 → 공용, 경고 `gender_merged_to_unisex`) |
+| 코드 (LLM 출력) | `query/draft.py` | `kind`에 기장 2종, `UNSUPPORTED_TYPES`는 `contract_vocabulary`에서 |
+| 코드 (프롬프트) | `query/prompt.py` | 표준 값 블록을 형식별로: `draft_v1`은 예전과 똑같이(속성 5종), `draft_v2`는 기장 2종 포함 — **v1 렌더링 결과는 바이트 단위로 그대로**(화면 경로 불변) |
+| 코드 (v2 경로) | `query/structured.py` (새) | `assemble_structured_query`(draft v2 → `resolve_conditions` → 중복 제거 → `StructuredQuery`), `structure_query_v2`(입력 검사·오류 코드는 `structure_query`와 같음, 새 오류 코드 `STRUCTURED_QUERY_INVALID`). **어디에서도 호출하지 않는다**(평가 스크립트·테스트만) |
+| 프롬프트 | `prompts/query_structuring/v2/` | 규칙 5(기장 kind), 7(원피스 → 드레스, 꾸밈말은 따로, 품목 속 기장은 조건 하나 더), 8(성별 제외, 남녀 → 공용), 10(`item_terms`는 표준으로 못 나타내는 상품명만), 11(기장은 조건, 세이프·사이즈만 unsupported). 예시 5 고침(롱 원피스), 예시 7 추가(성별 제외·숏패딩·반팔·니트 원피스). v2는 실제로 쓰인 적이 없어 새 폴더 대신 v2를 고쳤다(QD-4는 이미 쓰인 버전에 대한 규칙) |
+| 설정 | `configs/query_structuring.json` | `gender.aliases`의 공용에 "남녀" |
+| 데이터 | `data/user_queries.v2.json` (새, `scripts/build_query_dataset_v2.py`가 만듦) | 30개: v1에서 24개(같은 id) + 새 6개(q031~q036: 색 제외, 성별 제외, 남성·여성 모두, 셔츠 원피스·미니스커트, 소재·패턴 제외). 기대 draft는 손으로 쓰고, 기대 `StructuredQuery`는 코드로 만든 뒤 하나씩 검토. 모두 silver |
+| 평가 | `scripts/evaluate_query_structuring.py` (새) | `--provider fixture`(기대 draft를 LLM 출력으로 → 코드 부분만), `--provider llm`(`.env`의 실제 모델 → 외부 호출, 사용자 승인 필요). 결과를 사실 단위(카테고리·성별·속성·지원 불가·시즌·트렌드명)로 비교하고 `match`는 따로 비교 |
+| 테스트 | `tests/test_query_structured_path.py` (새) 외 | 실행 경로가 아직 v1인지, v2 조립, 오류 코드, 데이터 파일이 생성기 출력과 같은지, 프롬프트 예시와 겹치지 않는지, fixture로 30개 전부 재현. 기존 테스트는 형식 변경에 맞춰 고침. **저장소 전체 257개 중 255개 통과**(실패 2개는 F-7) |
+
+### 14.2 기준 측정 결과 (2026-11-10, 사용자 승인으로 30회 호출)
+`PYTHONPATH=src py scripts/evaluate_query_structuring.py --provider llm --out data/eval_runs/2026-11-10_v2_gpt-4o-mini_baseline.json`
+
+| 항목 | 결과 |
+|---|---|
+| 모델 · 프롬프트 · 기준 날짜 | openai `gpt-4o-mini` · v2(규칙 14, 예시 7) · 2026-11-10 |
+| 완전 일치 (`match`까지) | **18 / 30** (형식 오류 제외 시 18 / 26) |
+| 형식 오류 (`DRAFT_INVALID`, 결과 없음) | **4** (q007, q009, q010, q033) |
+| 조건 사실 재현율 / 정밀도 (카테고리·성별·속성) | 66 / 80 = 0.83 / 66 / 68 = 0.97 (형식 오류 4건의 사실은 모두 놓친 것으로 셈) |
+| `match` 일치 (찾은 값 중) | 1.0 |
+| 평균 시간 | 2.9초 / 질의 |
+| fixture(코드 부분만) | 30 / 30 |
+
+| 종류 | 기대 | 찾음 | 놓침 | 잘못 추가 |
+|---|---|---|---|---|
+| 카테고리 | 36 | 29 | 7 | 0 |
+| 성별 | 9 | 7 | 2 | 0 |
+| 색 · 소재 · 패턴 · 디테일 · 핏 | 7 · 9 · 7 · 1 · 5 | 6 · 8 · 6 · 1 · 5 | 1 · 1 · 1 · 0 · 0 | 1 · 0 · 0 · 0 · 1 |
+| 몸판 기장 · 소매 기장 | 5 · 1 | 3 · 1 | 2 · 0 | 0 · 0 |
+| 지원 불가 | 9 | 4 | 5 | 2 |
+| 시즌 (형식 오류 4건 때문에 놓침) | 30 | 26 | 4 | 0 |
+
+**새 기능은 동작했다**: 속성 제외 6개(q004 기장 크롭, q031 블랙·네이비, q035 가죽·스트라이프, q036 플로럴)를 모두 찾았고, 성별 제외(q032 "남성용은 빼고" → 제외 [남])도 맞았다. 값을 찾은 경우 `match`는 모두 정답과 같았다(사전 우선 규칙이 LLM 제안을 정리함).
+
+### 14.3 실패 유형 (12개 항목)
+| # | 유형 | 항목 | LLM이 낸 것 | 고칠 곳 |
+|---|---|---|---|---|
+| F1 | **지원 불가 종류를 조건 칸에 씀 → 결과 전체 실패** | q007, q009, q010, q033 | `kind: "abstract"`·`"age"`·`"channel"`, `unsupported.type: "gender"` | 프롬프트 + 코드(OQ-12: 고쳐 받기) |
+| F2 | 표준 품목을 `item_terms`로 | q025 점프수트, q030 티셔츠 (q009 탑·q010 조거팬츠도 같은 실수) | `item_terms: [{"raw": "점프수트"}]` | 프롬프트 규칙 10 ("표준 카테고리 이름은 항상 조건") |
+| F3 | 표준 상분류를 `unsupported`로 | q006 "아우터 제외하고" | `unsupported: [{type: category, raw: 아우터, polarity: exclude}]` | 프롬프트 + 코드(OQ-13: 사전 재확인) |
+| F4 | 품목 이름 속 기장을 놓침 | q021 숏패딩, q034 미니스커트 | 카테고리만 내고 기장 조건 없음 | 프롬프트 규칙 7(예시가 있는데도 놓침 → 규칙을 따로 떼어 강조) |
+| F5 | 소재 표준 값을 카테고리로 | q012 무스탕 | `kind: category, suggestion: 아우터`(상분류 제안이라 G-2로 거부 → unsupported) | 프롬프트("무스탕·퍼·가죽은 소재") |
+| F6 | 세이프를 핏으로 | q026 A라인 | `kind: fit, suggestion: null` | 프롬프트 규칙 11 |
+| F7 | 의미 없는 말을 조건으로 | q017 "컬러" | `{raw: 컬러, kind: color, suggestion: null}` | 프롬프트 |
+
+q033 "남성 여성 모두 입을 수 있는"은 형식 오류 외에도 LLM이 남성·여성을 **제외**로 읽었다("모두"를 오해). 프롬프트에 "모두/둘 다는 포함"을 넣는다.
+
+### 14.4 판단과 다음 단계 (Claude 의견, 결정은 사용자)
+- **지금 그대로 U4를 하면** 화면에서 질의 7~8개 중 1개(13%)가 통째로 실패한다(F1). 그래서 **바로 전환하는 것은 권하지 않는다.**
+- 실패 12개 중 F1~F7은 모두 **프롬프트 규칙 보강으로 고칠 수 있는 유형**이다. F1·F3은 코드로도 막을 수 있다(OQ-12·OQ-13). 사전 우선 규칙과 새 형식(제외, `match`)은 의도대로 동작했다.
+- 제안 순서: ① OQ-12·OQ-13·OQ-14 결정 → ② 코드 반영 + 프롬프트 v3(F1~F7) → ③ 30회 재측정(승인 필요) → ④ "U4 전환 기준"([query-decisions.md](query-decisions.md) §6)을 넘으면 U4.
+- 참고: v1(지금 화면이 쓰는 것)의 실제 정확도는 측정한 적이 없어 비교 기준이 없다. 원하면 같은 30개를 v1으로도 돌릴 수 있다(외부 호출 30회, v1에는 제외·기장·`match`가 없으므로 공통 항목만 비교).
+- 결과 파일 `data/eval_runs/2026-11-10_v2_gpt-4o-mini_baseline.json`에는 질의마다 LLM의 draft, 조립 결과, 놓친 것·잘못 추가한 것이 들어 있다(합성 질의라 사용자 정보 없음, API 키 없음).
+
+### 14.5 코드 수정 후 (2026-11-10, 결정 OQ-12′·OQ-13′·OQ-14′, 외부 호출 없음)
+사용자 질문: "조건 종류가 Pydantic으로 고정돼 있지 않은가?" → **고정돼 있다.** `draft.py`의 `kind`·`unsupported.type`은 닫힌 `Literal`이다. 다만 Pydantic은 LLM이 **낸 뒤에 검사**할 뿐 LLM이 목록 밖 값을 쓰는 것을 막지 못하고, 항목 하나만 틀려도 draft 전체를 거부한다. 그래서 형식 오류 4개가 나왔다. (생성 단계에서 막는 방법은 OpenAI의 Structured Outputs(JSON Schema를 모델에 강제)인데, 제공자마다 방식이 달라 이번에는 쓰지 않았다.)
+
+| 변경 | 파일 | 규칙 (특정 단어가 아니라 라벨·사전 단위, W-10) |
+|---|---|---|
+| 라벨 고쳐 받기 (OQ-12′) | `query/draft.py` `repair_draft_labels`, `structured.py`에서 검증 직전 호출 | 조건 `kind`가 지원 불가 이름표 → `unsupported`로, 모르는 `kind` → `unsupported`(`other`), `unsupported.type`이 조건 종류 → 제안 없이 조건으로, 모르는 이름표 → `other`. 구조 오류는 그대로 실패. 경고 `draft_kind_moved_to_unsupported`·`draft_unknown_kind`·`draft_unsupported_type_moved_to_conditions`·`draft_unknown_unsupported_type` |
+| 카테고리 재확인 (OQ-13′) | `query/structured.py` | LLM이 `unsupported`(category)로 보낸 표현을 **사전만으로** 다시 찾아, 표준 카테고리가 나오면 조건으로. 경고 `unsupported_category_resolved` |
+| temperature 0 (OQ-14′) | `configs/llm.json`, `llm_provider.py` | 두 제공자 호출에 `temperature` 전달(null이면 안 보냄). 화면 경로에도 적용 |
+| 평가 재채점 | `scripts/evaluate_query_structuring.py --provider replay` | 저장된 LLM 답을 새 코드로 다시 채점. 이제 `llm` 모드는 모든 항목의 원래 출력(`raw_output`)을 저장한다 |
+| 테스트 | `tests/test_query_draft_v2.py`(LabelRepairTests 6), `tests/test_query_structured_path.py`(+2), `tests/test_llm_provider.py`(+1) | 평가 데이터에 없는 표현으로 씀. 저장소 전체 266개 중 264개 통과(실패 2 = F-7) |
+
+**같은 LLM 답(기준 측정 30개)을 새 코드로 다시 채점** (`data/eval_runs/2026-11-10_v2_gpt-4o-mini_baseline_replay-code-fix.json`)
+
+| 항목 | 기준 측정 | 코드 수정 후 |
+|---|---|---|
+| 형식 오류 | 4 | **0** |
+| 완전 일치 | 18 / 30 | **20 / 30** |
+| 카테고리 재현율 | 29 / 36 | 32 / 36 |
+| 지원 불가 재현율 | 4 / 9 | 8 / 9 |
+| 시즌 | 26 / 30 | 30 / 30 |
+
+남은 10개는 **LLM의 해석** 문제라 코드로 고치지 않았다(W-10: 고치려면 특정 단어 규칙이 필요). 프롬프트 v3에서 다룬다.
+
+| 유형 | 항목 | 프롬프트 v3에서 할 일 (일반 규칙으로) |
+|---|---|---|
+| 표준 품목을 `item_terms`로 | q009 탑, q010 조거팬츠, q025 점프수트, q030 티셔츠 | 규칙 10을 "표준 카테고리 목록에 있는 품목 이름은 항상 category 조건, item_terms는 거의 쓰지 않는다"로 앞세움 |
+| 품목 속 기장 놓침 | q021 숏패딩, q034 미니스커트 | 기장 규칙을 규칙 7 안의 한 줄이 아니라 별도 규칙으로 |
+| 소재 값을 카테고리로 | q012 무스탕 | "표준 속성 값 목록에 있는 단어는 그 종류" (단어 나열 없이) |
+| 세이프를 핏으로 | q026 A라인 | 규칙 11 앞세움 |
+| 일반 명사를 조건으로 | q017 "컬러" | "색·컬러·소재·패턴 같은 종류 이름만으로는 조건이 아니다" |
+| "모두"를 제외로, "모두"를 성별로 | q033 | "모두·둘 다는 포함" |
+
+**과적합 주의**: 위 v3 규칙도 이 30개를 보고 만드는 것이므로, 30개 점수가 오르는 것만으로는 일반화됐다고 볼 수 없다. **v3를 고친 뒤에는 튜닝에 쓰지 않은 새 질의(holdout, 예: 20개)로 한 번 더 잰다**(W-10). holdout은 사용자가 직접 쓰거나, Claude가 쓰되 프롬프트를 고치는 동안 보지 않는다.
+
+### 14.6 프롬프트 v3 + temperature 0: dev 재측정과 holdout (2026-11-10, 사용자 승인으로 30 + 20회 호출)
+**만든 것**: `prompts/query_structuring/v3/`(새 폴더, v2는 `archived`). 바뀐 규칙은 [prompts/README.md](../prompts/README.md) v3 행. 평가 기준 질의의 단어를 규칙 예로 쓰지 않았다(W-10). v2 경로(`structured.py`)와 평가 스크립트의 기본 프롬프트가 v3가 됐다. 화면·서버는 그대로 v1.
+
+**holdout 세트** `data/user_queries.holdout.v1.json`(20개, `scripts/build_query_holdout_v1.py`): 사용자 지시("Claude가 쓰되 프롬프트를 고치는 동안 보지 않고, 허무맹랑한 입력은 쓰지 않는다")대로 **별도 Claude 에이전트**가 썼다. 그 에이전트는 v3 폴더를 읽지 않았고, 보고에 질의 문장을 넣지 않았다. 메인 세션은 **v3를 고정한 뒤에** 처음 열었다. dev·v1 데이터·프롬프트 예시와 같은 문장은 없다(코드로 확인, 가장 비슷한 것도 difflib 0.49). 라벨은 silver.
+
+| 항목 | v2 기준 측정 (dev) | v2 + 코드 수정 (dev, 재채점) | **v3 + temperature 0 (dev)** | **v3 + temperature 0 (holdout)** |
+|---|---|---|---|---|
+| 완전 일치 | 18 / 30 | 20 / 30 | **24 / 30 (80%)** | **15 / 20 (75%)** |
+| 완전 일치 + `match` | 18 / 30 | 20 / 30 | 24 / 30 | 14 / 20 |
+| 형식 오류 | 4 | 0 | 0 | 0 |
+| 코드가 라벨을 고쳐 받은 항목 (OQ-12′) | — | 4 | 2 | 1 |
+| 카테고리 재현율 | 29 / 36 | 32 / 36 | 35 / 36 | 20 / 20 |
+| 지원 불가 재현율 | 4 / 9 | 8 / 9 | 9 / 9 | 8 / 8 |
+| 평균 시간 | 2.9초 | — | 3.1초 | 2.6초 |
+
+결과 파일: `data/eval_runs/2026-11-10_v3_gpt-4o-mini_t0_dev.json`, `data/eval_runs/2026-11-10_v3_gpt-4o-mini_t0_holdout.json`.
+
+**dev(24/30)와 holdout(15/20)의 차이는 5%p**로 작다. 프롬프트가 dev 30개에만 맞춰졌다면 holdout에서 크게 떨어졌을 것이므로, v3의 개선은 대체로 일반화된 것으로 본다. 다만 표본이 작다(20개, 1개 = 5%p).
+
+**남은 실패 (dev 6 + holdout 6)**
+| 유형 | dev | holdout | 비고 |
+|---|---|---|---|
+| 품목 이름 속 기장을 놓침 | q021 숏패딩, q034 미니스커트 | h002 롱패딩 | **v3 규칙 8을 별도 규칙으로 강조했는데도 남은 가장 큰 약점.** 프롬프트만으로는 잘 안 고쳐진다 |
+| 트렌드·요청 일반어를 `style_names`로 | q020 "요즘 뜨는 트렌드", q022 "트렌드", q009 "Y2K 스타일"(raw 범위) | h006 "트렌드 키워드" | v3에서 새로 생긴 실수(v2에는 없음). 점수에는 들어가지만 trend 검색 조건에는 영향이 작다 |
+| 품목 앞 꾸밈말을 품목과 묶음 | q012 "무스탕"(코트 제안) | h014 "코듀로이 팬츠" 한 덩어리 → 소재 놓침 | 우연히 v3 규칙 5의 예가 "코듀로이 팬츠"였는데도(Claude는 holdout을 보지 않았다) 놓쳤다 |
+| 표준 품목을 `item_terms`로 | q009 탑 | — | v2보다 크게 줄었다(4 → 1) |
+| 사전에 없는 표현의 제안 값이 표준 목록 밖 | — | h019 "레오파드"(제안 "레오파드", 표준은 호피) → 제외 값 없음(원문은 남음) | 사전 추가 후보 표 1에 이미 "레오파드 → 호피"가 있다(승인 대기, [query-alias-candidates.md](query-alias-candidates.md)) |
+| 연도를 지어냄 | — | h020 "내년 봄" → `year: 2024` | 규칙 10(연도 계산 금지) 위반. 일반 코드 규칙("질의에 숫자로 없는 연도는 버리고 코드가 정한다")으로 막을 수 있다. 단, holdout을 보고 나온 수정이므로 하면 이 holdout은 더 이상 "안 본 세트"가 아니다 |
+| `match`만 다름 | — | h018 "MA-1 점퍼"를 LLM이 "MA-1"만 raw로 → 점퍼가 `exact` 대신 `llm` | 값은 맞음 |
+
+**사전 우선 규칙이 LLM 실수를 막은 예**: h020에서 LLM이 "점프수트"에 제안 "드레스"를 냈지만 사전이 점프수트(`exact`)로 확정했다(경고 `llm_suggestion_overridden`).
+
+**U4 전환 기준(Claude 제안)과 비교**: ① 형식 오류 0 → dev·holdout 모두 충족. ② 완전 일치 80% → dev 80% 충족, holdout 75%로 조금 못 미침. ③ 제외 조건 놓침 0 → dev 0, holdout 1(h019, 값은 못 정했지만 원문은 `polarity: exclude`로 남음).
+
+## 15. 품목별 묶음 (2026-11-11, U3.6, 결정 IT-1~IT-7)
+**왜**: 평평한 결과(카테고리 목록 + 속성 목록)에는 어느 속성이 어느 품목의 것인지가 남지 않는다. trend는 요청 속성을 모든 품목에 똑같이 걸고 종류끼리 AND로 합친다(trend `retrieval/scoring.py` `check_requested`, `graph/search.py` 2단계, 읽어서 확인). 그래서 "숏패딩이랑 반팔 니트 원피스"는 "니트·반팔인 패딩"을 찾게 되고, "스키니 청바지랑 루즈핏 셔츠"는 루즈 청바지도 통과시킨다.
+
+### 15.1 흐름
+```
+질의 --프롬프트 v4--> LLM --draft v3: {seasons, style_names, product_model_names, items[{raw, suggestion, conditions, unsupported}], common{conditions, unsupported}}
+     --repair_draft_v3_labels (OQ-12′, common과 품목마다)--> QueryDraftV3 검증
+     --assemble_structured_query--> StructuredQuery {trend_terms, items[QueryItem], out_of_scope_items[]}
+```
+조립 규칙 (`query/structured.py`, 코드만, LLM 없음):
+| 규칙 | 결정 | 예 |
+|---|---|---|
+| 품목마다 품목 표현을 카테고리 조건처럼 조회(사전 우선 → LLM 제안) | Q3·G-2 | "블레이저" → 재킷(`llm`) |
+| `common`의 조건을 **모든 품목에 복사** | IT-1 | "남성 말고 A랑 B" → A·B 모두 성별 제외 [남] |
+| 품목의 조건은 그 품목에만 | IT-2 | "니트 베스트랑 와이드 조거팬츠" → 니트는 베스트만 |
+| 예외: 첫 품목 앞의 성별은 다른 품목·공통에 성별이 없으면 공통으로 옮겨 모든 품목에(경고 `leading_gender_shared`) | IT-9 | "위민즈 점퍼랑 레깅스" → 둘 다 여 |
+| 품목 순서 = 품목 표현이 질의에 처음 나온 위치, `item_id` = i1, i2, … | IT-4·IT-8 | LLM이 순서를 바꿔 써도 `items[0]`(i1)은 먼저 말한 품목 |
+| 찾는 품목이 없으면 `category: null` 품목 1개 | IT-6 | "상의는 빼고 그린" = 하의·아우터·원피스 중 그린 |
+| 표준 카테고리가 아닌 품목은 `out_of_scope_items`(붙은 조건 원문 + 공통 조건 원문) | IT-7 | "블랙 부츠랑 셔츠" → 셔츠 품목, 부츠는 범위 밖(블랙과 함께) |
+| 찾는 품목이 모두 범위 밖 → `items: []` + 경고 `only_out_of_scope_items` | IT-7 | "모자랑 가방도 같이 보여줘" |
+| 한 품목 표현이 카테고리 두 개 → 품목 두 개(같은 조건) | OQ-10′ | 띄어 쓴 "셔츠 원피스" |
+| 시즌은 목록(말한 순서, 시즌마다 연도 규칙, 같은 것은 한 번, 없으면 `default_next` 1개), 트렌드명과 함께 질의 전체에 | IT-5″·SQ-2 | "올봄이랑 가을" → seasons 2개 |
+| 지원 불가 조건은 품목 안(공통이면 복사) | IT-5′ | "자라 말고" |
+| 잘못 놓인 카테고리(라벨 단위, W-10): 조건으로 쓴 포함 카테고리 → 품목(경고 `category_condition_moved_to_item`), `unsupported`의 포함 카테고리 → 사전만으로 조회해 품목 또는 범위 밖(OQ-13′), `unsupported`의 제외 카테고리 → 사전이 알면 제외 카테고리(경고 `unsupported_category_resolved`) | OQ-12′·OQ-13′ | — |
+
+새 경고 코드: `category_condition_moved_to_item`, `only_out_of_scope_items`, `stray_category_value`(품목 조건에서 포함 카테고리 값이 나옴, 정상 draft에서는 생기지 않음).
+
+### 15.2 만든 것과 바꾼 것
+| 구분 | 파일 | 내용 |
+|---|---|---|
+| 계약 모델 | `src/vogue_orchestrator/query/models.py` | `QueryItem`(category·excluded_categories·gender·attributes·unsupported), `OutOfScopeItem`(raw·reason·conditions_raw), `StructuredQuery.items`·`out_of_scope_items`. `Requested`·`CategoryFilter`와 최상위 `unsupported` 삭제 |
+| JSON Schema | `contracts/structured-query.schema.json` | 모델에서 다시 생성 |
+| LLM 출력 형식 | `src/vogue_orchestrator/query/draft_v3.py` (새 파일) | `QueryDraftV3`·`DraftItem`·`DraftCommon`, `repair_draft_v3_labels` |
+| | `src/vogue_orchestrator/query/draft.py` | 라벨 고쳐 받기를 목록 한 쌍 단위 `repair_label_lists`로 나눔(draft v2·v3가 함께 씀). draft v2는 보관 프롬프트 검증용으로 남김 |
+| 조립 | `src/vogue_orchestrator/query/structured.py` | 품목별 조립(위 표), 기본 프롬프트 v4 |
+| 프롬프트 | `prompts/query_structuring/v4/` (새 폴더), `v3/meta.json` → `archived` | 출력 형식과 "[품목과 조건을 넣을 곳]" 절, 예시 10개 ([prompts/README.md](../prompts/README.md) v4 행) |
+| | `src/vogue_orchestrator/query/prompt.py` | 형식 목록에 `draft_v3` |
+| 데이터 | `scripts/build_query_dataset_v3.py` → `data/user_queries.v3.json`, `scripts/build_query_holdout_v2.py` → `data/user_queries.holdout.v2.json` | 질의는 그대로(W-11), 라벨만 새 형식. 이전 생성 스크립트 2개는 삭제, 이전 JSON은 보관 |
+| 평가 | `scripts/evaluate_query_structuring.py` | 사실 단위에 품목 위치 i를 넣음(다른 품목에 붙은 조건 = 빠짐 1 + 추가 1), `out_of_scope` 그룹, 기본 데이터 v3·프롬프트 v4 |
+| 테스트 | `tests/test_query_structured_models.py`(다시 씀), `tests/test_query_structured_path.py`(다시 씀), `tests/test_query_draft_v3.py`(새 파일), `tests/test_query_prompt.py`(v4 현행, draft_v3 예시 검사) | 정의서 예 1~7을 그대로 검증, 예 4~7은 코드가 똑같이 만드는지 확인. 규칙 테스트 단어는 평가 데이터에 없는 것(W-10) |
+
+### 15.3 확인 결과 (LLM 호출 없음)
+- 코드 부분(fixture provider): dev 30/30, holdout v2 20/20 완전 일치(`match` 포함).
+- 전체 테스트 286개 중 284개 통과. 실패 2개는 F-7(질의 모듈과 무관).
+- **프롬프트 v4의 실제 LLM 정확도는 아직 모른다.** dev 30회 + 새 holdout 20회 호출은 사용자 승인 후(계획 U3.6 할 일 6). 그 전에는 v3 측정값(dev 24/30)과 비교할 수 없다 — 형식이 바뀌어 같은 기준이 아니고, 이제 품목을 잘못 짝지은 것도 틀린 것으로 센다.
+
+### 15.4 한계 (문서화)
+- 시즌은 여러 개 담지만(SQ-2) 품목과 짝짓지 않아 "봄 블라우스랑 겨울 코트"의 짝은 표현하지 못한다(IT-5″). trend에는 첫 시즌만 넘긴다(U4).
+- `item_terms`는 `product_model_names`로 이름을 바꿨다(SQ-1).
+- 빼고 싶은 품목에 붙은 꾸밈말("크롭 티셔츠 말고")은 그 품목에 묶이지 않고 찾는 품목의 제외 조건이 된다(q004: 블라우스 품목에 기장 크롭 제외 + 티셔츠 제외). "크롭인 티셔츠만 제외"라는 뜻은 담지 못한다.
+- trend에는 아직 첫 품목만 넘긴다(IT-4). 변환(`to_trend_query()`)과 경고 `items_not_forwarded`·화면 표시는 U4.
+
+### 15.5 프롬프트 v4 실제 측정 — dev (2026-11-11, 사용자 승인, gpt-4o-mini, temperature 0, 30회 호출)
+결과 파일: `data/eval_runs/2026-11-11_v4_gpt-4o-mini_t0_dev.json`.
+
+| 항목 | v3 (평평한 형식, 2026-11-10) | **v4 (품목별 형식)** |
+|---|---|---|
+| 완전 일치 | 24 / 30 | **17 / 30** |
+| 형식 오류 | 0 | 1 (q025: `common`을 객체가 아닌 목록으로 씀) |
+| 품목 묶음만 틀린 항목 | — | **0** (품목 위치를 무시하고 값만 비교해도 17/30) |
+| 평균 시간 | 3.1초 | 1.9초 |
+
+- **v3에서 맞았는데 v4에서 틀린 항목 7개, 반대는 0개.** 같은 30개 질의에서 퇴보했다.
+- **품목에 조건을 잘못 붙인 경우는 없다.** 틀린 것은 모두 값 단위다: 품목 앞 꾸밈말을 빠뜨림(q012 무스탕, q029 스키니, q036 데님), 품목 이름 속 기장을 빠뜨림(q021, q034), 포함/제외를 반대로(q004 "여자"를 제외로, q007 "자라"를 제외로), 찾는 품목을 제외로(q015 "모자랑 가방도 같이"), 지시문 질의에서 품목을 놓침(q022), 일반어를 트렌드명으로(q010 "트렌드"), 형식 오류 1(q025).
+- **해석(Claude)**: 출력이 중첩 구조(품목 안의 조건 목록)가 되면서 모델이 조건을 덜 꼼꼼히 뽑는다. 묶는 판단 자체는 잘 하므로, 문제는 "묶기"가 아니라 "중첩된 출력 형식"이다.
+- **holdout은 아직 돌리지 않았다**(별도 에이전트가 새 holdout을 작성 중). v4를 고칠 가능성이 크므로, 지금 돌리면 최종 확인용 세트를 미리 써 버리게 된다(W-10). 사용자 판단 대기.
+
+### 15.6 IT-9·BR-1 반영 (2026-11-11, LLM 호출 없음)
+| 결정 | 바꾼 곳 | 내용 |
+|---|---|---|
+| IT-9 첫 품목 앞 성별은 모든 품목에 | `query/structured.py` `_share_leading_gender`, 경고 `leading_gender_shared` | 품목 2개 이상 + 성별 단어가 첫 품목보다 앞 + 다른 품목·공통에 성별 없음 → 첫 품목의 그 성별 조건을 공통으로 옮김(IT-1로 모든 품목에 복사). 포함·제외 모두 |
+| BR-1 브랜드는 채점하지 않음 | `scripts/evaluate_query_structuring.py` `checked`, `UNCHECKED_UNSUPPORTED_TYPES` | 라벨은 그대로, 양쪽에서 브랜드 사실을 빼고, 라벨 브랜드를 포함한 원문("자라 스타일" 트렌드명 등)은 추가로 세지 않음 |
+| 테스트 | `tests/test_query_structured_path.py` | `test_gender_before_the_first_item_goes_to_every_item`(공유·각자 성별·뒤 품목 앞 성별·제외형), `test_brands_are_not_scored`. 단어는 평가 데이터에 없는 것(위민즈·맨즈·점퍼·레깅스·몽클레르, W-10) |
+
+확인: 테스트 292개 중 290 통과(2 = F-7). 코드 부분 dev 30/30, holdout v2 20/20, 새 holdout v3 20/20 그대로. v4 dev **저장된 LLM 답을 새 규칙으로 재채점**(`--provider replay`, 호출 없음): **18/30**(17 → 18, q007). IT-9는 dev에 해당 질의가 없어 영향 없음. 결과 파일 `data/eval_runs/2026-11-11_v4_gpt-4o-mini_t0_dev_replay-IT9-BR1.json`.
+
+### 15.7 프롬프트 v5 — 평평한 조건 + `item` 칸 (2026-11-11, 결정 FL-1)
+계약은 그대로이고 LLM이 쓰는 초안만 바뀐다.
+```
+질의 --프롬프트 v5--> draft v4 {seasons, style_names, product_model_names,
+                               items[{raw, suggestion}],
+                               conditions[{raw, kind, polarity, suggestion, item}], unsupported[{type, raw, polarity, item}]}
+     --repair_draft_v4_labels (OQ-12′, item 유지)--> QueryDraftV4 검증
+     --group_draft (item으로 품목별로 묶음, item null = 질의 전체)--> draft v3
+     --assemble_structured_query (15.1과 같음)--> StructuredQuery
+```
+예: "숏패딩이랑 반팔 니트 원피스" → items [숏패딩(패딩), 원피스(드레스)], conditions [숏패딩 body_length 크롭 item "숏패딩", 반팔 item "원피스", 니트 item "원피스"] → 결과는 15.1과 같은 품목 2개.
+
+| 구분 | 파일 | 내용 |
+|---|---|---|
+| LLM 출력 형식 | `src/vogue_orchestrator/query/draft_v4.py` (새 파일) | `QueryDraftV4`(`DraftItemRef`·`DraftConditionV4`·`DraftUnsupportedV4`), `repair_draft_v4_labels`, `group_draft`(item 맞추기: 같은 글자 → 공백·대소문자 무시 → 한 품목만 포함 관계, 못 맞추면 질의 전체 + 경고 `condition_item_unknown`; 같은 이름 품목 둘은 위치로 구분), `from_draft_v3`(묶인 라벨 → 평평한 초안) |
+| | `src/vogue_orchestrator/query/draft.py` | `repair_label_lists`가 옮긴 항목의 `item`을 유지(`_item_of`) |
+| 경로 | `src/vogue_orchestrator/query/structured.py` | 기본 프롬프트 v5. 형식이 draft_v4면 고쳐 받기 → 검증 → 묶기 → 조립, draft_v3(v4, 보관)면 이전대로. `result.draft`는 모델이 쓴 그대로(v5면 평평한 초안) |
+| | `src/vogue_orchestrator/query/prompt.py` | 형식 목록에 `draft_v4` |
+| 프롬프트 | `prompts/query_structuring/v5/` (새 폴더), `v4/meta.json` → `archived` | 출력 형식, "[표현마다 넣을 곳]"(조건은 모두 한 목록에 질의 순서대로, 품목 앞뒤 단어를 하나씩 확인), "[item: 조건이 어느 품목의 것인지]"(IT-2, null인 경우, **IT-9 첫 품목 앞 성별 = null**, 같은 이름 품목 둘), 규칙 4("~도/같이" 품목은 찾는 품목), 규칙 9(제외 표현이 붙지 않은 성별은 include), 규칙 13(unsupported에도 item), **규칙 14 새로**(트렌드명은 고유한 이름만·이름 부분만, "트렌드·스타일·무드·룩" 같은 일반어는 아님), 규칙 15(지시문 속 품목·조건은 그대로 정리). 예시 11개 = v4 예시를 새 형식으로 + 예시 8에 첫 품목 앞 성별("여성 스트라이프 블라우스랑 플리츠 스커트 같이 보여줘") |
+| 평가 | `scripts/evaluate_query_structuring.py` | 기본 프롬프트 v5. fixture는 draft_v4 프롬프트면 라벨을 `from_draft_v3`로 평평하게 바꿔 넣음 |
+| 테스트 | `tests/test_query_structured_path.py` | 규칙 테스트가 평평한 초안으로 돌아감(`run_path`), 새로: item으로 묶기, 느슨한 맞추기·못 맞추면 질의 전체, 같은 이름 품목 둘, 고쳐 받기 후 item 유지, 보관 프롬프트 v4도 실행됨. 데이터 재현은 v5·v4 둘 다 |
+| | `tests/test_query_prompt.py` | v5 현행·v4 보관, draft_v4 예시 검사(키 순서, 모든 item이 예시의 품목 이름, 조건이 질의 순서), item 칸 사용 범위(질의 전체·IT-9·품목 없음·unsupported), 묶은 뒤 draft_v3 검사도 그대로 |
+
+규칙 14는 v4 dev 실패(q010 "트렌드", q009 "Y2K 스타일")에서 나왔다. 평가 질의를 그대로 예시에 넣지는 않았다(W-10). 최종 확인은 새 holdout으로 한다.
+
+확인(LLM 호출 없음): 테스트 299개 중 297 통과(2 = F-7). 코드 부분(fixture, 평평하게 바꿔 넣음) dev 30/30, holdout v2 20/20, 새 holdout v3 20/20.
+
+**dev 실제 측정** (2026-11-11, 사용자 승인, gpt-4o-mini, temperature 0, 30회 호출, 결과 `data/eval_runs/2026-11-11_v5_gpt-4o-mini_t0_dev.json`):
+
+| 항목 | v3 (평평, 2026-11-10) | v4 (중첩) | **v5 (평평 + item)** |
+|---|---|---|---|
+| 완전 일치 | 24 / 30 (옛 채점: 품목 위치 없음, 브랜드 채점) | 17 / 30 (BR-1 재채점 18) | **21 / 30** |
+| 형식 오류 | 0 | 1 | **0** |
+| 품목 묶음만 틀린 항목 | — | 0 | **0** (품목 위치를 무시해도 21) |
+| 평균 시간 | 3.1초 | 1.9초 | 1.8초 |
+
+- v4(재채점 18)보다 나아진 것: q009("Y2K 스타일" → "Y2K"), q010("트렌드"를 트렌드명으로 쓰지 않음), q025(형식 오류 없어짐), q029(스키니가 청바지에). 나빠진 것: q006.
+- 남은 9개(값 단위, 품목 묶음 오류 없음):
+  - 품목 앞 꾸밈말을 빠뜨림: q012 무스탕, q036 데님 (v4와 같음)
+  - 품목 이름 속 기장을 빠뜨림: q021 숏패딩, q034 미니스커트 (v3부터 이어진 약점)
+  - 일반어를 품목으로: q006 "상품"을 품목으로 써서 범위 밖이 되고 조건이 그쪽에 붙음, q022 "모든 카테고리"를 품목으로
+  - 찾는 품목을 제외로: q015 "모자랑 가방도 같이" (v4와 같음)
+  - 포함/제외 뒤집힘: q004 "여자"를 제외로 (v4와 같음, 조건 붙은 제외 품목 한계와 겹침)
+  - 추상 표현 추가: q020 "요즘 뜨는 트렌드"를 abstract로
+- v3의 24/30과는 채점 기준이 달라(품목 위치·범위 밖 품목·브랜드) 그대로 비교할 수 없다.
+
+### 15.8 프롬프트 v6 — 남은 실패를 겨냥 (2026-11-11, 사용자 지시)
+형식(draft_v4)과 코드는 v5와 같고 프롬프트 글만 바꿨다(v5는 보관). 기본 실행 버전 v6(`structured.py`, 평가 스크립트).
+
+| 바꾼 곳 | 내용 | 겨냥한 실패 (v5 dev) |
+|---|---|---|
+| "[표현마다 넣을 곳]" 품목 | 품목은 옷의 구체적인 종류 이름. "옷·의류·제품·상품·아이템·것·전체·모든 종류"처럼 종류를 가리키지 않는 말은 품목이 아님(그런 질의는 items []) | q006 "상품", q022 "모든 카테고리" |
+| 새 절 "[출력 전 확인]" | 꾸밈말 둘 이상은 각각 조건("울 체크 코트"), 품목 raw 속 기장 말이 있으면 기장 조건, 품목이 종류 이름인지, "~도·같이·랑"으로 요청한 품목은 제외가 아님·제외 표현이 걸리지 않은 조건은 include | q012·q036 꾸밈말, q021·q034 기장, q015, q004 |
+| 예시 9 | "상의는 빼고 카키 컬러 아이템 중에 요즘 뭐가 뜨는지 보여줘"("아이템"은 품목이 아님) | 일반어 |
+| 예시 11 | "올봄이랑 가을 시즌 워싱 데님 크롭재킷 트렌드 비교해줘"(꾸밈말 둘 + 품목 이름 속 기장) | 꾸밈말·기장 |
+
+"상품" 등 일반어 목록과 확인 항목은 v5 dev 실패에서 나왔다. 예시 질의는 평가 질의와 겹치지 않는다(테스트가 확인, W-10). 테스트 299개 중 297 통과(2 = F-7), 코드 부분 dev 30/30·holdout v2 20/20·새 holdout v3 20/20.
+
+**dev 실제 측정** (2026-11-11, 30회 호출, `data/eval_runs/2026-11-11_v6_gpt-4o-mini_t0_dev.json`): **21/30**, v5와 같다. 형식 오류 0, 품목 묶음 오류 0, 평균 1.9초.
+- 나아진 것 q022(지시문 속 "모든 카테고리"를 품목으로 쓰지 않음), 나빠진 것 q030("그래픽"을 빠뜨림). 같은 수준의 흔들림으로 본다.
+- **겨냥한 실패는 하나도 고쳐지지 않았다.** 모델 출력을 보면(위 결과 파일의 `raw_output`):
+  - q006: 규칙에 "상품"이 품목이 아니라고 적었는데도 items에 "상품"을 씀.
+  - q012·q030·q036: 빠뜨린 꾸밈말이 모두 **품목 바로 앞 단어**다("무스탕 코트", "그래픽 티셔츠", "데님 스커트"). 그보다 앞의 꾸밈말(가죽·남녀공용·여자)은 씀.
+  - q021: "숏패딩" 품목만 쓰고 기장 조건을 쓰지 않음(예시 7에 같은 단어가 있는데도).
+  - q015: 함께 요청한 품목을 unsupported category exclude로 씀.
+- **해석(Claude)**: 규칙과 확인 목록을 분명히 적어도 gpt-4o-mini가 따르지 않는다. 프롬프트 글로 더 끌어올리기는 어렵고, 모델 능력의 한계로 보인다.
+
+
+### 15.9 계약 확정과 UI 연결 상태 (2026-11-11, 결정 SQ-F)
+- **계약 확정**: 사용자 판단으로 `StructuredQuery` 1.0을 지금 모양으로 확정했다. 남은 문제는 LLM 모델·프롬프트 버전업이며 계약은 바꾸지 않는다. 받는 Agent에게는 [정의서 §0](../contracts/structured-query.md)(넘기는 것, 꼭 알아야 할 것, 1.0에 넣지 않은 것, 생산 상태)부터 넘긴다.
+- **UI 연결 확인 (코드 읽기 + LLM 없이 함수 호출로 확인)**:
+
+| 확인 항목 | 결과 |
+|---|---|
+| `server.py` `structure_query_for_ui` | `structure_query`(v1 경로: 프롬프트 v1 → `TrendQuery`)를 부른다. `structure_query_v2`는 부르지 않는다 |
+| `GET /api/query-structuring` (`query_structuring_status`) | 프롬프트 버전 `query-structuring-prompt/v1` |
+| `/api/run` 응답의 `query_structuring` | 키: `draft`, `trend_query`, `trend_input_preview`(`sent: false`), `warnings`, `prompt_version` 등. **`structured_query` 없음** |
+| 화면 `web/app.js` `renderStructuring` | `trend_query`를 요약·표시("구조화 결과 보기 (TrendQuery)"). 품목 목록·`out_of_scope_items` 표시 없음 |
+| trend 단계로 전달 | 없음(미리보기만). 팀원의 공개 API `POST /v1/orchestrations`는 호출자가 준 `input.trend_query`를 전달하며 이 모듈과 무관 |
+| 설정 | `configs/query_structuring.json`의 `prompt_version`이 `v1`(테스트 `test_running_path_is_still_v1`이 고정) |
+
+  → (2026-11-11 SQ-F 시점) **`StructuredQuery`는 화면·서버·파이프라인 어디에도 연결되지 않았다.** 같은 날 FW-1로 서버 경로를 바꿨다(§15.10). 연결은 U4다([structured-query-plan.md §4](structured-query-plan.md) "U4가 할 일 목록"): 서버가 `structure_query_v2`를 부르고, 화면에 품목 목록·범위 밖 품목·경고를 표시하고, trend 미리보기는 `to_trend_query()`(`items[0]`·`seasons[0]`, 경고 `items_not_forwarded`·`seasons_not_forwarded`)로 만든다.
+
+**경고 코드 전체 (2026-11-11, `query/` 코드에서 수집)** — `StructuredQueryResult.warnings`에 코드 문자열만 들어간다(사용자 문장 없음). 계약(`StructuredQuery`)에는 들어 있지 않다.
+
+| 묶음 | 코드 |
+|---|---|
+| 받는 쪽에 의미 있음 | `include_exclude_conflict`, `gender_merged_to_unisex`, `season_year_inferred`, `only_out_of_scope_items`, `leading_gender_shared`, `condition_item_unknown`, `multiple_values_in_span` |
+| LLM 출력 이상(코드가 고쳐 받거나 알림) | `raw_not_in_query`, `no_conditions_extracted`, `draft_kind_moved_to_unsupported`, `draft_unknown_kind`, `draft_unsupported_type_moved_to_conditions`, `draft_unknown_unsupported_type`, `category_condition_moved_to_item`, `unsupported_category_resolved`, `stray_category_value` |
+| 값 확정 과정(사전·LLM 제안) | `llm_suggestion_overridden`, `suggestion_not_in_vocabulary`, `attribute_routed`, `category_major_suggestion_rejected`, `category_not_standard`, `dictionary_value_not_in_vocabulary`, `gender_value_not_in_vocabulary` |
+| v1 경로 전용(`TrendQuery`) | `attribute_type_unsupported`, `attribute_value_not_in_vocabulary`, `category_major_overridden` |
+| trend 입력으로 바꿀 때(`to_trend.py`, FW-1) | `items_not_forwarded`, `seasons_not_forwarded`, `no_item_to_forward`, `conditions_not_forwarded` |
+
+### 15.10 Agent 입력 확인과 첫 품목·첫 시즌 정정 (2026-11-11, 결정 FW-1)
+**1) 4개 Agent가 지금 받는 입력 (코드 확인: `core.py` `Orchestrator.run`, `connectors.py`, `server.py`, `demo.py`)**
+
+| Agent (단계) | 이 저장소의 단계 이름 | 사용자 질의와 관련해 받는 입력 (`core.py` `Orchestrator.run`) | 이 저장소의 질의 구조화 결과를 받나 |
+|---|---|---|---|
+| trend-analysis-agent (트렌드) | `trend` | demo·connected 모드(화면 `/api/run`): `{request_id, query(원문), scope}`. agent_http_v01 모드(공개 API `POST /v1/orchestrations`): **호출자가 준** `input.trend_query`(`TrendQuery`)를 그대로 | **받지 않음.** 화면의 구조화 결과는 미리보기(`trend_input_preview.sent: false`)뿐. v01 모드의 `TrendQuery`는 외부 호출자가 만든 것이고 모양상 품목·시즌이 하나다 |
+| stock-agent (재고) | `stock` | `trend_result`(trend 결과)만 | 받지 않음 (질의 자체를 받지 않음) |
+| sales-market-agent (시장성, Project_07) | `project_07` | `planning_request` = `{schema_version "1.0", request_id, query(원문), context(=scope)}` + `trend_result` + `inventory_product_result`. 로컬 어댑터는 `requested_query`에 원문을 넣고 시장·채널은 scope에서만 꺼냄 | 받지 않음 (원문만) |
+| new-product-agent (새 상품 기획, Project_06) | `project_06` | `planning_request`(원문) + `trend_result` + `inventory_product_result` + `sales_market_result` | 받지 않음 (원문만) |
+
+→ 이 저장소의 질의 구조화 결과를 받는 Agent는 없다. 구조화 결과가 Agent 입력 모양으로 만들어지는 곳은 화면의 trend 미리보기 하나뿐이므로, 거기서 첫 품목·첫 시즌만 남도록 고쳤다. 다른 Agent가 받게 되면 같은 규칙을 따른다([정의서 §7](../contracts/structured-query.md)).
+
+**2) 바꾼 것**
+
+| 구분 | 파일 | 내용 |
+|---|---|---|
+| 변환 (새 파일) | `src/vogue_orchestrator/query/to_trend.py` | `to_trend_query(sq) -> TrendConversion(trend_query, warnings)`: `items[0]`·`seasons[0]`만 `TrendQuery`로. 경고 `items_not_forwarded`·`seasons_not_forwarded`·`no_item_to_forward`·`conditions_not_forwarded`. 칸이 없는 조건은 `TrendQuery.unsupported`에 "반영되지 않음"으로(규칙 표는 정의서 §7) |
+| 화면 서버 | `src/vogue_orchestrator/server.py` | `structure_query_for_ui`: `structure_query`(v1) → **`structure_query_v2`(프롬프트 v6)** + `to_trend_query`. 응답 키: `structured_query`(전체), `draft`(평평한 초안), `warnings`(경로 + 변환 경고), `trend_query`(첫 품목·첫 시즌, 품목 없으면 `null`), `trend_input_preview`(`sent: false`, `forwarded: {items: ["i1"], seasons: 1}`). `query_structuring_status`의 프롬프트 버전 = `query-structuring-prompt/v6` |
+| 화면 | `web/app.js` | `trend_query`가 `null`일 때 오류 없이 "trend로 넘길 품목이 없습니다"를 표시하는 한 줄만 추가. 품목 목록 표시는 하지 않음(사용자: 아직 보류) |
+| 테스트 | `tests/test_query_to_trend.py`(새 파일, 6개), `tests/test_ui_query_structuring.py` | 정의서 예 3~7로 변환 확인(첫 품목만, 첫 시즌만, 칸 없는 조건은 unsupported, 품목 없음), 화면 훅이 v6 경로·첫 품목·첫 시즌을 내는지, 상태 API의 버전 |
+
+**3) 확인**: 테스트 307개 중 305 통과(2 = F-7). 데모 서버를 띄워 `GET /api/query-structuring` → `query-structuring-prompt/v6`, `POST /api/run`(동의 없음, LLM 호출 없음) → 파이프라인 4단계 정상. LLM 호출은 하지 않았다.
+
+**4) 그대로인 것**: 실제 trend 전송(UI-1·D2, `sent: false`), v1 경로 코드(`structure_query`, 보관), 공개 API `POST /v1/orchestrations`(호출자가 `trend_query`를 줌), 재고·시장성·새 상품 기획의 입력.
