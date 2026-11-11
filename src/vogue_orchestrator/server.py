@@ -40,10 +40,14 @@ def _default_provider_factory() -> tuple[Callable[[Any], Any], dict[str, Any]]:
 def structure_query_for_ui(
     query: str, request_id: str, *, enabled: bool, provider_factory: ProviderFactory | None = None,
 ) -> dict[str, Any]:
-    """Run the query-structuring module in-process (prompt -> LLM -> validate -> assemble) for the UI.
+    """Run the query-structuring module in-process for the UI: the StructuredQuery path
+    (`query.structured.structure_query_v2`, its current prompt - v6 since 2026-11-11, decision FW-1).
 
-    The result is only added to the /api/run response; it is NOT passed to the trend stage yet
-    (`trend_input_preview.sent` is false, decision D2). Failures never stop the pipeline and never
+    Output: `structured_query` (StructuredQuery 1.0, every item and season), `draft` (what the model
+    wrote), `warnings` (codes), and `trend_query` = what the trend stage would receive: only the FIRST
+    item and the FIRST season (`query.to_trend.to_trend_query`, IT-4 / SQ-2; null when no item can be
+    forwarded). The result is only added to the /api/run response; it is NOT passed to the trend stage
+    (`trend_input_preview.sent` is false, decisions D2 / UI-1). Failures never stop the pipeline and never
     echo the query, the model output or exception text: only codes (and an exception class name).
     """
     out: dict[str, Any] = {"status": "skipped", "request_id": request_id, "llm": None,
@@ -57,8 +61,10 @@ def structure_query_for_ui(
         return out
 
     try:  # lazy: the query module needs pydantic (optional extra "query")
-        from .query import QueryStructuringError, structure_query
+        from .query import QueryStructuringError
         from .query.config import QueryConfigError
+        from .query.structured import structure_query_v2
+        from .query.to_trend import to_trend_query
     except ImportError:
         return fail("QUERY_MODULE_UNAVAILABLE", "질의 모듈을 불러오지 못했습니다 (pydantic 설치 확인).")
     try:
@@ -77,25 +83,32 @@ def structure_query_for_ui(
             raise
 
     try:
-        result = structure_query(query, request_id=request_id, draft_provider=guarded)
+        result = structure_query_v2(query, request_id=request_id, draft_provider=guarded)
+        conversion = to_trend_query(result.structured_query)  # first item + first season only (FW-1)
     except QueryStructuringError as exc:
         return fail(exc.code, str(exc), seen.get("provider_error"))
     except QueryConfigError:
         return fail("QUERY_CONFIG_INVALID", "질의 구조화 설정이 올바르지 않습니다.")
     data = result.to_dict()
+    data["warnings"] = list(dict.fromkeys((*data["warnings"], *conversion.warnings)))
     out.update(status="ok", **data)
+    out["trend_query"] = conversion.to_dict()
     # What the trend stage would receive once the pipeline is wired (D2). Shown, not sent.
     out["trend_input_preview"] = {"sent": False, "request_id": request_id, "query": query,
-                                  "trend_query": data["trend_query"]}
+                                  "trend_query": out["trend_query"],
+                                  "forwarded": {"items": ["i1"] if out["trend_query"] else [],
+                                                "seasons": 1 if out["trend_query"] else 0}}
     return out
 
 
 def query_structuring_status() -> dict[str, Any]:
-    try:
-        from .query.prompt import PROMPT_VERSION
+    try:  # the UI runs the StructuredQuery path (FW-1); report the prompt that path uses
+        from .query.prompt import load_prompt
+        from .query.structured import STRUCTURED_PROMPT_VERSION
+        prompt_version = load_prompt(STRUCTURED_PROMPT_VERSION).prompt_id
     except Exception:
-        PROMPT_VERSION = None
-    return {"llm": llm_status(), "prompt_version": PROMPT_VERSION}
+        prompt_version = None
+    return {"llm": llm_status(), "prompt_version": prompt_version}
 
 
 class OrchestratorHandler(BaseHTTPRequestHandler):
