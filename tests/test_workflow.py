@@ -23,6 +23,8 @@ class WorkflowTests(unittest.TestCase):
         self.rid = self.sample['request_id']
         self.trace = []
         self.fail_stage = None
+        self.raise_at = None  # (stage, exception) raised by the fake transport
+        self.status_at = None  # (stage, HTTP status) returned by the fake transport
         self.mutate = lambda stage, value: value
         self.fail_image = False
         self.image_data = next((FIXTURES/'raw').glob('*.png')).read_bytes()
@@ -33,6 +35,10 @@ class WorkflowTests(unittest.TestCase):
             self.trace.append(stage)
             if stage == self.fail_stage:
                 return WireResponse(b'{"auth":"fixture denial"}', 401)
+            if self.raise_at and self.raise_at[0] == stage:
+                raise self.raise_at[1]
+            if self.status_at and self.status_at[0] == stage:
+                return WireResponse(b'{"error":"fixture upstream failure"}', self.status_at[1])
             if stage in {'trend','stock'}:
                 value = copy.deepcopy(self.sample['input'][stage+'_response']['raw_response'])
             else:
@@ -228,6 +234,36 @@ class WorkflowTests(unittest.TestCase):
                 response=self.run_flow()
                 self.assertEqual(response['envelope']['status'],'error')
                 self.assertNotIn('final_image',self.trace)
+
+    def test_transport_exceptions_follow_the_outbound_failure_mapping(self):
+        import socket
+        cases = [(TimeoutError('read'), 'UPSTREAM_TIMEOUT', 504, True),
+                 (socket.timeout('read'), 'UPSTREAM_TIMEOUT', 504, True),  # QA-O-01: was 503
+                 (ConnectionRefusedError(), 'UPSTREAM_UNAVAILABLE', 503, True),
+                 (ConnectionResetError(), 'UPSTREAM_UNAVAILABLE', 503, True)]
+        for exc, code, status, retryable in cases:
+            with self.subTest(exc=type(exc).__name__):
+                self.setUp()
+                self.raise_at = ('stock', exc)
+                result = self.run_flow()
+                self.assertEqual(result['http_status'], status)
+                error = result['envelope']['result']['errors'][-1]
+                self.assertEqual((error['code'], error['stage'], error['retryable']), (code, 'stock', retryable))
+                self.assertEqual(self.trace, ['trend', 'stock'])
+                self.assertEqual(result['envelope']['result']['rejected_response_artifacts'], [])
+
+    def test_upstream_non_2xx_statuses_follow_the_outbound_failure_mapping(self):
+        for upstream, code, status in [(500, 'UPSTREAM_HTTP_ERROR', 502), (503, 'UPSTREAM_HTTP_ERROR', 502),
+                                       (504, 'UPSTREAM_HTTP_ERROR', 502), (404, 'UPSTREAM_HTTP_ERROR', 502),
+                                       (403, 'UPSTREAM_AUTH', 403)]:
+            with self.subTest(upstream=upstream):
+                self.setUp()
+                self.status_at = ('planning_draft', upstream)
+                result = self.run_flow()
+                self.assertEqual(result['http_status'], status)
+                body = result['envelope']['result']
+                self.assertEqual((body['errors'][-1]['code'], body['errors'][-1]['retryable']), (code, False))
+                self.assertEqual(self.store.verify(body['rejected_response_artifacts'][0]), b'{"error":"fixture upstream failure"}')
 
     def test_run_level_limitations_are_appended_to_the_result(self):
         note = 'workflow-contract/0.1.1 not frozen; development run'

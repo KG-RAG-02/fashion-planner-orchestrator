@@ -5,7 +5,9 @@ from __future__ import annotations
 import importlib
 import http.client
 import json
+import math
 import os
+import re
 import ssl
 import sys
 from pathlib import Path
@@ -23,6 +25,38 @@ class ConnectorConfigurationError(RuntimeError):
 HTTP_CONNECT_TIMEOUT_SECONDS = 3
 AGENT_REQUEST_TIMEOUT_SECONDS = 60
 PROJECT06_HANDOFF_CONTRACT_VERSION = "vogue-handoff/0.2"
+# Workflow transport (conventions section 4): VOGUE_WORKFLOW_{CONNECT,READ}_TIMEOUT_SECONDS.
+WORKFLOW_CONNECT_TIMEOUT_SECONDS = 3.0
+WORKFLOW_READ_TIMEOUT_SECONDS = 75.0
+MAX_TIMEOUT_SECONDS = 600.0
+PRIVATE_HOST_PATTERN = re.compile(r"[a-z][a-z0-9-]{0,62}")
+
+
+def private_http_hosts(env: Mapping[str, str]) -> frozenset[str]:
+    """Exact single-label hostnames that may receive plain HTTP (VOGUE_AGENT_HTTP_PRIVATE_HOSTS)."""
+    hosts = set()
+    for item in str(env.get("VOGUE_AGENT_HTTP_PRIVATE_HOSTS") or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if not PRIVATE_HOST_PATTERN.fullmatch(item):
+            raise ConnectorConfigurationError(
+                "VOGUE_AGENT_HTTP_PRIVATE_HOSTS must list single-label lowercase hostnames")
+        hosts.add(item)
+    return frozenset(hosts)
+
+
+def timeout_seconds(env: Mapping[str, str], variable: str, default: float) -> float:
+    raw = str(env.get(variable) or "").strip()
+    if not raw:
+        return float(default)
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ConnectorConfigurationError(f"{variable} must be a number of seconds") from None
+    if not math.isfinite(value) or not 0 < value <= MAX_TIMEOUT_SECONDS:
+        raise ConnectorConfigurationError(f"{variable} must be within (0, {MAX_TIMEOUT_SECONDS:g}] seconds")
+    return value
 
 
 def _safe_origin(url: str | None) -> str | None:
@@ -42,15 +76,30 @@ def _safe_origin(url: str | None) -> str | None:
 
 
 def _service_url(env: Mapping[str, str], variable: str, route: str) -> str:
+    """Validate an agent base URL against the outbound policy (conventions section 4).
+
+    HTTPS (CA-verified by the transports) is always allowed. Plain HTTP is allowed to a host in
+    VOGUE_AGENT_HTTP_PRIVATE_HOSTS when a service bearer token is configured, or to loopback in
+    development mode; the allowlist does not depend on VOGUE_AGENT_HTTP_DEV_MODE.
+    """
     base = env[variable].strip()
     parts = urlsplit(base)
     if parts.scheme not in {"http", "https"} or not parts.hostname:
         raise ConnectorConfigurationError(f"{variable} must be an http(s) base URL")
     if parts.username or parts.password or parts.path not in {"", "/"} or parts.query or parts.fragment:
         raise ConnectorConfigurationError(f"{variable} must be a plain base URL without credentials or path")
+    try:
+        parts.port
+    except ValueError:
+        raise ConnectorConfigurationError(f"{variable} has an invalid port") from None
     dev_mode = env.get("VOGUE_AGENT_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
     if parts.scheme == "http":
         hostname = parts.hostname.lower()
+        if hostname in private_http_hosts(env):
+            if not str(env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN") or "").strip():
+                raise ConnectorConfigurationError(
+                    f"{variable} uses plain HTTP to a private host; VOGUE_AGENT_SERVICE_BEARER_TOKEN is required")
+            return base.rstrip("/") + route
         try:
             loopback = ipaddress.ip_address(hostname).is_loopback
         except ValueError:
@@ -81,20 +130,28 @@ def _post_json(url: str, payload: Mapping[str, Any], *, bearer_token: str | None
         connection.request("POST", parts.path or "/", body=body, headers=headers)
         response = connection.getresponse()
         response_body = response.read()
-        if response.status < 200 or response.status >= 300:
-            raise TransportError(f"agent returned HTTP {response.status}")
-        value = json.loads(response_body)
-        if not isinstance(value, Mapping):
-            raise TransportError("agent returned a non-object JSON response")
-        return value
-    except (http.client.HTTPException, OSError, TimeoutError, json.JSONDecodeError) as exc:
-        raise TransportError("agent transport or response decoding failed") from exc
+    except TimeoutError as exc:  # socket.timeout included; checked before OSError (QA-O-01)
+        raise TransportError("agent request timed out", code="UPSTREAM_TIMEOUT", http_status=504) from exc
+    except (http.client.HTTPException, OSError) as exc:
+        raise TransportError("agent connection failed", code="UPSTREAM_UNAVAILABLE", http_status=503) from exc
     finally:
         connection.close()
+    if response.status in {401, 403}:
+        raise TransportError(f"agent returned HTTP {response.status}", code="UPSTREAM_AUTH",
+                             http_status=response.status)
+    if response.status < 200 or response.status >= 300:
+        raise TransportError(f"agent returned HTTP {response.status}", code="UPSTREAM_HTTP_ERROR", http_status=502)
+    try:
+        value = json.loads(response_body)
+    except ValueError as exc:
+        raise TransportError("agent response is not valid JSON", code="CONTRACT_VIOLATION", http_status=502) from exc
+    if not isinstance(value, Mapping):
+        raise TransportError("agent returned a non-object JSON response", code="CONTRACT_VIOLATION", http_status=502)
+    return value
 
 
 def agent_http_v01_adapter(base_url: str, route_agent_id: str, *, bearer_token: str | None = None,
-                           dev_mode: bool = False) -> Adapter:
+                           dev_mode: bool = False, private_hosts: str | None = None) -> Adapter:
     """Build an opt-in client for the agreed HTTP v0.1 route.
 
     The endpoint is POST /v1/agents/{route_agent_id}/runs. Agent-specific
@@ -106,10 +163,11 @@ def agent_http_v01_adapter(base_url: str, route_agent_id: str, *, bearer_token: 
     stage = next((stage for stage, (route, _) in ROUTE_PRODUCERS.items() if route == route_agent_id), None)
     if stage is None:
         raise ConnectorConfigurationError("unsupported route_agent_id")
-    url = _service_url({"AGENT_URL": base_url, "VOGUE_AGENT_HTTP_DEV_MODE": "1" if dev_mode else ""},
+    # _service_url enforces the whole plain-HTTP policy (loopback needs dev mode; private hosts a token).
+    url = _service_url({"AGENT_URL": base_url, "VOGUE_AGENT_HTTP_DEV_MODE": "1" if dev_mode else "",
+                        "VOGUE_AGENT_HTTP_PRIVATE_HOSTS": private_hosts or "",
+                        "VOGUE_AGENT_SERVICE_BEARER_TOKEN": bearer_token or ""},
                        "AGENT_URL", f"/v1/agents/{route_agent_id}/runs")
-    if urlsplit(url).scheme == "http" and not dev_mode:
-        raise ConnectorConfigurationError("HTTP loopback is allowed only in development mode")
     if not dev_mode and not bearer_token:
         raise ConnectorConfigurationError("operational HTTP mode requires a service Bearer token")
 
@@ -364,7 +422,8 @@ def build_v01_http_orchestrator(environ: Mapping[str, str] | None = None) -> Orc
     dev_mode = env.get("VOGUE_AGENT_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
     token = env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN")
     clients = {
-        agent_id: agent_http_v01_adapter(env[variable], agent_id, bearer_token=token, dev_mode=dev_mode)
+        agent_id: agent_http_v01_adapter(env[variable], agent_id, bearer_token=token, dev_mode=dev_mode,
+                                         private_hosts=env.get("VOGUE_AGENT_HTTP_PRIVATE_HOSTS"))
         for variable, agent_id in endpoints.items()
     }
     def p07_placeholder(_payload: dict[str, Any]) -> Mapping[str, Any]:

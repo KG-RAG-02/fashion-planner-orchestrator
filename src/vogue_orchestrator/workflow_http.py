@@ -9,7 +9,8 @@ import socket
 import ssl
 from urllib.parse import urlsplit, unquote
 
-from .connectors import ConnectorConfigurationError, _service_url
+from .connectors import (ConnectorConfigurationError, WORKFLOW_CONNECT_TIMEOUT_SECONDS,
+                         WORKFLOW_READ_TIMEOUT_SECONDS, _service_url, timeout_seconds)
 from .workflow import Workflow, WireResponse, StageFailure
 from .workflow_contract import (WorkflowContract, VERSION, require, contract_gate_status,
                                 development_limitation)
@@ -43,23 +44,26 @@ def ensure_live_contract(contract=None, env=None):
     raise WorkflowUnavailable('CONTRACT_NOT_FROZEN', 409, 'The workflow contract baseline is not frozen.')
 
 
-def post_wire(url, payload, token=None):
+def post_wire(url, payload, token=None, *, connect_timeout=WORKFLOW_CONNECT_TIMEOUT_SECONDS,
+              read_timeout=WORKFLOW_READ_TIMEOUT_SECONDS):
+    """One POST, no retries. The URL was validated by _service_url (HTTPS with CA verification,
+    allowlisted private host with a bearer, or loopback in development mode)."""
     parts = urlsplit(url)
     cls = http.client.HTTPSConnection if parts.scheme == 'https' else http.client.HTTPConnection
     kwargs = {'context': ssl.create_default_context()} if parts.scheme == 'https' else {}
-    conn = cls(parts.hostname, parts.port, timeout=3, **kwargs)
+    conn = cls(parts.hostname, parts.port, timeout=connect_timeout, **kwargs)
     headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
     if token:
         headers['Authorization'] = 'Bearer ' + token
     try:
         conn.connect()
         if conn.sock:
-            conn.sock.settimeout(60)
+            conn.sock.settimeout(read_timeout)
         conn.request('POST', parts.path, body=canonical(payload), headers=headers)
         response = conn.getresponse()
         raw = response.read(16777217)
         return WireResponse(raw, response.status, response.getheader('Content-Type','application/json').split(';')[0], len(raw) > 16777216)
-    except (socket.timeout, TimeoutError):
+    except (socket.timeout, TimeoutError):  # before OSError: TimeoutError is an OSError
         raise StageFailure('UPSTREAM_TIMEOUT', 504) from None
     except (OSError, http.client.HTTPException):
         raise StageFailure('UPSTREAM_UNAVAILABLE', 503) from None
@@ -93,12 +97,15 @@ def build_workflow():
              ('stock','VOGUE_STOCK_AGENT_URL','stock-agent/runs'),
              ('draft','VOGUE_NEW_PRODUCT_AGENT_URL','new-product-agent/drafts'),
              ('review','VOGUE_SALES_MARKET_AGENT_URL','sales-market-agent/reviews')]
+    connect_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS', WORKFLOW_CONNECT_TIMEOUT_SECONDS)
+    read_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS', WORKFLOW_READ_TIMEOUT_SECONDS)
     adapters = {}
     for key, variable, route in specs:
         if not env.get(variable):
             raise ConnectorConfigurationError(variable + ' is required.')
         url = _service_url(env, variable, '/v1/agents/' + route)
-        adapters[key] = lambda payload, u=url: post_wire(u, payload, token)
+        adapters[key] = lambda payload, u=url: post_wire(u, payload, token, connect_timeout=connect_timeout,
+                                                         read_timeout=read_timeout)
     image = final_image if env.get('VOGUE_WORKFLOW_IMAGES_ENABLED') == '1' and env.get('OPENAI_API_KEY') else None
     return Workflow(**adapters, image=image, store=store(), contract=contract, limitations=limitations)
 

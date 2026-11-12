@@ -4,7 +4,8 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from .workflow_contract import VERSION, STAGES, ContractViolation, require, walk
+import http.client
+from .workflow_contract import VERSION, STAGES, require, walk
 from .workflow_store import canonical, digest, strict_json, checked_image
 
 
@@ -24,6 +25,26 @@ class StageFailure(RuntimeError):
     def __init__(self, code, http_status=502, artifact=None):
         self.code, self.http_status, self.artifact = code, http_status, artifact
         super().__init__(code)
+
+
+def stage_failure(exc, artifact=None):
+    """Outbound failure mapping (conventions section 4) for one producer call.
+
+    Timeouts are OSErrors too, so they are matched first (QA-O-01: a read timeout used to
+    surface as 503 UPSTREAM_UNAVAILABLE). TLS certificate errors are both OSError and
+    ValueError; they are an unavailable dependency, not a contract violation.
+    """
+    if isinstance(exc, StageFailure):
+        return exc
+    if isinstance(exc, TimeoutError):  # socket.timeout is TimeoutError
+        return StageFailure('UPSTREAM_TIMEOUT', 504, artifact)
+    if isinstance(exc, (OSError, http.client.HTTPException)):  # refused, reset, DNS, TLS
+        return StageFailure('UPSTREAM_UNAVAILABLE', 503, artifact)
+    if isinstance(exc, ValueError):  # ContractViolation, strict JSON, schema
+        return StageFailure('CONTRACT_VIOLATION', 502, artifact)
+    if artifact is not None and isinstance(exc, (KeyError, TypeError, IndexError, AttributeError)):
+        return StageFailure('CONTRACT_VIOLATION', 502, artifact)  # malformed body after a response arrived
+    return StageFailure('UPSTREAM_UNAVAILABLE', 503, artifact)
 
 
 class Workflow:
@@ -80,9 +101,10 @@ class Workflow:
             if wire.truncated or len(wire.body) > 16777216:
                 raise StageFailure('UPSTREAM_BODY_TOO_LARGE', 502, artifact)
             if not 200 <= wire.status < 300:
-                code = 'UPSTREAM_AUTH' if wire.status in {401,403} else 'UPSTREAM_HTTP_ERROR'
-                status = wire.status if wire.status in {401,403,503,504} else 502
-                raise StageFailure(code, status, artifact)
+                # Conventions section 4: upstream 401/403 -> UPSTREAM_AUTH; any other non-2xx -> 502.
+                if wire.status in {401, 403}:
+                    raise StageFailure('UPSTREAM_AUTH', wire.status, artifact)
+                raise StageFailure('UPSTREAM_HTTP_ERROR', 502, artifact)
             raw = strict_json(wire.body)
             if self.artifact_reader:
                 for node in walk(raw):
@@ -106,7 +128,7 @@ class Workflow:
             self.store.checkpoint_write(key, 'done', retained)
             return retained
         except Exception as exc:
-            failure = exc if isinstance(exc, StageFailure) else StageFailure('CONTRACT_VIOLATION' if isinstance(exc, (ValueError, ContractViolation)) else 'UPSTREAM_UNAVAILABLE', 502 if isinstance(exc, ValueError) else 503, artifact)
+            failure = stage_failure(exc, artifact)
             self.store.checkpoint_write(key, 'failed', dict(code=failure.code, http_status=failure.http_status, artifact=failure.artifact))
             raise failure from None
 
