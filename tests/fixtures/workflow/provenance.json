@@ -1,0 +1,10 @@
+{
+  "kind": "coordinator_synthetic_not_owner_live",
+  "trend_error": "derived from no_results fixture; status changed for terminal regression",
+  "files": {
+    "draft-request-text-ok.json": "513b3e8809c732b008d588ce937bb2c9937de3e6df49945080903ea5daf1ff86",
+    "draft-response-ok.json": "fb69eafab41cd0e1dd29451cd2401b9f8ab7c13137a5873e0379782afbddf773",
+    "review-response-ok.json": "acf0aa91827be19a3673518a5900ee6160753e17ee3b154a23edb80edcc31b31",
+    "integrated-trend-no-results.json": "058cf148c76aaa238eb42a3d95fd264b6f02022f49b9d143962b55f004d2e64f"
+  }
+}

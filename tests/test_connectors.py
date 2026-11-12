@@ -12,7 +12,7 @@ from vogue_orchestrator.connectors import (
 
 class ConnectorConfigurationTests(unittest.TestCase):
     def setUp(self):
-        self.project_07_root = Path(__file__).resolve().parents[2] / "project_07"
+        self.project_07_root = Path(__file__).resolve().parents[2] / "sales-market-agent"
         self.base_env = {
             "VOGUE_TREND_ADAPTER": "trend_adapter:run",
             "VOGUE_STOCK_AGENT_URL": "http://127.0.0.1:8002",

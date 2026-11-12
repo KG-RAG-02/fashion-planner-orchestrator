@@ -11,7 +11,7 @@
 <body>
   <header class="topbar">
     <a class="wordmark" href="/" aria-label="VOGUE Orchestrator 홈">VOGUE<span> / SYSTEMS</span></a>
-    <div class="mode"><span class="mode-dot"></span><label class="sr-only" for="run-mode">분석 방식</label><select id="run-mode" aria-label="분석 방식"><option value="demo">미리보기 · 샘플 결과</option><option value="connected">기존 연결로 분석</option><option value="agent_http_v01" selected>에이전트 API로 분석</option></select><details class="connection-popover"><summary id="connections-ready" aria-label="에이전트 연결 설정 확인">연결 확인 중</summary><div class="connection-popover-panel"><div id="connection-summary" class="connection-summary"></div><p class="connections-footnote">주소 설정 현황입니다. 실제 DB 연결과 데이터 조회는 실행 후 확인하세요.</p><details class="connection-details"><summary>기술 정보 보기</summary><div id="connector-list" class="connector-list"></div><p id="connection-technical-note" class="connections-footnote">실행 전에는 endpoint 상태나 데이터 권한을 조회하지 않습니다.</p></details></div></details><span id="local-services-status" class="local-services-status" aria-live="polite">서버 확인 중</span><button id="restart-local-services" class="server-restart-button" type="button">서버 재시작</button></div>
+    <div class="mode"><span class="mode-dot"></span><label class="sr-only" for="run-mode">분석 방식</label><select id="run-mode" aria-label="분석 방식"><option value="demo">미리보기 · 샘플 결과</option><option value="connected">기존 연결로 분석</option><option value="workflow_v01" selected>Draft → 시장 검토 → 통합 이미지</option><option value="legacy_migrated">Legacy · P08 이관 경로</option></select><details class="connection-popover"><summary id="connections-ready" aria-label="에이전트 연결 설정 확인">연결 확인 중</summary><div class="connection-popover-panel"><div id="connection-summary" class="connection-summary"></div><p class="connections-footnote">주소 설정 현황입니다. 실제 DB 연결과 데이터 조회는 실행 후 확인하세요.</p><details class="connection-details"><summary>기술 정보 보기</summary><div id="connector-list" class="connector-list"></div><p id="connection-technical-note" class="connections-footnote">실행 전에는 endpoint 상태나 데이터 권한을 조회하지 않습니다.</p></details></div></details><span id="local-services-status" class="local-services-status" aria-live="polite">서버 확인 중</span><button id="restart-local-services" class="server-restart-button" type="button">서버 재시작</button></div>
   </header>
 
   <main>
@@ -25,11 +25,12 @@
       <form id="run-form" class="query-card">
         <label for="query">무엇을 기획하고 싶으신가요?</label>
         <textarea id="query" name="query" maxlength="1000" rows="3" placeholder="예: 2027SS 한국 온라인 여성 니트 기획 방향을 검토하고 싶어요."></textarea>
+        <label for="input-image">참고 이미지 (선택 · PNG/JPEG/WebP · 10 MiB 이하 · 1장)</label><input id="input-image" type="file" accept="image/png,image/jpeg,image/webp"><p>현재 첫 품목·첫 시즌을 검색합니다. 이미지는 Draft에 참조로 전달되며 다품목·다시즌은 추가 검토가 필요합니다.</p>
         <div class="query-footer">
           <span id="query-count">0 / 1,000</span>
           <button id="run-button" type="submit"><span>파이프라인 실행</span><span aria-hidden="true">↗</span></button>
         </div>
-        <p class="demo-note"><strong>미리보기 · 샘플 결과</strong> 질의는 외부 LLM으로 구조화합니다. 실제 트렌드·재고·판매 자료나 운영 서비스는 호출하지 않습니다.</p>
+        <p class="demo-note">선택한 분석 방식으로 실행합니다. 통합 흐름은 Draft와 시장 검토를 마친 뒤 시각 제안을 만듭니다. 미리보기는 샘플 결과를 사용합니다.</p>
       </form>
 
       <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
@@ -41,6 +42,7 @@
           <div><h2>기획안 검토</h2></div>
           <div class="run-heading-actions"><div id="overall-status" class="overall-status"></div></div>
         </div>
+        <section id="workflow-results" aria-label="통합 기획 결과" hidden></section>
         <p id="history-note" class="history-note" hidden></p>
         <section id="plan-conditions" class="plan-conditions" aria-label="기획 조건">
           <div class="section-heading"><h3>기획 조건</h3><button id="edit-plan-request" type="button" class="text-action">조건 수정</button></div>

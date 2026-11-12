@@ -214,7 +214,7 @@ def _project07_context_fields(request: Mapping[str, Any]) -> dict[str, Any]:
 
 def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any]:
     env = environ or os.environ
-    default_p07 = Path(__file__).resolve().parents[3] / "project_07"
+    default_p07 = Path(__file__).resolve().parents[3] / "sales-market-agent"
     p07_root = Path(env.get("VOGUE_PROJECT07_ROOT", str(default_p07))).expanduser()
     stock_url = env.get("VOGUE_STOCK_AGENT_URL")
     p06_url = env.get("VOGUE_PROJECT06_URL")
@@ -323,7 +323,7 @@ def build_connected_orchestrator(environ: Mapping[str, str] | None = None) -> Or
     if missing:
         raise ConnectorConfigurationError("연결 설정이 필요한 저장소: " + ", ".join(missing))
 
-    default_p07 = Path(__file__).resolve().parents[3] / "project_07"
+    default_p07 = Path(__file__).resolve().parents[3] / "sales-market-agent"
     p07_root = Path(env.get("VOGUE_PROJECT07_ROOT", str(default_p07))).expanduser()
     p07_source_spec = env.get("VOGUE_PROJECT07_SOURCE_ADAPTER")
     stock_url = _service_url(env, "VOGUE_STOCK_AGENT_URL", "/v1/inventory-products")

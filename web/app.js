@@ -499,6 +499,13 @@ function renderStructuring(s) {
 }
 
 function renderExecution(data) {
+  document.querySelector('#workflow-results').hidden = true;
+  document.querySelector('.execution-details').hidden = false;
+  if (data.contract_version === 'vogue-workflow/0.1') {
+    renderWorkflow(data);
+    return;
+  }
+  for (const id of ['plan-conditions', 'evidence-overview', 'history-note']) document.getElementById(id).hidden = false;
   if (planningDraftDialog.open) planningDraftDialog.close();
   if (imageViewerDialog.open) imageViewerDialog.close();
   currentExecution = data;
@@ -664,6 +671,29 @@ form.addEventListener('submit', async (event) => {
   runButton.disabled = true;
   runButton.querySelector('span:first-child').textContent = '실행 중…';
   try {
+    if (document.querySelector('#input-image').files.length && requestMode !== 'workflow_v01') {
+      throw new Error('이미지 입력은 통합 워크플로우 모드에서 지원합니다.');
+    }
+    if (requestMode === 'workflow_v01') {
+      const requestId = crypto.randomUUID();
+      const images = [];
+      const file = document.querySelector('#input-image').files[0];
+      if (file) {
+        if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 10485760) throw new Error('이미지 형식과 10 MiB 제한을 확인해 주세요.');
+        const upload = await fetch('/v1/input-images', {method: 'POST', headers: {'Content-Type': file.type, 'X-Request-ID': requestId}, body: file});
+        if (!upload.ok) throw new Error('이미지 검증 또는 저장에 실패했습니다.');
+        images.push(await upload.json());
+      }
+      localStorage.setItem('vogue-workflow-request-id', requestId);
+      const response = await fetch('/api/workflow/run', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({contract_version: 'vogue-workflow/0.1', request_id: requestId, input: {user_input: {text: query, images}}})});
+      const data = await response.json();
+      if (data.result?.sources) renderExecution(data);
+      if (!response.ok) throw new Error(data.message || data.error?.message || data.error || '단계 오류로 중단됐습니다. 저장된 결과와 실행 기록을 확인하세요.');
+      currentMode = requestMode;
+      results.scrollIntoView({behavior: 'smooth', block: 'start'});
+      return;
+    }
     const response = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -865,3 +895,81 @@ refreshLocalServicesStatus().catch(() => {
   localServicesStatus.dataset.ready = 'false';
 });
 restoreLatestRun();
+
+
+// Target contract renderer: immutable sources and MD decision boundaries stay visible.
+function renderWorkflow(envelope) {
+  const body = envelope.result;
+  currentExecution = envelope;
+  const panel = document.querySelector('#workflow-results');
+  panel.replaceChildren();
+  panel.hidden = false;
+  results.hidden = false;
+  document.querySelector('#overall-status').textContent = body.status;
+  for (const id of ['plan-conditions', 'draft-card', 'evidence-overview', 'history-note']) document.getElementById(id).hidden = true;
+  document.querySelector('.execution-details').hidden = true;
+  function row(parent, tag, text) { const n = document.createElement(tag); n.textContent = text; parent.append(n); return n; }
+  row(panel, 'p', `Request ID · ${body.request_id}`);
+  row(panel, 'p', 'MD 판단 대기 · 채택 / 수정 / 보류. 가격·원가·수량·발주·최종 채택은 MD가 결정합니다.');
+  for (const [key, label] of [['planning_draft','Draft'], ['sales_market_review','시장 검토'], ['trend','Trend 근거'], ['stock','재고 근거']]) {
+    const card = row(panel, 'section', '');
+    row(card, 'h3', label);
+    const retained = body.sources[key];
+    if (!retained) { row(card, 'p', '미실행 또는 검증 실패 · 실행 trace를 확인하세요.'); continue; }
+    const raw = retained.raw_response;
+    const source = raw.result;
+    const obs = retained.observation;
+    row(card, 'p', `상태 ${raw.status} · 관측일 ${obs.as_of ?? '미확인'} · 수신 ${obs.observed_at} · 합성 ${obs.synthetic === null ? '미확인' : obs.synthetic ? '예' : '아니오'} · ${obs.data_nature}`);
+    row(card, 'p', `원본 hash ${retained.content_sha256} · bytes hash ${retained.raw_artifact.sha256}`);
+    const detail = source.draft || source.review;
+    if (source.draft) {
+      row(card, 'h4', source.draft.title);
+      row(card, 'p', `품목 ${source.draft.category ?? '미확인'} · 시즌 ${source.draft.season ?? '미확인'}`);
+      row(card, 'p', `누락·확인 사항: ${source.draft.open_questions.join(' / ') || '명시 항목 없음'}`);
+    }
+    for (const claim of detail?.claims || detail?.findings || []) row(card, 'p', `${claim.kind} · ${claim.text} · 근거 ${claim.evidence_refs.length}건`);
+    for (const metric of source.review?.metrics || []) row(card, 'p', `${metric.name || metric.metric_id || '지표'}: ${metric.value === null ? `미확인 (${metric.missing_reason})` : metric.value} · ${JSON.stringify(metric)}`);
+    row(card, 'p', `제한: ${[...(source.limitations || []), ...(detail?.limitations || []), ...obs.limitations].join(' / ') || '명시 항목 없음'}`);
+    const rawDetails = row(card, 'details', '');
+    row(rawDetails, 'summary', '원본 · Evidence · 오류 · artifact 보기');
+    row(rawDetails, 'pre', JSON.stringify(raw, null, 2));
+  }
+  row(panel, 'h3', '최종 통합 이미지');
+  row(panel, 'p', `상태 ${body.final_image.status} · ${body.final_image.reason || 'Draft와 시장 검토를 반영한 시각 제안입니다.'}`);
+  if (body.final_image.artifact) {
+    const image = document.createElement('img');
+    image.alt = '시장 검토 이후 생성된 MD 검토용 통합 시안';
+    image.src = `/api/workflow/artifacts/${encodeURIComponent(body.final_image.artifact.artifact_id)}`;
+    image.style.maxWidth = '100%';
+    panel.append(image);
+  }
+  if (body.final_image.status === 'failed' || (body.final_image.status === 'skipped' && body.integration)) {
+    const retry = row(panel, 'button', '최종 이미지만 재시도');
+    retry.type = 'button';
+    let retryKey = crypto.randomUUID();
+    retry.addEventListener('click', async () => {
+      retry.disabled = true;
+      try {
+        const response = await fetch('/v1/orchestrations/image-retries', {method: 'POST', headers: {'Content-Type':'application/json'}, body:JSON.stringify({request_id:body.request_id, retry_key:retryKey})});
+        const value = await response.json();
+        if (!response.ok) throw new Error(value.error?.message || value.error || '이미지 재시도 실패');
+        renderExecution(value);
+      } catch (error) { notice.textContent = error.message; notice.hidden = false; retry.disabled = false; }
+    });
+  }
+  row(panel, 'p', `전체 제한: ${body.limitations.join(' / ')}`);
+  row(panel, 'p', `오류: ${body.errors.map(e => e.code).join(' / ') || '없음'}`);
+  const trace = row(panel, 'details', '');
+  row(trace, 'summary', '실행 trace · 입력 hash · 결과 hash');
+  row(trace, 'pre', JSON.stringify(body.stages, null, 2));
+}
+
+// Restore the durable target result even after an upstream or image failure.
+(async () => {
+  const rid = localStorage.getItem('vogue-workflow-request-id');
+  if (!rid) return;
+  try {
+    const response = await fetch(`/api/workflow/runs/${encodeURIComponent(rid)}`);
+    if (response.ok) renderExecution(await response.json());
+  } catch (_) { /* Offline restore leaves the form usable. */ }
+})();
