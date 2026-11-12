@@ -1,13 +1,27 @@
+# Build context allowlist: only what the runtime image needs (see Dockerfile).
+*
+!app.py
+!pyproject.toml
+!src/vogue_orchestrator
+!web
+!configs
+!prompts
+!contracts
+!examples/fixtures/query
+
+# Never in the context, even inside the directories above: local state, secrets,
+# iCloud conflict copies ("name 2.ext"), caches, and repository-only material.
 .git
-.venv
-venv
-__pycache__
-*.py[cod]
-.env
-.pytest_cache
+.env*
+**/.env*
+.local
+**/.local
+**/* [0-9]
+**/* [0-9].*
+**/__pycache__
+**/*.py[cod]
+**/.DS_Store
 tests
-examples
+tools
+deploy
 docs
-prompts
-configs
-data
