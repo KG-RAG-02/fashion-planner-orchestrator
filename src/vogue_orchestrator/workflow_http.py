@@ -8,15 +8,15 @@ from pathlib import Path
 import re
 import socket
 import ssl
-from urllib.parse import urlsplit, unquote
+from urllib.parse import parse_qs, urlsplit, unquote
 
 from .connectors import (ConnectorConfigurationError, WORKFLOW_CONNECT_TIMEOUT_SECONDS,
                          WORKFLOW_READ_TIMEOUT_SECONDS, _service_url, timeout_seconds)
 from .workflow import Workflow, WireResponse, StageFailure
 from .workflow_contract import (WorkflowContract, VERSION, require, contract_gate_status,
                                 development_limitation, truthy)
-from .workflow_store import (ArtifactError, PeerArtifactReader, SHA256_HEX, WorkflowStore, canonical,
-                             p08_artifact, strict_json)
+from .workflow_store import (ArtifactError, MD_DECISIONS, PeerArtifactReader, RunStateError, SHA256_HEX,
+                             WorkflowStore, canonical, p08_artifact, strict_json)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -255,11 +255,14 @@ def _known_id(value):
 # Explicit route table: (method -> handler name). Nothing else under the workflow namespace runs.
 EXACT_ROUTES = {
     '/api/workflow/run': {'POST': 'start_run'},
+    '/api/workflow/runs': {'GET': 'list_runs'},
+    '/api/system/status': {'GET': 'system_status'},
     '/v1/input-images': {'POST': 'upload_image'},
     '/v1/orchestrations/image-retries': {'POST': 'retry_image'},
 }
 PATTERN_ROUTES = (
     (('runs', None), {'GET': 'get_run'}),
+    (('runs', None, 'md-decision'), {'GET': 'get_md_decisions', 'POST': 'post_md_decision'}),
     (('artifacts', None), {'GET': 'get_artifact'}),
 )
 NAMESPACE = '/api/workflow'
@@ -414,6 +417,86 @@ def _get_run(handler, value):
     handler._json(200, result['envelope'])
 
 
+LIMIT_PATTERN = re.compile(r'[0-9]{1,6}')
+RUNS_DEFAULT_LIMIT, RUNS_MAX_LIMIT = 20, 100
+
+
+def _list_runs(handler):
+    """GET /api/workflow/runs?limit=N (default 20, at most 100), newest first."""
+    values = parse_qs(urlsplit(handler.path).query, keep_blank_values=True).get('limit')
+    limit = RUNS_DEFAULT_LIMIT
+    if values is not None:
+        if len(values) != 1 or not LIMIT_PATTERN.fullmatch(values[0]) or int(values[0]) < 1:
+            problem(handler, 422, 'LIMIT_INVALID', 'limit must be an integer from 1 to 100.')
+            return
+        limit = min(int(values[0]), RUNS_MAX_LIMIT)
+    handler._json(200, {'runs': store().list_runs(limit), 'limit': limit})
+
+
+MD_DECISION_FIELDS = {'contract_version', 'request_id', 'integrated_response_sha256', 'decision', 'note'}
+MD_NOTE_MAX_CHARS = 2000
+MD_DECISION_MAX_BYTES = 65536
+
+
+def _md_decision_error(body, rid):
+    """422 code for an invalid MD decision body, or None (strict: unknown keys are rejected)."""
+    if not isinstance(body, dict):
+        return 'MD_DECISION_INVALID'
+    if body.get('contract_version') != VERSION:
+        return 'UNSUPPORTED_CONTRACT_VERSION'
+    if set(body) - MD_DECISION_FIELDS:
+        return 'MD_DECISION_UNKNOWN_FIELD'
+    if body.get('request_id') != rid:
+        return 'REQUEST_ID_MISMATCH'
+    sha = body.get('integrated_response_sha256')
+    if not isinstance(sha, str) or not SHA256_HEX.fullmatch(sha):
+        return 'INTEGRATED_RESPONSE_SHA256_INVALID'
+    if not isinstance(body.get('decision'), str) or body['decision'] not in MD_DECISIONS:
+        return 'MD_DECISION_INVALID'
+    note = body.get('note')
+    if note is not None and (not isinstance(note, str) or len(note) > MD_NOTE_MAX_CHARS):
+        return 'MD_NOTE_INVALID'
+    return None
+
+
+def _post_md_decision(handler, value):
+    """Append an MD decision (adopt | revise | hold) bound to the stored integrated response hash."""
+    rid = value
+    if not ID_PATTERN.fullmatch(rid):
+        problem(handler, 404, 'RUN_NOT_FOUND')
+        return
+    body = _read_json(handler, MD_DECISION_MAX_BYTES)
+    if body is _INVALID:
+        return
+    error = _md_decision_error(body, rid)
+    if error:
+        problem(handler, 422, error, request_id=rid)
+        return
+    try:
+        record = store().add_md_decision(rid, body['integrated_response_sha256'], body['decision'], body.get('note'))
+    except RunStateError as exc:
+        problem(handler, exc.http_status, exc.code, request_id=rid)
+        return
+    handler._json(201, record)
+
+
+def _get_md_decisions(handler, value):
+    """{request_id, integrated_response_sha256 (what POST verifies against), decisions oldest first}."""
+    rid = value
+    private = store()
+    if not ID_PATTERN.fullmatch(rid) or not private.run_exists(rid):
+        problem(handler, 404, 'RUN_NOT_FOUND', request_id=_known_id(rid))
+        return
+    current = private.integrated_response(rid)
+    handler._json(200, {'request_id': rid, 'integrated_response_sha256': current[1] if current else None,
+                        'decisions': private.md_decisions(rid)})
+
+
+def _system_status(handler):
+    from .system_status import system_status
+    handler._json(200, system_status())
+
+
 SERVED_MEDIA_TYPES = {'image/png', 'image/jpeg', 'image/webp', 'application/json'}
 
 
@@ -449,9 +532,13 @@ def _get_artifact(handler, value):
 
 ROUTE_HANDLERS = {
     'start_run': _start_run,
+    'list_runs': _list_runs,
+    'system_status': _system_status,
     'upload_image': _upload_image,
     'retry_image': _retry_image,
     'get_run': _get_run,
+    'get_md_decisions': _get_md_decisions,
+    'post_md_decision': _post_md_decision,
     'get_artifact': _get_artifact,
 }
 

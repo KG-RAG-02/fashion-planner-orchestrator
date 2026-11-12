@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+from datetime import datetime, timezone
 import errno
 import fcntl
 import hashlib
@@ -24,6 +25,28 @@ MAX_ARTIFACT_BYTES = 16777216  # retained response limit (conventions section 6)
 RESOLVER_CODES = {'ARTIFACT_READER_REQUIRED': 503, 'INVALID_ARTIFACT_URI': 422, 'INVALID_ARTIFACT_PATH': 422,
                   'ARTIFACT_UNAVAILABLE': 503, 'ARTIFACT_SIZE_MISMATCH': 422, 'ARTIFACT_HASH_MISMATCH': 422,
                   'ARTIFACT_TOO_LARGE': 413}
+
+
+MD_DECISIONS = ('adopt', 'revise', 'hold')
+EXCERPT_CHARS = 120
+
+
+def utc_now():
+    return datetime.now(timezone.utc).isoformat(timespec='milliseconds')
+
+
+def query_excerpt(text, limit=EXCERPT_CHARS):
+    """Whitespace-collapsed excerpt of at most `limit` characters."""
+    flat = ' '.join(str(text or '').split())
+    return flat if len(flat) <= limit else flat[:limit - 1] + '\u2026'
+
+
+class RunStateError(ValueError):
+    """A run-state conflict (404 unknown run, 409 not complete or integrated response mismatch)."""
+
+    def __init__(self, code, http_status):
+        self.code, self.http_status = code, http_status
+        super().__init__(code)
 
 
 class ArtifactError(ValueError):
@@ -158,6 +181,14 @@ class WorkflowStore:
             CREATE TABLE IF NOT EXISTS checkpoints(key TEXT PRIMARY KEY, state TEXT NOT NULL, value TEXT);
             CREATE TABLE IF NOT EXISTS requests(rid TEXT PRIMARY KEY, input_hash TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS runs(rid TEXT NOT NULL, attempt TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(rid,attempt));
+            CREATE TABLE IF NOT EXISTS run_index(rid TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                query_excerpt TEXT NOT NULL, status TEXT NOT NULL, integrated_response_sha256 TEXT);
+            CREATE TABLE IF NOT EXISTS md_decisions(rid TEXT NOT NULL, sequence INTEGER NOT NULL, integrated_response_sha256 TEXT NOT NULL,
+                decision TEXT NOT NULL, note TEXT, decided_at TEXT NOT NULL, PRIMARY KEY(rid, sequence));
+            CREATE TRIGGER IF NOT EXISTS md_decisions_no_update BEFORE UPDATE ON md_decisions
+                BEGIN SELECT RAISE(ABORT, 'md_decisions is append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS md_decisions_no_delete BEFORE DELETE ON md_decisions
+                BEGIN SELECT RAISE(ABORT, 'md_decisions is append-only'); END;
             ''')
         os.chmod(self.db_path, 0o600)
 
@@ -295,6 +326,72 @@ class WorkflowStore:
     def save_run(self, rid, attempt, value):
         with self.db() as db:
             db.execute('INSERT OR REPLACE INTO runs VALUES (?,?,?)', (rid, attempt, canonical(value).decode()))
+            envelope = value.get('envelope') if isinstance(value, dict) else None
+            if attempt == 'current' and isinstance(envelope, dict):
+                db.execute('UPDATE run_index SET status=?, integrated_response_sha256=?, updated_at=? WHERE rid=?',
+                           (str(envelope.get('status')), digest(envelope), utc_now(), rid))
+            elif attempt == 'progress':
+                db.execute('UPDATE run_index SET updated_at=? WHERE rid=? AND integrated_response_sha256 IS NULL', (utc_now(), rid))
+
+    def index_run(self, rid, text):
+        """Record a run for the listing once (created_at is never rewritten)."""
+        stamp = utc_now()
+        with self.db() as db:
+            db.execute('INSERT OR IGNORE INTO run_index VALUES (?,?,?,?,?,NULL)', (rid, stamp, stamp, query_excerpt(text), 'in_progress'))
+
+    def run_exists(self, rid):
+        with self.db() as db:
+            return db.execute('SELECT 1 FROM requests WHERE rid=? UNION ALL SELECT 1 FROM runs WHERE rid=? LIMIT 1',
+                              (rid, rid)).fetchone() is not None
+
+    def integrated_response(self, rid):
+        """(envelope, python-json-sort/1 sha256) of the latest final integrated response, or None."""
+        value = self.run(rid, 'current') or self.run(rid)
+        return (value['envelope'], digest(value['envelope'])) if value else None
+
+    def list_runs(self, limit):
+        """Newest first: request_id, status, created_at, updated_at, query_excerpt."""
+        with self.db() as db:
+            rows = db.execute('SELECT r.rid, i.created_at, i.updated_at, i.query_excerpt, i.status FROM requests r '
+                              'LEFT JOIN run_index i ON i.rid = r.rid '
+                              'ORDER BY (i.created_at IS NULL), i.created_at DESC, r.rowid DESC LIMIT ?', (limit,)).fetchall()
+        runs = []
+        for rid, created, updated, excerpt, status in rows:
+            if created is None:  # recorded before the run index existed
+                final = self.run(rid, 'current') or self.run(rid)
+                value = final or self.run(rid, 'progress')
+                result = value['envelope'].get('result', {}) if value else {}
+                status = final['envelope'].get('status') if final else 'in_progress'
+                excerpt = query_excerpt((result.get('user_input') or {}).get('text', '') if isinstance(result, dict) else '')
+            runs.append(dict(request_id=rid, status=status, created_at=created, updated_at=updated, query_excerpt=excerpt))
+        return runs
+
+    def add_md_decision(self, rid, expected_sha256, decision, note):
+        """Append one MD decision after checking it targets the stored final integrated response."""
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')  # the check and the append see one state of the runs table
+            row = (db.execute("SELECT value FROM runs WHERE rid=? AND attempt='current'", (rid,)).fetchone()
+                   or db.execute("SELECT value FROM runs WHERE rid=? AND attempt='initial'", (rid,)).fetchone())
+            if row is None:
+                known = db.execute('SELECT 1 FROM requests WHERE rid=? UNION ALL SELECT 1 FROM runs WHERE rid=? LIMIT 1',
+                                   (rid, rid)).fetchone()
+                raise RunStateError('RUN_NOT_COMPLETE', 409) if known else RunStateError('RUN_NOT_FOUND', 404)
+            if digest(strict_json(row[0].encode())['envelope']) != expected_sha256:
+                raise RunStateError('INTEGRATED_RESPONSE_MISMATCH', 409)
+            decided_at = utc_now()
+            db.execute('INSERT INTO md_decisions SELECT ?, COALESCE(MAX(sequence), 0) + 1, ?, ?, ?, ? FROM md_decisions WHERE rid=?',
+                       (rid, expected_sha256, decision, note, decided_at, rid))
+            sequence = db.execute('SELECT MAX(sequence) FROM md_decisions WHERE rid=?', (rid,)).fetchone()[0]
+        return dict(request_id=rid, sequence=sequence, integrated_response_sha256=expected_sha256,
+                    decision=decision, note=note, decided_at=decided_at)
+
+    def md_decisions(self, rid):
+        """Decision history, oldest first."""
+        with self.db() as db:
+            rows = db.execute('SELECT sequence, integrated_response_sha256, decision, note, decided_at FROM md_decisions '
+                              'WHERE rid=? ORDER BY sequence', (rid,)).fetchall()
+        return [dict(request_id=rid, sequence=sequence, integrated_response_sha256=sha, decision=decision, note=note,
+                     decided_at=decided_at) for sequence, sha, decision, note, decided_at in rows]
 
     def run(self, rid, attempt='initial'):
         with self.db() as db:

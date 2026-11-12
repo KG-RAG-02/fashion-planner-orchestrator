@@ -224,6 +224,7 @@ class Workflow:
         submitted = dict(user_input=user_input, planning_request=planning_request, trend_query=trend_query)
         with self.store.lock(request_id):
             self.store.bind(request_id, digest(submitted))
+            self.store.index_run(request_id, user_input['text'])
             previous = self.store.run(request_id, 'current') or self.store.run(request_id)
             if previous:
                 return previous
