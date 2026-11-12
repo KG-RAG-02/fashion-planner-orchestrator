@@ -17,8 +17,9 @@ class BoundaryTests(unittest.TestCase):
     def handler(self, body, path='/api/workflow/run'):
         h=object.__new__(OrchestratorHandler)
         h.path=path;h.command='POST';h.client_address=('127.0.0.1',12345)
+        h.server=SimpleNamespace(server_port=8765)
         raw=json.dumps(body).encode()
-        h.headers={'Content-Length':str(len(raw))};h.rfile=io.BytesIO(raw)
+        h.headers={'Content-Length':str(len(raw)),'Host':'127.0.0.1:8765'};h.rfile=io.BytesIO(raw)
         h._json=Mock();return h
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'),'workflow extra required')
@@ -43,7 +44,7 @@ class BoundaryTests(unittest.TestCase):
         h._json.assert_called_once_with(502,response['envelope'])
 
     def test_upload_limits_and_remote_boundary(self):
-        h=self.handler({},'/v1/input-images');h.headers={'Content-Length':'10485761'}
+        h=self.handler({},'/v1/input-images');h.headers={'Content-Length':'10485761','Host':'127.0.0.1:8765'}
         self.assertTrue(routes(h,h.path));self.assertEqual(h._json.call_args.args[0],413)
         h=self.handler({},'/v1/input-images');h.client_address=('192.0.2.1',100)
         routes(h,h.path);self.assertEqual(h._json.call_args.args[0],403)

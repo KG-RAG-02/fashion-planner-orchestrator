@@ -248,18 +248,78 @@ def _local_services_status() -> dict[str, Any]:
             "total": len(services), "all_healthy": all(item["status"] == "running" for item in services)}
 
 
-def _request_is_loopback(handler: BaseHTTPRequestHandler) -> bool:
+RUNTIME_MODES = {"host", "container"}
+
+
+def runtime_mode(environ: Mapping[str, str] | None = None) -> str:
+    """`container` when VOGUE_ORCHESTRATOR_RUNTIME=container; unknown values fail closed to container."""
+    value = str((os.environ if environ is None else environ).get("VOGUE_ORCHESTRATOR_RUNTIME") or "").strip().lower()
+    return "host" if value in {"", "host"} else "container"
+
+
+def trusted_peer_networks(environ: Mapping[str, str] | None = None) -> tuple[list[Any], bool]:
+    """Parse VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS; an invalid list trusts nothing beyond loopback."""
+    networks = []
+    for item in str((os.environ if environ is None else environ).get("VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS") or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(item, strict=False))
+        except ValueError:
+            return [], False
+    return networks, True
+
+
+def _server_port(handler: BaseHTTPRequestHandler) -> int:
+    port = getattr(getattr(handler, "server", None), "server_port", None)
+    if isinstance(port, int):
+        return port
     try:
-        if not ipaddress.ip_address(handler.client_address[0]).is_loopback:
-            return False
-    except (ValueError, IndexError):
+        return int(os.environ.get("VOGUE_ORCHESTRATOR_PORT", "8765"))
+    except ValueError:
+        return 8765
+
+
+def allowed_hosts(handler: BaseHTTPRequestHandler, environ: Mapping[str, str] | None = None) -> set[str]:
+    """VOGUE_ORCHESTRATOR_ALLOWED_HOSTS, default 127.0.0.1:<port> and localhost:<port>."""
+    raw = str((os.environ if environ is None else environ).get("VOGUE_ORCHESTRATOR_ALLOWED_HOSTS") or "")
+    configured = {item.strip().lower() for item in raw.split(",") if item.strip()}
+    if configured:
+        return configured
+    port = _server_port(handler)
+    return {f"127.0.0.1:{port}", f"localhost:{port}"}
+
+
+def _single_header(handler: BaseHTTPRequestHandler, name: str) -> tuple[bool, str | None]:
+    headers = handler.headers
+    values = headers.get_all(name) if hasattr(headers, "get_all") else None
+    if values is not None and len(values) > 1:
+        return False, None
+    return True, headers.get(name)
+
+
+def _request_is_trusted_local(handler: BaseHTTPRequestHandler) -> bool:
+    """Conventions section 5: (loopback peer or peer in VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS)
+    and Host in VOGUE_ORCHESTRATOR_ALLOWED_HOSTS and (no Origin or Origin == http://<Host>)."""
+    try:
+        peer = ipaddress.ip_address(handler.client_address[0])
+    except (ValueError, IndexError, TypeError, AttributeError):
         return False
-    origin = handler.headers.get("Origin")
-    if origin:
-        parsed = urlsplit(origin)
-        if parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+    if getattr(peer, "ipv4_mapped", None) is not None:
+        peer = peer.ipv4_mapped
+    if not peer.is_loopback:
+        networks, _ = trusted_peer_networks()
+        if not any(peer in network for network in networks):
             return False
-    return True
+    single_host, host = _single_header(handler, "Host")
+    single_origin, origin = _single_header(handler, "Origin")
+    if not single_host or not single_origin:
+        return False
+    host = (host or "").strip().lower()
+    if not host or host not in allowed_hosts(handler):
+        return False
+    return origin is None or origin.strip().lower() == "http://" + host
 
 
 def _history_id_is_safe(history_id: str) -> bool:
@@ -469,8 +529,30 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
         body = json.dumps(value, ensure_ascii=False).encode("utf-8")
         self._send(status, body, "application/json; charset=utf-8")
 
+    def _container_gate(self, path: str) -> bool:
+        """Container mode: every route except GET /api/health and static files needs a trusted
+        local request (legacy mutating routes included); /api/local-services/* does not exist.
+        Returns True when the response has been sent."""
+        if runtime_mode() != "container":
+            return False
+        if path == "/api/local-services" or path.startswith("/api/local-services/"):
+            self._json(404, {"error": "not_found"})
+            return True
+        if self.command == "GET" and (path == "/api/health" or not path.startswith(("/api/", "/v1/"))):
+            return False
+        if _request_is_trusted_local(self):
+            return False
+        from .workflow_http import owns, problem
+        if owns(path):
+            problem(self, 403, "LOCAL_WORKFLOW_ONLY")
+        else:
+            self._json(403, {"error": "trusted_local_only"})
+        return True
+
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        if self._container_gate(path):
+            return
         from .workflow_http import routes
         if routes(self, path):
             return
@@ -548,6 +630,8 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         path = urlparse(self.path).path
+        if self._container_gate(path):
+            return
         if path == "/api/run-history":
             try:
                 for item in RUN_HISTORY_DIR.glob("*"):
@@ -586,11 +670,13 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if self._container_gate(path):
+            return
         from .workflow_http import routes
         if routes(self, path):
             return
         if path == "/api/local-services/restart":
-            if not _request_is_loopback(self):
+            if not _request_is_trusted_local(self):
                 self._json(403, {"error": "local_restart_only"})
                 return
             root = Path(__file__).resolve().parents[2]
@@ -659,9 +745,9 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             from .workflow_store import strict_json
             value = strict_json(self.rfile.read(length))
             if path == "/v1/orchestrations" and isinstance(value, dict) and value.get("contract_version") == "vogue-workflow/0.1":
-                from .workflow_http import dispatch
-                if not _request_is_loopback(self):
-                    self._json(403, {"error": "LOCAL_WORKFLOW_ONLY"})
+                from .workflow_http import dispatch, problem
+                if not _request_is_trusted_local(self):
+                    problem(self, 403, "LOCAL_WORKFLOW_ONLY")
                     return
                 dispatch(self, value)
                 return
@@ -797,6 +883,9 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
     host = os.environ.get("VOGUE_ORCHESTRATOR_HOST", host)
     port = int(os.environ.get("VOGUE_ORCHESTRATOR_PORT", str(port)))
+    runtime = str(os.environ.get("VOGUE_ORCHESTRATOR_RUNTIME") or "").strip().lower()
+    if runtime and runtime not in RUNTIME_MODES:
+        raise ValueError("VOGUE_ORCHESTRATOR_RUNTIME must be 'host' or 'container'.")
     if host not in {"127.0.0.1", "localhost"} and os.environ.get("VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND") != "1":
         raise ValueError("Binding outside loopback requires VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND=1.")
     server = ThreadingHTTPServer((host, port), OrchestratorHandler)

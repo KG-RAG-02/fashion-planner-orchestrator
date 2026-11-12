@@ -158,13 +158,17 @@ def dispatch(handler, value):
         problem(handler, 503, 'WORKFLOW_DEPENDENCIES_MISSING')
 
 
+def owns(path):
+    """Paths served by the workflow boundary (problem bodies, trusted-local only)."""
+    return path in {'/api/workflow/run','/v1/input-images','/v1/orchestrations/image-retries'} or path.startswith('/api/workflow/artifacts/') or path.startswith('/api/workflow/runs/')
+
+
 def routes(handler, path):
     """Return True for owned routes. Local-only private artifact/run boundary."""
-    from .server import _request_is_loopback
-    owned = path in {'/api/workflow/run','/v1/input-images','/v1/orchestrations/image-retries'} or path.startswith('/api/workflow/artifacts/') or path.startswith('/api/workflow/runs/')
-    if not owned:
+    from .server import _request_is_trusted_local
+    if not owns(path):
         return False
-    if not _request_is_loopback(handler):
+    if not _request_is_trusted_local(handler):
         problem(handler, 403, 'LOCAL_WORKFLOW_ONLY')
         return True
     try:
