@@ -221,7 +221,7 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
     trend_spec = env.get("VOGUE_TREND_ADAPTER")
     p07_source_spec = env.get("VOGUE_PROJECT07_SOURCE_ADAPTER")
     p07_package_available = (p07_root / "src" / "market_research_agent").is_dir()
-    configuration_complete = bool(trend_spec and stock_url and p06_url and p07_package_available)
+    configuration_complete = bool(trend_spec and stock_url and p07_package_available)
     known_blockers = [
         "Trend local HTTP requires the shared Bearer token and a connected Neo4j graph; loopback has no TLS and production readiness is not provided here.",
         "Stock local HTTP requires a synthetic or approved DuckDB and a Bearer token; URL configuration does not establish either dependency's readiness.",
@@ -238,12 +238,6 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
         (StageName.STOCK, "VOGUE_STOCK_AGENT_URL", "source_adapter_verified", True,
          "http://127.0.0.1:8002", "TrendAnalysisResult 1.1 (explicit Stock adapter; source version/hash recorded)", "1.0",
          "Bearer token required; local DuckDB required; loopback HTTP is test-only"),
-        (StageName.PROJECT_07, "VOGUE_SALES_MARKET_AGENT_URL", "runtime_schema_aligned", True,
-         "http://127.0.0.1:8766", "PlanningRequest 1.0, Trend 1.0/1.1, Stock 1.0", "1.0",
-         "runtime is loopback-only with shared Bearer auth and no HTTPS; producer ID aligned to sales-market-agent"),
-        (StageName.PROJECT_06, "VOGUE_NEW_PRODUCT_AGENT_URL", "local_development_route", True,
-         "http://127.0.0.1:8767", "PlanningRequest 1.0, Trend 1.1, Stock 1.0, Sales Market 1.0", "1.0",
-         "shared Bearer token required in local and service modes; service mode also requires HTTPS"),
     )
     v01_routes = [
         {"route_agent_id": ROUTE_PRODUCERS[stage][0], "producer_id": ROUTE_PRODUCERS[stage][1],
@@ -263,8 +257,16 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
     }
     v01_mode = {
         "contract_version": CONTRACT_VERSION,
-        "configured": all(x["configured"] for x in v01_routes),
+        "configured": all(x["configured"] for x in v01_routes)
+            and bool(env.get("VOGUE_SALES_MARKET_AGENT_URL")),
         "routes": v01_routes,
+        "post_planning_review": {
+            "delegated_to": "sales-market-agent",
+            "path": "/v1/agents/sales-market-agent/reviews",
+            "configured": bool(env.get("VOGUE_SALES_MARKET_AGENT_URL")),
+            "target": _safe_origin(env.get("VOGUE_SALES_MARKET_AGENT_URL")),
+            "sales_market_agent_health": "not_checked",
+        },
         "endpoint_health": "not_checked",
         "schema_compatibility": "not_verified",
         "operational_approval": "not_verified",
@@ -306,11 +308,9 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
                            "Project_07 source package를 찾을 수 없습니다."),
             },
             {
-                "id": "project_06", "name": "Project_06",
+                "id": "project_06", "name": "Project_06 product variants",
                 "configured": bool(p06_url), "target": _safe_origin(p06_url),
-                "detail": ("Legacy POST /api/planning-draft requires matching versions. The separate v0.1 route needs "
-                           "an explicit PlanningRequest 1.0 / Trend 1.1 / Stock 1.0 / Sales Market 1.0 adapter; "
-                           "the local canonical /runs route supports this combination."),
+                "detail": "Project_06 remains the owner of product variant creation; the PlanningDraft engine runs in P08.",
             },
         ],
     }
@@ -350,15 +350,15 @@ def build_proposal_http_orchestrator(environ: Mapping[str, str] | None = None) -
 
 
 def build_v01_http_orchestrator(environ: Mapping[str, str] | None = None) -> Orchestrator:
-    """Build four HTTP v0.1 clients; configuration does not imply live support."""
+    """Build upstream HTTP clients; P08 generates the draft and calls P07 once."""
     env = environ or os.environ
     endpoints = {
         "VOGUE_TREND_AGENT_URL": "trend-analysis-agent",
         "VOGUE_STOCK_AGENT_URL": "stock-agent",
-        "VOGUE_SALES_MARKET_AGENT_URL": "sales-market-agent",
-        "VOGUE_NEW_PRODUCT_AGENT_URL": "new-product-agent",
     }
     missing = [name for name in endpoints if not env.get(name)]
+    if not env.get("VOGUE_SALES_MARKET_AGENT_URL"):
+        missing.append("VOGUE_SALES_MARKET_AGENT_URL")
     if missing:
         raise ConnectorConfigurationError("HTTP agent base URLs are required: " + ", ".join(missing))
     dev_mode = env.get("VOGUE_AGENT_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
@@ -367,11 +367,14 @@ def build_v01_http_orchestrator(environ: Mapping[str, str] | None = None) -> Orc
         agent_id: agent_http_v01_adapter(env[variable], agent_id, bearer_token=token, dev_mode=dev_mode)
         for variable, agent_id in endpoints.items()
     }
+    def p07_placeholder(_payload: dict[str, Any]) -> Mapping[str, Any]:
+        raise ConnectorConfigurationError("Sales Market review is requested after local PlanningDraft generation")
+
     return Orchestrator(
         trend=clients["trend-analysis-agent"],
         stock=clients["stock-agent"],
-        project_07=clients["sales-market-agent"],
-        project_06=clients["new-product-agent"],
+        project_07=p07_placeholder,
+        project_06=p07_placeholder,
         require_envelopes=True,
         project06_version_policy="v01_supported_sources",
     )
@@ -383,4 +386,29 @@ def request_project06_review_images(
     """Call Project_06's separate opt-in image adapter, leaving HTTP v0.1 untouched."""
     env = environ or os.environ
     url = _service_url(env, "VOGUE_NEW_PRODUCT_AGENT_URL", "/api/planning-draft")
+    return _post_json(url, payload, bearer_token=env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN"))
+
+
+def request_project06_sales_market_review(
+    request_id: str, planning_draft: Mapping[str, Any], environ: Mapping[str, str] | None = None,
+) -> Mapping[str, Any]:
+    """Send the producer PlanningDraft to Project_06's post-planning Sales Market bridge."""
+    env = environ or os.environ
+    url = _service_url(env, "VOGUE_NEW_PRODUCT_AGENT_URL", "/v1/agents/new-product-agent/sales-market-reviews")
+    payload = {
+        "contract_version": "vogue-sales-market-review/0.1-proposal",
+        "request_id": request_id,
+        "input": {"request_id": request_id, "planning_draft": dict(planning_draft)},
+    }
+    return _post_json(url, payload, bearer_token=env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN"))
+
+
+def request_sales_market_review(
+    request_id: str, planning_draft: Mapping[str, Any], environ: Mapping[str, str] | None = None,
+) -> Mapping[str, Any]:
+    """Send P08's generated PlanningDraft to the P07 review endpoint once."""
+    env = environ or os.environ
+    url = _service_url(env, "VOGUE_SALES_MARKET_AGENT_URL", "/v1/agents/sales-market-agent/reviews")
+    payload = {"contract_version": "vogue-sales-market-review/0.1-proposal", "request_id": request_id,
+               "input": {"request_id": request_id, "planning_draft": dict(planning_draft)}}
     return _post_json(url, payload, bearer_token=env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN"))
