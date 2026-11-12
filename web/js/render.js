@@ -259,14 +259,15 @@ export function renderRuns(list, runs, onOpen) {
 
 export function renderSystem(container, status) {
   if (!status) { container.replaceChildren(emptyNote('시스템 상태를 불러오지 못했습니다.')); return; }
-  const services = Object.entries(status.services ?? {});
+  const agents = Array.isArray(status.agents) ? status.agents : [];
   container.replaceChildren(
-    h('ul', { class: 'service-list' }, services.map(([name, svc]) => h('li', {},
-      h('span', {}, name),
-      h('span', { class: svc.reachable ? 'ok-text' : 'error-text' }, svc.reachable ? `응답${svc.http_status ? ` · ${svc.http_status}` : ''}` : '응답 없음')))),
+    h('ul', { class: 'service-list' }, agents.map((svc) => h('li', {},
+      h('span', {}, svc.id),
+      h('span', { class: svc.reachable && svc.healthy ? 'ok-text' : 'error-text' },
+        svc.reachable ? `${svc.healthy ? '정상' : '비정상'} · ${svc.http_status ?? '—'}${Number.isInteger(svc.latency_ms) ? ` · ${svc.latency_ms}ms` : ''}` : '응답 없음')))),
     h('dl', { class: 'meta-list' },
-      h('dt', {}, '계약 baseline'), h('dd', {}, status.contract?.state ?? status.contract_state ?? '—'),
-      h('dt', {}, '이미지 공급자'), h('dd', {}, status.image_provider ?? '—'),
-      h('dt', {}, '질의 구조화'), h('dd', {}, status.query_structuring_mode ?? '—'),
+      h('dt', {}, '계약 baseline'), h('dd', {}, `${status.contract?.state ?? '—'}${status.contract?.gate ? ` · gate ${status.contract.gate}` : ''}`),
+      h('dt', {}, '이미지 공급자'), h('dd', {}, status.image ? `${status.image.provider}${status.image.enabled ? '' : ' (비활성)'}` : '—'),
+      h('dt', {}, '질의 구조화'), h('dd', {}, status.query_structuring?.mode || 'llm'),
       h('dt', {}, '실행 모드'), h('dd', {}, status.runtime ?? '—')));
 }

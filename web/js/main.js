@@ -78,7 +78,7 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
   el.pipeline.hidden = false;
   view.renderRail(el.rail, model.rail(result, { inFlight }));
   el.results.hidden = false;
-  view.renderConcept(el.concept, envelope, { retryEnabled: Boolean(state.system?.image_retry_enabled), onRetry: retryImage });
+  view.renderConcept(el.concept, envelope, { retryEnabled: Boolean(state.system?.image?.retry_enabled), onRetry: retryImage });
   view.renderTrends(el.trends, model.trendCards(model.sourceResult(result, 'trend')));
   view.renderStock(el.stock, model.stockSlots(model.sourceResult(result, 'stock')));
   view.renderDraft(el.draft, model.draftView(model.sourceResult(result, 'planning_draft')));
@@ -220,9 +220,9 @@ function route() {
 async function refreshSystem() {
   const response = await api.systemStatus();
   state.system = response.ok ? response.body : null;
-  const services = Object.values(state.system?.services ?? {});
-  const up = services.filter((svc) => svc.reachable).length;
-  const contract = state.system?.contract?.state ?? state.system?.contract_state;
+  const services = Array.isArray(state.system?.agents) ? state.system.agents : [];
+  const up = services.filter((svc) => svc.reachable && svc.healthy).length;
+  const contract = state.system?.contract?.state;
   const tone = !state.system ? 'error' : up === services.length ? 'ok' : 'partial';
   el.systemDot.dataset.tone = tone;
   el.systemSummary.textContent = state.system
