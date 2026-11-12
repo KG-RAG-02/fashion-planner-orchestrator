@@ -1,16 +1,16 @@
 # StructuredQuery 1.0 — 구조화된 질의 계약
 
-> 상태: **1.0 확정 (2026-11-11, 결정 SQ-F).** 이 문서와 JSON Schema [structured-query.schema.json](structured-query.schema.json)이 받는 쪽에 넘기는 계약이다. 남은 개선은 스키마가 아니라 **생산 품질**(LLM 모델·프롬프트 버전)이며, 이는 계약을 바꾸지 않는다. 모델 원본 `src/vogue_orchestrator/query/models.py`(JSON Schema는 여기서 생성, 직접 수정 금지). 생산 경로 `query/structured.py` `structure_query_v2`(프롬프트 v6)는 **2026-11-11부터 화면 서버(`server.py`)가 쓴다**(FW-1). trend가 받을 입력은 첫 품목·첫 시즌만 담은 `TrendQuery`로 변환되고(§7), **HTTP v0.1 실행에서는 그 `TrendQuery`가 Trend에 실제로 전송된다**(§0.4, `main` 병합 후). 소유: **이 저장소(vogue-orchestrator)** — 결정 Y1. 근거와 결정 기록은 [query-decisions.md](../docs/query-decisions.md) (X1·X2·X3·X4·Y1·R0·Q3·G-1~G-3·IT-1~IT-9·SQ-1·SQ-2·CR-1·SQ-F). **처음 받는 Agent는 §0부터 읽는다.**
+> 상태: **1.0 확정 (2026-11-11, 결정 SQ-F).** 이 문서와 JSON Schema [structured-query.schema.json](structured-query-1.0.schema.json)이 받는 쪽에 넘기는 계약이다. 남은 개선은 스키마가 아니라 **생산 품질**(LLM 모델·프롬프트 버전)이며, 이는 계약을 바꾸지 않는다. 모델 원본 `src/vogue_orchestrator/query/models.py`(JSON Schema는 여기서 생성, 직접 수정 금지). 생산 경로 `query/structured.py` `structure_query_v2`(프롬프트 v6)는 **2026-11-11부터 화면 서버(`server.py`)가 쓴다**(FW-1). trend가 받을 입력은 첫 품목·첫 시즌만 담은 `TrendQuery`로 변환되고(§7), **HTTP v0.1 실행에서는 그 `TrendQuery`가 Trend에 실제로 전송된다**(§0.4, `main` 병합 후). 소유: **이 저장소(vogue-orchestrator)** — 결정 Y1. 근거와 결정 기록은 [query-decisions.md](../../../../docs/query-decisions.md) (X1·X2·X3·X4·Y1·R0·Q3·G-1~G-3·IT-1~IT-9·SQ-1·SQ-2·CR-1·SQ-F). **처음 받는 Agent는 §0부터 읽는다.**
 > 이 문서는 **받는 쪽**(trend-analysis-agent, 이후 재고 등 다른 Agent)이 각 필드의 뜻과 쓰는 법을 판단할 수 있게 쓴 정의서다. 받는 쪽이 어떤 필드를 어떻게 쓸지는 **받는 쪽이 정한다.** 이 문서의 "활용 예"는 권장이지 강제가 아니다.
 
 ## 0. 받는 Agent를 위한 인수인계 (2026-11-11, 1.0 확정)
-이 절만 읽어도 `StructuredQuery`를 받아 쓸 수 있도록 요약했다. 자세한 뜻은 §2~§7, 근거는 [query-decisions.md](../docs/query-decisions.md).
+이 절만 읽어도 `StructuredQuery`를 받아 쓸 수 있도록 요약했다. 자세한 뜻은 §2~§7, 근거는 [query-decisions.md](../../../../docs/query-decisions.md).
 
 **0.1 넘기는 것**
 | 무엇 | 위치 | 비고 |
 |---|---|---|
-| 뜻 (이 문서) | `contracts/structured-query.md` | 필드 §3, 값의 출처 `match` §4, 제외 §5, **조건을 합치는 규칙 §5.1**, 예시 §6 |
-| 검증용 JSON Schema | `contracts/structured-query.schema.json` | 모델에서 생성(`scripts/export_structured_query_schema.py`). 모든 필드 `required`, 모르는 필드 거부 |
+| 뜻 (이 문서) | `contracts/agents/vogue-orchestrator/output/structured-query.md` | 필드 §3, 값의 출처 `match` §4, 제외 §5, **조건을 합치는 규칙 §5.1**, 예시 §6 |
+| 검증용 JSON Schema | `contracts/agents/vogue-orchestrator/output/structured-query-1.0.schema.json` | 모델에서 생성(`scripts/export_structured_query_schema.py`). 모든 필드 `required`, 모르는 필드 거부 |
 | 모델 원본 (생산자) | `src/vogue_orchestrator/query/models.py` `StructuredQuery` | Pydantic 2. 스키마가 표현하지 못하는 규칙(§2 마지막 항목)도 검사 |
 | 검증된 예시 | §6 예 1~7 | `tests/test_query_structured_models.py`가 그대로 검증, 예 4~7은 코드가 똑같이 만드는지 `tests/test_query_structured_path.py`가 확인 |
 
@@ -34,10 +34,10 @@
 2. **품목 안에서는** 종류끼리 AND, 같은 종류 여러 값은 OR(규칙 2·3). 제외는 하나라도 맞으면 뺀다(규칙 6), 포함·제외가 겹치면 제외 우선(규칙 7).
 3. **`category: null`** 은 "모든 카테고리에서 `excluded_categories`를 뺀 것"이다(규칙 4, 예 7). **성별**은 포함(없으면 전체)에서 제외를 뺀 것이다(규칙 5).
 4. **`match`로 확실성을 판단한다**(§4). `value: null`(`match: none`) 조건과 `unsupported`는 **거르는 조건이 아니라 알림**이다(규칙 8·10).
-5. **`out_of_scope_items`** 는 표준 카테고리 밖이라 처리할 수 없는 품목이다. `items`가 `[]`일 수 있다(찾는 품목이 모두 범위 밖) — 이때 처리할 품목이 없다.
+5. **`out_of_scope_items`** 는 표준 카테고리 밖이라 처리할 수 없는 품목이다. 찾는 품목이 모두 범위 밖이어도 `items`는 비지 않는다: 질의 전체 조건(시즌 등)만 가진 `category: null` 품목 1개가 생긴다(IT-7′, 2026-11-12). 품목 자리의 말이 속성 값이면("반팔") 그 속성을 가진 `category: null` 품목이 된다(IT-10). 모델은 `[]`도 허용하지만 조립기는 쓰지 않는다.
 6. **시즌은 목록**(1개 이상, 여러 개면 OR, 규칙 11), 트렌드명 `style_names`의 `value`는 지금 항상 `null`이다.
 7. **버전**: `schema_version` "1.0". 모르는 필드를 거부하므로 1.x에서 필드가 늘면 받는 쪽도 새 스키마로 바꿔야 한다(OQ-2).
-8. **경고(`warnings`)는 계약에 들어 있지 않다.** 생산자 결과(`StructuredQueryResult.warnings`, 코드 문자열 목록)에 따로 있다. 받는 쪽에 함께 넘길지(봉투 envelope)는 연결할 때 정한다(§0.4). 받는 쪽에 의미 있는 코드: `include_exclude_conflict`(포함·제외 겹침), `gender_merged_to_unisex`(남+여 → 공용), `season_year_inferred`(연도를 코드가 정함), `only_out_of_scope_items`(처리할 품목 없음), `leading_gender_shared`(첫 품목 앞 성별을 모든 품목에), `condition_item_unknown`(조건의 품목을 못 찾아 질의 전체로 둠), `raw_not_in_query`·`no_conditions_extracted`(LLM 출력 이상), `multiple_values_in_span`(한 표현에서 값 여러 개). trend 입력으로 바꿀 때(§7)의 경고: `items_not_forwarded`·`seasons_not_forwarded`·`no_item_to_forward`·`conditions_not_forwarded`. 전체 목록은 [query-structuring.md](../docs/query-structuring.md).
+8. **경고(`warnings`)는 계약에 들어 있지 않다.** 생산자 결과(`StructuredQueryResult.warnings`, 코드 문자열 목록)에 따로 있다. 받는 쪽에 함께 넘길지(봉투 envelope)는 연결할 때 정한다(§0.4). 받는 쪽에 의미 있는 코드: `include_exclude_conflict`(포함·제외 겹침), `gender_merged_to_unisex`(남+여 → 공용), `season_year_inferred`(연도를 코드가 정함), `only_out_of_scope_items`(찾는 품목이 모두 범위 밖 → 모든 카테고리로, IT-7′), `item_word_used_as_condition`(품목 자리의 말이 속성 값, IT-10), `leading_gender_shared`(첫 품목 앞 성별을 모든 품목에), `condition_item_unknown`(조건의 품목을 못 찾아 질의 전체로 둠), `raw_not_in_query`·`no_conditions_extracted`(LLM 출력 이상), `multiple_values_in_span`(한 표현에서 값 여러 개). trend 입력으로 바꿀 때(§7)의 경고: `items_not_forwarded`·`seasons_not_forwarded`·`no_item_to_forward`·`conditions_not_forwarded`. 전체 목록은 [query-structuring.md](../../../../docs/query-structuring.md).
 
 **0.3 1.0에 넣지 않은 것 (확정, 필요하면 1.x에서 추가)**
 | 항목 | 지금 | 필요해지는 때 |
@@ -49,9 +49,9 @@
 
 **0.4 생산 상태 (받는 쪽이 기대할 품질)**
 - 생산 함수: `vogue_orchestrator.query.structured.structure_query_v2(query, request_id=..., draft_provider=...)` → `result.structured_query`(이 계약), `result.warnings`. LLM 호출은 `vogue_orchestrator.llm_provider.build_draft_provider()`(키는 `.env`). LLM은 해석만 하고 값과 `match`는 코드가 정한다(§4.1).
-- 프롬프트 v6, gpt-4o-mini, temperature 0. 예상 질의 30개(dev)에서 **완전 일치 21/30, 형식 오류 0, 조건을 다른 품목에 붙인 경우 0**. 틀린 것은 주로 **조건을 빠뜨린 것**(품목 바로 앞 꾸밈말, 품목 이름 속 기장)이고, 그다음이 일반어를 품목으로 읽음·포함/제외 뒤집힘이다. 따라서 받는 쪽은 "잘못 들어간 조건"보다 "빠진 조건"을 더 자주 만난다. 별도 holdout 20개 측정은 아직이다([query-structuring.md §15.7·§15.8](../docs/query-structuring.md)).
+- 프롬프트 v6, gpt-4o-mini, temperature 0. 예상 질의 30개(dev)에서 **완전 일치 21/30, 형식 오류 0, 조건을 다른 품목에 붙인 경우 0**. 틀린 것은 주로 **조건을 빠뜨린 것**(품목 바로 앞 꾸밈말, 품목 이름 속 기장)이고, 그다음이 일반어를 품목으로 읽음·포함/제외 뒤집힘이다. 따라서 받는 쪽은 "잘못 들어간 조건"보다 "빠진 조건"을 더 자주 만난다. 별도 holdout 20개 측정은 아직이다([query-structuring.md §15.7·§15.8](../../../../docs/query-structuring.md)).
 - 개선은 LLM 모델·프롬프트 버전 올리기로 한다. **계약(이 문서·스키마)은 바뀌지 않는다.**
-- **연결 상태 (2026-11-11, FW-1)**: 화면 서버(`server.py` `structure_query_for_ui`)가 이 계약을 만든다(`structure_query_v2`, 프롬프트 v6). 응답에는 `structured_query`(전체)와, trend가 받을 `trend_query`(**첫 품목·첫 시즌만**, `query/to_trend.py` `to_trend_query()`)가 함께 있다. (병합 전 기록) 어느 Agent에도 전송하지 않았다(`sent: false`). 아래 표는 병합 전의 확인 결과다. **2026-11-11 `main` 병합 후(팀원 5aro의 HTTP v0.1 E2E 연결)**: HTTP v0.1 실행 — 화면 `/api/run`(`mode: agent_http_v01`, 구조화 동의) 또는 공개 API `POST /v1/orchestrations`(`input.structure_query: true`) — 에서는 `structure_query_for_ui`가 만든 **`trend_query`(첫 품목·첫 시즌만, `to_trend_query()`)를 Trend `/runs`에 실제로 보낸다**(`trend_input_preview.sent: true`). 찾는 품목이 모두 범위 밖이라 보낼 것이 없으면 Agent를 부르지 않고 422 `query_structuring_no_item`. demo·connected 모드는 미리보기만(`sent: false`). 재고·시장성·새 상품 기획은 여전히 구조화 결과를 받지 않는다(원문 또는 앞 단계 결과). 오프라인 E2E용 `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`는 `examples/fixtures/query/*.synthetic.json`의 `structured_draft`(draft_v4)를 쓴다. `StructuredQuery` 자체를 받는 Agent는 아직 없다(trend는 변환된 `TrendQuery`를 받는다). 화면의 품목 목록 표시는 아직 없다(U4).
+- **연결 상태 (2026-11-11, FW-1)**: 화면 서버(`server.py` `structure_query_for_ui`)가 이 계약을 만든다(`structure_query_v2`, 프롬프트 v6). 응답에는 `structured_query`(전체)와, trend가 받을 `trend_query`(**첫 품목·첫 시즌만**, `query/to_trend.py` `to_trend_query()`)가 함께 있다. (병합 전 기록) 어느 Agent에도 전송하지 않았다(`sent: false`). 아래 표는 병합 전의 확인 결과다. **2026-11-11 `main` 병합 후(팀원 5aro의 HTTP v0.1 E2E 연결)**: HTTP v0.1 실행 — 화면 `/api/run`(`mode: agent_http_v01`, 구조화 동의) 또는 공개 API `POST /v1/orchestrations`(`input.structure_query: true`) — 에서는 `structure_query_for_ui`가 만든 **`trend_query`(첫 품목·첫 시즌만, `to_trend_query()`)를 Trend `/runs`에 실제로 보낸다**(`trend_input_preview.sent: true`). 찾는 품목이 모두 범위 밖이어도 2026-11-12부터는 모든 카테고리 품목으로 Trend를 부른다(IT-7′). 422 `query_structuring_no_item`은 보낼 품목이 없을 때의 안전장치로만 남았다. demo·connected 모드는 미리보기만(`sent: false`). 재고·시장성·새 상품 기획은 여전히 구조화 결과를 받지 않는다(원문 또는 앞 단계 결과). 오프라인 E2E용 `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`는 `examples/fixtures/query/*.synthetic.json`의 `structured_draft`(draft_v4)를 쓴다. `StructuredQuery` 자체를 받는 Agent는 아직 없다(trend는 변환된 `TrendQuery`를 받는다). 화면의 품목 목록 표시는 아직 없다(U4).
 
   | Agent (단계) | 이 저장소의 단계 이름 | 사용자 질의와 관련해 받는 입력 (`core.py` `Orchestrator.run`) | 이 저장소의 질의 구조화 결과를 받나 |
   |---|---|---|---|
@@ -65,9 +65,9 @@
 1.0은 확정되었다(SQ-F). 필드를 바꾸려면 아래 순서를 따른다. 각 단계 옆은 그 단계를 지키는 테스트·명령이다.
 | # | 할 일 | 지키는 테스트·명령 |
 |---|---|---|
-| 1 | **사용자 결정을 먼저 기록**: [query-decisions.md](../docs/query-decisions.md) §2.2에 결정 행(이유·쉬운 예·예상 JSON), 버전 규칙(필드 추가 = 1.x, 깨지는 변경 = 2.0, `schema_version` 값 변경) | — |
+| 1 | **사용자 결정을 먼저 기록**: [query-decisions.md](../../../../docs/query-decisions.md) §2.2에 결정 행(이유·쉬운 예·예상 JSON), 버전 규칙(필드 추가 = 1.x, 깨지는 변경 = 2.0, `schema_version` 값 변경) | — |
 | 2 | 모델 수정: `query/models.py` (필요하면 `contract_vocabulary.py`) | `tests/test_query_structured_models.py` |
-| 3 | JSON Schema 다시 만들기: `PYTHONPATH=src py scripts/export_structured_query_schema.py` → `contracts/structured-query.schema.json` (직접 고치지 않음) | `py scripts/export_structured_query_schema.py --check`, `test_committed_schema_is_the_exporter_output` |
+| 3 | JSON Schema 다시 만들기: `PYTHONPATH=src py scripts/export_structured_query_schema.py` → `contracts/agents/vogue-orchestrator/output/structured-query-1.0.schema.json` (직접 고치지 않음) | `py scripts/export_structured_query_schema.py --check`, `test_committed_schema_is_the_exporter_output` |
 | 4 | 이 정의서: §0(인수인계·클래스 표), §2 모양, §3 필드 표, 필요하면 §5.1 규칙, §6 예시, §7 차이·변환 표, §8 변경 이력 | — (문서) |
 | 5 | 테스트의 예시 상수: §6 예시는 `tests/test_query_structured_models.py`의 `EXAMPLE_1`~`EXAMPLE_7`·`SECTION_2_SHAPE`에 **손으로 옮겨 둔 사본**이다(마크다운을 읽지 않음). 문서와 함께 고친다. 필드 순서 검사도 같은 파일에 있다 | `test_query_structured_models.py`, `test_contract_examples_validate_against_the_exported_schema` |
 | 6 | `TrendQuery`와의 차이 목록 `INTENDED_DIFFERENCES`(같은 파일). **문서·`trend_terms` 수준의 차이만 잡는다**(품목 안 필드 변화는 잡지 않음) | `test_query_structured_models.py` |
@@ -102,7 +102,7 @@
 사용자 질의 ──► [이 저장소] StructuredQuery ──► trend 분석 (지금은 TrendQuery로 변환해서, Action Item)
                                             └─► 다른 Agent (예정, 각자 변환)
 ```
-trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))를 이어받아 이름을 바꾸고, 속성 포함/제외와 출처 표시(`match`)를 더한 것이다. 차이는 §7.
+trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](../../trend-analysis-agent/input/trend-query.md))를 이어받아 이름을 바꾸고, 속성 포함/제외와 출처 표시(`match`)를 더한 것이다. 차이는 §7.
 
 ## 2. 전체 형태
 조건은 **품목별로** 묶는다(2026-11-11 결정 IT-1~IT-7). 평평한 목록(카테고리 목록 + 속성 목록)에는 어느 속성이 어느 품목의 것인지가 남지 않아, "숏패딩이랑 반팔 니트 원피스"를 받는 쪽이 "니트 반팔 패딩"으로 찾게 되기 때문이다.
@@ -145,7 +145,8 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 - 품목 앞 꾸밈말은 **바로 뒤 품목에만** 붙는다(IT-2). "레오파드 패턴 없는 셔츠랑 스커트" → 레오파드 제외는 셔츠에만. "둘 다"·"모두"·품목 나열 뒤에서 전체를 꾸미는 말("셔츠랑 스커트 블랙으로")은 모든 품목에.
 - **예외: 첫 품목 앞의 성별은 모든 품목에 붙는다**(IT-9). "여성 셔츠랑 스커트" → 여성 셔츠 + 여성 스커트. 다른 품목에 따로 성별이 있으면("여성 셔츠랑 남성 바지") 각자 자기 것만. 두 번째 이후 품목 앞의 성별("셔츠랑 여성 스커트")은 IT-2대로 그 품목에만.
 - **찾는 품목을 말하지 않은 질의**는 `category: null`인 품목 1개다(IT-6). 뜻은 모든 카테고리에서 `excluded_categories`를 뺀 것이다: "아우터는 빼고 블랙" = 상의·하의·원피스 중 블랙(예 7). 제외를 남은 카테고리로 바꿔 쓰지 않는다(G-3과 같은 원칙).
-- **표준 카테고리 밖의 품목**("블랙 부츠"의 부츠)은 품목이 되지 않고 `out_of_scope_items`에 그 품목에 붙은 조건 원문과 함께 남는다(IT-7). 품목으로 만들면 "모든 카테고리의 블랙"으로 넓어지기 때문이다. 찾는 품목이 모두 범위 밖이면 `items`는 `[]`이다(경고 `only_out_of_scope_items`, 받는 쪽은 처리할 품목이 없다).
+- **표준 카테고리 밖의 품목**("블랙 부츠"의 부츠)은 품목이 되지 않고 `out_of_scope_items`에 그 품목에 붙은 조건 원문과 함께 남는다(IT-7). 품목으로 만들면 "모든 카테고리의 블랙"으로 넓어지기 때문이다. 찾는 품목이 모두 범위 밖이면 질의 전체 조건만 가진 `category: null` 품목 1개가 생긴다(경고 `only_out_of_scope_items`, IT-7′ — 시즌은 넘어가고 범위 밖 품목에 붙은 조건은 붙지 않는다).
+- **품목 자리의 말이 카테고리가 아니라 속성 값**이면("2027SS 여성 반팔"의 반팔 = 소매 기장) 범위 밖 품목이 아니라 그 속성 하나를 가진 `category: null` 품목이 된다(경고 `item_word_used_as_condition`, IT-10). 사전 값 `exact`·`alias`만 인정하고(`approx`는 범위 밖 그대로: "벨트"), 여러 종류로 정해지면 exact 우선, 그다음 소매 기장 → 몸판 기장 → 색 → 소재 → 패턴 → 핏 → 디테일.
 - 한 표현이 표준 카테고리 두 개를 가리키면(띄어 쓴 "셔츠 원피스", OQ-10′) 품목 두 개가 되고 조건은 둘 다 같다.
 - **시즌·트렌드명은 품목과 따로 질의 전체에 걸린다**(IT-5″). 시즌은 **목록**이다(SQ-2): 사용자가 말한 시즌을 나온 순서대로 모두 담고("올봄이랑 가을" → 2개), 말하지 않았으면 `default_next` 1개라 **항상 1개 이상**이다. 같은 연도·시즌은 한 번만. 시즌이 어느 품목의 것인지는 담지 않는다("봄 블라우스랑 겨울 코트" → 시즌 [SS, FW], 품목 [블라우스, 코트], 한계).
 - **빈 값은 `null`이 아니라 `[]`** 다. 속성 키 7개(`color`·`material`·`pattern`·`detail`·`fit`·`body_length`·`sleeve_length`)는 포함·제외 양쪽에 **항상 있다.** §6 예시는 지면상 빈 목록을 생략했다.
@@ -245,7 +246,7 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 | 남녀공용, 유니섹스 | 공용 | `alias` |
 | 표에 없는 표현 | LLM 제안이 남·여·공용 중 하나면 그 값 | `llm` |
 
-- 이 표는 trend 사전에 **없는 속성**에 대한 것이라 "질의 전용 별칭 사전을 만들지 않는다"(사전 중복 금지, [query-decisions.md](../docs/query-decisions.md) §5)와 충돌하지 않는다. trend 사전에 성별이 생기면 그쪽을 따르고 이 표는 지운다.
+- 이 표는 trend 사전에 **없는 속성**에 대한 것이라 "질의 전용 별칭 사전을 만들지 않는다"(사전 중복 금지, [query-decisions.md](../../../../docs/query-decisions.md) §5)와 충돌하지 않는다. trend 사전에 성별이 생기면 그쪽을 따르고 이 표는 지운다.
 - 표 항목 (2026-11-10 U2 확정): 여 = 여성·여자·여성용·우먼·위민즈·women·womens, 남 = 남성·남자·남성용·맨즈·men·mens, 공용 = 남녀공용·유니섹스·unisex. "젠더리스"는 같은 뜻이 아니라 넣지 않았다. 비교는 사전과 같은 방식(소문자, 공백·`-`·`_` 무시)이라 "남녀 공용"도 맞는다. 위치: `configs/query_structuring.json`의 `gender.aliases`.
 - **성별 제외와 여러 성별 (결정 G-3, 2026-11-10 사용자 확정, U3.5 구현)**: 성별도 카테고리·속성처럼 `include`/`exclude` 목록이다.
 
@@ -449,7 +450,7 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 | `style_names`·`product_model_names`의 `value` | 문자열 또는 `null` | `null`만 (어휘 없음) |
 | 모르는 필드 | 무시 (pydantic 기본) | 거부 (`additionalProperties: false`) |
 
-**품목 수 제한 (IT-4, 2026-11-11 결정)**: `TrendQuery`는 품목 하나만 담고 지금 파이프라인도 품목 1개만 받는다. 그래서 trend에는 **`items`의 첫 품목(질의에 가장 먼저 나온 품목)만** 넘긴다. 나머지 품목은 `StructuredQuery`에 그대로 남고, 넘기지 않았다는 사실을 경고 `items_not_forwarded`로 알린다(변환은 2026-11-11 `query/to_trend.py` `to_trend_query()`로 구현, FW-1. 화면 표시는 U4). **재고·시장성·새 상품 기획 Agent도 이 계약을 받게 되면 같은 규칙(첫 품목·첫 시즌)을 따른다**(FW-1, Multi-Loop 전까지). `items`가 `[]`이면(찾는 품목이 모두 범위 밖) trend를 부르지 않는다. 품목마다 반복하는 Multi-Loop 파이프라인이 생기면 모든 품목을 넘기도록 바꾼다. 받는 `TrendQuery` 한 개는 `items[0]`의 조건과 질의 전체의 `trend_terms`를 합쳐 만든다. `TrendQuery`의 시즌도 하나뿐이라 **`seasons[0]`만** 넘기고, 나머지 시즌은 경고 `seasons_not_forwarded`로 알린다(SQ-2). `items`가 `[]`이면 `TrendQuery`를 만들지 않는다(경고 `no_item_to_forward`).
+**품목 수 제한 (IT-4, 2026-11-11 결정)**: `TrendQuery`는 품목 하나만 담고 지금 파이프라인도 품목 1개만 받는다. 그래서 trend에는 **`items`의 첫 품목(질의에 가장 먼저 나온 품목)만** 넘긴다. 나머지 품목은 `StructuredQuery`에 그대로 남고, 넘기지 않았다는 사실을 경고 `items_not_forwarded`로 알린다(변환은 2026-11-11 `query/to_trend.py` `to_trend_query()`로 구현, FW-1. 화면 표시는 U4). **재고·시장성·새 상품 기획 Agent도 이 계약을 받게 되면 같은 규칙(첫 품목·첫 시즌)을 따른다**(FW-1, Multi-Loop 전까지). 찾는 품목이 모두 범위 밖이어도 `category: null` 품목이 있으므로 trend를 부른다(IT-7′). 품목마다 반복하는 Multi-Loop 파이프라인이 생기면 모든 품목을 넘기도록 바꾼다. 받는 `TrendQuery` 한 개는 `items[0]`의 조건과 질의 전체의 `trend_terms`를 합쳐 만든다. `TrendQuery`의 시즌도 하나뿐이라 **`seasons[0]`만** 넘기고, 나머지 시즌은 경고 `seasons_not_forwarded`로 알린다(SQ-2). `items`가 `[]`이면 `TrendQuery`를 만들지 않는다(경고 `no_item_to_forward`).
 
 **변환 규칙 (`to_trend_query()`, 2026-11-11 FW-1)**
 | `StructuredQuery` (`items[0]`) | `TrendQuery` |
@@ -462,11 +463,12 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](trend-query.md))
 | `attributes.exclude` 전부, 기장 2종(포함·제외) | `unsupported`(위와 같은 reason), 경고 `conditions_not_forwarded`. 이때 `TrendQuery.unsupported.type`은 속성 종류 이름(`color`·`body_length` 등) 또는 `gender`다 — `StructuredQuery`의 9개 `unsupported.type`과 다른 값이다(`TrendQuery`의 type은 자유 문자열) |
 | `unsupported` | `unsupported` (`polarity`가 없으므로 제외면 reason 끝에 "(제외 요청)") |
 | `seasons[0]`, `style_names`, `product_model_names` | `trend_terms.season`, `style_names`, `item_terms` |
-| `match`, `item_id`, `out_of_scope_items` | 넘기지 않음 (`StructuredQuery`에 남음) |
+| `match`, `item_id` | 넘기지 않음 (`StructuredQuery`에 남음) |
+| `out_of_scope_items` | 품목마다 `unsupported` `{type: "category", raw, reason}`로 넘김(IT-7′, 2026-11-12). 그 품목에 붙은 조건은 넘기지 않음 |
 
 이 차이 목록은 `tests/test_query_structured_models.py`의 `INTENDED_DIFFERENCES`로 검사한다. 목록에 없는 차이가 생기면 테스트가 실패한다.
 
-trend에 넘길 때의 변환(`to_trend_query()`)은 2026-11-11 구현됐다(위 표). 실제 전송과 trend 쪽 계약 반영(속성 제외·`match`를 받을 칸)은 **Action Item**이다([query-decisions.md §0](../docs/query-decisions.md)의 7·8). 변환에서 trend가 아직 모르는 필드(속성 제외, `match`)를 그냥 버리면 안 된다. trend가 반영하기 전에는 결과에 "반영되지 않은 조건"으로 알려야 한다 (X4 안전 조건).
+trend에 넘길 때의 변환(`to_trend_query()`)은 2026-11-11 구현됐다(위 표). 실제 전송과 trend 쪽 계약 반영(속성 제외·`match`를 받을 칸)은 **Action Item**이다([query-decisions.md §0](../../../../docs/query-decisions.md)의 7·8). 변환에서 trend가 아직 모르는 필드(속성 제외, `match`)를 그냥 버리면 안 된다. trend가 반영하기 전에는 결과에 "반영되지 않은 조건"으로 알려야 한다 (X4 안전 조건).
 
 ## 8. 변경 이력
 | 날짜 | 내용 |
@@ -486,3 +488,4 @@ trend에 넘길 때의 변환(`to_trend_query()`)은 2026-11-11 구현됐다(위
 | 2026-11-11 (13차) | **FW-1**: §0.4 연결 상태(화면 서버가 이 계약을 만듦, 4개 Agent가 받는 입력 표), §7 첫 품목·첫 시즌 규칙을 모든 받는 Agent로, `to_trend_query()` 변환 규칙 표. 계약 필드는 바뀌지 않음 |
 | 2026-11-11 (14차) | 콜드리드 검증 반영: 상태 줄(화면 서버 연결), §0.1.1 클래스 위치 표, §0.5 스키마를 바꾸는 절차(체크리스트), §0.6 옛 이름 → 새 이름 표, §0.2 경고 목록 보충, §2 "모델만 검사" 정정, §3 `QueryItem`에 `item_id`, §7 변환 표의 type 설명. 계약 필드는 바뀌지 않음 |
 | 2026-11-11 (15차) | `main` 병합(팀원 HTTP v0.1 E2E): HTTP v0.1 실행에서 `trend_query`(첫 품목·첫 시즌)가 Trend로 실제 전송됨을 상태 줄·§0.4에 반영. 계약 필드는 바뀌지 않음 |
+| 2026-11-12 (16차) | 사용자 결정 **IT-10**(품목 자리의 속성 값 → 그 속성을 가진 `category: null` 품목)·**IT-7′**(범위 밖 품목만 있어도 `category: null` 품목으로 시즌을 넘기고, `out_of_scope_items`는 trend `unsupported` type `category`). §0 5·8번, 연결 상태, §2 범위 밖 품목, §7 품목 수 제한·넘기지 않는 필드 표 갱신. 계약 모양은 그대로(1.0) |

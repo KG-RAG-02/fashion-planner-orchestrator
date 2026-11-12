@@ -512,7 +512,38 @@
      "style_names": [],
      "product_model_names": []
     },
-    "items": [],
+    "items": [
+     {
+      "item_id": "i1",
+      "category": null,
+      "excluded_categories": [],
+      "gender": {
+       "include": [],
+       "exclude": []
+      },
+      "attributes": {
+       "include": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       },
+       "exclude": {
+        "color": [],
+        "material": [],
+        "pattern": [],
+        "detail": [],
+        "fit": [],
+        "body_length": [],
+        "sleeve_length": []
+       }
+      },
+      "unsupported": []
+     }
+    ],
     "out_of_scope_items": [
      {
       "raw": "로퍼",

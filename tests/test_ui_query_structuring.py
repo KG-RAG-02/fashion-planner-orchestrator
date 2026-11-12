@@ -68,13 +68,31 @@ class StructuringTests(unittest.TestCase):
         self.assertEqual(preview["trend_query"], tq)
         self.assertEqual(preview["forwarded"], {"items": ["i1"], "seasons": 1})
 
-    def test_only_out_of_scope_items_give_no_trend_input(self):
-        out = server.structure_query_for_ui("벨트 보여줘", "rid-8", enabled=True,
-                                            provider_factory=fixed(flat_draft([("벨트", None)])))
+    def test_only_out_of_scope_items_still_give_a_trend_input_over_every_category(self):
+        # IT-7′ (2026-11-12): the season reaches trend; 벨트 goes to unsupported as a category
+        out = server.structure_query_for_ui("2027SS 벨트 보여줘", "rid-8", enabled=True, provider_factory=fixed(
+            flat_draft([("벨트", None)], seasons=[{"year": 2027, "season": "SS", "raw": "2027SS"}])))
         self.assertEqual(out["status"], "ok")
-        self.assertIsNone(out["trend_query"])
-        self.assertIn("no_item_to_forward", out["warnings"])
-        self.assertEqual(out["trend_input_preview"]["forwarded"], {"items": [], "seasons": 0})
+        tq = out["trend_query"]
+        self.assertEqual(tq["requested"]["categories"]["include"], [])
+        self.assertEqual((tq["trend_terms"]["season"]["year"], tq["trend_terms"]["season"]["season"]), (2027, "SS"))
+        self.assertEqual([(u["type"], u["raw"]) for u in tq["unsupported"]], [("category", "벨트")])
+        self.assertIn("only_out_of_scope_items", out["warnings"])
+        self.assertNotIn("no_item_to_forward", out["warnings"])
+        self.assertEqual(out["trend_input_preview"]["forwarded"], {"items": ["i1"], "seasons": 1})
+
+    def test_a_sleeve_length_alone_reaches_trend_with_its_season(self):
+        # IT-10 (2026-11-12): the query reported on 2026-11-12 ("2027SS 여성 반팔 제작하고 싶어")
+        draft = flat_draft([("반팔", "반팔")], conditions=[
+            {"raw": "여성", "kind": "gender", "polarity": "include", "suggestion": "여", "item": None}],
+            seasons=[{"year": 2027, "season": "SS", "raw": "2027SS"}])
+        out = server.structure_query_for_ui("2027SS 여성 반팔 제작하고 싶어", "rid-10", enabled=True,
+                                            provider_factory=fixed(draft))
+        tq = out["trend_query"]
+        self.assertIsNotNone(tq)
+        self.assertEqual(tq["requested"]["categories"]["include"], [])
+        self.assertEqual(tq["requested"]["gender"], {"raw": "여성", "value": "여"})
+        self.assertEqual([(u["type"], u["raw"]) for u in tq["unsupported"]], [("sleeve_length", "반팔")])
 
     def test_synthetic_fixtures_give_the_trend_query_of_the_v1_path(self):
         # main's offline E2E mode (VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture) serves each fixture's
@@ -100,8 +118,8 @@ class StructuringTests(unittest.TestCase):
                 want = [(u["type"], u["raw"]) for u in expected["unsupported"]]
                 if case["case"] == "abstract-and-length":  # a length is a body_length condition now (OQ-9′)
                     want = [("abstract", "포멀한 느낌"), ("body_length", "길이가 긴")]
-                if case["case"] == "nonstandard-values":  # 가방 is an out-of-scope item now (IT-7), not sent
-                    want = []
+                if case["case"] == "nonstandard-values":  # 가방 is out of scope (IT-7), reported as a category (IT-7′)
+                    want = [("category", "가방")]
                     self.assertEqual([o["raw"] for o in out["structured_query"]["out_of_scope_items"]], ["가방"])
                 self.assertEqual(sorted(got), sorted(want))
 

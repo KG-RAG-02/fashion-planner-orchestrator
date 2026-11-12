@@ -902,7 +902,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard\nvocabulary. Definition: contracts/structured-query.md (owner: vogue-orchestrator).\n\n`items` are in the order the user named them (decision IT-4: the pipeline takes one item today, so\nonly `items[0]` is forwarded to trend). Season and trend names are query-wide (`trend_terms`,\ndecision IT-5″). `items` is empty only when every item the user named is out of scope.",
+  "description": "StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard\nvocabulary. Definition: contracts/agents/vogue-orchestrator/output/structured-query.md (owner: vogue-orchestrator).\n\n`items` are in the order the user named them (decision IT-4: the pipeline takes one item today, so\nonly `items[0]` is forwarded to trend). Season and trend names are query-wide (`trend_terms`,\ndecision IT-5″). The assembler always writes at least one item: with no named item, or only\nout-of-scope ones, one item with `category: null` (IT-6, IT-7′). The model still accepts `[]`.",
   "properties": {
     "items": {
       "items": {

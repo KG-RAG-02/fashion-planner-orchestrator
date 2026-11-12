@@ -1,0 +1,393 @@
+{
+  "_provenance": {
+    "agent_id": "stock-agent",
+    "contract": "stock-agent input (TrendAnalysisResult as stock-agent reads it)",
+    "direction": "input",
+    "payload_schema_version": "1.0",
+    "method": "copy",
+    "source_repo": "KG-RAG-02/stock-agent",
+    "source_branch": "main",
+    "source_commit": "416c37c8695e",
+    "source_schema": "contracts/schemas/stock-agent-request.schema.json",
+    "source_files": [
+      {
+        "path": "contracts/schemas/stock-agent-request.schema.json",
+        "sha256": "c6a19a823f592c6227af192c5096914db44ff9ed263d4c59c5dd22e5fd08a536"
+      },
+      {
+        "path": "stock_agent/trend_request.py",
+        "sha256": "a91fb84f36215ac17bb7f7ad5f5726de1827083a6f652ab33b21bcdd15c7fccd"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/stock-agent/runs",
+      "contract_version": "vogue-handoff/0.1",
+      "detected_from": "stock_agent/api.py:HANDOFF_CONTRACT_VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:vogue:contracts:stock-agent:inventory-request:1.0",
+    "title": "stock-agent producer input = TrendAnalysisResult (payload schema 1.0)",
+    "description": "Legacy POST /v1/inventory-products accepts this object directly. POST /v1/agents/stock-agent/runs accepts the same unchanged object under input in a vogue-handoff/0.1 envelope. This producer input schema is separate from the shared HTTP envelope version. Unlisted TrendAnalysisResult fields are preserved at the HTTP boundary even when Stock does not consume them.",
+    "x-http-envelope": {
+      "route": "POST /v1/agents/stock-agent/runs",
+      "contract_version": "vogue-handoff/0.1",
+      "request": {
+        "contract_version": "vogue-handoff/0.1",
+        "request_id": "<non-empty string>",
+        "input": "this producer input object"
+      },
+      "response": {
+        "contract_version": "vogue-handoff/0.1",
+        "request_id": "<same request ID>",
+        "producer": {
+          "agent_id": "stock-agent",
+          "schema_version": "1.0"
+        },
+        "status": "result.status",
+        "result": "stock-agent-result.schema.json"
+      },
+      "authentication": "Authorization: Bearer VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+    },
+    "type": "object",
+    "required": [
+      "request_id",
+      "status",
+      "applied_filters",
+      "trends"
+    ],
+    "properties": {
+      "request_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "enum": [
+          "ok",
+          "no_results",
+          "error"
+        ],
+        "description": "no_results → DB를 조회하지 않고 no_results. error → INVALID_REQUEST(reason=upstream_error)"
+      },
+      "applied_filters": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/applied_filters"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "trends": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/trend"
+        }
+      },
+      "evidence": {
+        "type": "array"
+      },
+      "limitations": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "$defs": {
+      "applied_filters": {
+        "type": "object",
+        "properties": {
+          "season": {
+            "$ref": "#/$defs/season_request"
+          },
+          "categories": {
+            "type": "object",
+            "properties": {
+              "include": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/category_ref"
+                },
+                "description": "→ target_category (minor, 없으면 major). raw만 있는 항목은 쓰지 않음"
+              },
+              "exclude": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/category_ref"
+                },
+                "description": "→ exclude_categories"
+              }
+            }
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "enum": [
+                  "여",
+                  "남",
+                  "공용"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "여 → Ladieswear+Divided, 남 → Menswear+Divided, 공용 → 전체. 없으면 트렌드마다 Item gender"
+          },
+          "attributes": {
+            "type": "array",
+            "description": "type=color만 쓴다(→ target_colors). material·fit 등은 쓰지 않음",
+            "items": {
+              "type": "object",
+              "required": [
+                "type",
+                "value"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "color",
+                    "material",
+                    "pattern",
+                    "detail",
+                    "fit"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "season_request": {
+        "type": "object",
+        "required": [
+          "year",
+          "season"
+        ],
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "season": {
+            "enum": [
+              "SS",
+              "FW"
+            ]
+          },
+          "raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin": {
+            "enum": [
+              "user_requested",
+              "default_next"
+            ]
+          }
+        }
+      },
+      "category_ref": {
+        "type": "object",
+        "required": [
+          "raw"
+        ],
+        "properties": {
+          "raw": {
+            "type": "string"
+          },
+          "major": {
+            "anyOf": [
+              {
+                "enum": [
+                  "상의",
+                  "하의",
+                  "아우터",
+                  "원피스"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minor": {
+            "anyOf": [
+              {
+                "enum": [
+                  "탑",
+                  "블라우스",
+                  "티셔츠",
+                  "니트웨어",
+                  "셔츠",
+                  "브라탑",
+                  "후드티",
+                  "청바지",
+                  "팬츠",
+                  "스커트",
+                  "레깅스",
+                  "조거팬츠",
+                  "코트",
+                  "재킷",
+                  "점퍼",
+                  "패딩",
+                  "베스트",
+                  "가디건",
+                  "짚업",
+                  "드레스",
+                  "점프수트"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "trend": {
+        "type": "object",
+        "required": [
+          "style",
+          "items"
+        ],
+        "properties": {
+          "style": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "definition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": "array"
+              }
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/trend_item"
+            }
+          }
+        }
+      },
+      "trend_item": {
+        "type": "object",
+        "description": "03이 쓰는 Item 필드. 소재·핏은 vocabulary_v1 값만 쓰고, approx에 든 값은 쓰지 않는다(limitations에 적음).",
+        "properties": {
+          "category_major": {
+            "anyOf": [
+              {
+                "enum": [
+                  "상의",
+                  "하의",
+                  "아우터",
+                  "원피스"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "category_minor": {
+            "anyOf": [
+              {
+                "enum": [
+                  "탑",
+                  "블라우스",
+                  "티셔츠",
+                  "니트웨어",
+                  "셔츠",
+                  "브라탑",
+                  "후드티",
+                  "청바지",
+                  "팬츠",
+                  "스커트",
+                  "레깅스",
+                  "조거팬츠",
+                  "코트",
+                  "재킷",
+                  "점퍼",
+                  "패딩",
+                  "베스트",
+                  "가디건",
+                  "짚업",
+                  "드레스",
+                  "점프수트"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "colors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "21색 (vocabulary_v1 Color)"
+          },
+          "materials": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "fit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "enum": [
+                  "여",
+                  "남",
+                  "공용"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approx": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "예: material:플리스"
+          }
+        }
+      }
+    }
+  }
+}

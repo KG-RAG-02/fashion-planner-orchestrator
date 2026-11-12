@@ -3,7 +3,7 @@
 The queries and labels were written on 2026-11-11 by a separate Claude agent that did NOT read the v4
 prompt (no file under prompts/, no rendered prompt, no prompt examples) and did not look at data/eval_runs/.
 The agent wrote the labels only from the label rules: the draft v3 format (query/draft_v3.py), the contract
-(contracts/structured-query.md §2-§6) and the decisions (docs/query-decisions.md §2). So this set measures
+(contracts/agents/vogue-orchestrator/output/structured-query.md §2-§6) and the decisions (docs/query-decisions.md §2). So this set measures
 how prompt v4 generalises to queries it was not tuned on (work rule W-10 ④). The queries are new, not
 paraphrases of data/user_queries.v1-v3.json or the holdout v1/v2 sets. Labels are silver (not yet checked
 by the user).
@@ -136,7 +136,7 @@ ITEMS = [
 def build() -> dict:
     return {
         "_about": "홀드아웃 질의 20개(합성, 새 질의 h201~h220). 2026-11-11 프롬프트 v4를 읽지 않은 별도 Claude Agent가 "
-                  "질의와 라벨을 작성했다(라벨 근거: draft_v3.py 형식, contracts/structured-query.md, docs/query-decisions.md). "
+                  "질의와 라벨을 작성했다(라벨 근거: draft_v3.py 형식, contracts/agents/vogue-orchestrator/output/structured-query.md, docs/query-decisions.md). "
                   "프롬프트 v4의 최종 확인용(튜닝에 쓰지 않은 세트). label_status=silver: 사용자 확인 전. "
                   "생성: scripts/build_query_holdout_v3.py",
         "dataset": "user_queries_holdout",

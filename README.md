@@ -16,6 +16,8 @@ Project_08은 VOGUE 중앙 오케스트레이션 계층의 실행 가능한 로�
 
 agent별 현재 구현과 fixture 기반 input/output은 [`docs/agent-io-contracts.md`](docs/agent-io-contracts.md)에 정리했습니다. 공통 HTTP envelope는 팀 합의 `vogue-handoff/0.1`을 사용하며, producer별 필드와 schema는 producer 소유입니다.
 
+각 Agent의 입력·출력 계약을 코드 기준으로 뽑은 스냅샷과 출처는 [`contracts/agents/`](contracts/agents/SOURCES.md)에 모았습니다(2026-11-11). 생성·확인은 `py scripts/export_agent_contracts.py [--check]`, 구조와 절차는 [`contracts/README.md`](contracts/README.md)를 봅니다. 오케스트레이터가 모든 Agent 계약과 매핑을 맡는 작업의 목표·진행 상황·로컬 실행 방법·발견한 문제·대기 중인 결정은 [`docs/agent-contract-integration.md`](docs/agent-contract-integration.md)에 있습니다(이어받는 Agent는 여기부터).
+
 PlanningDraft 생성 엔진은 P06 Git commit `07e7d4d`에서 P08로 이관했습니다. P08이 초안과 기획 이미지를 만들고 P07에 리뷰를 한 번 요청합니다. P06은 상품 옵션 생성과 legacy `/api/planning-draft` 호환 경로를 계속 소유합니다.
 
 현재 구현과 합의 v0.1 간 차이, sales-market-agent 결과 및 차트 artifact의 실제 handoff 경로는 [`docs/integration-gap-analysis.md`](docs/integration-gap-analysis.md)에 기록했습니다. 특히 sales-market-agent envelope 전체는 실행 기록에 남지만 downstream 요청에는 `result`만 전달되고 sibling `artifacts`는 전달되지 않습니다.
@@ -117,7 +119,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 examples/synthetic_local_integr
 
 ## 질의 구조화 모듈 (LLM 호출 전 단계)
 
-사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 바꾸는 모듈입니다. 모듈 자체는 네트워크·LLM 호출과 키가 없고, 실제 LLM 호출은 모듈 밖 `llm_provider.py`가 맡습니다. UI 서버(`server.py`)만 이 모듈을 함수로 호출하며, 코어(core·connectors·demo)와는 서로 import하지 않습니다. 이 모듈만 pydantic이 필요합니다(optional extra `query`). 코어와 기존 테스트는 계속 표준 라이브러리만으로 실행되고, pydantic이 없으면 질의 테스트는 skip됩니다. 다음 출력 계약 `StructuredQuery` 1.0(이 저장소 소유)은 **2026-11-11 확정**되었고(받는 Agent용 요약: [`contracts/structured-query.md`](contracts/structured-query.md) §0), 이를 만드는 경로(`query/structured.py` `structure_query_v2`, 프롬프트 v6)도 구현되어 있습니다. 화면 서버(`server.py`)도 2026-11-11부터 이 경로를 쓰고, trend가 받을 입력은 첫 품목·첫 시즌만 담은 `TrendQuery`로 변환합니다(`query/to_trend.py`). HTTP v0.1 실행에서는 이 `TrendQuery`가 Trend로 실제 전송되고(위 HTTP mode 설명), demo·connected 모드에서는 미리보기입니다. (팀원 정리, `main`) UI는 이 모듈을 기본 실행하고, HTTP v0.1 mode는 결과를 Trend route에 전달합니다. `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`는 로컬 합성 E2E 전용 exact-match provider입니다(합성 질의 fixture의 `structured_draft`를 씀). 일반 모드에서는 설정된 LLM provider를 사용합니다.
+사용자 원문 질의를 trend-analysis-agent의 검색 입력 `TrendQuery`로 바꾸는 모듈입니다. 모듈 자체는 네트워크·LLM 호출과 키가 없고, 실제 LLM 호출은 모듈 밖 `llm_provider.py`가 맡습니다. UI 서버(`server.py`)만 이 모듈을 함수로 호출하며, 코어(core·connectors·demo)와는 서로 import하지 않습니다. 이 모듈만 pydantic이 필요합니다(optional extra `query`). 코어와 기존 테스트는 계속 표준 라이브러리만으로 실행되고, pydantic이 없으면 질의 테스트는 skip됩니다. 다음 출력 계약 `StructuredQuery` 1.0(이 저장소 소유)은 **2026-11-11 확정**되었고(받는 Agent용 요약: [`contracts/agents/vogue-orchestrator/output/structured-query.md`](contracts/agents/vogue-orchestrator/output/structured-query.md) §0), 이를 만드는 경로(`query/structured.py` `structure_query_v2`, 프롬프트 v6)도 구현되어 있습니다. 화면 서버(`server.py`)도 2026-11-11부터 이 경로를 쓰고, trend가 받을 입력은 첫 품목·첫 시즌만 담은 `TrendQuery`로 변환합니다(`query/to_trend.py`). HTTP v0.1 실행에서는 이 `TrendQuery`가 Trend로 실제 전송되고(위 HTTP mode 설명), demo·connected 모드에서는 미리보기입니다. (팀원 정리, `main`) UI는 이 모듈을 기본 실행하고, HTTP v0.1 mode는 결과를 Trend route에 전달합니다. `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`는 로컬 합성 E2E 전용 exact-match provider입니다(합성 질의 fixture의 `structured_draft`를 씀). 일반 모드에서는 설정된 LLM provider를 사용합니다.
 
 ```bash
 pip install -e ".[query]"
@@ -132,7 +134,7 @@ PYTHONPATH=src python3 examples/query_structuring_demo.py --show-prompt "가을 
 | [`configs/`](configs/README.md) | 질의 모듈 설정(`query_structuring.json`)과 저장소 전체 하드코딩 값·종속 관계 목록 |
 | [`data/`](data/README.md) | 예상 사용자 질의 30개(dev)·holdout과 기대 출력 (silver), 평가 결과 `eval_runs/` |
 
-사용자와 합의한 결정·작업 규칙·별칭 사전 정책은 [`docs/query-decisions.md`](docs/query-decisions.md)가 기준입니다(먼저 읽기). 확정된 다음 설계는 받는 쪽용 계약 정의서 [`contracts/structured-query.md`](contracts/structured-query.md)(`StructuredQuery` 1.0)와 구현 계획 [`docs/structured-query-plan.md`](docs/structured-query-plan.md)에 있습니다. 구현 내용, 코드 지도, 프롬프트, 가정, 한계와 향후 과제, 다음 할 일은 [`docs/query-structuring.md`](docs/query-structuring.md)에 있고, 설계 배경은 [`docs/query-preprocessing.md`](docs/query-preprocessing.md)에 있습니다.
+사용자와 합의한 결정·작업 규칙·별칭 사전 정책은 [`docs/query-decisions.md`](docs/query-decisions.md)가 기준입니다(먼저 읽기). 확정된 다음 설계는 받는 쪽용 계약 정의서 [`contracts/agents/vogue-orchestrator/output/structured-query.md`](contracts/agents/vogue-orchestrator/output/structured-query.md)(`StructuredQuery` 1.0)와 구현 계획 [`docs/structured-query-plan.md`](docs/structured-query-plan.md)에 있습니다. 구현 내용, 코드 지도, 프롬프트, 가정, 한계와 향후 과제, 다음 할 일은 [`docs/query-structuring.md`](docs/query-structuring.md)에 있고, 설계 배경은 [`docs/query-preprocessing.md`](docs/query-preprocessing.md)에 있습니다.
 
 ## 미결정 및 필요한 입력
 

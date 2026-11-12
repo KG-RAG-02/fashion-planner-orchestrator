@@ -1,0 +1,145 @@
+{
+  "_provenance": {
+    "agent_id": "new-product-agent",
+    "contract": "new-product-agent planning draft result",
+    "direction": "output",
+    "payload_schema_version": "1.0",
+    "method": "authored",
+    "source_repo": "KG-RAG-02/new-product-agent",
+    "source_branch": "main",
+    "source_commit": "fef9548cf5c5",
+    "source_files": [
+      {
+        "path": "src/vogue_npp/prototype/server.py",
+        "sha256": "c52ed2abfc858a07c044a46ade39d2fb9a902f7dbd954de2172828a4482af1b8"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/new-product-agent/runs",
+      "contract_version": "vogue-handoff/0.2",
+      "detected_from": "src/vogue_npp/adapters/handoff.py:CONTRACT_VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "소유 레포에 JSON Schema가 없어 코드를 읽고 이 저장소에서 작성했다. 스크립트가 다시 쓰지 않는다. source_files의 sha256이 달라지면 코드를 다시 읽고 손으로 갱신한다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:vogue:orchestrator:snapshot:new-product-agent:result:1.0",
+    "title": "new-product-agent planning draft result 1.0",
+    "description": "/runs 응답 envelope의 result. envelope는 {contract_version: \"vogue-handoff/0.2\", request_id, producer: {agent_id: \"new-product-agent\", schema_version: \"1.0\"}, status, result}이고 status는 result.status와 같다. result 자체에는 schema_version·agent_id가 없다. 하위 객체 구조는 아직 고정하지 않았다 (server.py _build_planning_draft_response).",
+    "type": "object",
+    "required": [
+      "status",
+      "request_id",
+      "input_statuses",
+      "draft",
+      "generation_metadata",
+      "planning_knowledge",
+      "planning_analysis",
+      "input_evidence",
+      "stock_trend_results",
+      "image",
+      "outfit_image",
+      "planning_board",
+      "validation_issues",
+      "evidence_ids",
+      "limitations",
+      "conflicts",
+      "questions_for_validation",
+      "compatibility"
+    ],
+    "properties": {
+      "status": {
+        "enum": [
+          "ok",
+          "partial"
+        ],
+        "description": "limitations·conflicts가 있거나 sales_market_result가 ok가 아니면 partial"
+      },
+      "request_id": {
+        "type": "string"
+      },
+      "input_statuses": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "draft": {
+        "type": "object",
+        "description": "기획 초안"
+      },
+      "generation_metadata": {
+        "type": "object"
+      },
+      "planning_knowledge": {
+        "type": "object"
+      },
+      "planning_analysis": {
+        "type": "object"
+      },
+      "input_evidence": {
+        "type": "object",
+        "description": "입력별 원본 payload, 출처, 버전 추적"
+      },
+      "stock_trend_results": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        }
+      },
+      "image": {
+        "type": [
+          "object",
+          "null"
+        ]
+      },
+      "outfit_image": {
+        "type": [
+          "object",
+          "null"
+        ]
+      },
+      "planning_board": {
+        "type": [
+          "object",
+          "null"
+        ]
+      },
+      "validation_issues": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        }
+      },
+      "evidence_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limitations": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "conflicts": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        }
+      },
+      "questions_for_validation": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "compatibility": {
+        "type": "object",
+        "description": "/runs 경로에서만. 입력 정규화 추적(adapter_version, source_payload_sha256 등)"
+      }
+    }
+  }
+}
