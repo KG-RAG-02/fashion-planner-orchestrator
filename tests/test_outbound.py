@@ -205,7 +205,8 @@ class LegacyPostJsonTests(unittest.TestCase):
                  (dict(connect_error=socket.timeout()), ('UPSTREAM_TIMEOUT', 504)),
                  (dict(connect_error=ConnectionRefusedError()), ('UPSTREAM_UNAVAILABLE', 503)),
                  (dict(status=401), ('UPSTREAM_AUTH', 401)), (dict(status=403), ('UPSTREAM_AUTH', 403)),
-                 (dict(status=500), ('UPSTREAM_HTTP_ERROR', 502)), (dict(status=503), ('UPSTREAM_HTTP_ERROR', 502)),
+                 (dict(status=500), ('UPSTREAM_HTTP_ERROR', 502)), (dict(status=502), ('UPSTREAM_HTTP_ERROR', 502)),
+                 (dict(status=503), ('UPSTREAM_UNAVAILABLE', 503)), (dict(status=504), ('UPSTREAM_TIMEOUT', 504)),
                  (dict(body=b'not-json'), ('CONTRACT_VIOLATION', 502)), (dict(body=b'[1]'), ('CONTRACT_VIOLATION', 502))]
         for options, expected in cases:
             with self.subTest(options=options):

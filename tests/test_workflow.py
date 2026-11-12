@@ -272,17 +272,26 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(result['envelope']['result']['rejected_response_artifacts'], [])
 
     def test_upstream_non_2xx_statuses_follow_the_outbound_failure_mapping(self):
-        for upstream, code, status in [(500, 'UPSTREAM_HTTP_ERROR', 502), (503, 'UPSTREAM_HTTP_ERROR', 502),
-                                       (504, 'UPSTREAM_HTTP_ERROR', 502), (404, 'UPSTREAM_HTTP_ERROR', 502),
-                                       (403, 'UPSTREAM_AUTH', 403)]:
+        # An upstream 503/504 keeps its meaning (the same codes as our own refused/timeout cases);
+        # every other non-2xx is 502. The upstream body is retained privately in every case.
+        cases = [(500, 'UPSTREAM_HTTP_ERROR', 502, False), (502, 'UPSTREAM_HTTP_ERROR', 502, False),
+                 (503, 'UPSTREAM_UNAVAILABLE', 503, True), (504, 'UPSTREAM_TIMEOUT', 504, True),
+                 (404, 'UPSTREAM_HTTP_ERROR', 502, False), (401, 'UPSTREAM_AUTH', 401, False),
+                 (403, 'UPSTREAM_AUTH', 403, False)]
+        for upstream, code, status, retryable in cases:
             with self.subTest(upstream=upstream):
                 self.setUp()
                 self.status_at = ('planning_draft', upstream)
                 result = self.run_flow()
                 self.assertEqual(result['http_status'], status)
                 body = result['envelope']['result']
-                self.assertEqual((body['errors'][-1]['code'], body['errors'][-1]['retryable']), (code, False))
+                error = body['errors'][-1]
+                self.assertEqual((result['envelope']['status'], error['code'], error['stage'], error['retryable']),
+                                 ('error', code, 'planning_draft', retryable))
                 self.assertEqual(self.store.verify(body['rejected_response_artifacts'][0]), b'{"error":"fixture upstream failure"}')
+                self.assertEqual(self.trace, ['trend', 'stock', 'planning_draft'])
+                self.assertEqual(self.run_flow()['http_status'], status)  # replay returns the stored outcome
+                self.assertEqual(len(self.trace), 3)
 
     @staticmethod
     def p07_reference(data):

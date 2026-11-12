@@ -10,6 +10,9 @@ from .workflow_store import ArtifactError, RESOLVER_CODES, canonical, digest, st
 
 # Namespaces whose artifacts P08 imports through a reader (conventions section 8).
 PEER_NAMESPACES = ('p07',)
+# An upstream that itself answers 503/504 keeps that meaning (the contract's error table): the same
+# codes as a refused connection or a socket timeout, retryable. Every other non-2xx is 502.
+UPSTREAM_STATUS_CODES = {503: 'UPSTREAM_UNAVAILABLE', 504: 'UPSTREAM_TIMEOUT'}
 
 
 def now():
@@ -106,9 +109,12 @@ class Workflow:
             if wire.truncated or len(wire.body) > 16777216:
                 raise StageFailure('UPSTREAM_BODY_TOO_LARGE', 502, artifact)
             if not 200 <= wire.status < 300:
-                # Conventions section 4: upstream 401/403 -> UPSTREAM_AUTH; any other non-2xx -> 502.
+                # Upstream 401/403 -> UPSTREAM_AUTH; 503/504 keep their meaning; any other non-2xx -> 502.
+                # The body stays retained privately as the rejected response artifact.
                 if wire.status in {401, 403}:
                     raise StageFailure('UPSTREAM_AUTH', wire.status, artifact)
+                if wire.status in UPSTREAM_STATUS_CODES:
+                    raise StageFailure(UPSTREAM_STATUS_CODES[wire.status], wire.status, artifact)
                 raise StageFailure('UPSTREAM_HTTP_ERROR', 502, artifact)
             raw = strict_json(wire.body)
             self.contract.envelope(raw, stage, rid)

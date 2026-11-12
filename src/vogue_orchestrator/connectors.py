@@ -139,6 +139,10 @@ def _post_json(url: str, payload: Mapping[str, Any], *, bearer_token: str | None
     if response.status in {401, 403}:
         raise TransportError(f"agent returned HTTP {response.status}", code="UPSTREAM_AUTH",
                              http_status=response.status)
+    if response.status in {503, 504}:  # the upstream's own unavailable/timeout keeps its meaning
+        raise TransportError(f"agent returned HTTP {response.status}",
+                             code="UPSTREAM_UNAVAILABLE" if response.status == 503 else "UPSTREAM_TIMEOUT",
+                             http_status=response.status)
     if response.status < 200 or response.status >= 300:
         raise TransportError(f"agent returned HTTP {response.status}", code="UPSTREAM_HTTP_ERROR", http_status=502)
     try:
