@@ -47,7 +47,7 @@ class LiveServerMixin:
             self.addCleanup(patcher.stop)
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), OrchestratorHandler)
         self.port = self.server.server_port
-        thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         thread.start()
         self.addCleanup(thread.join, 5)
         self.addCleanup(self.server.server_close)

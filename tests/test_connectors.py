@@ -1,4 +1,5 @@
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -38,9 +39,11 @@ class ConnectorConfigurationTests(unittest.TestCase):
         self.assertEqual(status["operational_approval"], "not_verified")
 
     def test_project07_checkout_must_contain_the_importable_package(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
         env = {
             **self.base_env,
-            "VOGUE_PROJECT07_ROOT": "/tmp/vogue-project-07-missing",
+            "VOGUE_PROJECT07_ROOT": str(Path(tmp.name) / "vogue-project-07-missing"),
             "VOGUE_PROJECT07_SOURCE_ADAPTER": "sources:build",
         }
         status = connection_status(env)

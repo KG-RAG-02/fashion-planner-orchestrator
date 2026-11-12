@@ -2,6 +2,7 @@
 import importlib.util
 import copy
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -15,9 +16,10 @@ FIXTURES = Path(__file__).parent / 'fixtures/workflow'
 @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'Install the workflow extra; validated separately with the existing Anaconda runtime.')
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix='p08-workflow-', dir='/private/tmp')
+        self.tmp = tempfile.TemporaryDirectory(prefix='p08-workflow-')
         self.addCleanup(self.tmp.cleanup)
-        self.store = WorkflowStore(self.tmp.name)
+        # The store refuses symlinked parents; macOS temp dirs live under the /var -> /private/var link.
+        self.store = WorkflowStore(os.path.realpath(self.tmp.name))
         self.contract = WorkflowContract()
         self.sample = json.loads((FIXTURES/'draft-request-text-ok.json').read_bytes())
         self.rid = self.sample['request_id']

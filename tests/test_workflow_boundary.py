@@ -75,7 +75,7 @@ class BoundaryTests(unittest.TestCase):
         generate.assert_not_called();downstream.assert_not_called()
 
     def test_error_and_image_failure_history_roundtrip(self):
-        with tempfile.TemporaryDirectory(dir='/private/tmp') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             with patch('vogue_orchestrator.server.LATEST_RUN_PATH',root/'latest.json'),patch('vogue_orchestrator.server.RUN_HISTORY_DIR',root/'runs'):
                 for value in [dict(status='error',stages=[]),dict(status='partial',stages=[],image_generation={'status':'failed'})]:

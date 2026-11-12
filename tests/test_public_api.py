@@ -1,6 +1,8 @@
 import json
 import io
 import os
+from pathlib import Path
+import tempfile
 import threading
 import unittest
 from http.server import ThreadingHTTPServer
@@ -49,7 +51,11 @@ class PublicOrchestrationApiTests(unittest.TestCase):
         handler.send_response = send_response
         handler.send_header = send_header
         handler.end_headers = lambda: None
-        with patch("vogue_orchestrator.server.build_demo_orchestrator") as build:
+        # Legacy /api/run saves UI history; keep it out of the repository's real .local/ directory.
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch("vogue_orchestrator.server.LATEST_RUN_PATH", Path(tmp) / "latest-run.json"), \
+                patch("vogue_orchestrator.server.RUN_HISTORY_DIR", Path(tmp) / "runs"), \
+                patch("vogue_orchestrator.server.build_demo_orchestrator") as build:
             from vogue_orchestrator.demo import build_demo_orchestrator
             build.side_effect = build_demo_orchestrator
             handler.do_POST()
