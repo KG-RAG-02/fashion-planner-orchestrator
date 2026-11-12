@@ -19,12 +19,12 @@ class ConnectorConfigurationTests(unittest.TestCase):
             "VOGUE_PROJECT06_URL": "http://127.0.0.1:8767",
         }
 
-    def test_project07_source_factory_is_required_for_ready_status(self):
+    def test_project07_builtin_source_is_available_without_factory(self):
         status = connection_status(self.base_env)
         self.assertFalse(status["ready"])
         p07 = next(item for item in status["connectors"] if item["id"] == "project_07")
-        self.assertFalse(p07["configured"])
-        self.assertFalse(p07["source_configured"])
+        self.assertTrue(p07["configured"])
+        self.assertTrue(p07["source_configured"])
 
         status = connection_status({**self.base_env, "VOGUE_PROJECT07_SOURCE_ADAPTER": "sources:build"})
         self.assertTrue(status["configuration_complete"])
@@ -33,7 +33,7 @@ class ConnectorConfigurationTests(unittest.TestCase):
         self.assertTrue(any("Stock" in blocker for blocker in status["known_blockers"]))
         self.assertEqual(status["endpoint_health"], "not_checked")
         self.assertEqual(status["contract_compatibility"], "not_verified")
-        self.assertEqual(status["source_permission"], "not_verified")
+        self.assertEqual(status["source_permission"], "owner_asserted")
         self.assertEqual(status["operational_approval"], "not_verified")
 
     def test_project07_checkout_must_contain_the_importable_package(self):

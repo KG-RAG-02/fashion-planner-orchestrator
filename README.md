@@ -89,13 +89,12 @@ UI의 **CONNECTED AGENTS** 모드는 설정이 완료됐을 때만 실행합니�
 VOGUE_TREND_ADAPTER=my_trend_adapter:run
 VOGUE_STOCK_AGENT_URL=http://127.0.0.1:8002
 VOGUE_PROJECT07_ROOT=/path/to/project_07
-VOGUE_PROJECT07_SOURCE_ADAPTER=my_market_sources:build_source
 VOGUE_PROJECT06_URL=http://127.0.0.1:8767
 ```
 
 - legacy trend adapter callable 입력은 `{request_id, query}`이고 출력은 원본 `TrendAnalysisResult`여야 합니다. Canonical HTTP mode는 query-structuring 결과를 Trend route input으로 보냅니다.
 - legacy stock adapter는 configured base URL의 `/v1/inventory-products`를 호출합니다. stock-agent가 LLM을 사용하도록 설정돼 있으면 trend 결과가 그 LLM 제공자에 전달될 수 있습니다. UI는 CONNECTED 실행 전에 수신 endpoint를 보여 주고 확인 checkbox를 요구합니다.
-- sales-market-agent는 지정한 checkout의 `MarketResearchAgent`를 in-process 호출합니다. `VOGUE_PROJECT07_SOURCE_ADAPTER`는 `research(context)`를 구현한 source factory `module:function`이며, 운영 자료원 설정은 이 factory에서 명시적으로 구성해야 합니다. 설정되지 않으면 연결 상태가 준비 완료가 아니며, 기본 `NoConfiguredSources`는 `no_results`를 반환합니다.
+- sales-market-agent는 지정한 checkout의 `MarketResearchAgent`를 in-process 호출합니다. 기본 adapter는 Project_07의 내장 `configured_agent()`를 사용해 읽기 전용 H&M R2 과거자료와 합성 fixture를 연결합니다. `VOGUE_PROJECT07_SOURCE_ADAPTER`를 지정하면 `research(context)` source factory `module:function`으로 이를 대체할 수 있습니다. H&M 사용 권한 flag는 필요하지 않습니다. Project_07 기본 source는 cloud R2를 요청 시 읽으므로 R2 접근·스키마 상태는 연결 상태에서 확인되지 않습니다.
 - 이 설정은 기존 혼합 CONNECTED 모드입니다. canonical HTTP v0.1 mode에는 별도 URL 변수 네 개가 필요합니다. Project_06의 local `/runs` 기본 포트는 8767, Project_07은 8766, Stock은 8002, Trend는 8768이며 Project_08 UI는 8765입니다.
 - 혼합 연결은 기존 endpoint를 사용하며, HTTP v0.1 timeout/retry 규칙은 별도 v0.1 client에 적용됩니다. 연결은 실제 요청 때만 실행됩니다.
 

@@ -22,6 +22,7 @@ class ConnectorConfigurationError(RuntimeError):
 
 HTTP_CONNECT_TIMEOUT_SECONDS = 3
 AGENT_REQUEST_TIMEOUT_SECONDS = 60
+PROJECT06_HANDOFF_CONTRACT_VERSION = "vogue-handoff/0.2"
 
 
 def _safe_origin(url: str | None) -> str | None:
@@ -132,7 +133,8 @@ def agent_http_v01_adapter(base_url: str, route_agent_id: str, *, bearer_token: 
             # object is exactly the four producer payload fields.
             agent_input = {key: value for key, value in payload.items() if key != "request_id"}
         return _post_json(url, {
-            "contract_version": CONTRACT_VERSION,
+            "contract_version": (PROJECT06_HANDOFF_CONTRACT_VERSION
+                                 if stage == StageName.PROJECT_06 else CONTRACT_VERSION),
             "request_id": request_id,
             "input": agent_input,
         }, bearer_token=bearer_token)
@@ -159,6 +161,7 @@ def _project07_adapter(root: Path, source_factory: Callable[[], Any] | None = No
         sys.path.insert(0, source_text)
     try:
         from market_research_agent import MarketResearchAgent, MarketResearchContext
+        from market_research_agent.http_server import configured_agent
     except ImportError as exc:
         raise ConnectorConfigurationError("Project_07 dependencies are not available in this Python environment") from exc
 
@@ -171,9 +174,10 @@ def _project07_adapter(root: Path, source_factory: Callable[[], Any] | None = No
             inventory_product_result=payload.get("inventory_product_result"),
             **_project07_context_fields(request),
         )
-        # A source is opt-in. Without one, Project_07 safely returns no_results.
-        source = source_factory() if source_factory else None
-        result = MarketResearchAgent(source).run(context).to_proposal_v1_3_dict()
+        # The built-in Project_07 source set reads the configured H&M R2 DB and
+        # synthetic R2 fixtures. A caller-provided factory can still override it.
+        agent = MarketResearchAgent(source_factory()) if source_factory else configured_agent()
+        result = agent.run(context).to_proposal_v1_3_dict()
         return result
 
     return run
@@ -217,11 +221,11 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
     trend_spec = env.get("VOGUE_TREND_ADAPTER")
     p07_source_spec = env.get("VOGUE_PROJECT07_SOURCE_ADAPTER")
     p07_package_available = (p07_root / "src" / "market_research_agent").is_dir()
-    configuration_complete = bool(trend_spec and stock_url and p06_url and p07_package_available and p07_source_spec)
+    configuration_complete = bool(trend_spec and stock_url and p06_url and p07_package_available)
     known_blockers = [
         "Trend local HTTP requires the shared Bearer token and a connected Neo4j graph; loopback has no TLS and production readiness is not provided here.",
         "Stock local HTTP requires a synthetic or approved DuckDB and a Bearer token; URL configuration does not establish either dependency's readiness.",
-        "Endpoint health, runtime schema compatibility, source permission, and operational approval must be checked independently of URL configuration.",
+        "Endpoint health, runtime schema compatibility, R2 connectivity, and operational readiness are not checked by configuration status.",
     ]
     dev_mode = env.get("VOGUE_AGENT_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
     # These capabilities were checked against the sibling local checkouts on
@@ -276,7 +280,7 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
         "known_blockers": known_blockers,
         "endpoint_health": "not_checked",
         "contract_compatibility": "not_verified",
-        "source_permission": "not_verified",
+        "source_permission": "owner_asserted",
         "operational_approval": "not_verified",
         "readiness_note": "Readiness checks configuration presence and known local blockers only; they do not perform live health or schema negotiation.",
         "connection_modes": {"mixed_connectors": mixed_mode, "agent_http_v01": v01_mode},
@@ -294,12 +298,12 @@ def connection_status(environ: Mapping[str, str] | None = None) -> dict[str, Any
             },
             {
                 "id": "project_07", "name": "Project_07",
-                "configured": p07_package_available and bool(p07_source_spec),
+                "configured": p07_package_available,
                 "target": "local Python adapter" if p07_package_available else None,
-                "source_configured": bool(p07_source_spec),
-                "detail": ("MarketResearchAgent를 로컬 호출합니다. 미지정 geography/channel/period는 None으로 전달하며, 사용자 질의로 추론하지 않습니다. source factory가 설정되어 있습니다."
-                           if p07_package_available and p07_source_spec else
-                           "MarketResearchAgent 경로 또는 source factory 설정이 필요합니다. 미지정 geography/channel/period를 임의 기본값으로 채우지 않습니다."),
+                "source_configured": p07_package_available,
+                "detail": ("기본 로컬 adapter가 H&M R2 DuckDB와 합성 R2 fixture를 사용합니다. R2 연결과 데이터 내용은 요청 시 확인합니다. 미지정 geography/channel/period는 임의로 채우지 않습니다."
+                           if p07_package_available else
+                           "Project_07 source package를 찾을 수 없습니다."),
             },
             {
                 "id": "project_06", "name": "Project_06",
