@@ -35,7 +35,7 @@
 
 ## v1 라벨과 별칭 사전 정책의 관계 (중요)
 v1의 기대 draft는 별칭 사전 정책(H1)과 γ(Q3, [docs/query-decisions.md](../docs/query-decisions.md))가 정해지기 **전에** 만들었다. γ를 구현할 때(계획 U5) **`user_queries.v2.json`을 새로 만든다** (v1은 보존):
-- 형식: 질의마다 **기대 `StructuredQuery`**(정의서 [contracts/structured-query.md](../contracts/structured-query.md))와, 그 결과를 만드는 기대 LLM 출력(draft v2). 모든 값에 기대 `match`를 적는다.
+- 형식: 질의마다 **기대 `StructuredQuery`**(정의서 [contracts/agents/vogue-orchestrator/output/structured-query.md](../contracts/agents/vogue-orchestrator/output/structured-query.md))와, 그 결과를 만드는 기대 LLM 출력(draft v2). 모든 값에 기대 `match`를 적는다.
 - q027 `슬랙스`: 지원 불가 → **팬츠, `match: alias`** (사전에 같은 뜻 별칭이 있음)
 - q011 `오버핏`: 오버사이즈 **`match: llm`** (사전에 없음, LLM 제안). q029 `루즈핏`: 루즈 **`match: llm`** (사전에 "루즈핏"이 없음)
 - q006 "니트 소재": 표현 안 단어 "니트"로 사전 조회 → 니트 `match: exact`

@@ -6,8 +6,10 @@ is reported, never dropped silently (X4 safety condition):
 
   - more items      -> warning `items_not_forwarded`
   - more seasons    -> warning `seasons_not_forwarded`
-  - no item at all (`items == []`, only out-of-scope items) -> no TrendQuery (None), warning
-    `no_item_to_forward`; the caller does not call trend.
+  - no item at all (`items == []`) -> no TrendQuery (None), warning `no_item_to_forward`; the caller does
+    not call trend. Since IT-7′ (2026-11-12) the assembler always writes at least one item, so this is a guard.
+  - `out_of_scope_items` (IT-7′) -> `TrendQuery.unsupported` with type `category` and the item's reason, so
+    trend reports them as not applied; warning `conditions_not_forwarded`. Their own conditions are not sent.
   - conditions of items[0] that TrendQuery has no field for (excluded attributes, body/sleeve length,
     an excluded or several genders, gender without a standard value) -> written to
     `TrendQuery.unsupported` (type + raw + reason, trend already reads that list as "not applied")
@@ -110,6 +112,10 @@ def to_trend_query(sq: StructuredQuery) -> TrendConversion:
     for entry in item.unsupported:
         reason = entry.reason + (" (제외 요청)" if entry.polarity == "exclude" else "")
         unsupported.append(UnsupportedCondition(type=entry.type, raw=entry.raw, reason=reason))
+
+    for entry in sq.out_of_scope_items:  # IT-7′: searched over every category, reported as not applied
+        unsupported.append(UnsupportedCondition(type="category", raw=entry.raw, reason=entry.reason))
+        warn(WARN_CONDITIONS_NOT_FORWARDED)
 
     trend_query = TrendQuery(
         request_id=sq.request_id,

@@ -1,0 +1,80 @@
+{
+  "_provenance": {
+    "agent_id": "sales-market-agent",
+    "contract": "sales-market-agent /runs response envelope",
+    "direction": "output",
+    "method": "copy",
+    "source_repo": "KG-RAG-02/sales-market-agent",
+    "source_branch": "feat/market-research-agent",
+    "source_commit": "d25cd8e30e4c",
+    "source_schema": "contracts/schemas/vogue-handoff-0.1-response.schema.json",
+    "source_files": [
+      {
+        "path": "contracts/schemas/vogue-handoff-0.1-response.schema.json",
+        "sha256": "d543ef3a1f6498ca951ccc9eba36f0b1ef8fb16a9044746f13d783d2ef0d9dd9"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/sales-market-agent/runs",
+      "contract_version": "vogue-handoff/0.1",
+      "detected_from": "src/market_research_agent/http_server.py:CONTRACT_VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:vogue:handoff:0.1:project-07:response",
+    "title": "VOGUE handoff v0.1 Project_07 run response",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract_version",
+      "request_id",
+      "producer",
+      "status",
+      "result"
+    ],
+    "properties": {
+      "contract_version": {
+        "const": "vogue-handoff/0.1"
+      },
+      "request_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "producer": {
+        "$ref": "#/$defs/producer"
+      },
+      "status": {
+        "enum": [
+          "ok",
+          "partial",
+          "no_results",
+          "error"
+        ]
+      },
+      "result": {
+        "$ref": "market-research-result.schema.json"
+      }
+    },
+    "$defs": {
+      "producer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent_id",
+          "schema_version"
+        ],
+        "properties": {
+          "agent_id": {
+            "const": "sales-market-agent"
+          },
+          "schema_version": {
+            "const": "1.0"
+          }
+        }
+      }
+    }
+  }
+}

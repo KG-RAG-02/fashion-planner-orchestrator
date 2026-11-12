@@ -5,7 +5,7 @@ suggestion}, draft v2). The LLM never sees the alias dictionary and never sets `
 Output: `ResolvedValue`s (with `match`), `UnsupportedItem`s and `ResolutionWarning`s. This module is
 independent of the pydantic models; the assembler maps the output into StructuredQuery.
 
-Rules (docs/structured-query-plan.md §2.1, contracts/structured-query.md §4):
+Rules (docs/structured-query-plan.md §2.1, contracts/agents/vogue-orchestrator/output/structured-query.md §4):
   1. The dictionary always wins. Look `raw` up in the alias dictionary of the attribute(s) of `kind`:
      standard value -> `exact`, same-meaning alias -> `alias`, approximate entry -> `approx`.
      A suggestion that differs from the dictionary answer is dropped (`llm_suggestion_overridden`).
