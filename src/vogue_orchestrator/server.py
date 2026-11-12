@@ -35,6 +35,14 @@ from .new_product import GENERATED_IMAGE_ROOT
 
 
 WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
+# The UI is served as ES modules with web fonts and every response carries nosniff, so these types
+# must not depend on the host's mime.types (macOS/Debian tables differ; .woff2 may be missing).
+for _mime, _suffix in (("text/javascript", ".js"), ("text/javascript", ".mjs"), ("text/css", ".css"),
+                       ("font/woff2", ".woff2"), ("font/woff", ".woff"), ("image/svg+xml", ".svg")):
+    mimetypes.add_type(_mime, _suffix)
+CONTENT_SECURITY_POLICY = ("default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; "
+                           "img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+                           "frame-ancestors 'none'; form-action 'self'")
 MAX_BODY_BYTES = 32_000
 MAX_QUERY_CHARS = 1_000
 MAX_REQUEST_ID_CHARS = 128
@@ -523,7 +531,7 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             self.send_header(name, value)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+        self.send_header("Content-Security-Policy", CONTENT_SECURITY_POLICY)
         self.end_headers()
         self.wfile.write(body)
 
