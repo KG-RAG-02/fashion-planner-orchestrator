@@ -28,10 +28,12 @@ class StageFailure(RuntimeError):
 
 class Workflow:
     """Injected producers return actual WireResponse bytes. No implicit fallbacks."""
-    def __init__(self, *, trend, stock, draft, review, image, store, contract, artifact_reader=None):
+    def __init__(self, *, trend, stock, draft, review, image, store, contract, artifact_reader=None, limitations=()):
         self.adapters = dict(trend=trend, stock=stock, planning_draft=draft, sales_market_review=review)
         self.image, self.store, self.contract = image, store, contract
         self.artifact_reader = artifact_reader
+        # Run-level limitations decided by the caller (e.g. a development run on a proposed contract).
+        self.limitations = tuple(limitations)
 
     def _retained(self, raw, artifact):
         body = raw['result']
@@ -186,7 +188,8 @@ class Workflow:
                         sources={s: None for s in STAGES[:4]}, stages=[], integration=None,
                         final_image=dict(status='skipped', artifact=None, lineage=None, reason='No eligible review.', provider_calls=0),
                         limitations=['Only the first item and first season are searched; full user text is retained.',
-                                     'Input images are references for Draft and integration; Trend receives a text search query.'],
+                                     'Input images are references for Draft and integration; Trend receives a text search query.',
+                                     *self.limitations],
                         errors=[], rejected_response_artifacts=[],
                         md_review=dict(status='pending', choices=['adopt','revise','hold'], reserved_decisions=['price','cost','quantity','purchase_order','adoption']))
             http_status, known = 200, {}

@@ -229,6 +229,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         services = configured_services()
+        if not services:
+            print("서비스 manifest가 없습니다: deploy/service-manifest.json 또는 VOGUE_SERVICE_MANIFEST를 확인해 주세요.",
+                  file=sys.stderr)
+            return 1
         if args.action == "status":
             return 0 if show_status(services) else 1
         if args.action == "stop":

@@ -7,12 +7,19 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+# In-repo host-mode manifest (vendored by the integrator); VOGUE_SERVICE_MANIFEST overrides it.
+DEFAULT_MANIFEST = ROOT / 'deploy/service-manifest.json'
+
+
+def venv_root():
+    """Shared venvs live outside iCloud: ${VOGUE_VENV_ROOT:-~/.cache/vogue-venvs}/<service>."""
+    return Path(os.environ.get('VOGUE_VENV_ROOT') or '~/.cache/vogue-venvs').expanduser()
 
 
 def _python(name, repo, version):
     key = 'VOGUE_PYTHON_' + name.upper().replace('-', '_')
     explicit = os.environ.get(key)
-    candidates = [Path(explicit)] if explicit else [repo / '.venv/bin/python', ROOT.parent / '_venv/bin/python', Path(sys.executable)]
+    candidates = [Path(explicit)] if explicit else [repo / '.venv/bin/python', venv_root() / name / 'bin/python', Path(sys.executable)]
     found = shutil.which('python' + version)
     if found and not explicit:
         candidates.append(Path(found))
@@ -29,9 +36,13 @@ def _python(name, repo, version):
 
 
 def services(manifest_path=None, *, require_runtime=True):
-    path = Path(manifest_path or os.environ.get('VOGUE_SERVICE_MANIFEST', ROOT.parent / '_workflow/infra/service-manifest.json'))
+    """Return the manifest's services; [] (unconfigured) when the default manifest is absent."""
+    configured = manifest_path or os.environ.get('VOGUE_SERVICE_MANIFEST')
+    path = Path(configured).expanduser() if configured else DEFAULT_MANIFEST
     if not path.is_file():
-        raise RuntimeError('Infra service-manifest.json is required; set VOGUE_SERVICE_MANIFEST to the reviewed manifest.')
+        if configured:
+            raise RuntimeError('The configured service manifest was not found; check VOGUE_SERVICE_MANIFEST.')
+        return []
     value = json.loads(path.read_text(encoding='utf-8'))
     entries = value.get('services')
     if value.get('schema_version') != 1 or not isinstance(entries, dict) or not entries:

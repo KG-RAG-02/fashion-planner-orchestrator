@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -24,9 +25,12 @@ class BoundaryTests(unittest.TestCase):
     def test_live_gate_blocks_before_any_query_provider(self):
         request=dict(contract_version='vogue-workflow/0.1',request_id='test-gate',input=dict(user_input=dict(text='test',images=[])))
         h=self.handler(request)
-        with patch('vogue_orchestrator.server.structure_query_for_ui') as llm:
+        with patch.dict(os.environ),patch('vogue_orchestrator.server.structure_query_for_ui') as llm:
+            for key in ('VOGUE_WORKFLOW_ALLOW_PROPOSED','VOGUE_WORKFLOW_CONTRACT_BASELINE'):
+                os.environ.pop(key,None)
             dispatch(h,request)
         self.assertEqual(h._json.call_args.args[0],409)
+        self.assertEqual(h._json.call_args.args[1]['error']['code'],'CONTRACT_NOT_FROZEN')
         llm.assert_not_called()
 
     def test_target_boundary_preserves_non_200_terminal_result(self):
@@ -78,10 +82,15 @@ class BoundaryTests(unittest.TestCase):
                     self.assertEqual(_load_latest_run()['result']['status'],value['status'])
 
     def test_manifest_ports_paths_and_container_bind_projection(self):
-        from vogue_orchestrator.service_manifest import services
-        manifest=Path(__file__).resolve().parents[2]/'_workflow/infra/service-manifest.json'
-        if not manifest.exists():self.skipTest('Infra manifest unavailable')
-        entries=services(require_runtime=False)
+        from vogue_orchestrator.service_manifest import DEFAULT_MANIFEST, services
+        root=Path(__file__).resolve().parents[1]
+        self.assertEqual(DEFAULT_MANIFEST,root/'deploy'/'service-manifest.json')
+        declared=json.loads(DEFAULT_MANIFEST.read_text(encoding='utf-8'))['services']
+        missing=sorted({e['repo'] for e in declared.values() if not (root.parent/e['repo']).is_dir()})
+        if missing:self.skipTest('sibling checkouts not present: '+', '.join(missing))
+        with patch.dict(os.environ):
+            os.environ.pop('VOGUE_SERVICE_MANIFEST',None)
+            entries=services(require_runtime=False)
         self.assertEqual(next(e for e in entries if e['name']=='stock')['port'],8002)
         self.assertTrue(all('0.0.0.0' not in e['args'] for e in entries))
         self.assertEqual(next(e for e in entries if e['name']=='sales-market')['repo'].name,'sales-market-agent')

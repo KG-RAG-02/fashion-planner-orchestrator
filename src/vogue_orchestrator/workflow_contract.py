@@ -3,9 +3,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from .workflow_store import digest, strict_json
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CONTRACT_ROOT = REPO_ROOT / 'contracts/workflow'
+BASELINE_FORMAT = 'vogue-workflow-baseline/1'
+DEFAULT_CONTRACT_PACKAGE = 'workflow-contract/0.1.1'
 VERSION = 'vogue-workflow/0.1'
 STAGES = ('trend', 'stock', 'planning_draft', 'sales_market_review', 'integration', 'final_image')
 SCHEMAS = {'trend': ('trend-analysis-agent', '1.1', 'vogue-handoff/0.1'),
@@ -44,11 +49,114 @@ def pointer(value, path):
     return value
 
 
+def truthy(value):
+    return str(value or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def snapshot_state(root=CONTRACT_ROOT):
+    """Return (snapshot, sha256 of its exact bytes, per-file drift codes)."""
+    root = Path(root)
+    raw = (root / 'snapshot.json').read_bytes()
+    snapshot = strict_json(raw)
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get('files'), dict):
+        raise ValueError('SNAPSHOT_INVALID')
+    errors = []
+    for relative, expected in sorted(snapshot['files'].items()):
+        path = root / relative
+        if not path.is_file():
+            errors.append('missing:' + relative)
+        elif hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            errors.append('hash:' + relative)
+    return snapshot, hashlib.sha256(raw).hexdigest(), errors
+
+
+def baseline_problems(baseline, snapshot, snapshot_sha, file_errors):
+    """Baseline consistency, equivalent to (and at least as strict as)
+    scripts/freeze_workflow_contract.check_baseline; tests keep the two in step."""
+    problems = list(file_errors)
+    if not isinstance(baseline, dict):
+        return problems + ['baseline_not_object']
+    if baseline.get('format') != BASELINE_FORMAT:
+        problems.append('format')
+    if baseline.get('snapshot_sha256') != snapshot_sha:
+        problems.append('snapshot_sha256')
+    if baseline.get('files') != dict(sorted(snapshot['files'].items())):
+        problems.append('files')
+    for key in ('contract_version', 'transport_version'):
+        if baseline.get(key) != snapshot.get(key):
+            problems.append(key)
+    if baseline.get('state') == 'frozen':
+        evidence = baseline.get('evidence') if isinstance(baseline.get('evidence'), dict) else {}
+        if baseline.get('producer_consumer_validated') is not True:
+            problems.append('frozen_without_validation')
+        reference = evidence.get('reference_fixtures') if isinstance(evidence.get('reference_fixtures'), dict) else {}
+        if reference.get('failed', 1) != 0:
+            problems.append('frozen_with_reference_failures')
+        suites = evidence.get('suites', [])
+        if not isinstance(suites, list) or any(not isinstance(s, dict) or s.get('returncode') != 0 for s in suites):
+            problems.append('frozen_with_suite_failures')
+        mutations = evidence.get('mutation_probes') if isinstance(evidence.get('mutation_probes'), dict) else {}
+        if mutations.get('accepted'):
+            problems.append('frozen_with_accepted_mutations')
+    return problems
+
+
+def baseline_path(env=None, root=CONTRACT_ROOT):
+    """`VOGUE_WORKFLOW_CONTRACT_BASELINE` overrides contracts/workflow/baseline.json (relative = repo root)."""
+    env = os.environ if env is None else env
+    override = str(env.get('VOGUE_WORKFLOW_CONTRACT_BASELINE') or '').strip()
+    if not override:
+        return Path(root) / 'baseline.json', 'contracts/workflow/baseline.json'
+    path = Path(override).expanduser()
+    return (path if path.is_absolute() else REPO_ROOT / path), 'VOGUE_WORKFLOW_CONTRACT_BASELINE'
+
+
+def contract_gate_status(env=None, root=None):
+    """Observe the in-repo contract gate (no network, never reads outside the configured paths).
+
+    gate: `open` (frozen, validated, snapshot and files match, no recorded failures),
+    `development` (anything else, with VOGUE_WORKFLOW_ALLOW_PROPOSED) or `closed`.
+    """
+    env = os.environ if env is None else env
+    root = Path(root) if root else CONTRACT_ROOT
+    path, source = baseline_path(env, root)
+    allow = truthy(env.get('VOGUE_WORKFLOW_ALLOW_PROPOSED'))
+    status = dict(source=source, state='unknown', contract_version=None, consistent=False, frozen=False,
+                  problems=[], allow_proposed=allow, gate='closed')
+    snapshot = None
+    try:
+        snapshot, snapshot_sha, file_errors = snapshot_state(root)
+        status['contract_version'] = snapshot.get('contract_version')
+    except (OSError, ValueError, TypeError, AttributeError):
+        status['problems'].append('snapshot_unreadable')
+    try:
+        baseline = strict_json(path.read_bytes())
+    except FileNotFoundError:
+        status['state'] = 'missing'
+        status['problems'].append('baseline_missing')
+    except (OSError, ValueError):
+        status['state'] = 'invalid'
+        status['problems'].append('baseline_unreadable')
+    else:
+        state = baseline.get('state') if isinstance(baseline, dict) else None
+        status['state'] = state if isinstance(state, str) and state else 'invalid'
+        if snapshot is not None:
+            status['problems'] = baseline_problems(baseline, snapshot, snapshot_sha, file_errors)
+    status['consistent'] = not status['problems']
+    status['frozen'] = status['consistent'] and status['state'] == 'frozen'
+    status['gate'] = 'open' if status['frozen'] else 'development' if allow else 'closed'
+    return status
+
+
+def development_limitation(status):
+    return (status.get('contract_version') or DEFAULT_CONTRACT_PACKAGE) + ' not frozen; development run'
+
+
 class WorkflowContract:
     def __init__(self, root=None):
         from jsonschema import Draft202012Validator, FormatChecker
         from referencing import Registry, Resource
-        self.root = Path(root or Path(__file__).resolve().parents[2] / 'contracts/workflow')
+        self.root = Path(root or CONTRACT_ROOT)
         snapshot = strict_json((self.root / 'snapshot.json').read_bytes())
         docs = {}
         for relative, sha in snapshot['files'].items():

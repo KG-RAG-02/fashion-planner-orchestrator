@@ -229,6 +229,16 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(response['envelope']['status'],'error')
                 self.assertNotIn('final_image',self.trace)
 
+    def test_run_level_limitations_are_appended_to_the_result(self):
+        note = 'workflow-contract/0.1.1 not frozen; development run'
+        self.workflow = Workflow(**{k: self.workflow.adapters[s] for k, s in (('trend', 'trend'), ('stock', 'stock'),
+                                    ('draft', 'planning_draft'), ('review', 'sales_market_review'))},
+                                 image=self.workflow.image, store=self.store, contract=self.contract, limitations=[note])
+        result = self.run_flow()
+        self.assertEqual(result['envelope']['status'], 'ok', result)
+        self.assertEqual(result['envelope']['result']['limitations'].count(note), 1)
+        self.contract.schema(result['envelope'], 'integrated-result.schema.json')
+
     def test_strict_json_and_symlink_store_rejection(self):
         from vogue_orchestrator.workflow_store import strict_json
         for raw in [b'{"a":1,"a":2}',b'{"a":NaN}',b'{"a":Infinity}']:

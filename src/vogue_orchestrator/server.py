@@ -221,6 +221,8 @@ def _local_services_status() -> dict[str, Any]:
         entries = manifest_services(require_runtime=False)
     except (RuntimeError, ValueError, OSError):
         return {"services": [], "healthy": 0, "total": 0, "all_healthy": False, "manifest_status": "unavailable_or_invalid"}
+    if not entries:
+        return {"services": [], "healthy": 0, "total": 0, "all_healthy": False, "manifest_status": "unconfigured"}
     endpoints = [(e["name"], e.get("label", e["name"]), "", f"http://127.0.0.1:{e['port']}", e["health_path"]) for e in entries]
     for service_id, label, env_key, default_url, health_path in endpoints:
         base_url = os.environ.get(env_key, default_url) if env_key else default_url

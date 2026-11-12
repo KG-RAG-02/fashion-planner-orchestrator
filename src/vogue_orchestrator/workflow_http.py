@@ -11,27 +11,36 @@ from urllib.parse import urlsplit, unquote
 
 from .connectors import ConnectorConfigurationError, _service_url
 from .workflow import Workflow, WireResponse, StageFailure
-from .workflow_contract import WorkflowContract, VERSION, require
+from .workflow_contract import (WorkflowContract, VERSION, require, contract_gate_status,
+                                development_limitation)
 from .workflow_store import WorkflowStore, canonical, strict_json
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+class WorkflowUnavailable(ConnectorConfigurationError):
+    """Configuration or gate failure with a stable problem code; the message never holds secrets."""
+
+    def __init__(self, code, http_status=409, message=None):
+        self.code, self.http_status = code, http_status
+        super().__init__(message or code)
 
 
 def store():
     return WorkflowStore(ROOT / '.local/workflow')
 
 
-def ensure_live_contract(contract):
-    """Fail closed until coordinator freezes this exact schema set and owners validate."""
-    path = ROOT.parent / '_workflow/decisions/contract-baseline.json'
-    try:
-        baseline = strict_json(path.read_bytes())
-        require(baseline['state'] == 'frozen' and baseline['producer_consumer_validated'] is True, 'CONTRACT_NOT_FROZEN')
-        snapshot = strict_json((contract.root / 'snapshot.json').read_bytes())
-        for name, sha in snapshot['files'].items():
-            require(baseline['artifact_sha256']['contracts/' + name] == sha, 'CONTRACT_BASELINE_MISMATCH')
-    except (OSError, ValueError, KeyError):
-        raise ConnectorConfigurationError('목표 계약과 owner 연동 검증이 아직 동결되지 않았습니다. fixture 검증과 실제 연결은 별도입니다.') from None
+def ensure_live_contract(contract=None, env=None):
+    """Return the run limitations the contract gate requires, or raise 409 CONTRACT_NOT_FROZEN.
+
+    Reads only contracts/workflow (or VOGUE_WORKFLOW_CONTRACT_BASELINE); see conventions section 9.
+    """
+    status = contract_gate_status(env, getattr(contract, 'root', None))
+    if status['gate'] == 'open':
+        return []
+    if status['gate'] == 'development':
+        return [development_limitation(status)]
+    raise WorkflowUnavailable('CONTRACT_NOT_FROZEN', 409, 'The workflow contract baseline is not frozen.')
 
 
 def post_wire(url, payload, token=None):
@@ -74,7 +83,7 @@ def final_image(payload):
 
 def build_workflow():
     contract = WorkflowContract()
-    ensure_live_contract(contract)
+    limitations = ensure_live_contract(contract)
     env = os.environ
     dev = env.get('VOGUE_AGENT_HTTP_DEV_MODE', '').lower() in {'1','true','yes'}
     token = env.get('VOGUE_AGENT_SERVICE_BEARER_TOKEN')
@@ -91,11 +100,15 @@ def build_workflow():
         url = _service_url(env, variable, '/v1/agents/' + route)
         adapters[key] = lambda payload, u=url: post_wire(u, payload, token)
     image = final_image if env.get('VOGUE_WORKFLOW_IMAGES_ENABLED') == '1' and env.get('OPENAI_API_KEY') else None
-    return Workflow(**adapters, image=image, store=store(), contract=contract)
+    return Workflow(**adapters, image=image, store=store(), contract=contract, limitations=limitations)
 
 
 def problem(handler, status, code):
     handler._json(status, {'contract_version': VERSION, 'request_id': None, 'status': 'error', 'error': {'code': code, 'message': code, 'stage': 'input', 'fatal': True, 'retryable': status in {503,504}}})
+
+
+def _configuration_problem(handler, exc):
+    problem(handler, getattr(exc, 'http_status', 409), getattr(exc, 'code', 'CONTRACT_OR_CONNECTORS_NOT_READY'))
 
 
 def dispatch(handler, value):
@@ -130,8 +143,8 @@ def dispatch(handler, value):
             if context: planning['context'] = context
         response = workflow.run(request_id=rid, user_input=user, planning_request=planning, trend_query=trend)
         handler._json(response['http_status'], response['envelope'])
-    except ConnectorConfigurationError:
-        problem(handler, 409, 'CONTRACT_OR_CONNECTORS_NOT_READY')
+    except ConnectorConfigurationError as exc:
+        _configuration_problem(handler, exc)
     except (ValueError, KeyError, TypeError):
         problem(handler, 422, 'WORKFLOW_INPUT_INVALID')
     except ImportError:
@@ -189,8 +202,8 @@ def routes(handler, path):
                     dispatch(handler, strict_json(data))
         else:
             problem(handler, 405, 'METHOD_NOT_ALLOWED')
-    except ConnectorConfigurationError:
-        problem(handler, 409, 'CONTRACT_OR_CONNECTORS_NOT_READY')
+    except ConnectorConfigurationError as exc:
+        _configuration_problem(handler, exc)
     except (ValueError, KeyError, TypeError):
         problem(handler, 422, 'WORKFLOW_INPUT_INVALID')
     except ImportError:
@@ -201,13 +214,9 @@ def routes(handler, path):
 def readiness():
     """Configuration observations only. Never equate env presence to live readiness."""
     urls = ['VOGUE_TREND_AGENT_URL','VOGUE_STOCK_AGENT_URL','VOGUE_NEW_PRODUCT_AGENT_URL','VOGUE_SALES_MARKET_AGENT_URL']
-    try:
-        baseline = strict_json((ROOT.parent / '_workflow/decisions/contract-baseline.json').read_bytes())
-        baseline_state = baseline.get('state', 'unknown')
-    except (OSError, ValueError):
-        baseline_state = 'unknown'
+    gate = contract_gate_status()
     return dict(configured=all(bool(os.environ.get(key)) for key in urls), ready=False,
                 endpoint_health='not_checked', authentication='not_verified', schema_compatibility='not_verified',
-                data_verified=False, end_to_end=False, baseline_state=baseline_state,
+                data_verified=False, end_to_end=False, baseline_state=gate['state'], contract_gate=gate['gate'],
                 service_token_configured=bool(os.environ.get('VOGUE_AGENT_SERVICE_BEARER_TOKEN')),
                 description='Trend → Stock → P06 Draft-only → P07 full Draft Review → P08 final image; MD pending.')
