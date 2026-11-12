@@ -123,9 +123,9 @@
 ### 4.2 다른 저장소·문서
 | 대상 | 무엇에 의존 | 어디서 | 바뀌면 |
 |---|---|---|---|
-| trend-analysis-agent | 표준 어휘 (`contracts/trend-query.contract.json`, 원본 `origin/main@4196bc460876`) | `vocabulary.py` → 모델(`models.py`·`trend_query.py`)·프롬프트·resolver | 스냅샷 갱신 → `generate_query_vocabulary.py` → 테스트 (`docs/query-structuring.md` §9) |
+| trend-analysis-agent | 표준 어휘 (`contracts/agents/trend-analysis-agent/input/trend-query.contract.json`, 원본 `origin/main@4196bc460876`) | `vocabulary.py` → 모델(`models.py`·`trend_query.py`)·프롬프트·resolver | 스냅샷 갱신 → `generate_query_vocabulary.py` → 테스트 (`docs/query-structuring.md` §9) |
 | trend-analysis-agent | `TrendQuery` 형식 (같은 스냅샷) | `trend_query.py` (v1 실행 경로, 나중의 `to_trend_query()`) | 같은 절차, `test_query_trend_query.py`가 차이를 알려 줌 |
-| trend-analysis-agent | 별칭 사전 (`contracts/alias-map.snapshot.json`, 원본 `feature/extraction-prompt-experiments@7b525c4`) | `alias_data.py` → `lexicon.py` → `resolve.py` | trend `.venv`로 `export_alias_snapshot.py` → 테스트 ([contracts/alias-map.md](../contracts/alias-map.md)) |
+| trend-analysis-agent | 별칭 사전 (`contracts/agents/trend-analysis-agent/vocabulary/alias-map.snapshot.json`, 원본 `feature/extraction-prompt-experiments@7b525c4`) | `alias_data.py` → `lexicon.py` → `resolve.py` | trend `.venv`로 `export_alias_snapshot.py` → 테스트 ([contracts/agents/trend-analysis-agent/vocabulary/alias-map.md](../contracts/agents/trend-analysis-agent/vocabulary/alias-map.md)) |
 | trend-analysis-agent | `TrendAnalysisResult` 형태 (`request_id`, status 3종 등) | core의 trend 단계 검증 | core 수정 필요 |
 | trend-analysis-agent | 호출 진입점 | 아직 없음 (`TrendSearcher.search` 함수만, D3) | connectors에 연결 방식 추가 |
 | stock-agent | `POST /v1/inventory-products`, 응답 필드·`agent_id` | connectors, core | connectors·core 수정 |

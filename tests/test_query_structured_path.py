@@ -126,12 +126,49 @@ class StructuredPathTests(unittest.TestCase):
         self.assertEqual([r["value"] for r in sq["items"][0]["attributes"]["include"]["color"]], ["브라운"])
         self.assertEqual([(o["raw"], o["conditions_raw"]) for o in sq["out_of_scope_items"]], [("가방", ["레더", "브라운"])])
 
-    def test_only_out_of_scope_items_means_nothing_to_send(self):
-        result = self.run_path(draft(items=[item("벨트", None)]), "벨트 보여줘")
+    def test_only_out_of_scope_items_still_give_one_item_over_every_category(self):
+        # IT-7′ (2026-11-12): the season must still reach trend; 벨트 is only an approx detail ("띠") in the
+        # dictionary, so IT-10 does not turn it into a condition. Its own "블랙" never widens the item.
+        result = self.run_path(draft(items=[item("벨트", None, [c("블랙", "color", "블랙")])],
+                                     seasons=[{"year": 2027, "season": "SS", "raw": "2027SS"}]), "2027SS 블랙 벨트 보여줘")
         sq = result.structured_query.model_dump(mode="json")
-        self.assertEqual(sq["items"], [])
-        self.assertEqual([o["raw"] for o in sq["out_of_scope_items"]], ["벨트"])
+        self.assertEqual(len(sq["items"]), 1)
+        self.assertIsNone(sq["items"][0]["category"])
+        self.assertEqual(sq["items"][0]["attributes"]["include"]["color"], [])
+        self.assertEqual([(o["raw"], o["conditions_raw"]) for o in sq["out_of_scope_items"]], [("벨트", ["블랙"])])
+        self.assertEqual(sq["trend_terms"]["seasons"][0]["raw"], "2027SS")
         self.assertIn("only_out_of_scope_items", result.warnings)
+        self.assertNotIn("item_word_used_as_condition", result.warnings)
+
+    def test_an_item_word_that_is_an_attribute_value_becomes_an_item_over_every_category(self):
+        # IT-10 (2026-11-12): "반팔" alone is a sleeve length, not a category -> category null + sleeve_length
+        result = self.run_path(draft(items=[item("반팔", "반팔")], common=[c("여성", "gender", "여")],
+                                     seasons=[{"year": 2027, "season": "SS", "raw": "2027SS"}]),
+                               "2027SS 여성 반팔 제작하고 싶어")
+        sq = result.structured_query.model_dump(mode="json")
+        self.assertEqual(sq["out_of_scope_items"], [])
+        (only,) = sq["items"]
+        self.assertIsNone(only["category"])
+        self.assertEqual(only["attributes"]["include"]["sleeve_length"], [{"raw": "반팔", "value": "반팔", "match": "exact"}])
+        self.assertEqual([g["value"] for g in only["gender"]["include"]], ["여"])
+        self.assertIn("item_word_used_as_condition", result.warnings)
+        self.assertNotIn("only_out_of_scope_items", result.warnings)
+
+    def test_an_attribute_item_word_keeps_its_own_item_next_to_a_real_one(self):
+        # IT-10: "반팔이랑 스커트" -> the sleeve length stays on its own item; the skirt gets no sleeve condition
+        items = self.items_of(self.run_path(draft(items=[item("반팔", None), item("스커트", "스커트")]), "반팔이랑 스커트"))
+        self.assertEqual([i["category"] and i["category"]["minor"] for i in items], [None, "스커트"])
+        self.assertEqual([v["value"] for v in items[0]["attributes"]["include"]["sleeve_length"]], ["반팔"])
+        self.assertEqual(items[1]["attributes"]["include"]["sleeve_length"], [])
+
+    def test_an_item_word_with_several_attribute_kinds_follows_the_priority(self):
+        # IT-10: exact before alias, then sleeve_length > body_length > ... > detail
+        cases = {"민소매": ("sleeve_length", "민소매"), "체크": ("pattern", "체크"), "롱": ("body_length", "롱")}
+        for word, (kind, value) in cases.items():
+            with self.subTest(word=word):
+                (only,) = self.items_of(self.run_path(draft(items=[item(word, None)]), f"{word} 보여줘"))
+                found = {k: [v["value"] for v in vs] for k, vs in only["attributes"]["include"].items() if vs}
+                self.assertEqual(found, {kind: [value]})
 
     def test_one_expression_with_two_categories_gives_two_items(self):
         # OQ-10′ on items: the spaced "셔츠 원피스" names 셔츠 and 드레스 -> two items with the same conditions
@@ -270,7 +307,7 @@ class StructuredPathTests(unittest.TestCase):
 
 @unittest.skipUnless(HAS_PYDANTIC, SKIP_REASON)
 class ContractExamplesAreProducedByTheCodeTests(unittest.TestCase):
-    """The contract examples with several items (contracts/structured-query.md §6) come out of the assembly."""
+    """The contract examples with several items (contracts/agents/vogue-orchestrator/output/structured-query.md §6) come out of the assembly."""
 
     @classmethod
     def setUpClass(cls):

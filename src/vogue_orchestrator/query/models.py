@@ -1,8 +1,8 @@
 """Pydantic models of the StructuredQuery 1.0 contract (the output of query structuring).
 
 Owner of the contract: THIS repository (decision Y1). Receiver-facing definition:
-contracts/structured-query.md. The JSON Schema handed to receivers,
-contracts/structured-query.schema.json, is generated from these models by
+contracts/agents/vogue-orchestrator/output/structured-query.md. The JSON Schema handed to receivers,
+contracts/agents/vogue-orchestrator/output/structured-query-1.0.schema.json, is generated from these models by
 scripts/export_structured_query_schema.py (drift check: tests/test_query_structured_models.py).
 
 Values come from the K-Fashion standard vocabulary owned by trend-analysis-agent (vocabulary.py,
@@ -283,11 +283,12 @@ class OutOfScopeItem(_Contract):
 
 class StructuredQuery(_Contract):
     """StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard
-    vocabulary. Definition: contracts/structured-query.md (owner: vogue-orchestrator).
+    vocabulary. Definition: contracts/agents/vogue-orchestrator/output/structured-query.md (owner: vogue-orchestrator).
 
     `items` are in the order the user named them (decision IT-4: the pipeline takes one item today, so
     only `items[0]` is forwarded to trend). Season and trend names are query-wide (`trend_terms`,
-    decision IT-5″). `items` is empty only when every item the user named is out of scope."""
+    decision IT-5″). The assembler always writes at least one item: with no named item, or only
+    out-of-scope ones, one item with `category: null` (IT-6, IT-7′). The model still accepts `[]`."""
 
     schema_version: Literal["1.0"] = SCHEMA_VERSION
     request_id: NonEmptyStr

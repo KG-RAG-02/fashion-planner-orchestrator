@@ -67,6 +67,18 @@ class ToTrendQueryTests(unittest.TestCase):
         brand = next(u for u in tq["unsupported"] if u["type"] == "brand")
         self.assertTrue(brand["reason"].endswith("(제외 요청)"))
 
+    def test_out_of_scope_items_are_reported_to_trend_as_unsupported_categories(self):
+        # IT-7′ (2026-11-12): searched over every category, the out-of-scope item is reported as not applied
+        document = copy.deepcopy(self.examples.EXAMPLE_6)
+        document["out_of_scope_items"] = [{"raw": "부츠", "reason": "표준 카테고리(상분류 4·하분류 21)에 없음",
+                                           "conditions_raw": ["블랙"]}]
+        result = self.run_example(document)
+        tq = result.to_dict()
+        boots = [u for u in tq["unsupported"] if u["raw"] == "부츠"]
+        self.assertEqual(boots, [{"type": "category", "raw": "부츠", "reason": "표준 카테고리(상분류 4·하분류 21)에 없음"}])
+        self.assertNotIn("블랙", [u["raw"] for u in tq["unsupported"]])  # its own conditions are not sent
+        self.assertIn("conditions_not_forwarded", result.warnings)
+
     def test_no_item_means_nothing_to_forward(self):
         document = copy.deepcopy(self.examples.EXAMPLE_6)
         document["items"] = []

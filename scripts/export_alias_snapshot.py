@@ -1,9 +1,9 @@
 """Export the trend-analysis-agent alias dictionary as a JSON snapshot plus golden expectations.
 
 Writes (in this repository):
-  contracts/alias-map.snapshot.json  dictionary data of configs/alias_map/*.yaml (11 attributes +
+  contracts/agents/trend-analysis-agent/vocabulary/alias-map.snapshot.json  dictionary data of configs/alias_map/*.yaml (11 attributes +
                                           text_guard) with standard values and provenance
-  contracts/alias-map.golden.json    outputs of the ORIGINAL trend code (AliasMap.normalize,
+  contracts/agents/trend-analysis-agent/vocabulary/alias-map.golden.json    outputs of the ORIGINAL trend code (AliasMap.normalize,
                                           normalize_tokens, normalize_color, split_tokens, norm_key and
                                           TextMatcher text matching) used to verify the port
   src/vogue_orchestrator/query/alias_data.py  regenerated from the snapshot (scripts/generate_alias_data.py)
@@ -16,7 +16,7 @@ virtual environment, from the root of this repository:
 
 --check exits 1 when any of the three files would change. The trend repository is only read
 (read-only git commands; `--no-optional-locks` so no index refresh is written).
-Description of the files: contracts/alias-map.md
+Description of the files: contracts/agents/trend-analysis-agent/vocabulary/alias-map.md
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = Path(__file__).resolve().parent
-SNAPSHOT_PATH = ROOT / "contracts" / "alias-map.snapshot.json"
-GOLDEN_PATH = ROOT / "contracts" / "alias-map.golden.json"
+SNAPSHOT_PATH = ROOT / "contracts" / "agents" / "trend-analysis-agent" / "vocabulary" / "alias-map.snapshot.json"
+GOLDEN_PATH = ROOT / "contracts" / "agents" / "trend-analysis-agent" / "vocabulary" / "alias-map.golden.json"
 QUERIES_PATH = ROOT / "data" / "user_queries.v1.json"
 
 sys.path.insert(0, str(SCRIPTS_DIR))

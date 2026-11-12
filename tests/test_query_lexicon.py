@@ -1,7 +1,7 @@
 """Alias-dictionary port (query/lexicon.py) against the snapshot and the original trend code. Stdlib only.
 
 - alias_data.py must be exactly what scripts/generate_alias_data.py renders from the snapshot.
-- Every golden case (outputs of trend AliasMap, see contracts/alias-map.golden.json) must be
+- Every golden case (outputs of trend AliasMap, see contracts/agents/trend-analysis-agent/vocabulary/alias-map.golden.json) must be
   reproduced exactly by the port.
 Skipped when the snapshot files are not in this checkout.
 """
@@ -14,8 +14,8 @@ from _query_support import ROOT
 from vogue_orchestrator.query import alias_data, lexicon
 from vogue_orchestrator.query.lexicon import Lexicon, Normalized, norm_key
 
-ALIAS_SNAPSHOT_PATH = ROOT / "contracts" / "alias-map.snapshot.json"
-ALIAS_GOLDEN_PATH = ROOT / "contracts" / "alias-map.golden.json"
+ALIAS_SNAPSHOT_PATH = ROOT / "contracts" / "agents" / "trend-analysis-agent" / "vocabulary" / "alias-map.snapshot.json"
+ALIAS_GOLDEN_PATH = ROOT / "contracts" / "agents" / "trend-analysis-agent" / "vocabulary" / "alias-map.golden.json"
 
 
 def _load_generator():
