@@ -128,10 +128,10 @@ def main(argv=None):
     status, body, _, elapsed, _ = call(base, "GET", "/api/health")
     check("orchestrator /api/health is 200", status == 200, f"{status} in {elapsed}s")
     status, system, _, _, _ = call(base, "GET", "/api/system/status")
-    services = (system or {}).get("services", {})
+    services = {agent.get("id"): agent for agent in (system or {}).get("agents", []) if isinstance(agent, dict)}
     check("system status lists the four agents", status == 200 and len(services) >= 4, f"{status} {sorted(services)}")
-    check("every agent answers its liveness probe", services and all(s.get("reachable") for s in services.values()),
-          {k: s.get("reachable") for k, s in services.items()})
+    check("every agent answers its liveness probe", bool(services) and all(s.get("reachable") and s.get("healthy") for s in services.values()),
+          {k: s.get("http_status") for k, s in services.items()})
     evidence["system"] = system
 
     request_id = f"e2e-{args.profile}-{uuid.uuid4().hex[:12]}"
@@ -171,7 +171,7 @@ def main(argv=None):
         check("stub reaches all six stages", names == STAGE_ORDER, names)
         check("stub generates exactly one fixture image", image.get("status") == "generated" and calls == 1, image.get("status"))
     if args.profile in ("stub", "rehearsal"):
-        check("no paid image call outside live", image.get("status") != "generated" or (system or {}).get("image_provider") == "fixture", (system or {}).get("image_provider"))
+        check("no paid image call outside live", image.get("status") != "generated" or ((system or {}).get("image") or {}).get("provider") == "fixture", ((system or {}).get("image") or {}).get("provider"))
     validator = schema_validator()
     if validator is None:
         check("integrated-result schema validation (jsonschema missing — skipped)", True, "skipped: install jsonschema to enable")
