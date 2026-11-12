@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import http.client
 from .workflow_contract import VERSION, STAGES, require, walk
-from .workflow_store import canonical, digest, strict_json, checked_image
+from .workflow_store import ArtifactError, RESOLVER_CODES, canonical, digest, strict_json, checked_image
+
+# Namespaces whose artifacts P08 imports through a reader (conventions section 8).
+PEER_NAMESPACES = ('p07',)
 
 
 def now():
@@ -36,6 +39,8 @@ def stage_failure(exc, artifact=None):
     """
     if isinstance(exc, StageFailure):
         return exc
+    if isinstance(exc, ArtifactError) and exc.code in RESOLVER_CODES:  # section 8 codes keep their status
+        return StageFailure(exc.code, exc.http_status, artifact)
     if isinstance(exc, TimeoutError):  # socket.timeout is TimeoutError
         return StageFailure('UPSTREAM_TIMEOUT', 504, artifact)
     if isinstance(exc, (OSError, http.client.HTTPException)):  # refused, reset, DNS, TLS
@@ -106,12 +111,8 @@ class Workflow:
                     raise StageFailure('UPSTREAM_AUTH', wire.status, artifact)
                 raise StageFailure('UPSTREAM_HTTP_ERROR', 502, artifact)
             raw = strict_json(wire.body)
-            if self.artifact_reader:
-                for node in walk(raw):
-                    if {'artifact_id','uri','sha256','immutable'} <= node.keys():
-                        try: self.store.verify(node)
-                        except ValueError: self.store.import_verified(node, self.artifact_reader(node))
             self.contract.envelope(raw, stage, rid)
+            self._import_peer_artifacts(raw)
             if stage == 'trend' and raw['status'] == 'ok':
                 season = payload['input'].get('trend_terms', {}).get('season', {})
                 if season.get('origin') == 'user_requested':
@@ -131,6 +132,27 @@ class Workflow:
             failure = stage_failure(exc, artifact)
             self.store.checkpoint_write(key, 'failed', dict(code=failure.code, http_status=failure.http_status, artifact=failure.artifact))
             raise failure from None
+
+    def _import_peer_artifacts(self, raw):
+        """Import peer (P07) artifact references through the reader and the store's import_verified.
+
+        P08's own references are checked by the semantic pass; a peer reference that is not yet in
+        the store needs a configured reader (503 ARTIFACT_READER_REQUIRED otherwise).
+        """
+        prefixes = tuple('artifact://' + namespace + '/' for namespace in PEER_NAMESPACES)
+        for node in walk(raw):
+            if not {'artifact_id', 'uri', 'sha256', 'immutable'} <= node.keys():
+                continue
+            if not isinstance(node['uri'], str) or not node['uri'].startswith(prefixes):
+                continue
+            try:
+                self.store.verify(node)
+                continue
+            except ValueError:
+                pass
+            if self.artifact_reader is None:
+                raise ArtifactError('ARTIFACT_READER_REQUIRED')
+            self.store.import_verified(node, self.artifact_reader(node))
 
     def _trace(self, body, stage, payload, start, status, response_hash=None, errors=None):
         logical_hash = digest(payload)

@@ -265,6 +265,57 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual((body['errors'][-1]['code'], body['errors'][-1]['retryable']), (code, False))
                 self.assertEqual(self.store.verify(body['rejected_response_artifacts'][0]), b'{"error":"fixture upstream failure"}')
 
+    @staticmethod
+    def p07_reference(data):
+        import hashlib
+        sha = hashlib.sha256(data).hexdigest()
+        return dict(artifact_id='p07-review-' + sha[:16], uri='artifact://p07/reviews/%s.json' % sha, sha256=sha,
+                    media_type='application/json', size_bytes=len(data), immutable=True)
+
+    def review_carries(self, reference):
+        def mutate(stage, value):
+            if stage == 'sales_market_review':
+                value['result']['artifacts'] = [reference]
+            return value
+        self.mutate = mutate
+
+    def peer_root(self, reference, data):
+        root = Path(self.tmp.name) / 'peer'
+        (root / 'p07' / 'reviews').mkdir(parents=True)
+        (root / 'p07' / 'reviews' / (reference['sha256'] + '.json')).write_bytes(data)
+        return root
+
+    def test_review_peer_artifact_without_reader_is_503_artifact_reader_required(self):
+        self.review_carries(self.p07_reference(b'{"review":"synthetic"}'))
+        result = self.run_flow()
+        body = result['envelope']['result']
+        self.assertEqual((result['http_status'], body['errors'][-1]['code'], body['errors'][-1]['retryable']),
+                         (503, 'ARTIFACT_READER_REQUIRED', True))
+        self.assertEqual(self.trace, ['trend', 'stock', 'planning_draft', 'sales_market_review'])
+        self.assertEqual(body['final_image']['provider_calls'], 0)
+
+    def test_review_peer_artifact_is_imported_through_the_reader(self):
+        from vogue_orchestrator.workflow_store import PeerArtifactReader
+        data = b'{"review":"synthetic"}'
+        reference = self.p07_reference(data)
+        self.workflow.artifact_reader = PeerArtifactReader(self.peer_root(reference, data))
+        self.review_carries(reference)
+        result = self.run_flow()
+        self.assertEqual(result['envelope']['status'], 'ok', result)
+        self.assertEqual(self.store.verify(reference), data)
+        self.contract.schema(result['envelope'], 'integrated-result.schema.json')
+        self.contract.semantic(result['envelope'], self.rid, self.store)
+
+    def test_review_peer_artifact_mismatch_fails_closed(self):
+        from vogue_orchestrator.workflow_store import PeerArtifactReader
+        reference = self.p07_reference(b'{"review":"synthetic"}')
+        self.workflow.artifact_reader = PeerArtifactReader(self.peer_root(reference, b'{"review":"SYNTHETIC"}'))  # same size, other bytes
+        self.review_carries(reference)
+        result = self.run_flow()
+        self.assertEqual((result['http_status'], result['envelope']['result']['errors'][-1]['code']),
+                         (422, 'ARTIFACT_HASH_MISMATCH'))
+        self.assertNotIn('final_image', self.trace)
+
     def test_run_level_limitations_are_appended_to_the_result(self):
         note = 'workflow-contract/0.1.1 not frozen; development run'
         self.workflow = Workflow(**{k: self.workflow.adapters[s] for k, s in (('trend', 'trend'), ('stock', 'stock'),

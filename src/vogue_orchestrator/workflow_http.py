@@ -15,7 +15,8 @@ from .connectors import (ConnectorConfigurationError, WORKFLOW_CONNECT_TIMEOUT_S
 from .workflow import Workflow, WireResponse, StageFailure
 from .workflow_contract import (WorkflowContract, VERSION, require, contract_gate_status,
                                 development_limitation)
-from .workflow_store import WorkflowStore, canonical, strict_json
+from .workflow_store import (ArtifactError, PeerArtifactReader, SHA256_HEX, WorkflowStore, canonical,
+                             p08_artifact, strict_json)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -28,8 +29,25 @@ class WorkflowUnavailable(ConnectorConfigurationError):
         super().__init__(message or code)
 
 
+def _repo_path(value):
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else ROOT / path
+
+
+def store_root(env=None):
+    """VOGUE_WORKFLOW_STORE_DIR (default <repo>/.local/workflow; container /app/.local/workflow)."""
+    value = str((os.environ if env is None else env).get('VOGUE_WORKFLOW_STORE_DIR') or '').strip()
+    return _repo_path(value) if value else ROOT / '.local/workflow'
+
+
 def store():
-    return WorkflowStore(ROOT / '.local/workflow')
+    return WorkflowStore(store_root())
+
+
+def peer_artifact_reader(env=None):
+    """PeerArtifactReader rooted at VOGUE_PEER_ARTIFACT_ROOT, or None when it is not configured."""
+    value = str((os.environ if env is None else env).get('VOGUE_PEER_ARTIFACT_ROOT') or '').strip()
+    return PeerArtifactReader(_repo_path(value)) if value else None
 
 
 def ensure_live_contract(contract=None, env=None):
@@ -86,10 +104,15 @@ def final_image(payload):
     return result.image_bytes, result.mime_type
 
 
-def build_workflow():
+_FROM_ENV = object()
+
+
+def build_workflow(*, artifact_reader=_FROM_ENV):
     contract = WorkflowContract()
     limitations = ensure_live_contract(contract)
     env = os.environ
+    if artifact_reader is _FROM_ENV:
+        artifact_reader = peer_artifact_reader(env)
     dev = env.get('VOGUE_AGENT_HTTP_DEV_MODE', '').lower() in {'1','true','yes'}
     token = env.get('VOGUE_AGENT_SERVICE_BEARER_TOKEN')
     if not dev and not token:
@@ -108,7 +131,8 @@ def build_workflow():
         adapters[key] = lambda payload, u=url: post_wire(u, payload, token, connect_timeout=connect_timeout,
                                                          read_timeout=read_timeout)
     image = final_image if env.get('VOGUE_WORKFLOW_IMAGES_ENABLED') == '1' and env.get('OPENAI_API_KEY') else None
-    return Workflow(**adapters, image=image, store=store(), contract=contract, limitations=limitations)
+    return Workflow(**adapters, image=image, store=store(), contract=contract, artifact_reader=artifact_reader,
+                    limitations=limitations)
 
 
 def problem(handler, status, code, message=None, *, request_id=None, stage='input', headers=None):
@@ -234,6 +258,8 @@ def routes(handler, path):
         return True
     try:
         ROUTE_HANDLERS[methods[handler.command]](handler, **params)
+    except ArtifactError as exc:
+        problem(handler, exc.http_status, exc.code)
     except ConnectorConfigurationError as exc:
         _configuration_problem(handler, exc)
     except (ValueError, KeyError, TypeError):
@@ -335,17 +361,37 @@ def _get_run(handler, value):
     handler._json(200, result['envelope'])
 
 
+SERVED_MEDIA_TYPES = {'image/png', 'image/jpeg', 'image/webp', 'application/json'}
+
+
 def _get_artifact(handler, value):
+    """Serve stored bytes after verification. Only images and JSON keep their media type; anything
+    else (e.g. an upstream text/html error body) is an attachment, never same-origin active content."""
     artifact_id = value
-    require(len(artifact_id) == 32 and all(c in '0123456789abcdef' for c in artifact_id), 'ARTIFACT_ID_INVALID')
     private = store()
-    with private.db() as db:
-        row = db.execute('SELECT metadata FROM artifacts WHERE uri=?', ('artifact://local/'+artifact_id,)).fetchone()
-    if row is None:
-        problem(handler, 404, 'ARTIFACT_NOT_FOUND')
-        return
-    meta = strict_json(row[0].encode())
-    handler._send(200, private.verify(meta), meta['media_type'])
+    if SHA256_HEX.fullmatch(artifact_id):
+        registered = private.media_types(artifact_id)
+        if not registered:
+            problem(handler, 404, 'ARTIFACT_NOT_FOUND')
+            return
+        rank = lambda item: (not item[0].startswith('image/'), item[0] != 'application/json', item[0])  # noqa: E731
+        media, size = sorted(registered, key=rank)[0]
+        meta = p08_artifact(artifact_id, media, size)
+    else:
+        # Legacy artifact://local/<uuid4 hex> rows minted before content addressing.
+        require(len(artifact_id) == 32 and all(c in '0123456789abcdef' for c in artifact_id), 'ARTIFACT_ID_INVALID')
+        with private.db() as db:
+            row = db.execute('SELECT metadata FROM artifacts WHERE uri=?', ('artifact://local/'+artifact_id,)).fetchone()
+        if row is None:
+            problem(handler, 404, 'ARTIFACT_NOT_FOUND')
+            return
+        meta = strict_json(row[0].encode())
+    data = private.verify(meta)
+    if meta['media_type'] in SERVED_MEDIA_TYPES:
+        handler._send(200, data, meta['media_type'])
+    else:
+        handler._send(200, data, 'application/octet-stream',
+                      {'Content-Disposition': 'attachment; filename="artifact-' + artifact_id + '.bin"'})
 
 
 ROUTE_HANDLERS = {
