@@ -906,8 +906,8 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
-    host = os.environ.get("VOGUE_ORCHESTRATOR_HOST", host)
-    port = int(os.environ.get("VOGUE_ORCHESTRATOR_PORT", str(port)))
+    host = (os.environ.get("VOGUE_ORCHESTRATOR_HOST") or "").strip() or host  # blank = default
+    port = int((os.environ.get("VOGUE_ORCHESTRATOR_PORT") or "").strip() or port)
     runtime = str(os.environ.get("VOGUE_ORCHESTRATOR_RUNTIME") or "").strip().lower()
     if runtime and runtime not in RUNTIME_MODES:
         raise ValueError("VOGUE_ORCHESTRATOR_RUNTIME must be 'host' or 'container'.")

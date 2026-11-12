@@ -100,7 +100,7 @@ def system_status(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         contract={key: gate[key] for key in ('contract_version', 'state', 'consistent', 'frozen', 'gate',
                                              'allow_proposed', 'source', 'problems')},
         image=dict(enabled=enabled, provider=provider or 'invalid', retry_enabled=image_retry_enabled(env),
-                   ready=enabled and (provider == 'fixture' or (provider == 'openai' and bool(env.get('OPENAI_API_KEY'))))),
+                   ready=enabled and (provider == 'fixture' or (provider == 'openai' and bool(str(env.get('OPENAI_API_KEY') or '').strip())))),
         query_structuring=dict(mode='synthetic_fixture' if structuring == 'synthetic_fixture' else 'llm'),
         outbound=dict(private_hosts=hosts, private_hosts_valid=hosts_valid,
                       dev_mode=str(env.get('VOGUE_AGENT_HTTP_DEV_MODE') or '').lower() in {'1', 'true', 'yes'},

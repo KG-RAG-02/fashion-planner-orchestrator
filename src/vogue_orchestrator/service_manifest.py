@@ -13,7 +13,7 @@ DEFAULT_MANIFEST = ROOT / 'deploy/service-manifest.json'
 
 def venv_root():
     """Shared venvs live outside iCloud: ${VOGUE_VENV_ROOT:-~/.cache/vogue-venvs}/<service>."""
-    return Path(os.environ.get('VOGUE_VENV_ROOT') or '~/.cache/vogue-venvs').expanduser()
+    return Path((os.environ.get('VOGUE_VENV_ROOT') or '').strip() or '~/.cache/vogue-venvs').expanduser()
 
 
 def _python(name, repo, version):
@@ -37,7 +37,7 @@ def _python(name, repo, version):
 
 def services(manifest_path=None, *, require_runtime=True):
     """Return the manifest's services; [] (unconfigured) when the default manifest is absent."""
-    configured = manifest_path or os.environ.get('VOGUE_SERVICE_MANIFEST')
+    configured = manifest_path or (os.environ.get('VOGUE_SERVICE_MANIFEST') or '').strip()
     path = Path(configured).expanduser() if configured else DEFAULT_MANIFEST
     if not path.is_file():
         if configured:

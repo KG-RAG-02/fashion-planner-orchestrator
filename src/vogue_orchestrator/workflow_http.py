@@ -36,7 +36,7 @@ def _repo_path(value):
 
 def store_root(env=None):
     """VOGUE_WORKFLOW_STORE_DIR (default <repo>/.local/workflow; container /app/.local/workflow)."""
-    value = str((os.environ if env is None else env).get('VOGUE_WORKFLOW_STORE_DIR') or '').strip()
+    value = setting(env, 'VOGUE_WORKFLOW_STORE_DIR')
     return _repo_path(value) if value else ROOT / '.local/workflow'
 
 
@@ -46,7 +46,7 @@ def store():
 
 def peer_artifact_reader(env=None):
     """PeerArtifactReader rooted at VOGUE_PEER_ARTIFACT_ROOT, or None when it is not configured."""
-    value = str((os.environ if env is None else env).get('VOGUE_PEER_ARTIFACT_ROOT') or '').strip()
+    value = setting(env, 'VOGUE_PEER_ARTIFACT_ROOT')
     return PeerArtifactReader(_repo_path(value)) if value else None
 
 
@@ -95,13 +95,18 @@ FIXTURE_IMAGE_LIMITATION = ('Final image comes from the deterministic local fixt
                             '(VOGUE_WORKFLOW_IMAGE_PROVIDER=fixture): a placeholder, not a generated concept.')
 
 
+def setting(env, name):
+    """An optional setting; compose passes unset optional values as empty strings, so blank means unset."""
+    return str((os.environ if env is None else env).get(name) or '').strip()
+
+
 def images_enabled(env=None):
     return (os.environ if env is None else env).get('VOGUE_WORKFLOW_IMAGES_ENABLED') == '1'
 
 
 def image_provider_name(env=None):
     """VOGUE_WORKFLOW_IMAGE_PROVIDER: openai (default) or fixture; anything else is None (invalid)."""
-    value = str((os.environ if env is None else env).get('VOGUE_WORKFLOW_IMAGE_PROVIDER') or 'openai').strip().lower()
+    value = setting(env, 'VOGUE_WORKFLOW_IMAGE_PROVIDER').lower() or 'openai'
     return value if value in IMAGE_PROVIDERS else None
 
 
@@ -141,7 +146,8 @@ def final_image(payload):
     request = ImageGenerationRequest(request_id=payload['request_id'], season=None, category=None, prompt=prompt,
                                     prompt_version='p08-reviewed-image/1', prompt_sha256=hashlib.sha256(prompt.encode()).hexdigest(),
                                     evidence_ids=(), proposal_fields=('integration',), limitations=('MD review required.',), conflicts=())
-    result = OpenAIImageProvider(api_key=os.environ.get('OPENAI_API_KEY', ''), model=os.environ.get('VOGUE_IMAGE_MODEL', DEFAULT_IMAGE_MODEL)).generate(request)
+    result = OpenAIImageProvider(api_key=setting(None, 'OPENAI_API_KEY'),
+                                 model=setting(None, 'VOGUE_IMAGE_MODEL') or DEFAULT_IMAGE_MODEL).generate(request)
     return result.image_bytes, result.mime_type
 
 
@@ -155,7 +161,7 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
     if artifact_reader is _FROM_ENV:
         artifact_reader = peer_artifact_reader(env)
     dev = env.get('VOGUE_AGENT_HTTP_DEV_MODE', '').lower() in {'1','true','yes'}
-    token = env.get('VOGUE_AGENT_SERVICE_BEARER_TOKEN')
+    token = setting(env, 'VOGUE_AGENT_SERVICE_BEARER_TOKEN') or None
     if not dev and not token:
         raise ConnectorConfigurationError('Service Bearer token is required.')
     specs = [('trend','VOGUE_TREND_AGENT_URL','trend-analysis-agent/runs'),
@@ -179,7 +185,7 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
         if provider == 'fixture':
             image = fixture_image
             limitations = [*limitations, FIXTURE_IMAGE_LIMITATION]
-        elif env.get('OPENAI_API_KEY'):
+        elif setting(env, 'OPENAI_API_KEY'):
             image = final_image
     return Workflow(**adapters, image=image, store=store(), contract=contract, artifact_reader=artifact_reader,
                     limitations=limitations)
