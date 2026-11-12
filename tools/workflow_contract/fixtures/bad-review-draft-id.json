@@ -1,0 +1,82 @@
+{
+  "contract_version": "vogue-workflow/0.1",
+  "request_id": "fixture:workflow:001",
+  "producer": {
+    "agent_id": "sales-market-agent",
+    "schema_version": "sales-market-review/1.0"
+  },
+  "status": "ok",
+  "result": {
+    "schema_version": "sales-market-review/1.0",
+    "agent_id": "sales-market-agent",
+    "request_id": "fixture:workflow:001",
+    "status": "ok",
+    "review_identity": {
+      "review_id": "fixture:review:001",
+      "revision": 1,
+      "content_sha256": "e922fe0c6086e4c6283623c3c0f58fefb60eb74ba9b97ec735cc7659e8f618f3"
+    },
+    "review": {
+      "reviewed_draft": {
+        "draft_id": "wrong:draft",
+        "revision": 1,
+        "content_sha256": "8c97b7ecef6ad142bb382c0ed11659798a23cbce6cb3bfccca30611e0a2a11a9"
+      },
+      "draft_response_sha256": "46972872300e11bf06c8f991c5a073a9c20a7db715db0d2abb8072bb07672159",
+      "findings": [
+        {
+          "kind": "interpretation",
+          "text": "Fixture-only qualitative assessment, not a sales forecast.",
+          "evidence_refs": [
+            {
+              "evidence_id": "trend:fixture:article:0:bd1ee873",
+              "source_response_sha256": "d360118bc820e8395df8a59c7f2e81685082bda6d78e141a7cf7372315c283bc",
+              "source_pointer": "/result/evidence/0"
+            }
+          ]
+        }
+      ],
+      "evidence": [],
+      "metrics": [
+        {
+          "name": "current_company_sales",
+          "value": null,
+          "missing_reason": "No current company sales source in this fixture.",
+          "unit": "pieces",
+          "currency": null,
+          "period": null,
+          "comparability": "unknown",
+          "observation": {
+            "observed_at": "2026-11-12T06:00:00Z",
+            "as_of": null,
+            "synthetic": true,
+            "data_nature": "synthetic_fixture",
+            "source": "coordinator synthetic fixture; no real company data",
+            "limitations": [
+              "Fixture only; not current inventory or actual sales."
+            ]
+          },
+          "evidence_refs": []
+        }
+      ],
+      "limitations": [
+        "Historical/sample sources cannot establish current sales."
+      ],
+      "observation": {
+        "observed_at": "2026-11-12T06:00:00Z",
+        "as_of": null,
+        "synthetic": true,
+        "data_nature": "synthetic_fixture",
+        "source": "coordinator synthetic fixture; no real company data",
+        "limitations": [
+          "Fixture only; not current inventory or actual sales."
+        ]
+      }
+    },
+    "limitations": [
+      "Synthetic fixture only; not current market validation."
+    ],
+    "errors": [],
+    "artifacts": []
+  }
+}

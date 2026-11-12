@@ -1,0 +1,70 @@
+{
+  "contract_version": "vogue-workflow/0.1",
+  "request_id": "fixture:workflow:001",
+  "producer": {
+    "agent_id": "sales-market-agent",
+    "schema_version": "sales-market-review/1.0"
+  },
+  "status": "no_results",
+  "result": {
+    "schema_version": "sales-market-review/1.0",
+    "agent_id": "sales-market-agent",
+    "request_id": "fixture:workflow:001",
+    "status": "no_results",
+    "review_identity": {
+      "review_id": "fixture:review:001",
+      "revision": 1,
+      "content_sha256": "c1f807ad2ae98e4009351f1d020c4ce1ae6fccbe643fe1b2926e5dd84d2dd55c"
+    },
+    "review": {
+      "reviewed_draft": {
+        "draft_id": "fixture:draft:001",
+        "revision": 1,
+        "content_sha256": "8c97b7ecef6ad142bb382c0ed11659798a23cbce6cb3bfccca30611e0a2a11a9"
+      },
+      "draft_response_sha256": "46972872300e11bf06c8f991c5a073a9c20a7db715db0d2abb8072bb07672159",
+      "findings": [],
+      "evidence": [],
+      "metrics": [
+        {
+          "name": "current_company_sales",
+          "value": 0,
+          "missing_reason": "No current company sales source in this fixture.",
+          "unit": "pieces",
+          "currency": null,
+          "period": null,
+          "comparability": "unknown",
+          "observation": {
+            "observed_at": "2026-11-12T06:00:00Z",
+            "as_of": null,
+            "synthetic": true,
+            "data_nature": "synthetic_fixture",
+            "source": "coordinator synthetic fixture; no real company data",
+            "limitations": [
+              "Fixture only; not current inventory or actual sales."
+            ]
+          },
+          "evidence_refs": []
+        }
+      ],
+      "limitations": [
+        "Historical/sample sources cannot establish current sales."
+      ],
+      "observation": {
+        "observed_at": "2026-11-12T06:00:00Z",
+        "as_of": null,
+        "synthetic": true,
+        "data_nature": "synthetic_fixture",
+        "source": "coordinator synthetic fixture; no real company data",
+        "limitations": [
+          "Fixture only; not current inventory or actual sales."
+        ]
+      }
+    },
+    "limitations": [
+      "Synthetic fixture only; not current market validation."
+    ],
+    "errors": [],
+    "artifacts": []
+  }
+}

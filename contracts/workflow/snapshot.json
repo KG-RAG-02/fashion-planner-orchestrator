@@ -1,6 +1,7 @@
 {
-  "state": "proposed",
-  "source": "_workflow/contracts",
+  "contract_version": "workflow-contract/0.1.1",
+  "transport_version": "vogue-workflow/0.1",
+  "source": "contracts/workflow",
   "files": {
     "common.schema.json": "801b975ba1032444af5e47f417e3f53e306eba76b77882af62693c2e64d17710",
     "integrated-result.schema.json": "bb43e1dbe1b1819b341f922f85cb468c81d298b2dd409acb009e783085d3dbd3",

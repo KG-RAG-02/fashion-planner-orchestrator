@@ -1,0 +1,35 @@
+{
+  "contract_version": "vogue-handoff/0.1",
+  "producer": {
+    "agent_id": "stock-agent",
+    "schema_version": "1.0"
+  },
+  "request_id": "fixture:workflow:001",
+  "result": {
+    "agent_id": "stock-agent",
+    "errors": [
+      {
+        "code": "SOURCE_UNAVAILABLE",
+        "message": "Synthetic unavailable source",
+        "reason": "fixture"
+      }
+    ],
+    "evidence": [],
+    "input_provenance": {
+      "adapter_version": "stock-trend-input-adapter/1.0",
+      "internal_schema_version": null,
+      "source_agent_id": "trend-analysis-agent",
+      "source_payload_sha256": "041556b19d893aed9a18e4fccc433dadfe29c7554b6adfd962d0b564c25c0efb",
+      "source_schema_version": "1.1",
+      "transformed": true
+    },
+    "products": [],
+    "request_id": "fixture:workflow:001",
+    "schema_version": "1.0",
+    "season_basis": null,
+    "status": "error",
+    "summary": "Synthetic fixture only",
+    "trend_results": []
+  },
+  "status": "error"
+}

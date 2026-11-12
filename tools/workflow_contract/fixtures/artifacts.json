@@ -1,0 +1,118 @@
+{
+  "artifact://fixtures/raw/132093eeb0b8eb75ed31bc9810d4d4762062adf374265be4a60ba5b97f9ac60f.json": {
+    "path": "raw/132093eeb0b8eb75ed31bc9810d4d4762062adf374265be4a60ba5b97f9ac60f.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/1d094c63232283193cda9ced3309825c66003c1dea7189a817f7674c0ffac6b9.json": {
+    "path": "raw/1d094c63232283193cda9ced3309825c66003c1dea7189a817f7674c0ffac6b9.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/1d90314615f9386d989b62d27b3b91b17de21b78c12f593799e68b68a6040097.json": {
+    "path": "raw/1d90314615f9386d989b62d27b3b91b17de21b78c12f593799e68b68a6040097.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/20398762d44bcfb70cd0aae524b92266ccc570fdc4165eeb36e6fdf231524111.json": {
+    "path": "raw/20398762d44bcfb70cd0aae524b92266ccc570fdc4165eeb36e6fdf231524111.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/20cf624e4b4bf7e3a4d28fd4932bb646358789a49b6a0017b4b89e207f41b536.json": {
+    "path": "raw/20cf624e4b4bf7e3a4d28fd4932bb646358789a49b6a0017b4b89e207f41b536.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/292103f778832d3e36aa048684e96ffc07c8b88f163071db6caea1aa9da52d3c.json": {
+    "path": "raw/292103f778832d3e36aa048684e96ffc07c8b88f163071db6caea1aa9da52d3c.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/2f6194200d4e507924b8ef3803f35a01513575745148894f7b48d6d0405aa6a6.json": {
+    "path": "raw/2f6194200d4e507924b8ef3803f35a01513575745148894f7b48d6d0405aa6a6.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/3248de21a5213366e4cd243715090198a2ffebe2df78b6b7838f74960e5b2df0.json": {
+    "path": "raw/3248de21a5213366e4cd243715090198a2ffebe2df78b6b7838f74960e5b2df0.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/328c2d3ca4a6b3cdedddde2bd46a207c45ea56b15f41d1882a12fe57f1feb3f0.json": {
+    "path": "raw/328c2d3ca4a6b3cdedddde2bd46a207c45ea56b15f41d1882a12fe57f1feb3f0.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/33419951b98bbbcf5f084829f79d5ad0fae9c1e5cee696bdd0a6031294d141d3.json": {
+    "path": "raw/33419951b98bbbcf5f084829f79d5ad0fae9c1e5cee696bdd0a6031294d141d3.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/43a03e018d0303126bd59f06848170a994dac97b19bec8e447bc9410fe4aa294.json": {
+    "path": "raw/43a03e018d0303126bd59f06848170a994dac97b19bec8e447bc9410fe4aa294.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/491a1b2e60bd4d4d8ab3da442a0aa8e8be10a3d73851ddaadba73ea02a977021.json": {
+    "path": "raw/491a1b2e60bd4d4d8ab3da442a0aa8e8be10a3d73851ddaadba73ea02a977021.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/50affe1ad4140fdfd9f4e9bbc1924005f7aea58ca5df345b4ddfaed73a9c8e50.json": {
+    "path": "raw/50affe1ad4140fdfd9f4e9bbc1924005f7aea58ca5df345b4ddfaed73a9c8e50.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/5640cfe2635a7051baf1854871eac6a7fda01b574a7f89f76b1d8db1aee11640.json": {
+    "path": "raw/5640cfe2635a7051baf1854871eac6a7fda01b574a7f89f76b1d8db1aee11640.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/7ac2abfce2be8b46dd9826d597d94edeefc1570b4a992622721b90a1850e3ee9.png": {
+    "path": "raw/7ac2abfce2be8b46dd9826d597d94edeefc1570b4a992622721b90a1850e3ee9.png",
+    "media_type": "image/png"
+  },
+  "artifact://fixtures/raw/7c1aae6ba33f0226dded3fe33228e7724609b95590e0a627b9c79229bf14b75c.json": {
+    "path": "raw/7c1aae6ba33f0226dded3fe33228e7724609b95590e0a627b9c79229bf14b75c.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/7dd9794ac2f0ac62afb14d51f569f128d5498988837e491604e5cb834a366d18.json": {
+    "path": "raw/7dd9794ac2f0ac62afb14d51f569f128d5498988837e491604e5cb834a366d18.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/89c4c97bf3a8becde872f301993125cb19e2730c54187f4282ec5a239b31b874.json": {
+    "path": "raw/89c4c97bf3a8becde872f301993125cb19e2730c54187f4282ec5a239b31b874.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/902adda2918f8b85bc2858fa2061c577fb777e47543a3a2f88715d4f1bb8a9e6.json": {
+    "path": "raw/902adda2918f8b85bc2858fa2061c577fb777e47543a3a2f88715d4f1bb8a9e6.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/953211b4b7000f47e80005c896dafa45603ec1624ebd1253db4af4e3ffd73b14.json": {
+    "path": "raw/953211b4b7000f47e80005c896dafa45603ec1624ebd1253db4af4e3ffd73b14.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/c72babe04578158e9c0115384c37617bad9d528392dfb310dda055228d7d109c.json": {
+    "path": "raw/c72babe04578158e9c0115384c37617bad9d528392dfb310dda055228d7d109c.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/cebf465e6a6af562996d776a6301a91cec58e91aed6445179696751bde7fe0e1.json": {
+    "path": "raw/cebf465e6a6af562996d776a6301a91cec58e91aed6445179696751bde7fe0e1.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/d57ec369d0e45047f807f8cf4cce76fb974423879c1d94ea27919a7d784a6850.json": {
+    "path": "raw/d57ec369d0e45047f807f8cf4cce76fb974423879c1d94ea27919a7d784a6850.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/d629bf7d4b5eaebd7cead73963ababf6d43c25b080825472e9d7a89c9fa9cb2e.json": {
+    "path": "raw/d629bf7d4b5eaebd7cead73963ababf6d43c25b080825472e9d7a89c9fa9cb2e.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/dc91e2562fbb84bb968acc678ad24aecfba6434dd2dee5612cf5338d3821c720.json": {
+    "path": "raw/dc91e2562fbb84bb968acc678ad24aecfba6434dd2dee5612cf5338d3821c720.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/e360c9df98398effe488b07dba88062303fd6ebee0d3dfdeb20ce57e75db7180.json": {
+    "path": "raw/e360c9df98398effe488b07dba88062303fd6ebee0d3dfdeb20ce57e75db7180.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/fb4fb8e8bd27f0069e393ba33799ac333553af5c16ec6cb6da736af83ead0a56.json": {
+    "path": "raw/fb4fb8e8bd27f0069e393ba33799ac333553af5c16ec6cb6da736af83ead0a56.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/fbb1a51040cfc9411f3016048a161eb4c9e843b4974874addb6b1e54607c9f65.json": {
+    "path": "raw/fbb1a51040cfc9411f3016048a161eb4c9e843b4974874addb6b1e54607c9f65.json",
+    "media_type": "application/json"
+  },
+  "artifact://fixtures/raw/fbb72309036be5d143bddda05ed90702a530bd8204ee49064af5a6d60f5c404a.json": {
+    "path": "raw/fbb72309036be5d143bddda05ed90702a530bd8204ee49064af5a6d60f5c404a.json",
+    "media_type": "application/json"
+  }
+}

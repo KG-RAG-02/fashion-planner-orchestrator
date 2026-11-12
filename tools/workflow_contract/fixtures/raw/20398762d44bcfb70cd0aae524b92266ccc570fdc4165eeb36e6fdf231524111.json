@@ -1,0 +1,95 @@
+{
+  "contract_version": "vogue-handoff/0.1",
+  "producer": {
+    "agent_id": "trend-analysis-agent",
+    "schema_version": "1.1"
+  },
+  "request_id": "fixture:workflow:001",
+  "result": {
+    "applied_filters": {
+      "attributes": [],
+      "categories": {
+        "exclude": [],
+        "include": []
+      },
+      "gender": null,
+      "season": {
+        "origin": "user_requested",
+        "raw": null,
+        "season": "SS",
+        "year": 2027
+      }
+    },
+    "evidence": [
+      {
+        "article_id": "fixture:article",
+        "block_idx": 0,
+        "evidence_id": "trend:fixture:article:0:bd1ee873",
+        "published_at": null,
+        "quote": "합성 테스트 문장",
+        "title": "Fixture article",
+        "url": null
+      }
+    ],
+    "limitations": [
+      "Synthetic fixture article, not an external citation."
+    ],
+    "request_id": "fixture:workflow:001",
+    "schema_version": "1.1",
+    "status": "ok",
+    "trends": [
+      {
+        "items": [
+          {
+            "approx": [],
+            "category_major": "상의",
+            "category_minor": "셔츠",
+            "colors": [],
+            "details": [],
+            "evidence_ids": [
+              "trend:fixture:article:0:bd1ee873"
+            ],
+            "fit": null,
+            "gender": null,
+            "id": "fixture:item",
+            "image_urls": [],
+            "length_body": null,
+            "length_body_raw": null,
+            "length_sleeve": null,
+            "length_sleeve_raw": null,
+            "materials": [],
+            "name": "테스트 셔츠",
+            "patterns": [],
+            "request_match": {
+              "matched": [],
+              "mismatched": [],
+              "unknown": []
+            },
+            "shape": null,
+            "similar_products": [],
+            "styling_accessory": null,
+            "styling_raw": null
+          }
+        ],
+        "style": {
+          "aliases": [],
+          "article_id": null,
+          "definition": "Fixture style",
+          "description": [],
+          "focus_core": [],
+          "focus_evidence_ids": [
+            "trend:fixture:article:0:bd1ee873"
+          ],
+          "focus_supporting": [],
+          "id": "fixture:style",
+          "name": "합성 셔츠",
+          "name_origin": "analyst",
+          "seasons": [
+            "2027SS"
+          ]
+        }
+      }
+    ]
+  },
+  "status": "ok"
+}

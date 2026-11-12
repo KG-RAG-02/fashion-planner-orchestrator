@@ -1,0 +1,33 @@
+{
+  "contract_version": "vogue-handoff/0.1",
+  "producer": {
+    "agent_id": "trend-analysis-agent",
+    "schema_version": "1.1"
+  },
+  "request_id": "fixture:workflow:001",
+  "result": {
+    "applied_filters": {
+      "attributes": [],
+      "categories": {
+        "exclude": [],
+        "include": []
+      },
+      "gender": null,
+      "season": {
+        "origin": "user_requested",
+        "raw": null,
+        "season": "SS",
+        "year": 2027
+      }
+    },
+    "evidence": [],
+    "limitations": [
+      "Synthetic fixture article, not an external citation."
+    ],
+    "request_id": "fixture:workflow:001",
+    "schema_version": "1.1",
+    "status": "no_results",
+    "trends": []
+  },
+  "status": "no_results"
+}
