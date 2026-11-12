@@ -168,11 +168,17 @@ def _call_anthropic(client: Any, settings: LLMSettings, system: str, user: str) 
 
 
 def _call_openai(client: Any, settings: LLMSettings, system: str, user: str) -> str:
+    sampling = _sampling(settings)
+    # GPT-6 reasoning models reject sampling overrides unless reasoning is disabled.
+    # Query structuring is a constrained extraction call, so use the supported
+    # no-reasoning mode when a deterministic temperature is configured.
+    if settings.model.strip().lower().startswith("gpt-6") and sampling:
+        sampling["reasoning_effort"] = "none"
     response = client.chat.completions.create(
         model=settings.model,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         response_format={"type": "json_object"},  # the prompt asks for one JSON object
-        **_sampling(settings),
+        **sampling,
     )
     choice = response.choices[0]
     if choice.finish_reason == "length":

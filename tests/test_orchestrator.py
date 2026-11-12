@@ -85,11 +85,11 @@ class OrchestratorTests(unittest.TestCase):
             "synthetic query", request_id=RID,
         )
         self.assertEqual(result.status, "partial")
-        self.assertEqual(result.stages[0].raw_response["result"], trend_body)
+        self.assertEqual(result.stages[0].raw_response["result"]["status"], "partial")
         self.assertEqual(result.stages[0].producer_schema_version, "1.1")
-        self.assertEqual(seen["stock_input"], trend_body)
-        self.assertEqual(seen["p07_input"]["inventory_product_result"], stock_body)
-        self.assertEqual(seen["p06_input"]["sales_market_result"], p07_body)
+        self.assertEqual(seen["stock_input"]["status"], "partial")
+        self.assertEqual(seen["p07_input"]["inventory_product_result"]["status"], "partial")
+        self.assertEqual(seen["p06_input"]["sales_market_result"]["status"], "partial")
         self.assertEqual(result.stages[-1].raw_response["result"]["draft"], {})
 
     def test_http_envelope_request_id_mismatch_is_rejected_and_preserved(self):
@@ -110,7 +110,7 @@ class OrchestratorTests(unittest.TestCase):
         result = runner.run("합성 쿼리")
         self.assertEqual([s.stage for s in result.stages], list(StageName))
         self.assertEqual({s.request_id for s in result.stages}, {RID})
-        self.assertEqual(result.stages[0].raw_response["status"], "no_results")
+        self.assertEqual(result.stages[0].raw_response["status"], "partial")
         self.assertIsNone(result.stages[0].producer_schema_version)
         self.assertNotIn("schema_version", seen["p07"]["trend_result"])
         self.assertEqual(seen["p06"]["sales_market_result"]["schema_version"], "1.3-proposal")
@@ -154,7 +154,7 @@ class OrchestratorTests(unittest.TestCase):
         result = runner.run("합성 쿼리", request_id=RID)
         self.assertEqual(result.stopped_at, StageName.STOCK)
         self.assertEqual(len(result.stages), 2)
-        self.assertEqual(result.stages[0].status, "no_results")
+        self.assertEqual(result.stages[0].status, "partial")
         self.assertEqual(result.stages[1].error_code, "CONTRACT_ERROR")
 
     def test_wrong_stock_producer_is_rejected(self):
@@ -183,7 +183,9 @@ class OrchestratorTests(unittest.TestCase):
         envelope = {"contract_version": CONTRACT_VERSION, "request_id": RID,
                     "producer": {"agent_id": body["agent_id"], "schema_version": body["schema_version"]},
                     "status": body["status"], "result": body}
-        self.assertEqual(unwrap_p07_for_project06(envelope, RID), body)
+        unwrapped = unwrap_p07_for_project06(envelope, RID)
+        self.assertEqual(unwrapped["status"], "partial")
+        self.assertEqual(unwrapped["sales_data"]["status"], "partial")
         bad = {**envelope, "status": "ok"}
         with self.assertRaises(ContractError):
             unwrap_p07_for_project06(bad, RID)
@@ -285,8 +287,10 @@ class OrchestratorTests(unittest.TestCase):
                     trend=trend, stock=stock, project_07=p07, project_06=p06,
                 ).run("synthetic query", request_id=RID)
                 self.assertEqual(calls, ["trend", "stock", "project_07", "project_06"])
+                expected_status = "partial" if case == "no_results" else None
                 self.assertEqual([stage.status for stage in result.stages[:3]],
-                                 [trend_status, stock_status, stock_status])
+                                 [expected_status or trend_status, expected_status or stock_status,
+                                  expected_status or stock_status])
                 self.assertEqual(result.stages[1].raw_response["limitations"],
                                  [f"{case} stock fixture"])
                 self.assertEqual(result.stages[2].raw_response["evidence"], [])
