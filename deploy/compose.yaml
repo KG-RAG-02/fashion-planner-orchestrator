@@ -1,0 +1,191 @@
+# VOGUE — integrated deployment (base layer).
+#
+# Never run this file alone: use deploy/bin/vogue {stub|rehearsal|live}, which adds
+#   compose.stub.yaml  (deterministic, offline)      or
+#   compose.data.yaml  (Neo4j Aura + Cloudflare R2)  [+ compose.paid.yaml for the single live run]
+# and the env file ~/.config/vogue/vogue.env (outside iCloud, created by `vogue init-env`).
+#
+# Topology: only the orchestrator is published (127.0.0.1); agents talk over the internal
+# `backend` network with the shared bearer token; artifacts are exchanged through read-only
+# volume subpaths and verified by size + sha256 (docs/workflow-integration-conventions.md §8).
+
+name: vogue
+
+x-app: &app
+  read_only: true
+  user: "10001:10001"
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,size=128m,mode=1777
+  restart: unless-stopped
+  init: true
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+x-env: &env
+  HOME: /tmp
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+  VOGUE_AGENT_SERVICE_BEARER_TOKEN: ${VOGUE_AGENT_SERVICE_BEARER_TOKEN:?run deploy/bin/vogue init-env first}
+
+networks:
+  backend:
+    internal: true
+  edge:
+    ipam:
+      config:
+        - subnet: ${VOGUE_EDGE_SUBNET:-172.30.231.0/28}
+  egress: {}
+
+volumes:
+  p08_state:
+    name: vogue_${VOGUE_RUN_LABEL:-default}_p08_state
+  p06_data:
+    name: vogue_${VOGUE_RUN_LABEL:-default}_p06_data
+  p07_state:
+    name: vogue_${VOGUE_RUN_LABEL:-default}_p07_state
+
+services:
+  volume-init:
+    image: vogue/orchestrator:dev
+    build: { context: .., dockerfile: Dockerfile }
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mkdir -p /v/p08/workflow/blobs /v/p07/reviews /v/p07/hm-cache /v/p06 &&
+        chown -R 10001:10001 /v/p08 /v/p07 /v/p06 &&
+        chmod 0750 /v/p08 /v/p07 /v/p06 && echo volume-init-ok
+    volumes:
+      - p08_state:/v/p08
+      - p07_state:/v/p07
+      - p06_data:/v/p06
+    restart: "no"
+
+  trend:
+    <<: *app
+    image: vogue/trend:dev
+    build: { context: ../../trend-analysis-agent, dockerfile: docker/demo/Dockerfile.app }
+    environment:
+      <<: *env
+      TREND_API_MODE: service
+      TREND_API_HOST: 0.0.0.0
+      TREND_API_PORT: "8768"
+    networks: [backend]
+    restart: on-failure
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8768/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  stock:
+    <<: *app
+    image: vogue/stock:dev
+    build: { context: ../../stock-agent }
+    environment:
+      <<: *env
+      STOCK_CACHE_DIR: /cache
+      STOCK_IMAGE_CACHE_DIR: /tmp/stock-images
+      STOCK_LLM_PROVIDER: policy
+    networks: [backend]
+    mem_limit: 2g
+
+  new-product:
+    <<: *app
+    image: vogue/new-product:dev
+    build: { context: ../../new-product-agent }
+    environment:
+      <<: *env
+      VOGUE_HTTP_MODE: private
+      VOGUE_HOST: 0.0.0.0
+      VOGUE_PORT: "8767"
+      VOGUE_EXECUTION_PROFILE: draft_only
+      VOGUE_WORKFLOW_DRAFT_ENABLED: "true"
+      VOGUE_UPSTREAM_ARTIFACT_ROOT: /artifacts
+    volumes:
+      - p06_data:/app/data/local
+      - type: volume
+        source: p08_state
+        target: /artifacts/p08/blobs
+        read_only: true
+        volume: { subpath: workflow/blobs }
+    networks: [backend]
+    mem_limit: 512m
+    depends_on:
+      volume-init: { condition: service_completed_successfully }
+
+  sales-market:
+    <<: *app
+    image: vogue/sales-market:dev
+    build: { context: ../../sales-market-agent }
+    environment:
+      <<: *env
+      VOGUE_UPSTREAM_ARTIFACT_ROOT: /artifacts
+      VOGUE_P07_REVIEW_ARTIFACT_DIR: /data/reviews
+      VOGUE_PROJECT07_DISABLE_DOTENV: "1"
+    volumes:
+      - type: volume
+        source: p07_state
+        target: /data/reviews
+        volume: { subpath: reviews }
+      - type: volume
+        source: p08_state
+        target: /artifacts/p08/blobs
+        read_only: true
+        volume: { subpath: workflow/blobs }
+    networks: [backend]
+    mem_limit: 1536m
+    depends_on:
+      volume-init: { condition: service_completed_successfully }
+
+  orchestrator:
+    <<: *app
+    image: vogue/orchestrator:dev
+    build: { context: .., dockerfile: Dockerfile }
+    environment:
+      <<: *env
+      VOGUE_ORCHESTRATOR_HOST: 0.0.0.0
+      VOGUE_ORCHESTRATOR_PORT: "8765"
+      VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND: "1"
+      VOGUE_ORCHESTRATOR_RUNTIME: container
+      VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS: ${VOGUE_EDGE_SUBNET:-172.30.231.0/28}
+      VOGUE_ORCHESTRATOR_ALLOWED_HOSTS: 127.0.0.1:${VOGUE_UI_PORT:-8765},localhost:${VOGUE_UI_PORT:-8765}
+      VOGUE_AGENT_HTTP_PRIVATE_HOSTS: trend,stock,new-product,sales-market
+      VOGUE_TREND_AGENT_URL: http://trend:8768
+      VOGUE_STOCK_AGENT_URL: http://stock:8002
+      VOGUE_NEW_PRODUCT_AGENT_URL: http://new-product:8767
+      VOGUE_SALES_MARKET_AGENT_URL: http://sales-market:8766
+      VOGUE_WORKFLOW_STORE_DIR: /app/.local/workflow
+      VOGUE_PEER_ARTIFACT_ROOT: /peer
+      VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS: "75"
+      VOGUE_WORKFLOW_IMAGES_ENABLED: "1"
+      VOGUE_WORKFLOW_IMAGE_PROVIDER: fixture
+      VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED: "0"
+      VOGUE_QUERY_STRUCTURING_MODE: synthetic_fixture
+    ports:
+      - "127.0.0.1:${VOGUE_UI_PORT:-8765}:8765"
+    volumes:
+      - p08_state:/app/.local
+      - type: volume
+        source: p07_state
+        target: /peer/p07/reviews
+        read_only: true
+        volume: { subpath: reviews }
+    networks: [edge, backend]
+    mem_limit: 512m
+    depends_on:
+      volume-init: { condition: service_completed_successfully }
+      trend: { condition: service_healthy }
+      stock: { condition: service_healthy }
+      new-product: { condition: service_healthy }
+      sales-market: { condition: service_healthy }

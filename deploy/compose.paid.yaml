@@ -1,0 +1,21 @@
+# Paid-model layer — the ONLY file that references the OpenAI key.
+#   deploy/bin/vogue live "<planning brief>"   (refuses a second run; see LIVE_GUARD in bin/vogue)
+# Calls per run: P08 query structuring (1 LLM call + retries on error), stock tool-calling agent
+# (a few calls per trend), and at most one final image after the market review.
+
+services:
+  stock:
+    environment:
+      STOCK_LLM_PROVIDER: openai
+      LLM_API_KEY: ${VOGUE_OPENAI_API_KEY:?VOGUE_OPENAI_API_KEY missing in the env file}
+      LLM_MODEL: ${VOGUE_STOCK_LLM_MODEL:?VOGUE_STOCK_LLM_MODEL missing in the env file}
+
+  orchestrator:
+    environment:
+      VOGUE_QUERY_STRUCTURING_MODE: llm
+      LLM_API_KEY: ${VOGUE_OPENAI_API_KEY:?VOGUE_OPENAI_API_KEY missing in the env file}
+      LLM_MODEL: ${VOGUE_P08_LLM_MODEL:?VOGUE_P08_LLM_MODEL missing in the env file}
+      OPENAI_API_KEY: ${VOGUE_OPENAI_API_KEY:?VOGUE_OPENAI_API_KEY missing in the env file}
+      VOGUE_WORKFLOW_IMAGE_PROVIDER: openai
+      VOGUE_IMAGE_MODEL: ${VOGUE_IMAGE_MODEL:-}
+      VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED: "0"

@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# VOGUE deployment wrapper. See deploy/README.md.
+#
+#   vogue init-env [--force]          create/complete ~/.config/vogue/vogue.env (values never printed)
+#   vogue preflight <profile>         stub | rehearsal | live
+#   vogue build                       build all five service images (vogue/<svc>:dev)
+#   vogue stub                        offline stack on 127.0.0.1:18765 + end-to-end check
+#   vogue rehearsal                   Aura + R2 data, no paid model, on 127.0.0.1:8765 + end-to-end check
+#   vogue live "<planning brief>"     the single paid run (guarded: refuses a second run)
+#   vogue probe <profile>             in-stack auth (401/401/4xx) and inbound-gate (403) probes
+#   vogue up|ps|logs|down <profile>   lifecycle helpers (down never removes volumes)
+set -euo pipefail
+
+DEPLOY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="${VOGUE_ENV_FILE:-$HOME/.config/vogue/vogue.env}"
+PY="${VOGUE_PYTHON:-python3}"
+EVIDENCE_DIR="${VOGUE_EVIDENCE_DIR:-$HOME/VOGUE-archive/e2e}"
+LIVE_GUARD="${VOGUE_LIVE_GUARD:-$HOME/.config/vogue/live-run.done}"
+STUB_QUERY="2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하고 싶어"
+
+die() { echo "vogue: $*" >&2; exit 1; }
+
+profile_settings() {
+  case "$1" in
+    stub) PROJECT=vogue-stub; PORT=18765; LABEL=stub; FILES=(compose.yaml compose.stub.yaml) ;;
+    rehearsal) PROJECT=vogue; PORT=8765; LABEL=default; FILES=(compose.yaml compose.data.yaml) ;;
+    live) PROJECT=vogue; PORT=8765; LABEL=default; FILES=(compose.yaml compose.data.yaml compose.paid.yaml) ;;
+    *) die "unknown profile '$1' (stub | rehearsal | live)" ;;
+  esac
+}
+
+compose() {
+  local profile="$1"; shift
+  profile_settings "$profile"
+  [ -f "$ENV_FILE" ] || die "env file missing: $ENV_FILE (run: vogue init-env)"
+  local args=(-p "$PROJECT" --project-directory "$DEPLOY" --env-file "$ENV_FILE")
+  local file
+  for file in "${FILES[@]}"; do args+=(-f "$DEPLOY/$file"); done
+  VOGUE_UI_PORT="$PORT" VOGUE_RUN_LABEL="$LABEL" docker compose "${args[@]}" "$@"
+}
+
+wait_ready() {
+  local profile="$1"
+  profile_settings "$profile"
+  local deadline=$(( $(date +%s) + ${VOGUE_WAIT_SECONDS:-900} ))
+  echo "waiting for http://127.0.0.1:$PORT/api/health (all agents must be healthy first)…"
+  while :; do
+    if curl -fsS -o /dev/null --max-time 3 "http://127.0.0.1:$PORT/api/health"; then
+      echo "ready."
+      return 0
+    fi
+    local failed
+    failed="$(compose "$profile" ps -a --format '{{.Service}} {{.State}} {{.ExitCode}}' | awk '$2=="exited" && $3!="0" {print $1}')"
+    if [ -n "$failed" ]; then
+      echo "failed services: $failed" >&2
+      # shellcheck disable=SC2086
+      compose "$profile" logs --no-color --tail 60 $failed >&2 || true
+      return 1
+    fi
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "timed out; current state:" >&2
+      compose "$profile" ps -a >&2 || true
+      return 1
+    fi
+    sleep 5
+  done
+}
+
+probe() {
+  local profile="$1"
+  echo "auth probes (orchestrator -> agents):"
+  compose "$profile" exec -T orchestrator python - < "$DEPLOY/e2e/probe_auth.py"
+  echo "inbound gate probes (backend peer -> orchestrator):"
+  compose "$profile" exec -T trend python - --peer < "$DEPLOY/e2e/probe_auth.py"
+}
+
+stamp() { date +%Y%m%dT%H%M%S; }
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  init-env)
+    "$PY" "$DEPLOY/scripts/bootstrap_env.py" --out "$ENV_FILE" "$@" ;;
+  preflight)
+    "$PY" "$DEPLOY/scripts/preflight.py" --profile "${1:?profile}" --env-file "$ENV_FILE" "${@:2}" ;;
+  build)
+    compose stub build orchestrator trend stock new-product sales-market "$@" ;;
+  up)
+    profile="${1:?profile}"
+    "$PY" "$DEPLOY/scripts/preflight.py" --profile "$profile" --env-file "$ENV_FILE"
+    compose "$profile" up -d --remove-orphans
+    wait_ready "$profile" ;;
+  probe)
+    probe "${1:?profile}" ;;
+  stub)
+    "$0" up stub
+    probe stub
+    mkdir -p "$EVIDENCE_DIR"
+    "$PY" "$DEPLOY/e2e/run_e2e.py" --base "http://127.0.0.1:18765" --profile stub --query "$STUB_QUERY" \
+      --out "$EVIDENCE_DIR/stub-$(stamp).json" "$@" ;;
+  rehearsal)
+    "$0" up rehearsal
+    probe rehearsal
+    mkdir -p "$EVIDENCE_DIR"
+    "$PY" "$DEPLOY/e2e/run_e2e.py" --base "http://127.0.0.1:8765" --profile rehearsal \
+      --trend-query "${VOGUE_REHEARSAL_TREND_QUERY:-$DEPLOY/e2e/queries/rehearsal-trend-query.json}" \
+      --out "$EVIDENCE_DIR/rehearsal-$(stamp).json" "$@" ;;
+  live)
+    query="${1:?usage: vogue live \"<planning brief>\"}"; shift
+    [ -e "$LIVE_GUARD" ] && die "a live run was already recorded ($LIVE_GUARD). Delete it deliberately to allow another paid run."
+    "$0" up live
+    probe live
+    mkdir -p "$EVIDENCE_DIR" "$(dirname "$LIVE_GUARD")"
+    date -u +%Y-%m-%dT%H:%M:%SZ > "$LIVE_GUARD"
+    "$PY" "$DEPLOY/e2e/run_e2e.py" --base "http://127.0.0.1:8765" --profile live --query "$query" \
+      --skip-replay --timeout 900 --out "$EVIDENCE_DIR/live-$(stamp).json" "$@" ;;
+  ps)
+    compose "${1:?profile}" ps -a ;;
+  logs)
+    profile="${1:?profile}"; shift
+    compose "$profile" logs --no-color --tail "${VOGUE_LOG_TAIL:-200}" "$@" ;;
+  down)
+    compose "${1:?profile}" down --remove-orphans ;;
+  help|-h|--help)
+    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *)
+    die "unknown command '$cmd' (try: vogue help)" ;;
+esac

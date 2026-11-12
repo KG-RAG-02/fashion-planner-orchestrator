@@ -1,0 +1,89 @@
+# Real-data layer: Neo4j Aura (trend graph) + Cloudflare R2 (stock and H&M DuckDB caches).
+#   deploy/bin/vogue rehearsal   (this layer alone: zero paid model calls — PolicyLLM + fixture image)
+#   deploy/bin/vogue live        (plus compose.paid.yaml)
+# Cache volumes are fixed-name so a ~0.8 GB download happens once and survives restarts.
+
+x-r2: &r2
+  R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?R2_ACCOUNT_ID missing in the env file}
+  R2_BUCKET: ${R2_BUCKET:?R2_BUCKET missing in the env file}
+  R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID missing in the env file}
+  R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY missing in the env file}
+  R2_ENDPOINT: ${R2_ENDPOINT:-}
+  R2_DB_KEY: ${R2_DB_KEY:?R2_DB_KEY missing in the env file}
+  R2_IMAGE_PREFIX: ${R2_IMAGE_PREFIX:-}
+
+services:
+  trend:
+    environment:
+      NEO4J_URI: ${NEO4J_URI:?fill NEO4J_URI (Neo4j Aura) in the env file}
+      NEO4J_USER: ${NEO4J_USER:?fill NEO4J_USER in the env file}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?fill NEO4J_PASSWORD in the env file}
+    networks: [backend, egress]
+
+  stock-cache-init:
+    image: vogue/stock:dev
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=64m,mode=1777"]
+    environment:
+      <<: *r2
+      HOME: /tmp
+      STOCK_CACHE_DIR: /cache
+    command: ["python", "-m", "stock_agent.server", "--prepare-cache"]
+    volumes:
+      - stock_cache:/cache
+    networks: [egress]
+    restart: "no"
+
+  stock:
+    environment:
+      <<: *r2
+      STOCK_CACHE_DIR: /cache
+    volumes:
+      - stock_cache:/cache:ro
+    networks: [backend, egress]
+    depends_on:
+      stock-cache-init: { condition: service_completed_successfully }
+
+  p07-cache-init:
+    image: vogue/sales-market:dev
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=64m,mode=1777"]
+    environment:
+      <<: *r2
+      HOME: /tmp
+      VOGUE_R2_HM_DB_CACHE_DIR: /data/hm-cache
+      VOGUE_PROJECT07_DISABLE_DOTENV: "1"
+    entrypoint: ["python", "/init/p07_cache_init.py"]
+    volumes:
+      - ./init/p07_cache_init.py:/init/p07_cache_init.py:ro
+      - type: volume
+        source: p07_state
+        target: /data/hm-cache
+        volume: { subpath: hm-cache }
+    networks: [egress]
+    restart: "no"
+    depends_on:
+      volume-init: { condition: service_completed_successfully }
+
+  sales-market:
+    environment:
+      <<: *r2
+      VOGUE_R2_HM_DB_CACHE_DIR: /data/hm-cache
+    volumes:
+      - type: volume
+        source: p07_state
+        target: /data/hm-cache
+        volume: { subpath: hm-cache }
+    networks: [backend, egress]
+    depends_on:
+      p07-cache-init: { condition: service_completed_successfully }
+
+volumes:
+  stock_cache:
+    name: vogue_stock_cache

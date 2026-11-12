@@ -1,0 +1,109 @@
+# Deterministic offline layer: no egress, no R2, no Aura, no paid model.
+#   deploy/bin/vogue stub   (project "vogue-stub", UI on 127.0.0.1:18765)
+#
+# * neo4j-stub   — throwaway Neo4j on tmpfs, seeded with the synthetic trend fixture graph
+# * stock        — synthetic fixture DuckDB (built in-image) + deterministic PolicyLLM
+# * sales-market — bundled synthetic_local_fixture review source (labelled synthetic)
+# * orchestrator — offline query structuring + fixture image renderer
+# Stub query that exercises the whole chain:
+#   "2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하고 싶어"
+
+services:
+  neo4j-stub:
+    image: neo4j:5.26-community
+    pull_policy: missing
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_STUB_PASSWORD:?run deploy/bin/vogue init-env first}
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 128m
+      NEO4J_PLUGINS: "[]"
+    tmpfs:
+      - /data
+      - /logs
+    networks: [backend]
+    mem_limit: 1536m
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#neo4j/}\" 'RETURN 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 15s
+
+  trend-stub-seed:
+    image: vogue/trend:dev
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=64m,mode=1777"]
+    environment:
+      HOME: /tmp
+      NEO4J_URI: bolt://neo4j-stub:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_STUB_PASSWORD:?run deploy/bin/vogue init-env first}
+    command: ["python", "scripts/seed_fixture_graph.py"]
+    networks: [backend]
+    restart: "no"
+    depends_on:
+      neo4j-stub: { condition: service_healthy }
+
+  trend:
+    environment:
+      NEO4J_URI: bolt://neo4j-stub:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_STUB_PASSWORD:?run deploy/bin/vogue init-env first}
+    depends_on:
+      trend-stub-seed: { condition: service_completed_successfully }
+
+  stock-fixture-init:
+    image: vogue/stock:dev
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=64m,mode=1777"]
+    environment:
+      HOME: /tmp
+    command: ["python", "-m", "stock_agent.fixture_db", "/fixture/fixture.duckdb"]
+    volumes:
+      - stock_fixture:/fixture
+    restart: "no"
+    depends_on:
+      stock-fixture-perms: { condition: service_completed_successfully }
+
+  stock-fixture-perms:
+    image: vogue/stock:dev
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: ["no-new-privileges:true"]
+    entrypoint: ["/bin/sh", "-c", "chown 10001:10001 /fixture && rm -f /fixture/fixture.duckdb /fixture/fixture.duckdb.wal"]
+    volumes:
+      - stock_fixture:/fixture
+    restart: "no"
+
+  stock:
+    environment:
+      STOCK_DB_PATH: /fixture/fixture.duckdb
+      STOCK_LLM_PROVIDER: policy
+    volumes:
+      - stock_fixture:/fixture:ro
+    depends_on:
+      stock-fixture-init: { condition: service_completed_successfully }
+
+  sales-market:
+    environment:
+      VOGUE_P07_REVIEW_SOURCE: synthetic_local_fixture
+
+  orchestrator:
+    environment:
+      VOGUE_QUERY_STRUCTURING_MODE: synthetic_fixture
+      VOGUE_WORKFLOW_IMAGE_PROVIDER: fixture
+
+volumes:
+  stock_fixture:
+    name: vogue_stub_stock_fixture
