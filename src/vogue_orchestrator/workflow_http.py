@@ -14,7 +14,7 @@ from .connectors import (ConnectorConfigurationError, WORKFLOW_CONNECT_TIMEOUT_S
                          WORKFLOW_READ_TIMEOUT_SECONDS, _service_url, timeout_seconds)
 from .workflow import Workflow, WireResponse, StageFailure
 from .workflow_contract import (WorkflowContract, VERSION, require, contract_gate_status,
-                                development_limitation)
+                                development_limitation, truthy)
 from .workflow_store import (ArtifactError, PeerArtifactReader, SHA256_HEX, WorkflowStore, canonical,
                              p08_artifact, strict_json)
 
@@ -90,6 +90,47 @@ def post_wire(url, payload, token=None, *, connect_timeout=WORKFLOW_CONNECT_TIME
         conn.close()
 
 
+IMAGE_PROVIDERS = ('openai', 'fixture')
+FIXTURE_IMAGE_LIMITATION = ('Final image comes from the deterministic local fixture provider '
+                            '(VOGUE_WORKFLOW_IMAGE_PROVIDER=fixture): a placeholder, not a generated concept.')
+
+
+def images_enabled(env=None):
+    return (os.environ if env is None else env).get('VOGUE_WORKFLOW_IMAGES_ENABLED') == '1'
+
+
+def image_provider_name(env=None):
+    """VOGUE_WORKFLOW_IMAGE_PROVIDER: openai (default) or fixture; anything else is None (invalid)."""
+    value = str((os.environ if env is None else env).get('VOGUE_WORKFLOW_IMAGE_PROVIDER') or 'openai').strip().lower()
+    return value if value in IMAGE_PROVIDERS else None
+
+
+def image_retry_enabled(env=None):
+    return truthy((os.environ if env is None else env).get('VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED'))
+
+
+def fixture_image(payload):
+    """Deterministic local PNG for offline runs: no network, no model, colours derived from the lineage.
+
+    The state machine counts provider_calls exactly as for the real provider.
+    """
+    require(images_enabled(), 'IMAGE_PROVIDER_DISABLED')
+    import io
+    from PIL import Image, ImageDraw
+    lineage = hashlib.sha256(canonical(payload['lineage'])).digest()
+    image = Image.new('RGB', (512, 512), tuple(lineage[0:3]))
+    draw = ImageDraw.Draw(image)
+    for band in range(8):
+        colour = tuple(lineage[3 + band * 3:6 + band * 3])
+        draw.rectangle((32, 96 + band * 44, 480, 128 + band * 44), fill=colour)
+    draw.rectangle((8, 8, 503, 503), outline=(255, 255, 255), width=4)
+    draw.text((32, 32), 'VOGUE FIXTURE IMAGE (synthetic)', fill=(255, 255, 255))
+    draw.text((32, 56), 'lineage ' + lineage.hex()[:16], fill=(255, 255, 255))
+    buffer = io.BytesIO()
+    image.save(buffer, format='PNG')
+    return buffer.getvalue(), 'image/png'
+
+
 def final_image(payload):
     # Called only by the state machine after an eligible, hash-linked review.
     from .workflows.image_generation import OpenAIImageProvider, ImageGenerationRequest, DEFAULT_IMAGE_MODEL
@@ -130,7 +171,16 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
         url = _service_url(env, variable, '/v1/agents/' + route)
         adapters[key] = lambda payload, u=url: post_wire(u, payload, token, connect_timeout=connect_timeout,
                                                          read_timeout=read_timeout)
-    image = final_image if env.get('VOGUE_WORKFLOW_IMAGES_ENABLED') == '1' and env.get('OPENAI_API_KEY') else None
+    image = None
+    if images_enabled(env):
+        provider = image_provider_name(env)
+        if provider is None:
+            raise WorkflowUnavailable('IMAGE_PROVIDER_INVALID', 409, 'VOGUE_WORKFLOW_IMAGE_PROVIDER must be openai or fixture.')
+        if provider == 'fixture':
+            image = fixture_image
+            limitations = [*limitations, FIXTURE_IMAGE_LIMITATION]
+        elif env.get('OPENAI_API_KEY'):
+            image = final_image
     return Workflow(**adapters, image=image, store=store(), contract=contract, artifact_reader=artifact_reader,
                     limitations=limitations)
 
@@ -336,6 +386,9 @@ def _upload_image(handler):
 
 
 def _retry_image(handler):
+    if not image_retry_enabled():
+        problem(handler, 409, 'IMAGE_RETRY_DISABLED', 'Image retries are disabled (VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED).')
+        return
     value = _read_json(handler, 8388608)
     if value is _INVALID:
         return

@@ -190,6 +190,23 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result['envelope']['result']['final_image']['status'],'generated')
         self.assertEqual(self.trace,['trend','stock','planning_draft','sales_market_review','final_image'])
 
+    def test_fixture_image_provider_runs_offline_and_counts_one_call(self):
+        import os
+        from unittest.mock import patch
+        from vogue_orchestrator.workflow_http import fixture_image
+        self.workflow.image = fixture_image
+        with patch.dict(os.environ, {'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}), \
+                patch('socket.socket.connect', side_effect=AssertionError('no network')):
+            result = self.run_flow()
+        self.assertEqual(result['envelope']['status'], 'ok', result)
+        image = result['envelope']['result']['final_image']
+        self.assertEqual((image['status'], image['provider_calls'], image['artifact']['media_type']), ('generated', 1, 'image/png'))
+        self.assertEqual(image['artifact']['uri'], 'artifact://p08/blobs/' + image['artifact']['sha256'])
+        with patch.dict(os.environ, {'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}):
+            expected, _ = fixture_image({'lineage': image['lineage']})
+        self.assertEqual(self.store.verify(image['artifact']), expected)
+        self.contract.schema(result['envelope'], 'integrated-result.schema.json')
+
     def test_duplicate_concurrent_requests_generate_once(self):
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(2) as pool:
