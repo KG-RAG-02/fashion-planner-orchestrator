@@ -6,6 +6,7 @@ from vogue_orchestrator.connectors import (
     ConnectorConfigurationError, _project07_context_fields, _service_url,
     connection_status, agent_http_v01_adapter, build_v01_http_orchestrator,
     HTTP_CONNECT_TIMEOUT_SECONDS, AGENT_REQUEST_TIMEOUT_SECONDS, _post_json, TransportError,
+    request_project06_sales_market_review,
 )
 
 
@@ -234,13 +235,28 @@ class ConnectorConfigurationTests(unittest.TestCase):
             "VOGUE_TREND_AGENT_URL": "http://localhost:8001",
             "VOGUE_STOCK_AGENT_URL": "http://localhost:8002",
             "VOGUE_SALES_MARKET_AGENT_URL": "http://localhost:8003",
-            "VOGUE_NEW_PRODUCT_AGENT_URL": "http://localhost:8004",
             "VOGUE_AGENT_HTTP_DEV_MODE": "1",
         }
         runner = build_v01_http_orchestrator(env)
         self.assertTrue(runner.require_envelopes)
         self.assertEqual(HTTP_CONNECT_TIMEOUT_SECONDS, 3)
         self.assertEqual(AGENT_REQUEST_TIMEOUT_SECONDS, 60)
+
+    def test_project06_review_adapter_uses_review_proposal_contract(self):
+        sent = {}
+        def fake_post(url, payload, *, bearer_token=None):
+            sent.update(url=url, payload=payload, bearer_token=bearer_token)
+            return {"status": "no_results"}
+        draft = {"schema_version": "1.0", "draft_id": "req-1", "product": {"category": "원피스"}}
+        with patch("vogue_orchestrator.connectors._post_json", side_effect=fake_post):
+            result = request_project06_sales_market_review("req-1", draft, {
+                "VOGUE_NEW_PRODUCT_AGENT_URL": "http://127.0.0.1:8767",
+                "VOGUE_AGENT_HTTP_DEV_MODE": "1", "VOGUE_AGENT_SERVICE_BEARER_TOKEN": "test-token",
+            })
+        self.assertEqual(result["status"], "no_results")
+        self.assertEqual(sent["url"], "http://127.0.0.1:8767/v1/agents/new-product-agent/sales-market-reviews")
+        self.assertEqual(sent["payload"]["contract_version"], "vogue-sales-market-review/0.1-proposal")
+        self.assertEqual(sent["bearer_token"], "test-token")
 
     def test_readiness_separates_mixed_connectors_from_http_v01(self):
         status = connection_status({**self.base_env, "VOGUE_PROJECT07_SOURCE_ADAPTER": "sources:build"})
@@ -251,15 +267,15 @@ class ConnectorConfigurationTests(unittest.TestCase):
         self.assertTrue(all(route["endpoint_health"] == "not_checked" for route in canonical["routes"]))
         by_route = {route["route_agent_id"]: route for route in canonical["routes"]}
         self.assertEqual(by_route["trend-analysis-agent"]["known_status"], "local_development_route")
+        self.assertNotIn("sales-market-agent", by_route)
+        self.assertEqual(canonical["post_planning_review"]["delegated_to"], "sales-market-agent")
+        self.assertEqual(canonical["post_planning_review"]["path"],
+                         "/v1/agents/sales-market-agent/reviews")
         self.assertTrue(by_route["trend-analysis-agent"]["implemented"])
         self.assertEqual(by_route["trend-analysis-agent"]["local_development_base_url"], "http://127.0.0.1:8768")
         self.assertEqual(by_route["stock-agent"]["known_status"], "source_adapter_verified")
         self.assertTrue(by_route["stock-agent"]["implemented"])
-        self.assertEqual(by_route["sales-market-agent"]["known_status"], "runtime_schema_aligned")
-        self.assertEqual(by_route["sales-market-agent"]["producer_result_schema_version"], "1.0")
-        self.assertEqual(by_route["sales-market-agent"]["local_development_base_url"], "http://127.0.0.1:8766")
-        self.assertEqual(by_route["new-product-agent"]["producer_result_schema_version"], "1.0")
-        self.assertEqual(by_route["new-product-agent"]["local_development_base_url"], "http://127.0.0.1:8767")
+        self.assertNotIn("new-product-agent", by_route)
 
 
 if __name__ == "__main__":

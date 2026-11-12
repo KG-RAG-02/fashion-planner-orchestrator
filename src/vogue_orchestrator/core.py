@@ -19,7 +19,7 @@ class StageName(StrEnum):
 
 
 VALID_STATUSES = {"ok", "partial", "no_results", "error"}
-TREND_STATUSES = {"ok", "no_results", "error"}
+TREND_STATUSES = {"ok", "partial", "no_results", "error"}
 CONTRACT_VERSION = "vogue-handoff/0.1"
 PROJECT06_CONTRACT_VERSION = "vogue-handoff/0.2"
 P07_INPUT_SCHEMA_VERSION = "1.0"
@@ -109,7 +109,9 @@ class OrchestrationResult:
                     "stage": r.stage.value, "status": "partial" if r.status == "no_results" else r.status, "request_id": r.request_id,
                     "producer_id": r.producer_id,
                     "producer_schema_version": r.producer_schema_version,
-                    "raw_response": _normalize_no_results(r.raw_response),
+                    "raw_response": (r.raw_response if isinstance(r.raw_response, Mapping)
+                                     and "contract_version" in r.raw_response
+                                     else _normalize_no_results(r.raw_response)),
                     "error_code": r.error_code, "error_message": r.error_message,
                 }
                 for r in self.stages
@@ -306,7 +308,13 @@ class Orchestrator:
             "request_id": rid, "query": query, "scope": normalized_scope,
         }
 
-        for stage in (StageName.TREND, StageName.STOCK, StageName.PROJECT_07, StageName.PROJECT_06):
+        # The canonical HTTP pipeline ends after upstream evidence. P08 then
+        # builds the migrated PlanningDraft and requests one P07 review.
+        # In-process compatibility mode retains its historical adapters.
+        stage_order = ((StageName.TREND, StageName.STOCK)
+                       if self.require_envelopes else
+                       (StageName.TREND, StageName.STOCK, StageName.PROJECT_07, StageName.PROJECT_06))
+        for stage in stage_order:
             raw: Any = None
             try:
                 if stage == StageName.STOCK:
@@ -318,7 +326,8 @@ class Orchestrator:
                                "inventory_product_result": shared.get("inventory_product_result")}
                 elif stage == StageName.PROJECT_06:
                     p07_raw = shared.get("sales_market_result")
-                    p07_body = unwrap_p07_for_project06(p07_raw, rid) if p07_raw is not None else None
+                    p07_body = (unwrap_p07_for_project06(p07_raw, rid)
+                                if p07_raw is not None and not self.require_envelopes else None)
                     planning_request = shared.get("planning_request")
                     trend_result = shared.get("trend_result")
                     inventory_result = shared.get("inventory_product_result")
@@ -387,18 +396,26 @@ class Orchestrator:
                 else:
                     payload = trend_payload
 
-                raw = _normalize_no_results(self.adapters[stage](payload))
+                raw = self.adapters[stage](payload)
+                # Keep canonical envelopes byte-for-byte equivalent at the JSON
+                # object level so their status/result consistency remains valid.
+                # Legacy producer bodies use the established no_results policy.
+                if not (isinstance(raw, Mapping) and "contract_version" in raw):
+                    raw = _normalize_no_results(raw)
                 response_body = raw
                 envelope_metadata = None
                 if self.require_envelopes and not (isinstance(raw, Mapping) and "contract_version" in raw):
                     raise ContractError("HTTP v0.1 response envelope is required")
                 if isinstance(raw, Mapping) and "contract_version" in raw:
                     _, expected_agent = ROUTE_PRODUCERS[stage]
+                    expected_contract = (raw.get("contract_version")
+                                         if stage == StageName.PROJECT_06
+                                         and raw.get("contract_version") in {CONTRACT_VERSION, PROJECT06_CONTRACT_VERSION}
+                                         else PROJECT06_CONTRACT_VERSION if stage == StageName.PROJECT_06
+                                         else CONTRACT_VERSION)
                     response_body, envelope_agent, envelope_version, envelope_status = _unpack_handoff_response(
                         raw, rid, expected_agent=expected_agent,
-                        expected_contract_version=(PROJECT06_CONTRACT_VERSION
-                                                  if stage == StageName.PROJECT_06
-                                                  else CONTRACT_VERSION),
+                        expected_contract_version=expected_contract,
                     )
                     result_version = response_body.get("schema_version")
                     if (stage in SUPPORTED_PRODUCER_VERSIONS
@@ -459,10 +476,10 @@ class Orchestrator:
                     result.stopped_at = stage
                     break
                 if stage == StageName.TREND:
-                    shared["trend_result"] = response_body
+                    shared["trend_result"] = _normalize_no_results(response_body)
                     shared["planning_request"] = planning_request
                 elif stage == StageName.STOCK:
-                    shared["inventory_product_result"] = response_body
+                    shared["inventory_product_result"] = _normalize_no_results(response_body)
                 elif stage == StageName.PROJECT_07:
                     shared["sales_market_result"] = raw
             except Exception as exc:

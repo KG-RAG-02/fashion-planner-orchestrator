@@ -85,7 +85,7 @@ class OrchestratorTests(unittest.TestCase):
             "synthetic query", request_id=RID,
         )
         self.assertEqual(result.status, "partial")
-        self.assertEqual(result.stages[0].raw_response["result"]["status"], "partial")
+        self.assertEqual(result.stages[0].raw_response["result"]["status"], "no_results")
         self.assertEqual(result.stages[0].producer_schema_version, "1.1")
         self.assertEqual(seen["stock_input"]["status"], "partial")
         self.assertEqual(seen["p07_input"]["inventory_product_result"]["status"], "partial")
@@ -292,7 +292,10 @@ class OrchestratorTests(unittest.TestCase):
                                  [expected_status or trend_status, expected_status or stock_status,
                                   expected_status or stock_status])
                 self.assertEqual(result.stages[1].raw_response["limitations"],
-                                 [f"{case} stock fixture"])
+                                 ([f"{case} stock fixture"] if case != "no_results" else [
+                                     "no_results stock fixture",
+                                     "No usable results were returned for this scope; this partial status does not imply a zero value.",
+                                 ]))
                 self.assertEqual(result.stages[2].raw_response["evidence"], [])
                 self.assertEqual(result.stages[3].raw_response["draft"]["review_status"],
                                  "md_review_required")
@@ -393,16 +396,13 @@ class OrchestratorTests(unittest.TestCase):
         result = runner.run("synthetic", request_id=RID, trend_query=tq)
         self.assertEqual(result.status, "partial")
         self.assertEqual(seen["trend_input"], tq)
-        self.assertEqual(seen["stock_input"], trend_body)
-        self.assertEqual(seen["p06_input"]["sales_market_result"], p07_body)
-        self.assertEqual(seen["p07_input"]["planning_request"]["context"], {"season_year": 2027})
-        self.assertEqual(seen["p06_input"]["planning_request"]["context"]["season"],
-                         {"value": "2027SS", "source": "user"})
-        self.assertEqual(seen["p06_input"]["planning_request"]["context"]["category"],
-                         {"value": "니트웨어", "source": "user"})
-        self.assertNotIn("season", seen["p07_input"]["planning_request"]["context"])
-        self.assertNotIn("artifacts", seen["p06_input"])
-        self.assertEqual(result.stages[2].raw_response, p07_envelope)
+        self.assertEqual(seen["stock_input"]["status"], "partial")
+        self.assertIn("No usable results were returned", seen["stock_input"]["limitations"][-1])
+        self.assertNotIn("p06_input", seen)
+        self.assertNotIn("p07_input", seen)
+        self.assertNotIn("artifacts", seen.get("p06_input", {}))
+        self.assertEqual([stage.stage for stage in result.stages],
+                         [StageName.TREND, StageName.STOCK])
         self.assertEqual(result.stages[0].producer_schema_version, "1.1")
 
     def test_v01_missing_trend_query_stops_without_calling_any_agent(self):

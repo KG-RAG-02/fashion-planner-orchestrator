@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 from urllib.parse import quote, urlparse, urlsplit
 
 from .demo import build_demo_orchestrator
@@ -27,9 +27,11 @@ from .connectors import (
     build_connected_orchestrator,
     build_v01_http_orchestrator,
     connection_status,
-    request_project06_review_images,
+    request_sales_market_review,
 )
 from .llm_provider import LLMConfigurationError, build_draft_provider, load_settings
+from .planning_migration import build_migrated_planning_draft
+from .new_product import GENERATED_IMAGE_ROOT
 
 
 WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
@@ -46,7 +48,7 @@ LOCAL_SERVICE_ENDPOINTS = (
     ("trend", "트렌드", "VOGUE_TREND_AGENT_URL", "http://127.0.0.1:8768", "/health"),
     ("stock", "상품·재고", "VOGUE_STOCK_AGENT_URL", "http://127.0.0.1:8769", "/health"),
     ("market", "시장 조사", "VOGUE_SALES_MARKET_AGENT_URL", "http://127.0.0.1:8766", "/api/health"),
-    ("planning", "기획 초안", "VOGUE_NEW_PRODUCT_AGENT_URL", "http://127.0.0.1:8767", "/api/health"),
+    ("planning", "기획 초안", "", "http://127.0.0.1:8765", "/api/health"),
     ("orchestrator", "기획 UI", "", "http://127.0.0.1:8765", "/api/health"),
 )
 
@@ -304,141 +306,19 @@ def _list_run_history() -> list[dict[str, Any]]:
 
 
 def _image_generation_followup(execution: Any) -> dict[str, Any]:
-    """Ask Project_06's opt-in legacy image adapter using the exact saved upstream bodies."""
-    final = next((stage for stage in execution.stages if stage.stage.value == "project_06"), None)
+    """Return the product and board images already produced with P08's draft."""
+    final = next((stage for stage in execution.stages if stage.stage.value in {"planning_draft", "project_06"}), None)
     response = final.raw_response if final is not None else None
     body = response.get("result") if isinstance(response, dict) else None
-    evidence = body.get("input_evidence") if isinstance(body, dict) else None
-    if not isinstance(evidence, dict):
-        return {"status": "not_available", "error_code": "PROJECT_06_INPUT_TRACE_MISSING"}
-    inputs = {
-        name: (evidence.get(name) or {}).get("payload")
-        for name in ("planning_request", "trend_result", "inventory_product_result", "sales_market_result")
-    }
-    if not all(isinstance(value, dict) for value in inputs.values()):
-        return {"status": "not_available", "error_code": "PROJECT_06_IMAGE_INPUT_MISSING"}
-    source_trend_version = inputs["trend_result"].get("schema_version")
-    legacy_inputs = copy.deepcopy(inputs)
-    visual_season = None
-    visual_season_source = None
-    planning_request = legacy_inputs.get("planning_request")
-    planning_context = planning_request.get("context") if isinstance(planning_request, dict) else None
-    if not isinstance(planning_context, dict):
-        planning_context = {}
-        if isinstance(planning_request, dict):
-            planning_request["context"] = planning_context
-    season_context = planning_context.get("season")
-    if isinstance(season_context, dict) and season_context.get("value"):
-        visual_season = season_context.get("value")
-        visual_season_source = season_context.get("source")
-    else:
-        # A query without an explicit season may still have one season grounded
-        # in its Trend result. Use it only in this separate visual request and
-        # label the provenance; the canonical run and saved producer payloads
-        # remain unchanged.
-        trend_seasons = {
-            season
-            for trend in (inputs["trend_result"].get("trends") or [])
-            if isinstance(trend, dict)
-            for season in ((trend.get("style") or {}).get("seasons") or [])
-            if isinstance(season, str) and len(season) > 2
-            and season[:-2].isdigit() and season[-2:] in {"SS", "FW"}
-        }
-        if len(trend_seasons) == 1:
-            visual_season = next(iter(trend_seasons))
-            visual_season_source = "trend_result"
-            planning_context["season"] = {"value": visual_season, "source": visual_season_source}
-    if source_trend_version == "1.1":
-        # The separate legacy image endpoint requires all producer schemas to
-        # match PlanningRequest 1.0. Adapt a copy only; the canonical v0.1 raw
-        # response and original Trend 1.1 payload remain untouched in the trace.
-        legacy_inputs["trend_result"]["schema_version"] = "1.0"
-    elif source_trend_version not in {None, "1.0"}:
-        return {"status": "not_supported", "error_code": "UNSUPPORTED_TREND_IMAGE_INPUT_VERSION"}
-    image_request = {
-        "request_id": execution.request_id,
-        **legacy_inputs,
-        "generate_image": True,
-        "generate_planning_board": True,
-    }
-    image_response = request_project06_review_images(image_request)
-    actual_image_response = image_response
-    image = image_response.get("image") if isinstance(image_response, dict) else None
-    board = image_response.get("planning_board") if isinstance(image_response, dict) else None
-    fallback_response = None
-    fallback_used = False
-    conflicts = image_response.get("conflicts") if isinstance(image_response, dict) else None
-    context = inputs["planning_request"].get("context")
-    context = context if isinstance(context, dict) else {}
-    explicit_season = context.get("season")
-    explicit_category = context.get("category")
-    has_user_scope = all(
-        isinstance(value, dict) and value.get("source") == "user"
-        and isinstance(value.get("value"), str) and value.get("value").strip()
-        for value in (explicit_season, explicit_category)
-    )
-    if (isinstance(image, dict) and image.get("status") == "blocked"
-            and isinstance(conflicts, list) and conflicts and has_user_scope):
-        # User-authorized visual fallback: keep the actual canonical run intact,
-        # but make a separate Project_06 image request with an explicit
-        # synthetic no-results inventory input. Never represent it as real
-        # stock data or alter the recorded agent response.
-        fallback_inputs = copy.deepcopy(legacy_inputs)
-        fallback_inputs["inventory_product_result"] = {
-            "agent_id": "stock-agent",
-            "schema_version": "1.0",
-            "request_id": execution.request_id,
-            "status": "no_results",
-            "products": [],
-            "evidence": [],
-            "limitations": [
-                "SYNTHETIC IMAGE FALLBACK: conflicting inventory was excluded from this separate visual request; this does not mean actual inventory is empty."
-            ],
-            "errors": [],
-        }
-        fallback_request = {
-            "request_id": execution.request_id,
-            **fallback_inputs,
-            "generate_image": True,
-            "generate_planning_board": True,
-        }
-        fallback_response = request_project06_review_images(fallback_request)
-        fallback_image = fallback_response.get("image") if isinstance(fallback_response, dict) else None
-        if isinstance(fallback_image, dict) and fallback_image.get("status") == "generated":
-            image_response, image, board = fallback_response, fallback_image, fallback_response.get("planning_board")
-            fallback_used = True
+    if not isinstance(body, dict):
+        return {"status": "not_available", "error_code": "PLANNING_DRAFT_RESULT_MISSING"}
+    image = body.get("image")
+    board = body.get("planning_board")
     return {
-        "status": ("generated_synthetic_fallback" if fallback_used else
-                  "generated" if isinstance(image, dict) and image.get("status") == "generated" else
-                  (image.get("status") if isinstance(image, dict) else "failed")),
+        "status": (image.get("status") if isinstance(image, dict) else "not_available"),
         "image": image,
         "planning_board": board,
-        "synthetic_fallback": {
-            "used": fallback_used,
-            "reason": "Project_06 blocked visual generation because actual upstream inventory conflicts with the explicitly requested season/category." if conflicts else None,
-            "excluded_input": "inventory_product_result" if fallback_used else None,
-            "limitations": ([
-                "가상 보완 입력으로 별도 생성한 이미지입니다. 실제 재고 근거가 아니며, 실제 Project_08 단계 응답과 MD 검토 필요 상태는 그대로 유지됩니다."
-            ] if fallback_used else []),
-            "blocked_actual_attempt": ({
-                "status": actual_image_response.get("image", {}).get("status"),
-                "conflicts": conflicts,
-                "raw_response": actual_image_response,
-            } if fallback_used else None),
-        },
-        "input_compatibility": {
-            "adapter_version": "project08-project06-image-legacy/0.1",
-            "trend_source_schema_version": source_trend_version,
-            "trend_legacy_input_schema_version": legacy_inputs["trend_result"].get("schema_version"),
-            "original_trend_payload_preserved": True,
-        },
-        "visual_request_scope": {
-            "season": visual_season,
-            "season_source": visual_season_source,
-            "category_source": ((planning_context.get("category") or {}).get("source")
-                                if isinstance(planning_context.get("category"), dict) else None),
-        },
-        "raw_response": image_response,
+        "review_only": True,
     }
 
 
@@ -451,7 +331,7 @@ def _image_display_urls(image_generation: dict[str, Any]) -> dict[str, Any]:
         filename = Path(urlparse(image_url).path).name if isinstance(image_url, str) else ""
         if (isinstance(image_url, str) and image_url.startswith("/api/generated-images/")
                 and Path(image_url).name == filename and filename):
-            images[key] = "/api/new-product/images/" + quote(filename)
+            images[key] = "/api/planning/images/" + quote(filename)
     return images
 
 
@@ -548,6 +428,28 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 return
             self._send(200, content, content_type)
             return
+        if path.startswith("/api/planning/images/"):
+            filename = path.removeprefix("/api/planning/images/")
+            if Path(filename).name != filename or not filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".svg")):
+                self._json(400, {"error": "invalid_generated_image"})
+                return
+            target = (GENERATED_IMAGE_ROOT / filename).resolve()
+            try:
+                if GENERATED_IMAGE_ROOT.resolve() not in target.parents or not target.is_file():
+                    raise FileNotFoundError
+                content = target.read_bytes()
+                if len(content) > MAX_IMAGE_BYTES:
+                    self._json(413, {"error": "generated_image_too_large"})
+                    return
+                content_type = mimetypes.guess_type(target.name)[0]
+                if content_type not in {"image/png", "image/jpeg", "image/webp", "image/svg+xml"}:
+                    self._json(415, {"error": "unsupported_image_type"})
+                    return
+            except FileNotFoundError:
+                self._json(404, {"error": "generated_image_not_found"})
+                return
+            self._send(200, content, content_type)
+            return
         relative = "index.html" if path == "/" else path.removeprefix("/")
         target = (WEB_ROOT / relative).resolve()
         if WEB_ROOT.resolve() not in target.parents or not target.is_file():
@@ -631,14 +533,14 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 return
             result = record["result"]
             final_stage = next((stage for stage in result.get("stages", [])
-                                if stage.get("stage") == "project_06"), None)
+                                if stage.get("stage") in {"planning_draft", "project_06"}), None)
             if not isinstance(final_stage, dict) or not isinstance(final_stage.get("raw_response"), dict):
-                self._json(409, {"error": "project06_response_unavailable"})
+                self._json(409, {"error": "planning_draft_response_unavailable"})
                 return
             execution = SimpleNamespace(
                 request_id=result.get("request_id"),
                 stages=[SimpleNamespace(
-                    stage=SimpleNamespace(value="project_06"),
+                    stage=SimpleNamespace(value=final_stage.get("stage", "planning_draft")),
                     raw_response=final_stage["raw_response"],
                 )],
             )
@@ -705,18 +607,16 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 trend_query = None
                 mode = value.get("mode", "demo") if isinstance(value, dict) else "demo"
                 # UI runs query structuring by default; public API callers can opt in explicitly.
-                structure = value.get("structure", not public_api) if isinstance(value, dict) else not public_api
-                generate_images = value.get("generate_images", False) if isinstance(value, dict) else False
+                structure = value.get("structure", mode != "agent_http_v01") if isinstance(value, dict) else not public_api
             if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
                 raise ValueError(f"쿼리는 1~{MAX_QUERY_CHARS}자로 입력해 주세요.")
             if mode not in {"demo", "connected", "agent_http_v01"}:
                 raise ValueError("지원하지 않는 실행 모드입니다.")
             if not isinstance(structure, bool):
                 raise ValueError("structure 값은 true/false여야 합니다.")
-            if not isinstance(generate_images, bool):
-                raise ValueError("generate_images 값은 true/false여야 합니다.")
-            if generate_images and (public_api or mode != "agent_http_v01"):
-                raise ValueError("기획 이미지 생성은 UI의 HTTP v0.1 실행에서만 요청할 수 있습니다.")
+            if not public_api and mode == "agent_http_v01" and not structure:
+                self._json(400, {"error": "invalid_request", "message": "에이전트 API 실행에는 질의 구조화 동의가 필요합니다."})
+                return
         except (ValueError, json.JSONDecodeError) as exc:
             self._json(400, {"error": "invalid_request", "message": str(exc)})
             return
@@ -757,17 +657,79 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 run_options["trend_query"] = trend_query
             execution = orchestrator.run(query.strip(), **run_options)
             result = execution.to_dict()
-            if generate_images:
+            result["input"] = {"original_query": query.strip(), "trend_query": trend_query}
+            upstream = {stage.get("stage"): stage for stage in result.get("stages", [])}
+            planning_body = None
+            if mode == "agent_http_v01":
                 try:
-                    result["image_generation"] = _image_display_urls(
-                        dict(_image_generation_followup(execution)))
+                    trend_envelope = upstream.get("trend", {}).get("raw_response", {})
+                    stock_envelope = upstream.get("stock", {}).get("raw_response", {})
+                    trend_body = trend_envelope.get("result", trend_envelope)
+                    stock_body = stock_envelope.get("result", stock_envelope)
+                    if not isinstance(trend_body, Mapping) or not isinstance(stock_body, Mapping):
+                        raise ValueError("Upstream trend or stock result is missing")
+                    planning_body = build_migrated_planning_draft(
+                        execution.request_id, query.strip(), scope, trend_query, trend_body, stock_body,
+                    )
+                    plan_stage = {"stage": "planning_draft", "status": planning_body.get("status", "partial"),
+                                  "request_id": execution.request_id, "producer_id": "vogue-orchestrator",
+                                  "producer_schema_version": "1.0",
+                                  "raw_response": {"contract_version": "vogue-planning-draft/1.0",
+                                                   "request_id": execution.request_id,
+                                                   "producer": {"agent_id": "vogue-orchestrator", "schema_version": "1.0"},
+                                                   "status": planning_body.get("status", "partial"), "result": planning_body}}
+                    result["stages"].append(plan_stage)
+                    draft_data = planning_body.get("draft") if isinstance(planning_body.get("draft"), Mapping) else {}
+                    category = draft_data.get("category")
+                    if not isinstance(category, str) or not category.strip():
+                        result["sales_market_review"] = {"status": "not_run", "request_id": execution.request_id,
+                                                           "reason": "planning_draft_category_missing"}
+                        result["stages"].append({"stage": "project_07", "status": "not_run",
+                                                 "request_id": execution.request_id,
+                                                 "error_code": "PLANNING_DRAFT_CATEGORY_MISSING"})
+                        result["status"] = "partial"
+                    else:
+                        product = {"category": category.strip()}
+                        for source_key, target_key in (("season", "season"), ("material", "material"),
+                                                       ("product_type", "product_type"), ("gender", "gender")):
+                            val = draft_data.get(source_key)
+                            if isinstance(val, str) and val.strip():
+                                product[target_key] = val.strip()
+                        p07_draft = {"schema_version": "1.0", "draft_id": execution.request_id, "product": product}
+                        review_envelope = request_sales_market_review(execution.request_id, p07_draft)
+                        review_body = review_envelope.get("result")
+                        producer = review_envelope.get("producer")
+                        if (review_envelope.get("contract_version") != "vogue-sales-market-review/0.1-proposal"
+                                or review_envelope.get("request_id") != execution.request_id
+                                or not isinstance(producer, Mapping) or producer.get("agent_id") != "sales-market-agent"
+                                or not isinstance(review_body, Mapping)
+                                or review_body.get("request_id") != execution.request_id
+                                or review_body.get("schema_version") != producer.get("schema_version")
+                                or review_body.get("status") != review_envelope.get("status")):
+                            raise ValueError("Sales Market review envelope failed validation")
+                        result["sales_market_review"] = review_envelope
+                        result["stages"].append({"stage": "project_07", "status": review_envelope.get("status", "error"),
+                                                 "request_id": execution.request_id,
+                                                 "producer_id": producer.get("agent_id"),
+                                                 "producer_schema_version": producer.get("schema_version"),
+                                                 "raw_response": review_envelope})
+                        if review_envelope.get("status") != "ok":
+                            result["status"] = "partial"
                 except Exception as exc:
-                    result["image_generation"] = {
-                        "status": "failed", "error_code": "PROJECT_06_IMAGE_REQUEST_FAILED",
-                        "error_type": type(exc).__name__,
-                        "error_message": (str(exc) if isinstance(exc, (ConnectorConfigurationError,))
-                                         or type(exc).__name__ == "TransportError" else None),
-                    }
+                    result["sales_market_review"] = {"status": "error", "request_id": execution.request_id,
+                                                       "error_code": "SALES_MARKET_REVIEW_FAILED",
+                                                       "error_type": type(exc).__name__}
+                    result["stages"].append({"stage": "project_07", "status": "error",
+                                             "request_id": execution.request_id,
+                                             "error_code": "SALES_MARKET_REVIEW_FAILED",
+                                             "error_type": type(exc).__name__})
+                    result["status"] = "partial"
+            if isinstance(planning_body, Mapping):
+                result["image_generation"] = _image_display_urls({
+                    "status": (planning_body.get("image") or {}).get("status", "not_available")
+                        if isinstance(planning_body.get("image"), Mapping) else "not_available",
+                    "image": planning_body.get("image"), "planning_board": planning_body.get("planning_board"),
+                })
             if public_api:
                 result["input"] = {"original_query": query.strip(), "scope": scope}
                 if trend_query is not None:
@@ -777,11 +739,13 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 fingerprint = json.dumps({"request_id": execution.request_id, "input": result["input"]},
                                          sort_keys=True, ensure_ascii=False, separators=(",", ":"))
                 result["run_id"] = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
-                last = execution.stages[-1].raw_response if execution.stages else None
-                if isinstance(last, dict) and isinstance(last.get("result"), dict):
-                    last = last["result"]
-                if isinstance(last, dict):
-                    result["final_result"] = last.get("draft")
+                if isinstance(planning_body, Mapping):
+                    result["final_result"] = planning_body
+                else:
+                    terminal = next((stage for stage in reversed(result.get("stages", []))
+                                     if stage.get("stage") in {"project_06", "planning_draft"}), None)
+                    envelope = terminal.get("raw_response") if isinstance(terminal, Mapping) else None
+                    result["final_result"] = envelope.get("result", envelope) if isinstance(envelope, Mapping) else envelope
                 if structuring is not None:
                     result["query_structuring"] = structuring
                 self._json(200 if result["status"] != "error" else 502, result)

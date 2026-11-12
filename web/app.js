@@ -27,21 +27,24 @@ let currentExecution = null;
 const stageLabels = {
   trend: ['01', '쿼리 · 트렌드 분석', 'trend-analysis-agent'],
   stock: ['02', '자사 상품 · 재고', 'stock-agent'],
-  project_07: ['03', '판매 · 시장 조사', 'sales-market-agent'],
-  project_06: ['04', '기획 초안', 'new-product-agent'],
+  planning_draft: ['03', '기획 초안', 'vogue-orchestrator'],
+  project_07: ['04', '판매 · 시장 검토', 'sales-market-agent'],
+  project_06: ['기존', '상품 옵션', 'new-product-agent'],
 };
 const statusLabels = { ok: '완료', partial: '부분 완료', no_results: '조회 결과 없음', error: '호출 오류' };
 const stageNotes = {
   trend: '현재 합성 모드에서는 trend 서비스에 연결하지 않고 결과 없음 fixture를 사용합니다.',
   stock: '현재 합성 모드에서는 재고 DB나 stock API를 조회하지 않습니다.',
-  project_07: 'sales-market-agent 단계의 합성 결과입니다. 실제 판매·시장 자료를 조회하지 않습니다.',
-  project_06: 'new-product-agent 단계의 합성 응답입니다. 실제 기획 생성기는 호출하지 않습니다.',
+  planning_draft: 'P06 Git에서 이관한 생성기를 P08에서 실행한 기획 초안입니다. 입력 근거와 출처 정보가 포함됩니다.',
+  project_07: 'sales-market-agent의 기획 초안 검토 결과입니다.',
+  project_06: 'new-product-agent의 상품 옵션 생성 단계입니다.',
 };
 const connectedStageNotes = {
   trend: 'trend-analysis-agent의 HTTP v0.1 응답 envelope와 원본 TrendAnalysisResult입니다.',
   stock: 'stock-agent의 HTTP v0.1 응답입니다. Trend 1.1 원본 식별 정보와 adapter provenance를 확인하세요.',
-  project_07: 'sales-market-agent의 HTTP v0.1 응답입니다. sibling artifacts는 downstream에 전달하지 않습니다.',
-  project_06: 'new-product-agent의 HTTP v0.1 초안 응답입니다. 최종 판단은 MD 검토로 남습니다.',
+  planning_draft: 'P08 내부의 이관 생성기가 trend와 stock 근거를 연결해 작성했습니다.',
+  project_07: 'sales-market-agent의 HTTP 리뷰 응답입니다.',
+  project_06: 'new-product-agent의 상품 옵션 응답입니다.',
 };
 
 queryInput.addEventListener('input', () => {
@@ -521,7 +524,8 @@ function renderExecution(data) {
   document.querySelector('.execution-details').open = false;
   const list = document.querySelector('#stage-list');
   list.replaceChildren(...[renderStructuring(data.query_structuring), ...data.stages.map(renderStage)].filter(Boolean));
-  const finalStage = data.stages.find((item) => item.stage === 'project_06');
+  const finalStage = data.stages.find((item) => item.stage === 'planning_draft')
+    || data.stages.find((item) => item.stage === 'project_06');
   const draftCard = document.querySelector('#draft-card');
   const finalBody = finalStage?.raw_response?.result || finalStage?.raw_response;
   const imageData = data.image_generation;
@@ -530,7 +534,7 @@ function renderExecution(data) {
   savedImageCostNote.hidden = imageButtonHidden;
   const hasGeneratedImage = imageData?.status === 'generated' || imageData?.image?.status === 'generated'
     || imageData?.planning_board?.status === 'generated';
-  generateSavedImagesButton.textContent = hasGeneratedImage ? '이미지 다시 생성' : '이미지 생성';
+  generateSavedImagesButton.textContent = hasGeneratedImage ? '이미지 다시 불러오기' : '이미지 확인';
   const productUrl = imageData?.image_display_url;
   const boardUrl = imageData?.planning_board_display_url;
   if (finalBody?.draft) {
@@ -573,6 +577,21 @@ function renderExecution(data) {
       const value = claimValue(draft[key]);
       addDraftRow(label, value || '자료 없음 · MD 검토 필요', value ? draft[key]?.kind : 'to_validate');
     }
+    const marketReview = data.sales_market_review?.result;
+    if (marketReview) {
+      const reviewStatus = data.sales_market_review.status || marketReview.status || 'unknown';
+      addDraftRow('판매·시장 사후검증', `상태 · ${reviewStatus}`, 'evidence_observation');
+      for (const missing of (Array.isArray(marketReview.missing_data) ? marketReview.missing_data : [])) {
+        const label = missing?.field || missing?.domain || '분석 자료';
+        const reason = missing?.message || missing?.reason || '자료 없음';
+        addDraftRow('검증 자료 누락', `${label} · ${reason}`, 'to_validate');
+      }
+      for (const limitation of (Array.isArray(marketReview.limitations) ? marketReview.limitations : [])) {
+        addDraftRow('판매·시장 검증 한계', String(limitation), 'to_validate');
+      }
+      const reviewEvidence = Array.isArray(marketReview.evidence) ? marketReview.evidence : [];
+      if (reviewEvidence.length) addDraftRow('판매·시장 근거', `근거 ${reviewEvidence.length}건`, 'evidence_observation');
+    }
     detail.replaceChildren(...rows.map(([label, value, kind]) => {
       const row = el('p', 'draft-detail-row');
       const [kindLabel, kindClass] = claimKindLabel(kind);
@@ -588,7 +607,7 @@ function renderExecution(data) {
     openPlanningDraftButton.hidden = true;
     document.querySelector('#draft-title').textContent = productUrl || boardUrl ? '기획 이미지 미리보기' : '시각 시안 미생성';
     document.querySelector('#draft-summary').textContent = imageData?.error_message
-      || (productUrl || boardUrl ? '' : '기획 초안 또는 이미지가 준비되지 않았습니다. 연결 상세에서 Project_06 상태를 확인해 주세요.');
+      || (productUrl || boardUrl ? '' : '기획 초안 또는 이미지가 준비되지 않았습니다. 연결 상세에서 Trend·Stock 입력과 P08 생성기 설정을 확인해 주세요.');
     document.querySelector('#draft-summary').hidden = !document.querySelector('#draft-summary').textContent;
     document.querySelector('#draft-details').replaceChildren();
     draftCard.hidden = false;
@@ -648,8 +667,7 @@ form.addEventListener('submit', async (event) => {
     const response = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, mode: requestMode, structure: true,
-        generate_images: requestMode === 'agent_http_v01' }),
+      body: JSON.stringify({ query, mode: requestMode, structure: true }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -778,13 +796,13 @@ generateSavedImagesButton.addEventListener('click', async () => {
   const historyId = currentExecution?.history_id;
   if (!historyId) return;
   generateSavedImagesButton.disabled = true;
-  generateSavedImagesButton.textContent = '이미지 생성 중…';
+  generateSavedImagesButton.textContent = '이미지 불러오는 중…';
   notice.hidden = true;
   try {
     const response = await fetch(`/api/run-history/${encodeURIComponent(historyId)}/images`, { method: 'POST' });
     const data = await response.json();
     if (!response.ok || !data.image_generation) {
-      throw new Error(data.error || '이미지를 생성하지 못했습니다.');
+      throw new Error(data.error || '이미지를 불러오지 못했습니다.');
     }
     currentExecution.image_generation = data.image_generation;
     renderExecution(currentExecution);
@@ -798,7 +816,7 @@ generateSavedImagesButton.addEventListener('click', async () => {
     const updatedImages = currentExecution?.image_generation;
     const hasGeneratedImage = updatedImages?.status === 'generated' || updatedImages?.image?.status === 'generated'
       || updatedImages?.planning_board?.status === 'generated';
-    generateSavedImagesButton.textContent = hasGeneratedImage ? '이미지 다시 생성' : '이미지 생성';
+    generateSavedImagesButton.textContent = hasGeneratedImage ? '이미지 다시 불러오기' : '이미지 확인';
   }
 });
 
