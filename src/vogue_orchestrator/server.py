@@ -515,19 +515,21 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
         # User-entered queries and pipeline payloads are kept out of HTTP logs.
         return
 
-    def _send(self, status: int, body: bytes, content_type: str) -> None:
+    def _send(self, status: int, body: bytes, content_type: str, headers: Mapping[str, str] | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
         self.end_headers()
         self.wfile.write(body)
 
-    def _json(self, status: int, value: object) -> None:
+    def _json(self, status: int, value: object, headers: Mapping[str, str] | None = None) -> None:
         body = json.dumps(value, ensure_ascii=False).encode("utf-8")
-        self._send(status, body, "application/json; charset=utf-8")
+        self._send(status, body, "application/json; charset=utf-8", headers)
 
     def _container_gate(self, path: str) -> bool:
         """Container mode: every route except GET /api/health and static files needs a trusted
@@ -632,6 +634,9 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if self._container_gate(path):
             return
+        from .workflow_http import routes
+        if routes(self, path):
+            return
         if path == "/api/run-history":
             try:
                 for item in RUN_HISTORY_DIR.glob("*"):
@@ -667,6 +672,18 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             self._json(500, {"error": "latest_run_clear_failed"})
             return
         self._json(200, {"cleared": True})
+
+    def _unsupported_method(self) -> None:
+        """PUT/PATCH: workflow paths answer 404/405 problem bodies; nothing else accepts them."""
+        path = urlparse(self.path).path
+        if self._container_gate(path):
+            return
+        from .workflow_http import routes
+        if routes(self, path):
+            return
+        self._json(405, {"error": "method_not_allowed"})
+
+    do_PUT = do_PATCH = _unsupported_method
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path

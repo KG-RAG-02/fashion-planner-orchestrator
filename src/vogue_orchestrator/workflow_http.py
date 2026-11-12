@@ -5,6 +5,7 @@ import hashlib
 import http.client
 import os
 from pathlib import Path
+import re
 import socket
 import ssl
 from urllib.parse import urlsplit, unquote
@@ -110,21 +111,36 @@ def build_workflow():
     return Workflow(**adapters, image=image, store=store(), contract=contract, limitations=limitations)
 
 
-def problem(handler, status, code):
-    handler._json(status, {'contract_version': VERSION, 'request_id': None, 'status': 'error', 'error': {'code': code, 'message': code, 'stage': 'input', 'fatal': True, 'retryable': status in {503,504}}})
+def problem(handler, status, code, message=None, *, request_id=None, stage='input', headers=None):
+    """Problem body (common.schema.json#/$defs/problem); messages never carry secrets or upstream bodies."""
+    body = {'contract_version': VERSION, 'request_id': request_id, 'status': 'error',
+            'error': {'code': code, 'message': message or code, 'stage': stage, 'fatal': True,
+                      'retryable': status in {503, 504}}}
+    if headers:
+        handler._json(status, body, headers=headers)
+    else:
+        handler._json(status, body)
 
 
-def _configuration_problem(handler, exc):
-    problem(handler, getattr(exc, 'http_status', 409), getattr(exc, 'code', 'CONTRACT_OR_CONNECTORS_NOT_READY'))
+def _configuration_problem(handler, exc, request_id=None):
+    problem(handler, getattr(exc, 'http_status', 409), getattr(exc, 'code', 'CONTRACT_OR_CONNECTORS_NOT_READY'),
+            request_id=request_id)
+
+
+ID_PATTERN = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}')  # common.schema.json#/$defs/id
 
 
 def dispatch(handler, value):
     from .server import structure_query_for_ui
+    rid = None
     try:
         require(isinstance(value, dict), 'INPUT_OBJECT_REQUIRED')
+        if value.get('contract_version') != VERSION:
+            # Rejected before any model, DB or network work (conventions section 1).
+            problem(handler, 422, 'UNSUPPORTED_CONTRACT_VERSION')
+            return
         rid = value.get('request_id')
         require(isinstance(rid, str) and 0 < len(rid) <= 128, 'REQUEST_ID_REQUIRED')
-        require(value.get('contract_version') == VERSION, 'TRANSPORT_VERSION_MISMATCH')
         incoming = value.get('input', {})
         require(isinstance(incoming, dict), 'INPUT_OBJECT_REQUIRED')
         user = incoming.get('user_input')
@@ -151,68 +167,73 @@ def dispatch(handler, value):
         response = workflow.run(request_id=rid, user_input=user, planning_request=planning, trend_query=trend)
         handler._json(response['http_status'], response['envelope'])
     except ConnectorConfigurationError as exc:
-        _configuration_problem(handler, exc)
+        _configuration_problem(handler, exc, _known_id(rid))
     except (ValueError, KeyError, TypeError):
-        problem(handler, 422, 'WORKFLOW_INPUT_INVALID')
+        problem(handler, 422, 'WORKFLOW_INPUT_INVALID', request_id=_known_id(rid))
     except ImportError:
-        problem(handler, 503, 'WORKFLOW_DEPENDENCIES_MISSING')
+        problem(handler, 503, 'WORKFLOW_DEPENDENCIES_MISSING', request_id=_known_id(rid))
+
+
+def _known_id(value):
+    return value if isinstance(value, str) and ID_PATTERN.fullmatch(value) else None
+
+
+# Explicit route table: (method -> handler name). Nothing else under the workflow namespace runs.
+EXACT_ROUTES = {
+    '/api/workflow/run': {'POST': 'start_run'},
+    '/v1/input-images': {'POST': 'upload_image'},
+    '/v1/orchestrations/image-retries': {'POST': 'retry_image'},
+}
+PATTERN_ROUTES = (
+    (('runs', None), {'GET': 'get_run'}),
+    (('artifacts', None), {'GET': 'get_artifact'}),
+)
+NAMESPACE = '/api/workflow'
+
+
+def match(path):
+    """Return (methods, params) for a documented route, ({}, {}) for an unknown path inside the
+    workflow namespace, or None when the path does not belong to the workflow boundary."""
+    if path in EXACT_ROUTES:
+        return EXACT_ROUTES[path], {}
+    if path != NAMESPACE and not path.startswith(NAMESPACE + '/'):
+        return None
+    segments = path[len(NAMESPACE) + 1:].split('/')
+    for pattern, methods in PATTERN_ROUTES:
+        if len(segments) == len(pattern) and all(segment for segment in segments) and all(
+                expected is None or expected == segment for expected, segment in zip(pattern, segments)):
+            values = [unquote(segment) for expected, segment in zip(pattern, segments) if expected is None]
+            return methods, {'value': values[0]} if len(values) == 1 else {'values': values}
+    return {}, {}
 
 
 def owns(path):
     """Paths served by the workflow boundary (problem bodies, trusted-local only)."""
-    return path in {'/api/workflow/run','/v1/input-images','/v1/orchestrations/image-retries'} or path.startswith('/api/workflow/artifacts/') or path.startswith('/api/workflow/runs/')
+    return match(path) is not None
 
 
 def routes(handler, path):
-    """Return True for owned routes. Local-only private artifact/run boundary."""
+    """Serve the workflow boundary. Return False for paths it does not own.
+
+    Unknown paths under /api/workflow/ answer 404 and undocumented methods 405 (problem bodies);
+    no path other than POST /api/workflow/run (and the versioned POST /v1/orchestrations) starts a run.
+    """
     from .server import _request_is_trusted_local
-    if not owns(path):
+    route = match(path)
+    if route is None:
         return False
+    methods, params = route
+    if not methods:
+        problem(handler, 404, 'ROUTE_NOT_FOUND')
+        return True
     if not _request_is_trusted_local(handler):
         problem(handler, 403, 'LOCAL_WORKFLOW_ONLY')
         return True
+    if handler.command not in methods:
+        problem(handler, 405, 'METHOD_NOT_ALLOWED', headers={'Allow': ', '.join(sorted(methods))})
+        return True
     try:
-        if handler.command == 'GET' and path.startswith('/api/workflow/runs/'):
-            rid = unquote(path.removeprefix('/api/workflow/runs/'))
-            result = store().run(rid, 'current') or store().run(rid) or store().run(rid, 'progress')
-            handler._json(200 if result else 404, result['envelope'] if result else {'error':'RUN_NOT_FOUND'})
-        elif handler.command == 'GET' and path.startswith('/api/workflow/artifacts/'):
-            artifact_id = path.removeprefix('/api/workflow/artifacts/')
-            require(len(artifact_id) == 32 and all(c in '0123456789abcdef' for c in artifact_id), 'ARTIFACT_ID_INVALID')
-            private = store()
-            with private.db() as db:
-                row = db.execute('SELECT metadata FROM artifacts WHERE uri=?', ('artifact://local/'+artifact_id,)).fetchone()
-            require(row is not None, 'ARTIFACT_NOT_FOUND')
-            meta = strict_json(row[0].encode())
-            handler._send(200, private.verify(meta), meta['media_type'])
-        elif handler.command == 'POST':
-            size = int(handler.headers.get('Content-Length', '0'))
-            limit = 10485760 if path == '/v1/input-images' else 8388608
-            if not 0 < size <= limit:
-                problem(handler, 413, 'BODY_SIZE_INVALID')
-                return True
-            data = handler.rfile.read(size)
-            require(len(data) == size, 'BODY_TRUNCATED')
-            if path == '/v1/input-images':
-                rid = handler.headers.get('X-Request-ID', '')
-                require(0 < len(rid) <= 128, 'REQUEST_ID_REQUIRED')
-                mime = handler.headers.get('Content-Type', '').split(';')[0]
-                if mime not in {'image/png','image/jpeg','image/webp'}:
-                    problem(handler, 415, 'IMAGE_MIME_UNSUPPORTED')
-                else:
-                    handler._json(201, store().upload(data, mime, rid))
-            elif path == '/v1/orchestrations/image-retries':
-                value = strict_json(data)
-                workflow = build_workflow()
-                result = workflow.retry_image(value['request_id'], value['retry_key'])
-                handler._json(result['http_status'], result['envelope'])
-            else:
-                if handler.headers.get('Content-Type', '').split(';')[0] != 'application/json':
-                    problem(handler, 415, 'JSON_MIME_REQUIRED')
-                else:
-                    dispatch(handler, strict_json(data))
-        else:
-            problem(handler, 405, 'METHOD_NOT_ALLOWED')
+        ROUTE_HANDLERS[methods[handler.command]](handler, **params)
     except ConnectorConfigurationError as exc:
         _configuration_problem(handler, exc)
     except (ValueError, KeyError, TypeError):
@@ -220,6 +241,120 @@ def routes(handler, path):
     except ImportError:
         problem(handler, 503, 'WORKFLOW_DEPENDENCIES_MISSING')
     return True
+
+
+def _content_length(handler, limit):
+    """Validated Content-Length, or None after answering 400/413 (checked before the media type)."""
+    try:
+        size = int(handler.headers.get('Content-Length', '0'))
+    except ValueError:
+        size = -1
+    if size > limit:
+        problem(handler, 413, 'BODY_TOO_LARGE')
+        return None
+    if size <= 0:
+        problem(handler, 400, 'BODY_REQUIRED')
+        return None
+    return size
+
+
+def _read_exact(handler, size):
+    data = handler.rfile.read(size)
+    if len(data) != size:
+        problem(handler, 400, 'BODY_TRUNCATED')
+        return None
+    return data
+
+
+_INVALID = object()
+
+
+def _read_json(handler, limit):
+    """Strict JSON body (application/json), or _INVALID after answering 400/413/415."""
+    size = _content_length(handler, limit)
+    if size is None:
+        return _INVALID
+    if handler.headers.get('Content-Type', '').split(';')[0].strip().lower() != 'application/json':
+        problem(handler, 415, 'JSON_MIME_REQUIRED')
+        return _INVALID
+    data = _read_exact(handler, size)
+    if data is None:
+        return _INVALID
+    try:
+        return strict_json(data)
+    except (ValueError, RecursionError):
+        problem(handler, 400, 'MALFORMED_JSON')
+        return _INVALID
+
+
+def _start_run(handler):
+    value = _read_json(handler, 8388608)
+    if value is not _INVALID:
+        dispatch(handler, value)
+
+
+def _upload_image(handler):
+    size = _content_length(handler, 10485760)
+    if size is None:
+        return
+    mime = handler.headers.get('Content-Type', '').split(';')[0].strip().lower()
+    if mime not in {'image/png', 'image/jpeg', 'image/webp'}:
+        problem(handler, 415, 'IMAGE_MIME_UNSUPPORTED')
+        return
+    data = _read_exact(handler, size)
+    if data is None:
+        return
+    rid = handler.headers.get('X-Request-ID', '')
+    require(0 < len(rid) <= 128, 'REQUEST_ID_REQUIRED')
+    handler._json(201, store().upload(data, mime, rid))
+
+
+def _retry_image(handler):
+    value = _read_json(handler, 8388608)
+    if value is _INVALID:
+        return
+    require(isinstance(value, dict), 'INPUT_OBJECT_REQUIRED')
+    if 'contract_version' in value and value['contract_version'] != VERSION:
+        problem(handler, 422, 'UNSUPPORTED_CONTRACT_VERSION')
+        return
+    workflow = build_workflow()
+    result = workflow.retry_image(value['request_id'], value['retry_key'])
+    handler._json(result['http_status'], result['envelope'])
+
+
+def _get_run(handler, value):
+    rid = value
+    if not ID_PATTERN.fullmatch(rid):
+        problem(handler, 404, 'RUN_NOT_FOUND')
+        return
+    private = store()
+    result = private.run(rid, 'current') or private.run(rid) or private.run(rid, 'progress')
+    if not result:
+        problem(handler, 404, 'RUN_NOT_FOUND', request_id=rid)
+        return
+    handler._json(200, result['envelope'])
+
+
+def _get_artifact(handler, value):
+    artifact_id = value
+    require(len(artifact_id) == 32 and all(c in '0123456789abcdef' for c in artifact_id), 'ARTIFACT_ID_INVALID')
+    private = store()
+    with private.db() as db:
+        row = db.execute('SELECT metadata FROM artifacts WHERE uri=?', ('artifact://local/'+artifact_id,)).fetchone()
+    if row is None:
+        problem(handler, 404, 'ARTIFACT_NOT_FOUND')
+        return
+    meta = strict_json(row[0].encode())
+    handler._send(200, private.verify(meta), meta['media_type'])
+
+
+ROUTE_HANDLERS = {
+    'start_run': _start_run,
+    'upload_image': _upload_image,
+    'retry_image': _retry_image,
+    'get_run': _get_run,
+    'get_artifact': _get_artifact,
+}
 
 
 def readiness():
