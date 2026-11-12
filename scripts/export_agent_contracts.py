@@ -12,8 +12,9 @@ Methods
   authored  written in this repository by reading the agent's code, because the agent publishes no
             JSON Schema (new-product-agent). Never rewritten; the check reports when its sources change
 
-Also reads each agent's HTTP handoff `contract_version` constant from its source and compares it with
-the orchestrator's `core.CONTRACT_VERSION` (a mismatch means the v0.1 HTTP call to that agent fails).
+Also reads each agent's HTTP handoff `contract_version` constant from its source and compares it with the
+value core.py expects for that agent (`CONTRACT_VERSION`, or `PROJECT06_CONTRACT_VERSION` for
+new-product-agent; ORCHESTRATOR_VERSION_CONSTANT). A mismatch means the HTTP call to that agent fails.
 
 Usage
   py scripts/export_agent_contracts.py            # write copy/pydantic snapshots (pinned/authored untouched)
@@ -169,9 +170,15 @@ def envelope_version(agent_id: str) -> dict[str, Any]:
             "detected_from": f"{envelope.source_file}:{envelope.constant}"}
 
 
-def orchestrator_contract_version() -> str:
+# The orchestrator constant each agent's handoff version is compared with (core.py). new-product-agent
+# moved to vogue-handoff/0.2 and core.py accepts it under its own constant (main 559a39d, 2026-11-12).
+ORCHESTRATOR_VERSION_CONSTANT = {"new-product-agent": "PROJECT06_CONTRACT_VERSION"}
+
+
+def orchestrator_contract_version(agent_id: str | None = None) -> str:
+    constant = ORCHESTRATOR_VERSION_CONSTANT.get(agent_id or "", "CONTRACT_VERSION")
     text = (ROOT / "src" / "vogue_orchestrator" / "core.py").read_text(encoding="utf-8")
-    match = re.search(r'^CONTRACT_VERSION\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    match = re.search(rf'^{constant}\s*=\s*"([^"]+)"', text, re.MULTILINE)
     return match.group(1) if match else "unknown"
 
 
@@ -221,7 +228,7 @@ def dump(value: Any) -> str:
 METHOD_LABEL = {"copy": "복사", "pydantic": "pydantic 내보내기", "pinned": "고정(검사만)", "authored": "코드 읽고 작성"}
 
 
-def render_sources(expected_version: str) -> str:
+def render_sources() -> str:
     """contracts/agents/SOURCES.md, generated from each snapshot's _provenance."""
     lines = [
         "# Agent 계약 스냅샷 출처",
@@ -249,18 +256,22 @@ def render_sources(expected_version: str) -> str:
         "",
         "## HTTP handoff contract_version",
         "",
-        f"오케스트레이터(`src/vogue_orchestrator/core.py` `CONTRACT_VERSION`)는 `{expected_version}`을 보내고 같은 값의 응답만 받는다.",
+        "오케스트레이터(`src/vogue_orchestrator/core.py`)가 Agent마다 기대하는 값과 Agent 소스의 값을 비교한다. "
+        "route는 Agent 저장소가 제공하는 `/runs`이며, 오케스트레이터가 실제로 부르는 경로와는 다를 수 있다"
+        " (2026-11-12 `main`: v0.1 실행은 Trend·Stock `/runs` 후 P07 `/reviews`, New Product는 부르지 않음).",
         "",
-        "| Agent | route | Agent가 받는 contract_version | 읽은 위치 | 오케스트레이터와 |",
-        "|---|---|---|---|---|",
+        "| Agent | route | Agent가 받는 contract_version | 읽은 위치 | 오케스트레이터 기대값 (core.py) | 비교 |",
+        "|---|---|---|---|---|---|",
     ]
     for agent_id in REPOS:
         if not repo_root(agent_id).exists():
             continue
         found = envelope_version(agent_id)
-        same = "같음" if found["contract_version"] == expected_version else "**다름 → 이 단계 호출 실패**"
+        expected = orchestrator_contract_version(agent_id)
+        constant = ORCHESTRATOR_VERSION_CONSTANT.get(agent_id, "CONTRACT_VERSION")
+        same = "같음" if found["contract_version"] == expected else "**다름 → 이 단계 호출 실패**"
         lines.append(f"| {agent_id} | `{found['route']}` | `{found['contract_version']}` | "
-                     f"`{found['detected_from']}` | {same} |")
+                     f"`{found['detected_from']}` | `{expected}` (`{constant}`) | {same} |")
     return "\n".join(lines) + "\n"
 
 
@@ -316,9 +327,8 @@ def main(argv: list[str] | None = None) -> int:
             target.write_text(dump(fresh), encoding="utf-8", newline="\n")
             print(f"wrote  {label}")
 
-    expected = orchestrator_contract_version()
     sources_path = CONTRACTS / "SOURCES.md"
-    sources = render_sources(expected)
+    sources = render_sources()
     current_sources = sources_path.read_text(encoding="utf-8") if sources_path.exists() else None
     if args.check:
         ok = current_sources == sources
@@ -331,13 +341,14 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("same   SOURCES.md")
 
-    print(f"\nhandoff contract_version (orchestrator core.py: {expected})")
+    print("\nhandoff contract_version (agent source vs orchestrator core.py)")
     for agent_id in REPOS:
         if not repo_root(agent_id).exists():
             continue
         found = envelope_version(agent_id)
+        expected = orchestrator_contract_version(agent_id)
         flag = "same    " if found["contract_version"] == expected else "MISMATCH"
-        print(f"  {flag} {agent_id}: {found['contract_version']} ({found['detected_from']})")
+        print(f"  {flag} {agent_id}: {found['contract_version']} ({found['detected_from']}) vs core.py {expected}")
 
     if args.check and stale:
         print(f"\n{len(stale)} snapshot(s) out of date: run py {GENERATED_BY}"

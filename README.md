@@ -8,7 +8,8 @@ Project_08은 VOGUE 중앙 오케스트레이션 계층의 실행 가능한 로�
 
 ```text
 사용자 쿼리 → trend-analysis-agent → stock-agent
-            → sales-market-agent 판매·시장 조사 → new-product-agent 기획 초안 → MD 검토
+            → P08 이관 PlanningDraft 생성기·상품 시안
+                  → sales-market-agent 사후 검토 → P08 통합 UI → MD 검토
 ```
 
 ## 현재 구현 범위
@@ -17,29 +18,31 @@ agent별 현재 구현과 fixture 기반 input/output은 [`docs/agent-io-contrac
 
 각 Agent의 입력·출력 계약을 코드 기준으로 뽑은 스냅샷과 출처는 [`contracts/agents/`](contracts/agents/SOURCES.md)에 모았습니다(2026-11-11). 생성·확인은 `py scripts/export_agent_contracts.py [--check]`, 구조와 절차는 [`contracts/README.md`](contracts/README.md)를 봅니다. 오케스트레이터가 모든 Agent 계약과 매핑을 맡는 작업의 목표·진행 상황·로컬 실행 방법·발견한 문제·대기 중인 결정은 [`docs/agent-contract-integration.md`](docs/agent-contract-integration.md)에 있습니다(이어받는 Agent는 여기부터).
 
-표시 이름은 `sales-market-agent`와 `new-product-agent`로 통일했습니다. Sales Market의 producer ID는 `sales-market-agent`이며, 두 agent의 checkout 디렉터리(`project_07`, `project_06`), Python stage key와 legacy 환경변수명은 저장소 호환성을 위해 그대로 둡니다. New Product의 legacy prototype route는 `/api/planning-draft`; canonical HTTP v0.1 route는 `/v1/agents/new-product-agent/runs`입니다.
+PlanningDraft 생성 엔진은 P06 Git commit `07e7d4d`에서 P08로 이관했습니다. P08이 초안과 기획 이미지를 만들고 P07에 리뷰를 한 번 요청합니다. P06은 상품 옵션 생성과 legacy `/api/planning-draft` 호환 경로를 계속 소유합니다.
 
 현재 구현과 합의 v0.1 간 차이, sales-market-agent 결과 및 차트 artifact의 실제 handoff 경로는 [`docs/integration-gap-analysis.md`](docs/integration-gap-analysis.md)에 기록했습니다. 특히 sales-market-agent envelope 전체는 실행 기록에 남지만 downstream 요청에는 `result`만 전달되고 sibling `artifacts`는 전달되지 않습니다.
 
-- 동기 순차 runner는 transport-neutral callable 어댑터를 받습니다. Legacy mixed mode는 Trend callable, Stock 기존 HTTP, Sales Market in-process, New Product legacy HTTP를 사용합니다. `agent_http_v01` mode는 네 canonical route를 모두 HTTP v0.1로 호출합니다.
+- 동기 순차 runner는 transport-neutral callable 어댑터를 받습니다. Legacy mixed mode는 기존 호환 경로를 유지합니다. `agent_http_v01` mode는 Trend → Stock을 호출하고, P08의 이관 생성기가 PlanningDraft를 만든 뒤 P07 `/reviews`를 한 번 요청합니다.
 - 응답 원문을 복사·정규화하지 않고 `StageRecord.raw_response`로 보존합니다. request ID, producer ID, producer schema version, 상태 일치 여부는 별도 검증합니다.
-- sales-market-agent에는 요청·trend·stock raw payload를 전달합니다. sales-market-agent의 `1.3-proposal`을 포함한 제안 schema는 producer schema version으로만 기록하며 공통 계약 버전으로 사용하지 않습니다.
-- 현재 new-product-agent의 legacy prototype 입력에는 sales-market-agent raw 결과 객체를 `sales_market_result`로 전달합니다. v0.1 응답을 받으면 전체 envelope를 기록하고 `result` body만 전달하며, sibling `artifacts`는 별도 계약 전까지 보내지 않습니다.
+- P07 `/reviews`에는 P08이 생성한 PlanningDraft의 category 등 지원 필드만 전달합니다. Trend/Stock 결과 원본과 evidence를 별도 PlanningDraft trace에 보존합니다.
+- P08은 Trend 1.1 원본 payload를 보존하면서 내부 생성기 입력용 1.0 사본으로 변환하고, Stock 1.0을 그대로 사용합니다. 입력 근거·스키마 변환 provenance·생성 제한은 PlanningDraft에 포함됩니다.
 - 실제 계약 대조 결과 trend producer는 `TrendAnalysisResult` v1.1에서 `schema_version`을 반환하지만 `agent_id`는 내보내지 않습니다. 이전 v1.0 결과에는 버전 필드가 없을 수 있습니다. runner는 raw 결과와 producer 버전을 그대로 보존하고, ID는 저장소 정체성으로 별도 기록합니다.
+- PlanningDraft와 상품 시안은 이관된 P06 생성기가 P08에서 만듭니다. UI는 초안의 근거·제한과 P07 SalesMarketReview의 근거·누락 자료를 나란히 표시합니다.
+- P08 runtime은 `VOGUE_SALES_MARKET_AGENT_URL` 및 `VOGUE_AGENT_SERVICE_BEARER_TOKEN`으로 P07 리뷰 endpoint에 연결합니다. 승인 자료가 연결되지 않으면 P07은 명시적인 `no_results`를 반환하고, 실행은 부분 결과로 표시됩니다.
 - HTTP mode는 원문 질의를 TrendQuery로 구조화한 뒤 동일 request ID로 Trend `/runs`에 전달합니다. 합성 검증에서는 `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`를 사용합니다. 구조화 실패는 agent 호출 전에 422로 중단합니다.
 - Stock `/runs`는 Trend 1.1 source version과 hash를 provenance로 기록하고 내부 요청 변환본을 별도로 처리합니다. Stock 응답 payload는 schema 1.0입니다.
 - Sales Market HTTP runtime producer ID와 JSON Schema는 `sales-market-agent`로 정렬했습니다. result 1.0만 downstream으로 보내며 sibling artifacts는 전달하지 않습니다.
-- New Product의 legacy `/api/planning-draft`는 입력 버전 동등성을 요구하지만, canonical `/v1/agents/new-product-agent/runs`는 PlanningRequest `1.0` + Trend `1.1` + Stock `1.0` + Sales Market `1.0` 조합을 명시 adapter로 지원합니다. Project_08 HTTP v0.1 client는 canonical route를 사용합니다.
-- (질의 구조화, 2026-11-11 FW-1) 원문 → `StructuredQuery`(이 저장소의 질의 계약) → `TrendQuery`(첫 품목·첫 시즌) 변환은 `src/vogue_orchestrator/query/`에 구현돼 있고 화면 서버가 LLM(`llm_provider.py`)으로 호출합니다. HTTP v0.1 실행에서는 첫 품목·첫 시즌만 담은 `TrendQuery`가 Trend `/runs`로 전달되고, demo·connected 모드에서는 미리보기입니다(아래 "질의 구조화 모듈"). runner는 sales-market-agent/new-product-agent용 최소 PlanningRequest에 원문 쿼리만 담으며 시즌·카테고리를 추론하지 않습니다. 실제 trend 호출 adapter는 아직 연결할 수 없습니다.
+- P06 생성기 이관 상세와 남은 runtime 설정은 [`docs/p06-planning-generator-migration.md`](docs/p06-planning-generator-migration.md)에 기록했습니다. P06의 legacy planning/variant 기능은 이전 버전 호환을 위해 남아 있습니다.
+- (질의 구조화, 2026-11-11 FW-1) 원문 → `StructuredQuery` → `TrendQuery` 변환은 `src/vogue_orchestrator/query/`에서 처리합니다. HTTP v0.1 실행은 Trend `/runs`에 구조화 결과를 보내고, 명시적으로 요청한 시즌·카테고리만 PlanningDraft 요청 context로 전달합니다.
 - `partial`과 `no_results`는 다음 단계에 전달하고, `error` 및 계약 검증 실패는 기본적으로 이후 호출을 멈춥니다. 앞선 성공 결과는 실행 기록에 남습니다.
 - 자동 재시도와 영속 중복 제거는 기본 비활성입니다. 선택 가능한 idempotency key 생성 함수만 제공합니다. 재시도·중복 저장은 운영 합의 후 외부 구현을 주입해야 합니다.
-- 실행 trace는 UI 응답에 포함되며, 전체 `error` 실행과 요청한 상품 이미지·기획서 보드 첨부가 실패한 실행은 저장하지 않습니다. 이미지 생성을 요청하지 않은 실행이나 이미지가 생성된 `partial` 실행은 저장합니다. UI 실행의 최근 20건은 저장소 루트의 `.local/runs/`에 로컬 보관됩니다. `.local/latest-run.json`에서 마지막 저장 실행을 페이지 로드 때 복원하고, 화면의 저장 기록 선택 메뉴에서 과거 실행을 불러오거나 개별 삭제할 수 있습니다. 이 파일은 Git에서 제외되며 UI에서 전체 기록도 삭제할 수 있습니다. Legacy mixed mode에는 공통 HTTP 인증 전달이 없습니다. HTTP v0.1 client는 Bearer token 전달, 3초 connect timeout, 60초 request timeout을 적용하며 자동 재시도는 하지 않습니다. 승인된 외부 자료원은 이 저장소에서 연결하지 않습니다.
+- 실행 trace는 UI 응답에 포함되며, 전체 `error` 실행과 P06에서 요청한 상품 이미지·기획 보드가 실패한 실행은 저장하지 않습니다. UI 실행의 최근 20건은 저장소 루트의 `.local/runs/`에 로컬 보관됩니다. `.local/latest-run.json`에서 마지막 저장 실행을 페이지 로드 때 복원하고, 화면의 저장 기록 선택 메뉴에서 과거 실행을 불러오거나 개별 삭제할 수 있습니다. 이 파일은 Git에서 제외되며 UI에서 전체 기록도 삭제할 수 있습니다. Legacy mixed mode에는 공통 HTTP 인증 전달이 없습니다. HTTP v0.1 client는 Bearer token 전달, 3초 connect timeout, 60초 request timeout을 적용하며 자동 재시도는 하지 않습니다. 승인된 외부 자료원은 이 저장소에서 연결하지 않습니다.
 
 2026-11-10 합성 local E2E에서 네 canonical route를 실제 loopback TCP로 호출하고 Project_08 orchestration 응답까지 확인했습니다. Trend·Stock·Sales Market은 유효한 `no_results`를 유지했고 New Product는 `partial` MD 검토 초안을 반환했습니다. HTTP 경로는 통과했지만 business-result 성공이나 운영 readiness를 뜻하지 않습니다. 실제 서비스 readiness 점검에서 Neo4j·Stock DB·Sales Market 승인 자료원·Project_08 URL/LLM 설정이 없어 real-data E2E는 준비되지 않은 것으로 확인했습니다. 세부 결과와 다음 준비 항목은 [`docs/integration-validation.md`](docs/integration-validation.md)에 있습니다.
 
 ## 공통 HTTP v0.1 어댑터 (opt-in)
 
-`POST /v1/agents/{route_agent_id}/runs` 호출은 합의한 JSON envelope를 보내며, 전체 응답을 기록하고 producer `result`만 downstream에 전달합니다. UI의 `에이전트 API로 분석` 옵션이 이 경로를 호출합니다. UI는 질의를 외부 LLM으로 구조화하고, 이미지·기획서 보드도 생성합니다. 이미지 생성은 Project_06 및 설정된 이미지 제공자에 입력을 전달하며 API 비용이 발생할 수 있습니다.
+`POST /v1/agents/{route_agent_id}/runs` 호출은 합의한 JSON envelope를 보내며, 전체 응답을 기록하고 producer `result`만 downstream에 전달합니다. UI의 `에이전트 API로 분석` 옵션은 Trend, Stock 호출 후 P08에서 PlanningDraft를 만들고 P07 리뷰 endpoint를 한 번 호출합니다. 질의 구조화는 설정된 LLM을 사용합니다. 텍스트·상품 이미지 provider 설정은 P08 환경을 사용합니다.
 
 ```python
 from vogue_orchestrator.connectors import build_v01_http_orchestrator
@@ -91,13 +94,12 @@ UI의 **CONNECTED AGENTS** 모드는 설정이 완료됐을 때만 실행합니�
 VOGUE_TREND_ADAPTER=my_trend_adapter:run
 VOGUE_STOCK_AGENT_URL=http://127.0.0.1:8002
 VOGUE_PROJECT07_ROOT=/path/to/project_07
-VOGUE_PROJECT07_SOURCE_ADAPTER=my_market_sources:build_source
 VOGUE_PROJECT06_URL=http://127.0.0.1:8767
 ```
 
 - legacy trend adapter callable 입력은 `{request_id, query}`이고 출력은 원본 `TrendAnalysisResult`여야 합니다. Canonical HTTP mode는 query-structuring 결과를 Trend route input으로 보냅니다.
 - legacy stock adapter는 configured base URL의 `/v1/inventory-products`를 호출합니다. stock-agent가 LLM을 사용하도록 설정돼 있으면 trend 결과가 그 LLM 제공자에 전달될 수 있습니다. UI는 CONNECTED 실행 전에 수신 endpoint를 보여 주고 확인 checkbox를 요구합니다.
-- sales-market-agent는 지정한 checkout의 `MarketResearchAgent`를 in-process 호출합니다. `VOGUE_PROJECT07_SOURCE_ADAPTER`는 `research(context)`를 구현한 source factory `module:function`이며, 운영 자료원 설정은 이 factory에서 명시적으로 구성해야 합니다. 설정되지 않으면 연결 상태가 준비 완료가 아니며, 기본 `NoConfiguredSources`는 `no_results`를 반환합니다.
+- sales-market-agent는 지정한 checkout의 `MarketResearchAgent`를 in-process 호출합니다. 기본 adapter는 Project_07의 내장 `configured_agent()`를 사용해 읽기 전용 H&M R2 과거자료와 합성 fixture를 연결합니다. `VOGUE_PROJECT07_SOURCE_ADAPTER`를 지정하면 `research(context)` source factory `module:function`으로 이를 대체할 수 있습니다. H&M 사용 권한 flag는 필요하지 않습니다. Project_07 기본 source는 cloud R2를 요청 시 읽으므로 R2 접근·스키마 상태는 연결 상태에서 확인되지 않습니다.
 - 이 설정은 기존 혼합 CONNECTED 모드입니다. canonical HTTP v0.1 mode에는 별도 URL 변수 네 개가 필요합니다. Project_06의 local `/runs` 기본 포트는 8767, Project_07은 8766, Stock은 8002, Trend는 8768이며 Project_08 UI는 8765입니다.
 - 혼합 연결은 기존 endpoint를 사용하며, HTTP v0.1 timeout/retry 규칙은 별도 v0.1 client에 적용됩니다. 연결은 실제 요청 때만 실행됩니다.
 

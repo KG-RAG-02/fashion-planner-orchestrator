@@ -20,11 +20,11 @@
 
 ## HTTP handoff contract_version
 
-오케스트레이터(`src/vogue_orchestrator/core.py` `CONTRACT_VERSION`)는 `vogue-handoff/0.1`을 보내고 같은 값의 응답만 받는다.
+오케스트레이터(`src/vogue_orchestrator/core.py`)가 Agent마다 기대하는 값과 Agent 소스의 값을 비교한다. route는 Agent 저장소가 제공하는 `/runs`이며, 오케스트레이터가 실제로 부르는 경로와는 다를 수 있다 (2026-11-12 `main`: v0.1 실행은 Trend·Stock `/runs` 후 P07 `/reviews`, New Product는 부르지 않음).
 
-| Agent | route | Agent가 받는 contract_version | 읽은 위치 | 오케스트레이터와 |
-|---|---|---|---|---|
-| trend-analysis-agent | `/v1/agents/trend-analysis-agent/runs` | `vogue-handoff/0.1` | `src/trend_agent/api/server.py:CONTRACT_VERSION` | 같음 |
-| stock-agent | `/v1/agents/stock-agent/runs` | `vogue-handoff/0.1` | `stock_agent/api.py:HANDOFF_CONTRACT_VERSION` | 같음 |
-| sales-market-agent | `/v1/agents/sales-market-agent/runs` | `vogue-handoff/0.1` | `src/market_research_agent/http_server.py:CONTRACT_VERSION` | 같음 |
-| new-product-agent | `/v1/agents/new-product-agent/runs` | `vogue-handoff/0.2` | `src/vogue_npp/adapters/handoff.py:CONTRACT_VERSION` | **다름 → 이 단계 호출 실패** |
+| Agent | route | Agent가 받는 contract_version | 읽은 위치 | 오케스트레이터 기대값 (core.py) | 비교 |
+|---|---|---|---|---|---|
+| trend-analysis-agent | `/v1/agents/trend-analysis-agent/runs` | `vogue-handoff/0.1` | `src/trend_agent/api/server.py:CONTRACT_VERSION` | `vogue-handoff/0.1` (`CONTRACT_VERSION`) | 같음 |
+| stock-agent | `/v1/agents/stock-agent/runs` | `vogue-handoff/0.1` | `stock_agent/api.py:HANDOFF_CONTRACT_VERSION` | `vogue-handoff/0.1` (`CONTRACT_VERSION`) | 같음 |
+| sales-market-agent | `/v1/agents/sales-market-agent/runs` | `vogue-handoff/0.1` | `src/market_research_agent/http_server.py:CONTRACT_VERSION` | `vogue-handoff/0.1` (`CONTRACT_VERSION`) | 같음 |
+| new-product-agent | `/v1/agents/new-product-agent/runs` | `vogue-handoff/0.2` | `src/vogue_npp/adapters/handoff.py:CONTRACT_VERSION` | `vogue-handoff/0.2` (`PROJECT06_CONTRACT_VERSION`) | 같음 |

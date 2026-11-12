@@ -81,7 +81,7 @@ py scripts/export_structured_query_schema.py    # StructuredQuery 스키마 (mod
 - 형제 checkout 위치는 기본 `../<저장소 이름>`입니다. 다르면 `VOGUE_TREND_ROOT`, `VOGUE_STOCK_ROOT`, `VOGUE_SALES_MARKET_ROOT`, `VOGUE_NEW_PRODUCT_ROOT`로 지정합니다.
 - Trend 스키마는 `<trend>/.venv`의 Python으로 내보냅니다. 다른 Python을 쓰려면 `VOGUE_TREND_PYTHON`을 지정합니다.
 - `--check` 결과 표시: `OK` 일치, `STALE` 원본이 바뀜(스크립트를 다시 실행), `REVIEW` 작성한 계약의 원본 코드가 바뀜(코드를 다시 읽고 손으로 갱신), `MISSING` 파일 없음.
-- 마지막에 Agent별 handoff `contract_version`을 오케스트레이터 `core.py`의 `CONTRACT_VERSION`과 비교해 `MISMATCH`를 표시합니다. 이 비교는 exit code에 반영하지 않습니다.
+- 마지막에 Agent별 handoff `contract_version`을 오케스트레이터 `core.py`가 그 Agent에 기대하는 값(`CONTRACT_VERSION`, new-product-agent는 `PROJECT06_CONTRACT_VERSION`)과 비교해 `MISMATCH`를 표시합니다. 이 비교는 exit code에 반영하지 않습니다.
 - `trend-query.contract.json`이 `STALE`이면 Trend의 TrendQuery가 바뀐 것입니다. 스냅샷을 새로 만든 뒤 `py scripts/generate_query_vocabulary.py`로 `query/vocabulary.py`를 다시 생성합니다.
 - 별칭 사전(`vocabulary/alias-map.*`)은 `scripts/export_alias_snapshot.py`와 `scripts/generate_alias_data.py`가 담당합니다.
 
@@ -100,5 +100,5 @@ py scripts/export_structured_query_schema.py    # StructuredQuery 스키마 (mod
 
 ## 이 등록으로 드러난 것 (2026-11-11)
 
-- **new-product-agent handoff 버전 불일치:** new-product-agent는 `vogue-handoff/0.2`만 받고(2026-11-11 `59dade3`), 오케스트레이터는 `0.1`을 보냅니다. v0.1 HTTP 모드에서 이 단계는 HTTP 422 `UNSUPPORTED_CONTRACT_VERSION`으로 실패합니다.
+- **new-product-agent handoff 버전 불일치 → `main`에서 해소(2026-11-12):** new-product-agent는 `vogue-handoff/0.2`만 받습니다(2026-11-11 `59dade3`). 등록 당시 오케스트레이터는 `0.1`만 보냈으나, `main` 559a39d에서 `core.py`에 `PROJECT06_CONTRACT_VERSION = "vogue-handoff/0.2"`가 생겼고 v0.1 실행은 New Product를 부르지 않습니다(PlanningDraft 생성기가 오케스트레이터로 이관됨).
 - **new-product-agent가 trend 아이템의 `length`를 읽음:** trend는 `length_body`·`length_sleeve`로 내보내므로 값이 항상 비어 있습니다. `planning-draft-input-0.2.contract.json`의 해당 필드 설명에 적었습니다.

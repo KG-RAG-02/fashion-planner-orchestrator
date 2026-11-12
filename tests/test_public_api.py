@@ -91,10 +91,86 @@ class PublicOrchestrationApiTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(result["error"], "invalid_request")
 
+    def test_agent_http_creates_local_p08_draft_before_single_p07_review(self):
+        from vogue_orchestrator import Orchestrator
+
+        seen = {}
+
+        def envelope(agent_id, version, body, contract="vogue-handoff/0.1"):
+            return {"contract_version": contract, "request_id": body["request_id"],
+                    "producer": {"agent_id": agent_id, "schema_version": version},
+                    "status": body["status"], "result": body}
+
+        def trend(payload):
+            rid = payload["request_id"]
+            return envelope("trend-analysis-agent", "1.1", {
+                "request_id": rid, "schema_version": "1.1", "status": "ok",
+                "trends": [], "evidence": [], "limitations": [],
+            })
+
+        def stock(payload):
+            rid = payload["request_id"]
+            return envelope("stock-agent", "1.0", {
+                "request_id": rid, "schema_version": "1.0", "agent_id": "stock-agent",
+                "status": "ok", "products": [], "trend_results": [], "evidence": [],
+                "limitations": [], "errors": [],
+            })
+
+        planning_body = {
+            "request_id": "", "schema_version": "1.0", "status": "partial",
+            "draft": {"category": "상의", "season": "2027SS", "attributes": []},
+            "image": {"status": "blocked", "image_url": None},
+            "planning_board": {"status": "blocked", "image_url": None},
+        }
+
+        def unexpected_project07(_payload):
+            raise AssertionError("P07 must run only after P06 creates the draft")
+
+        runner = Orchestrator(trend=trend, stock=stock, project_07=unexpected_project07,
+                              project_06=unexpected_project07, require_envelopes=True)
+        review = {"contract_version": "vogue-sales-market-review/0.1-proposal",
+                  "request_id": "", "producer": {"agent_id": "sales-market-agent",
+                  "schema_version": "sales-market-review/0.1-internal"},
+                  "status": "no_results", "result": {"request_id": "", "status": "no_results",
+                  "producer_id": "sales-market-agent", "schema_version": "sales-market-review/0.1-internal"}}
+
+        def make_planning(request_id, query, scope, trend_query, trend_result, stock_result):
+            seen["upstream"] = (trend_result, stock_result)
+            planning_body["request_id"] = request_id
+            return planning_body
+
+        def post_review(request_id, draft):
+            seen["draft"] = draft
+            review["request_id"] = request_id
+            review["result"]["request_id"] = request_id
+            return review
+
+        body = {"mode": "agent_http_v01", "query": "2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하고 싶어",
+                "structure": True}
+        with patch.dict(os.environ, {"VOGUE_QUERY_STRUCTURING_MODE": "synthetic_fixture"}), \
+             patch("vogue_orchestrator.server.build_v01_http_orchestrator", return_value=runner), \
+             patch("vogue_orchestrator.server.build_migrated_planning_draft", side_effect=make_planning), \
+             patch("vogue_orchestrator.server.request_sales_market_review", side_effect=post_review):
+            status, result = self.post("/api/run", body)
+
+        self.assertEqual(status, 200)
+        self.assertEqual([stage["stage"] for stage in result["stages"]],
+                         ["trend", "stock", "planning_draft", "project_07"])
+        self.assertEqual(seen["draft"], {
+            "schema_version": "1.0", "draft_id": result["request_id"],
+            "product": {"category": "상의", "season": "2027SS"},
+        })
+        self.assertEqual(result["sales_market_review"], review)
+        self.assertEqual(result["image_generation"]["status"], "blocked")
+
     def test_legacy_api_run_remains_available(self):
         status, result = self.post("/api/run", {"query": "synthetic legacy"})
         self.assertEqual(status, 200)
         self.assertEqual(result["status"], "partial")
+        final_stage = next(stage for stage in result["stages"] if stage["stage"] == "project_06")
+        self.assertEqual(final_stage["raw_response"]["request_id"], result["request_id"])
+        self.assertTrue(final_stage["raw_response"]["draft"]["title"])
+        self.assertNotIn("planning_draft", result)
 
     def test_public_agent_http_can_structure_fixture_query_into_trend_stage_input(self):
         from vogue_orchestrator.demo import build_demo_orchestrator
