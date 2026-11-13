@@ -3,22 +3,31 @@
 The orchestrator maps every agent's input and output, so it keeps a code-based copy of each agent's
 contract here. The owning repository stays the source of truth; these files are copies with
 provenance (repo, branch, commit, source-file sha256) so a later change in the owner can be detected.
+Entries of this repository (agent id vogue-orchestrator) read their sources from this checkout.
 
 Methods
-  copy      wrap a JSON Schema file that the agent repository already publishes
+  copy      wrap a JSON Schema file that the agent repository already publishes. A vogue-workflow/0.1
+            schema is copied from the producer's vendored copy of contracts/workflow (P08: the canonical file)
   pydantic  run the agent's own Python (its .venv) and call `model_json_schema()` on its model
   pinned    an existing snapshot that generated code depends on (trend-query: query/vocabulary.py is
             generated from it). Checked only; refresh it through its own workflow
   authored  written in this repository by reading the agent's code, because the agent publishes no
-            JSON Schema (new-product-agent). Never rewritten; the check reports when its sources change
+            JSON Schema (new-product-agent /runs, the P08 MD decision request). Never rewritten; the
+            check reports when its sources change
 
-Also reads each agent's HTTP handoff `contract_version` constant from its source and compares it with the
-value core.py expects for that agent (`CONTRACT_VERSION`, or `PROJECT06_CONTRACT_VERSION` for
-new-product-agent; ORCHESTRATOR_VERSION_CONSTANT). A mismatch means the HTTP call to that agent fails.
+Also reads the `contract_version` constant of every agent route from its source (`NAME = "..."` or
+`NAME = '...'`) and compares it with the value the orchestrator uses on that route: core.py for /runs
+(`CONTRACT_VERSION`, or `PROJECT06_CONTRACT_VERSION` for new-product-agent; ORCHESTRATOR_VERSION_CONSTANT),
+or the "<file>:<CONSTANT>" an Envelope names in `expected_from` (the vogue-workflow/0.1 routes compare with
+src/vogue_orchestrator/workflow_contract.py:VERSION). A mismatch means the HTTP call on that route fails.
+
+Both modes also compare the workflow contract copies: every file pinned in contracts/workflow/snapshot.json
+must have its pinned sha256 (after CRLF -> LF) in contracts/workflow and in each vendored copy (VENDORED);
+a sibling checkout that is absent is skipped with the reason. Only --check turns a difference into exit 1.
 
 Usage
   py scripts/export_agent_contracts.py            # write copy/pydantic snapshots (pinned/authored untouched)
-  py scripts/export_agent_contracts.py --check    # exit 1 if a snapshot is out of date with its source
+  py scripts/export_agent_contracts.py --check    # exit 1 if a snapshot or a workflow contract copy is out of date
 
 Sibling roots default to ../<repo-name>; override with VOGUE_<NAME>_ROOT (TREND, STOCK, SALES_MARKET,
 NEW_PRODUCT). The trend Python defaults to <trend root>/.venv; override with VOGUE_TREND_PYTHON.
@@ -40,11 +49,13 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = ROOT / "contracts" / "agents"
+WORKFLOW = ROOT / "contracts" / "workflow"
 GENERATED_BY = "scripts/export_agent_contracts.py"
 NOTE = "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
 AUTHORED_NOTE = ("소유 레포에 JSON Schema가 없어 코드를 읽고 이 저장소에서 작성했다. 스크립트가 다시 쓰지 않는다. "
                  "source_files의 sha256이 달라지면 코드를 다시 읽고 손으로 갱신한다.")
 
+SELF = "vogue-orchestrator"  # this repository: its entries read files under ROOT, not a sibling checkout
 REPOS = {
     "trend-analysis-agent": ("VOGUE_TREND_ROOT", "trend-analysis-agent"),
     "stock-agent": ("VOGUE_STOCK_ROOT", "stock-agent"),
@@ -56,8 +67,11 @@ REPOS = {
 @dataclass(frozen=True)
 class Envelope:
     route: str
-    source_file: str
+    source_file: str  # in the agent repository
     constant: str  # name of the contract_version constant in source_file
+    # "<file in this repository>:<CONSTANT>" holding the value the orchestrator uses on this route.
+    # None keeps the /runs default: core.py with ORCHESTRATOR_VERSION_CONSTANT (else CONTRACT_VERSION).
+    expected_from: str | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +85,7 @@ class Entry:
     source_files: tuple[str, ...]
     source: str | None = None  # copy: schema path; pydantic: "module:Model"
     extra: dict[str, Any] = field(default_factory=dict)
+    envelope: Envelope | None = None  # route the contract travels on; None: the agent's /runs (ENVELOPES)
 
 
 ENVELOPES = {
@@ -82,6 +97,39 @@ ENVELOPES = {
     "new-product-agent": Envelope("/v1/agents/new-product-agent/runs", "src/vogue_npp/adapters/handoff.py",
                                   "CONTRACT_VERSION"),
 }
+
+# vogue-workflow/0.1 routes (conventions section 1). The orchestrator sends workflow_contract.py:VERSION.
+WORKFLOW_CONTRACT_PY = "src/vogue_orchestrator/workflow_contract.py"
+WORKFLOW_ENVELOPES = {
+    "new-product-agent": Envelope("/v1/agents/new-product-agent/drafts", "src/vogue_npp/adapters/planning_draft.py",
+                                  "CONTRACT_VERSION", f"{WORKFLOW_CONTRACT_PY}:VERSION"),
+    "sales-market-agent": Envelope("/v1/agents/sales-market-agent/reviews", "src/market_research_agent/reviews.py",
+                                   "VERSION", f"{WORKFLOW_CONTRACT_PY}:VERSION"),
+}
+# Routes this repository serves. Read from this checkout; there is no other side to compare with.
+RUN_ENVELOPE = Envelope("/api/workflow/run, /v1/orchestrations", WORKFLOW_CONTRACT_PY, "VERSION")
+MD_DECISION_ENVELOPE = Envelope("/api/workflow/runs/{rid}/md-decision", WORKFLOW_CONTRACT_PY, "VERSION")
+
+# Byte-identical copies of contracts/workflow that producers vendor (conventions section 1).
+VENDORED = {
+    "new-product-agent": "contracts/workflow-proposed",
+    "sales-market-agent": "src/market_research_agent/resources/workflow_contract",
+}
+# Pinned files a vogue-workflow/0.1 schema's $ref resolves to (common.schema.json refers to upstream/).
+WORKFLOW_REFS = ("common.schema.json", "upstream/trend-result-1.1.schema.json", "upstream/stock-result-1.0.schema.json")
+
+
+def workflow_entry(agent_id: str, direction: str, name: str, contract: str, payload_version: str | None,
+                   directory: str, envelope: Envelope) -> Entry:
+    """Copy of one vogue-workflow/0.1 schema from `directory` of the agent's repository.
+
+    The file name carries the boundary's producer schema version (planning-draft/1.0, sales-market-review/1.0,
+    integrated-result/1.0). source_files add the pinned files its $ref resolves to.
+    """
+    source = f"{directory}/{name}.schema.json"
+    return Entry(agent_id, direction, f"{name}-1.0.contract.json", contract, payload_version, "copy",
+                 (source, *(f"{directory}/{rel}" for rel in WORKFLOW_REFS)), source, envelope=envelope)
+
 
 ENTRIES = (
     Entry("trend-analysis-agent", "input", "trend-query.contract.json", "TrendQuery", None, "pinned",
@@ -114,16 +162,41 @@ ENTRIES = (
           "sales-market-agent /runs error body", None, "copy",
           ("contracts/schemas/vogue-handoff-0.1-error.schema.json",),
           "contracts/schemas/vogue-handoff-0.1-error.schema.json"),
-    Entry("new-product-agent", "input", "planning-draft-input-0.2.contract.json",
-          "new-product-agent /runs input (four producer payloads)", None, "authored",
+    workflow_entry("sales-market-agent", "input", "sales-market-review-request",
+                   "sales-market-agent /reviews request (P08 → P07 full-Draft review)", None,
+                   VENDORED["sales-market-agent"], WORKFLOW_ENVELOPES["sales-market-agent"]),
+    workflow_entry("sales-market-agent", "output", "sales-market-review-response",
+                   "sales-market-agent /reviews response (SalesMarketReview envelope)", "sales-market-review/1.0",
+                   VENDORED["sales-market-agent"], WORKFLOW_ENVELOPES["sales-market-agent"]),
+    Entry("new-product-agent", "input", "planning-draft-input-0.3.contract.json",
+          "new-product-agent /runs input (three producer payloads)", None, "authored",
           ("src/vogue_npp/adapters/handoff.py", "src/vogue_npp/prototype/server.py")),
     Entry("new-product-agent", "output", "planning-draft-result-1.0.contract.json",
           "new-product-agent planning draft result", "1.0", "authored",
-          ("src/vogue_npp/prototype/server.py",)),
+          ("src/vogue_npp/prototype/server.py", "src/vogue_npp/adapters/handoff.py")),
+    workflow_entry("new-product-agent", "input", "planning-draft-request",
+                   "new-product-agent /drafts request (P08 → P06 Draft-only)", None,
+                   VENDORED["new-product-agent"], WORKFLOW_ENVELOPES["new-product-agent"]),
+    workflow_entry("new-product-agent", "output", "planning-draft-response",
+                   "new-product-agent /drafts response (PlanningDraft envelope)", "planning-draft/1.0",
+                   VENDORED["new-product-agent"], WORKFLOW_ENVELOPES["new-product-agent"]),
+    workflow_entry(SELF, "output", "integrated-result", "vogue-orchestrator workflow run response (integrated result)",
+                   "integrated-result/1.0", "contracts/workflow", RUN_ENVELOPE),
+    Entry(SELF, "input", "md-decision-request-1.0.contract.json",
+          "vogue-orchestrator MD decision request (POST /api/workflow/runs/{rid}/md-decision)", None, "authored",
+          ("src/vogue_orchestrator/workflow_http.py", "src/vogue_orchestrator/workflow_store.py",
+           WORKFLOW_CONTRACT_PY),
+          envelope=MD_DECISION_ENVELOPE),
 )
 
 
+def repo_name(agent_id: str) -> str:
+    return SELF if agent_id == SELF else REPOS[agent_id][1]
+
+
 def repo_root(agent_id: str) -> Path:
+    if agent_id == SELF:
+        return ROOT
     env, name = REPOS[agent_id]
     return Path(os.environ.get(env, ROOT.parent / name)).resolve()
 
@@ -152,7 +225,9 @@ def pydantic_schema(agent_root: Path, spec: str) -> dict[str, Any]:
     module, _, name = spec.partition(":")
     code = (f"import json,sys; from {module} import {name} as M; "
             "sys.stdout.write(json.dumps(M.model_json_schema(), ensure_ascii=False))")
-    env = {**os.environ, "PYTHONPATH": str(agent_root / "src"), "PYTHONIOENCODING": "utf-8"}
+    # No bytecode: the agent checkout stays untouched (no __pycache__ in a sibling repository).
+    env = {**os.environ, "PYTHONPATH": str(agent_root / "src"), "PYTHONIOENCODING": "utf-8",
+           "PYTHONDONTWRITEBYTECODE": "1"}
     # Not `-I`: the model is imported from the agent's own src/ through PYTHONPATH.
     result = subprocess.run([trend_python(agent_root), "-c", code],
                             cwd=agent_root, env=env, capture_output=True, text=True, encoding="utf-8")
@@ -161,25 +236,49 @@ def pydantic_schema(agent_root: Path, spec: str) -> dict[str, Any]:
     return json.loads(result.stdout)
 
 
-def envelope_version(agent_id: str) -> dict[str, Any]:
-    envelope = ENVELOPES[agent_id]
-    path = repo_root(agent_id) / envelope.source_file
-    text = path.read_text(encoding="utf-8") if path.exists() else ""
-    match = re.search(rf'^{envelope.constant}\s*=\s*"([^"]+)"', text, re.MULTILINE)
-    return {"route": envelope.route, "contract_version": match.group(1) if match else None,
+# A module-level string constant: NAME = "..." or NAME = '...', optionally annotated (NAME: Final = ...).
+CONSTANT_PATTERN = r"""^{name}\s*(?::[^=\n]*)?=\s*(?:"([^"\n]+)"|'([^'\n]+)')"""
+
+
+def read_constant(path: Path, name: str) -> str | None:
+    """Value of the first module-level string constant `name` in `path`, or None if absent or not a literal."""
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    match = re.search(CONSTANT_PATTERN.format(name=re.escape(name)), text, re.MULTILINE)
+    if match is None:
+        return None
+    return match.group(1) if match.group(1) is not None else match.group(2)
+
+
+def envelope_version(agent_id: str, envelope: Envelope | None = None) -> dict[str, Any]:
+    """The contract_version an agent route accepts, read from the agent source (default: its /runs)."""
+    envelope = envelope or ENVELOPES[agent_id]
+    value = read_constant(repo_root(agent_id) / envelope.source_file, envelope.constant)
+    return {"route": envelope.route, "contract_version": value,
             "detected_from": f"{envelope.source_file}:{envelope.constant}"}
 
 
-# The orchestrator constant each agent's handoff version is compared with (core.py). new-product-agent
-# moved to vogue-handoff/0.2 and core.py accepts it under its own constant (main 559a39d, 2026-11-12).
+# The core.py constant each agent's /runs version is compared with. new-product-agent has its own constant
+# (main 559a39d, 2026-11-12: vogue-handoff/0.2); new-product-agent moved /runs to vogue-handoff/0.3 in 340a7d4
+# (2026-11-12), so that row reports MISMATCH until core.py follows. P08 calls P06 on /drafts, not /runs.
 ORCHESTRATOR_VERSION_CONSTANT = {"new-product-agent": "PROJECT06_CONTRACT_VERSION"}
+CORE_PY = "src/vogue_orchestrator/core.py"
 
 
-def orchestrator_contract_version(agent_id: str | None = None) -> str:
-    constant = ORCHESTRATOR_VERSION_CONSTANT.get(agent_id or "", "CONTRACT_VERSION")
-    text = (ROOT / "src" / "vogue_orchestrator" / "core.py").read_text(encoding="utf-8")
-    match = re.search(rf'^{constant}\s*=\s*"([^"]+)"', text, re.MULTILINE)
-    return match.group(1) if match else "unknown"
+def expected_from(agent_id: str | None = None, envelope: Envelope | None = None) -> str:
+    """"<file>:<CONSTANT>" in this repository holding the value the orchestrator uses on an agent route."""
+    if envelope is not None and envelope.expected_from:
+        return envelope.expected_from
+    return f"{CORE_PY}:{ORCHESTRATOR_VERSION_CONSTANT.get(agent_id or '', 'CONTRACT_VERSION')}"
+
+
+def orchestrator_contract_version(agent_id: str | None = None, envelope: Envelope | None = None) -> str:
+    path, _, constant = expected_from(agent_id, envelope).rpartition(":")
+    return read_constant(ROOT / path, constant) or "unknown"
+
+
+def transports() -> list[tuple[str, Envelope]]:
+    """Every agent route whose contract_version is compared with the orchestrator's value."""
+    return [*ENVELOPES.items(), *WORKFLOW_ENVELOPES.items()]
 
 
 def source_hashes(agent_root: Path, files: tuple[str, ...]) -> list[dict[str, str]]:
@@ -208,13 +307,13 @@ def build(entry: Entry, agent_root: Path, schema: dict[str, Any]) -> dict[str, A
         "direction": entry.direction,
         "payload_schema_version": entry.payload_version,
         "method": entry.method,
-        "source_repo": f"KG-RAG-02/{REPOS[entry.agent_id][1]}",
+        "source_repo": f"KG-RAG-02/{repo_name(entry.agent_id)}",
         "source_branch": branch,
         "source_commit": commit + ("+uncommitted" if dirty and dirty != "unknown" else ""),
         "source_schema": entry.source if entry.method == "copy" else None,
         "source_model": entry.source if entry.method in {"pydantic", "pinned"} else None,
         "source_files": source_hashes(agent_root, entry.source_files),
-        "handoff": envelope_version(entry.agent_id),
+        "handoff": envelope_version(entry.agent_id, entry.envelope),
         "generated_by": GENERATED_BY,
         "note": NOTE,
     }
@@ -223,6 +322,42 @@ def build(entry: Entry, agent_root: Path, schema: dict[str, Any]) -> dict[str, A
 
 def dump(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, indent=2) + "\n"
+
+
+def pinned_differences(base: Path, pins: dict[str, str]) -> list[str]:
+    """Pinned files under `base` that are missing or whose LF-normalized sha256 is not the pin."""
+    out = []
+    for rel, pin in sorted(pins.items()):
+        path = base / rel
+        if not path.is_file():
+            out.append(f"{rel} (missing)")
+        elif sha256_normalized(path) != pin:
+            out.append(f"{rel} (sha256 differs from snapshot.json)")
+    return out
+
+
+def vendored_check() -> tuple[list[str], list[str]]:
+    """Compare contracts/workflow and every vendored copy with the pins in contracts/workflow/snapshot.json.
+
+    Returns (report lines, problems). A sibling checkout that is not present is reported as SKIP, not a problem.
+    """
+    snapshot = WORKFLOW / "snapshot.json"
+    if not snapshot.is_file():
+        return [f"MISSING {snapshot.relative_to(ROOT).as_posix()}"], ["snapshot.json (missing)"]
+    pins = json.loads(snapshot.read_text(encoding="utf-8"))["files"]
+    targets = [(f"{SELF}/contracts/workflow", WORKFLOW, None)]
+    targets += [(f"{agent_id}/{directory}", repo_root(agent_id) / directory, repo_root(agent_id))
+                for agent_id, directory in VENDORED.items()]
+    lines: list[str] = []
+    problems: list[str] = []
+    for label, base, checkout in targets:
+        if checkout is not None and not checkout.exists():
+            lines.append(f"SKIP   {label}: checkout not found at {checkout}")
+            continue
+        differences = pinned_differences(base, pins)
+        problems += [f"{label}/{item}" for item in differences]
+        lines += [f"STALE  {label}/{item}" for item in differences] or [f"OK     {label} ({len(pins)} files)"]
+    return lines, problems
 
 
 METHOD_LABEL = {"copy": "복사", "pydantic": "pydantic 내보내기", "pinned": "고정(검사만)", "authored": "코드 읽고 작성"}
@@ -256,31 +391,34 @@ def render_sources() -> str:
         "",
         "## HTTP handoff contract_version",
         "",
-        "오케스트레이터(`src/vogue_orchestrator/core.py`)가 Agent마다 기대하는 값과 Agent 소스의 값을 비교한다. "
-        "route는 Agent 저장소가 제공하는 `/runs`이며, 오케스트레이터가 실제로 부르는 경로와는 다를 수 있다"
-        " (2026-11-12 `main`: v0.1 실행은 Trend·Stock `/runs` 후 P07 `/reviews`, New Product는 부르지 않음).",
+        "Agent 경로마다 Agent 소스의 값과 오케스트레이터가 그 경로에 쓰는 값을 비교한다. `/runs`(vogue-handoff)는 "
+        "`src/vogue_orchestrator/core.py`의 상수와, vogue-workflow/0.1 경로(P06 `/drafts`, P07 `/reviews`)는 "
+        "`src/vogue_orchestrator/workflow_contract.py`의 `VERSION`과 비교한다. route는 Agent 저장소가 제공하는 경로이며, "
+        "오케스트레이터가 실제로 부르는 경로와는 다를 수 있다 (2026-11-13 `integration/docker-e2e`: 워크플로 실행은 "
+        "Trend·Stock `/runs` 후 P06 `/drafts`, P07 `/reviews`를 부르고, New Product `/runs`는 부르지 않음).",
         "",
-        "| Agent | route | Agent가 받는 contract_version | 읽은 위치 | 오케스트레이터 기대값 (core.py) | 비교 |",
-        "|---|---|---|---|---|---|",
+        "| Agent | route | Agent가 받는 contract_version | 읽은 위치 | 오케스트레이터 값 | 읽은 위치 (이 저장소) | 비교 |",
+        "|---|---|---|---|---|---|---|",
     ]
-    for agent_id in REPOS:
+    for agent_id, envelope in transports():
         if not repo_root(agent_id).exists():
             continue
-        found = envelope_version(agent_id)
-        expected = orchestrator_contract_version(agent_id)
-        constant = ORCHESTRATOR_VERSION_CONSTANT.get(agent_id, "CONTRACT_VERSION")
-        same = "같음" if found["contract_version"] == expected else "**다름 → 이 단계 호출 실패**"
+        found = envelope_version(agent_id, envelope)
+        expected = orchestrator_contract_version(agent_id, envelope)
+        same = "같음" if found["contract_version"] == expected else "**다름 → 이 경로로 부르면 실패**"
         lines.append(f"| {agent_id} | `{found['route']}` | `{found['contract_version']}` | "
-                     f"`{found['detected_from']}` | `{expected}` (`{constant}`) | {same} |")
+                     f"`{found['detected_from']}` | `{expected}` | `{expected_from(agent_id, envelope)}` | {same} |")
     return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true", help="exit 1 if a snapshot is out of date")
+    parser.add_argument("--check", action="store_true",
+                        help="exit 1 if a snapshot or a workflow contract copy is out of date")
     args = parser.parse_args(argv)
 
     stale: list[str] = []
+    checked = 0
     for entry in ENTRIES:
         agent_root = repo_root(entry.agent_id)
         target = CONTRACTS / entry.agent_id / entry.direction / entry.target
@@ -288,6 +426,7 @@ def main(argv: list[str] | None = None) -> int:
         if not agent_root.exists():
             print(f"SKIP   {label}: checkout not found at {agent_root}")
             continue
+        checked += 1
         current = json.loads(target.read_text(encoding="utf-8")) if target.exists() else None
         schema = fresh_schema(entry, agent_root)
 
@@ -341,19 +480,35 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("same   SOURCES.md")
 
-    print("\nhandoff contract_version (agent source vs orchestrator core.py)")
-    for agent_id in REPOS:
+    print("\nworkflow contract copies (pins: contracts/workflow/snapshot.json, LF-normalized sha256)")
+    copy_lines, copy_problems = vendored_check()
+    for line in copy_lines:
+        print(f"  {line}")
+
+    print("\nhandoff contract_version (agent source vs orchestrator)")
+    for agent_id, envelope in transports():
         if not repo_root(agent_id).exists():
             continue
-        found = envelope_version(agent_id)
-        expected = orchestrator_contract_version(agent_id)
+        found = envelope_version(agent_id, envelope)
+        expected = orchestrator_contract_version(agent_id, envelope)
         flag = "same    " if found["contract_version"] == expected else "MISMATCH"
-        print(f"  {flag} {agent_id}: {found['contract_version']} ({found['detected_from']}) vs core.py {expected}")
+        print(f"  {flag} {envelope.route}: {found['contract_version']} ({found['detected_from']}) "
+              f"vs {expected} ({expected_from(agent_id, envelope)})")
 
-    if args.check and stale:
+    if not args.check:
+        return 0
+    if stale:
         print(f"\n{len(stale)} snapshot(s) out of date: run py {GENERATED_BY}"
               " (pinned/authored ones are refreshed by hand)")
+    if copy_problems:
+        print(f"\n{len(copy_problems)} workflow contract file(s) differ from contracts/workflow/snapshot.json:"
+              " the owning repository re-copies them (never edit pinned bytes here)")
+    if stale or copy_problems:
         return 1
+    skipped = len(ENTRIES) - checked
+    print(f"\ncheck passed: {checked} snapshot(s) and SOURCES.md up to date"
+          + (f" ({skipped} skipped: checkout not found)" if skipped else "")
+          + "; workflow contract copies match snapshot.json (handoff MISMATCH lines do not fail the check)")
     return 0
 
 

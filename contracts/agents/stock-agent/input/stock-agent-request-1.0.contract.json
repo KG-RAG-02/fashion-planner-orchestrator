@@ -6,17 +6,17 @@
     "payload_schema_version": "1.0",
     "method": "copy",
     "source_repo": "KG-RAG-02/stock-agent",
-    "source_branch": "main",
-    "source_commit": "416c37c8695e",
+    "source_branch": "integration/docker-e2e",
+    "source_commit": "5815f28cbb3f",
     "source_schema": "contracts/schemas/stock-agent-request.schema.json",
     "source_files": [
       {
         "path": "contracts/schemas/stock-agent-request.schema.json",
-        "sha256": "c6a19a823f592c6227af192c5096914db44ff9ed263d4c59c5dd22e5fd08a536"
+        "sha256": "9eb8d9050951c0bb50b10854e38910c05874aaecd682f44460c3ab5658e62d03"
       },
       {
         "path": "stock_agent/trend_request.py",
-        "sha256": "a91fb84f36215ac17bb7f7ad5f5726de1827083a6f652ab33b21bcdd15c7fccd"
+        "sha256": "6552cce94d367fa6568d3b71a8866b6b588fa1b6daec01fbde56a5e3cf26d393"
       }
     ],
     "handoff": {
@@ -30,7 +30,7 @@
   "json_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "urn:vogue:contracts:stock-agent:inventory-request:1.0",
-    "title": "stock-agent producer input = TrendAnalysisResult (payload schema 1.0)",
+    "title": "stock-agent input = TrendAnalysisResult 1.1",
     "description": "Legacy POST /v1/inventory-products accepts this object directly. POST /v1/agents/stock-agent/runs accepts the same unchanged object under input in a vogue-handoff/0.1 envelope. This producer input schema is separate from the shared HTTP envelope version. Unlisted TrendAnalysisResult fields are preserved at the HTTP boundary even when Stock does not consume them.",
     "x-http-envelope": {
       "route": "POST /v1/agents/stock-agent/runs",
@@ -54,6 +54,7 @@
     },
     "type": "object",
     "required": [
+      "schema_version",
       "request_id",
       "status",
       "applied_filters",
@@ -96,6 +97,10 @@
         "items": {
           "type": "string"
         }
+      },
+      "schema_version": {
+        "const": "1.1",
+        "description": "Trend producer schema, separate from Stock result1.0"
       }
     },
     "$defs": {

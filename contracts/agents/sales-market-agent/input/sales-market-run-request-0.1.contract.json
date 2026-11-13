@@ -5,8 +5,8 @@
     "direction": "input",
     "method": "copy",
     "source_repo": "KG-RAG-02/sales-market-agent",
-    "source_branch": "feat/market-research-agent",
-    "source_commit": "d25cd8e30e4c",
+    "source_branch": "integration/docker-e2e",
+    "source_commit": "93ea49e9418b",
     "source_schema": "contracts/schemas/vogue-handoff-0.1-request.schema.json",
     "source_files": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "path": "src/market_research_agent/http_server.py",
-        "sha256": "9e97f637ac0dad2bf275292a7732f7b7dd2de1c2f8042b6ee87f48ee24ff9caa"
+        "sha256": "15d4b6740b1971194c0c64388a26c7f86a10e75d73acc67de3f4f881359c9a50"
       }
     ],
     "handoff": {

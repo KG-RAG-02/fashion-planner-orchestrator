@@ -1,0 +1,261 @@
+{
+  "_provenance": {
+    "agent_id": "new-product-agent",
+    "contract": "new-product-agent /drafts response (PlanningDraft envelope)",
+    "direction": "output",
+    "payload_schema_version": "planning-draft/1.0",
+    "method": "copy",
+    "source_repo": "KG-RAG-02/new-product-agent",
+    "source_branch": "integration/docker-e2e",
+    "source_commit": "6f05269c91df",
+    "source_schema": "contracts/workflow-proposed/planning-draft-response.schema.json",
+    "source_files": [
+      {
+        "path": "contracts/workflow-proposed/planning-draft-response.schema.json",
+        "sha256": "4a91b659b18c37e0b20b2b6f30a728c06408f63a8535825d8a2159ba4b2dd1b5"
+      },
+      {
+        "path": "contracts/workflow-proposed/common.schema.json",
+        "sha256": "801b975ba1032444af5e47f417e3f53e306eba76b77882af62693c2e64d17710"
+      },
+      {
+        "path": "contracts/workflow-proposed/upstream/trend-result-1.1.schema.json",
+        "sha256": "7618fb459eb68f56bb12d2c5b171ff0a1fcd066a9ae987c2b4f9a3095d74dbef"
+      },
+      {
+        "path": "contracts/workflow-proposed/upstream/stock-result-1.0.schema.json",
+        "sha256": "f2b6984bb37cca4333559e4e05b88312ecf511f578803adee51885c344e6ce00"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/new-product-agent/drafts",
+      "contract_version": "vogue-workflow/0.1",
+      "detected_from": "src/vogue_npp/adapters/planning_draft.py:CONTRACT_VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://contracts.vogue.invalid/workflow/0.1/planning-draft-response.schema.json",
+    "title": "P06 → P08 PlanningDraft envelope",
+    "$comment": "PROPOSED workflow-contract/0.1.1: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract_version",
+      "request_id",
+      "producer",
+      "status",
+      "result"
+    ],
+    "properties": {
+      "contract_version": {
+        "const": "vogue-workflow/0.1"
+      },
+      "request_id": {
+        "$ref": "common.schema.json#/$defs/id"
+      },
+      "producer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent_id",
+          "schema_version"
+        ],
+        "properties": {
+          "agent_id": {
+            "const": "new-product-agent"
+          },
+          "schema_version": {
+            "const": "planning-draft/1.0"
+          }
+        }
+      },
+      "status": {
+        "$ref": "common.schema.json#/$defs/status"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "agent_id",
+          "request_id",
+          "status",
+          "draft_identity",
+          "draft",
+          "source_request",
+          "source_request_sha256",
+          "limitations",
+          "errors",
+          "artifacts",
+          "image_generation_calls",
+          "review_calls"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": "planning-draft/1.0"
+          },
+          "agent_id": {
+            "const": "new-product-agent"
+          },
+          "request_id": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "status": {
+            "$ref": "common.schema.json#/$defs/status"
+          },
+          "draft_identity": {
+            "anyOf": [
+              {
+                "$ref": "common.schema.json#/$defs/draft_identity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "common.schema.json#/$defs/draft"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_request": {
+            "$ref": "planning-draft-request.schema.json"
+          },
+          "source_request_sha256": {
+            "$ref": "common.schema.json#/$defs/sha256"
+          },
+          "limitations": {
+            "$ref": "common.schema.json#/$defs/strings"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/error"
+            },
+            "minItems": 0
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/json_artifact"
+            },
+            "minItems": 0
+          },
+          "image_generation_calls": {
+            "const": 0
+          },
+          "review_calls": {
+            "const": 0
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "ok",
+                    "partial"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "draft_identity": {
+                  "$ref": "common.schema.json#/$defs/draft_identity"
+                },
+                "draft": {
+                  "$ref": "common.schema.json#/$defs/draft"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "no_results",
+                    "error"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "draft_identity": {
+                  "type": "null"
+                },
+                "draft": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "error"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "errors": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "common.schema.json#/$defs/error"
+                  },
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "no_results"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "limitations": {
+                  "type": "array",
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
