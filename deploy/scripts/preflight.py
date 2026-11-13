@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import socket
 import stat
@@ -67,6 +68,16 @@ def dataless_files(limit=20):
                 except OSError:
                     continue
     return found
+
+
+def default_image_model():
+    """DEFAULT_IMAGE_MODEL from the orchestrator source (single source of truth), or None if unreadable."""
+    source = Path(__file__).resolve().parents[2] / "src" / "vogue_orchestrator" / "workflows" / "image_generation.py"
+    try:
+        match = re.search(r'^DEFAULT_IMAGE_MODEL = "([A-Za-z0-9._:-]+)"$', source.read_text(encoding="utf-8"), re.M)
+    except OSError:
+        return None
+    return match.group(1) if match else None
 
 
 def main(argv=None) -> int:
@@ -127,7 +138,8 @@ def main(argv=None) -> int:
             reachable = False
         check("Neo4j host reachable over TCP", reachable, f"scheme {target.scheme}")
     if args.profile == "live" and not args.skip_network and env.get("VOGUE_OPENAI_API_KEY"):
-        image_model = env.get("VOGUE_IMAGE_MODEL") or None
+        # A blank VOGUE_IMAGE_MODEL means the service default; check that model too (it was never checked before).
+        image_model = env.get("VOGUE_IMAGE_MODEL") or default_image_model()
         for label, model in (("query model", env.get("VOGUE_P08_LLM_MODEL")), ("stock model", env.get("VOGUE_STOCK_LLM_MODEL")), ("image model", image_model)):
             if not model:
                 check(f"OpenAI {label} available", True, "using the service default (not checked)")

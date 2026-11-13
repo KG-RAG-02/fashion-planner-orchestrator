@@ -9,6 +9,7 @@
 #   vogue live "<planning brief>"     the single paid run (guarded: refuses a second run)
 #   vogue probe <profile>             in-stack auth (401/401/4xx) and inbound-gate (403) probes
 #   vogue sheet <profile> <request>   render a stored run's 기획서 PNG offline (read-only volume, no network)
+#   vogue image-retry <request>       ONE paid retry of the live final-image stage (guarded per run)
 #   vogue up|ps|logs|down <profile>   lifecycle helpers (down never removes volumes)
 set -euo pipefail
 
@@ -124,6 +125,23 @@ case "$cmd" in
       python -m vogue_orchestrator.planning_sheet --request-id "$rid" --store-dir /state/workflow --output - > "$out.tmp"
     mv "$out.tmp" "$out"
     echo "planning sheet: $out" ;;
+  image-retry)
+    rid="${1:?usage: vogue image-retry <request_id>}"
+    [[ "$rid" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$ ]] || die "invalid request id: $rid"
+    marker="$(dirname "$LIVE_GUARD")/image-retry-$rid.done"
+    [ -e "$marker" ] && die "an image retry for $rid was already recorded ($marker). Delete it deliberately to allow another paid call."
+    profile_settings live
+    VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=1 "$0" up live
+    mkdir -p "$EVIDENCE_DIR" "$(dirname "$marker")"
+    date -u +%Y-%m-%dT%H:%M:%SZ > "$marker"
+    out="$EVIDENCE_DIR/live-$rid-image-retry-$(stamp)"
+    status=0
+    "$PY" "$DEPLOY/e2e/image_retry.py" --base "http://127.0.0.1:$PORT" --request-id "$rid" --out "$out.json" || status=$?
+    docker run --rm --network none --read-only -v "vogue_${LABEL}_p08_state:/state:ro" vogue/orchestrator:dev \
+      python -m vogue_orchestrator.image_request --diagnostics --request-id "$rid" --store-dir /state/workflow > "$out-diagnostics.json" || true
+    echo "diagnostics: $out-diagnostics.json"
+    VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=0 "$0" up live
+    exit "$status" ;;
   ps)
     compose "${1:?profile}" ps -a ;;
   logs)
@@ -132,7 +150,7 @@ case "$cmd" in
   down)
     compose "${1:?profile}" down --remove-orphans ;;
   help|-h|--help)
-    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' ;;
+    sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
   *)
     die "unknown command '$cmd' (try: vogue help)" ;;
 esac

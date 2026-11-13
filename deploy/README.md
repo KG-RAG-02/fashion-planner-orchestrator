@@ -91,6 +91,17 @@ deploy/bin/vogue down stub
 ```bash
 deploy/bin/vogue sheet live e2e-live-xxxxxxxxxxxx
 ```
+
+- **최종 이미지만 다시 만들기 (유료 1회)**
+  - live 실행의 이미지 단계만 다시 호출합니다. 다른 단계는 다시 부르지 않습니다.
+  - 재시도 스위치는 이 호출 동안만 켜고, 끝나면 다시 끕니다.
+  - 같은 실행에 두 번째 재시도는 거부합니다(`~/.config/vogue/image-retry-<id>.done`).
+  - 결과는 `~/VOGUE-archive/e2e/live-<id>-image-retry-<시각>.json`과 `-final-image.png`, `-planning-sheet.png`, `-diagnostics.json`에 저장됩니다. 진단 파일에는 prompt 길이, endpoint, `usage.text_tokens`, 오류 code가 들어갑니다.
+  - 비용이 드는 명령이라 실행 전에 승인을 받으세요.
+
+```bash
+deploy/bin/vogue image-retry e2e-live-xxxxxxxxxxxx
+```
 - 실행 기록은 P08 volume에 보존됩니다. UI의 Runs 화면이나 `GET /api/workflow/runs`로 다시 볼 수 있습니다.
 - MD 결정(채택/수정/보류)은 append-only로 기록됩니다. 결과 원문은 바뀌지 않습니다.
 
