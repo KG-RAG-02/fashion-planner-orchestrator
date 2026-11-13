@@ -37,9 +37,9 @@ browser ──127.0.0.1:8765──► orchestrator (UI · workflow · artifact s
 - 질의 구조화도 생략합니다. 대신 `e2e/queries/rehearsal-trend-query.json`의 TrendQuery를 그대로 보냅니다.
 
 **요청 시간 제한** (2026-11-13)
-- Stock 요청 전체 deadline은 90초입니다(`STOCK_HANDOFF_TIMEOUT_SECONDS`, 기본 60초).
-- P08은 Stock 응답을 120초까지 기다립니다(`VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS`).
-- Stock은 트렌드를 차례로 처리하고 LLM 사용 시 트렌드당 약 10초가 걸립니다. 트렌드가 많으면(예: 11개) 90초도 넘을 수 있습니다.
+- Stock 요청 전체 deadline은 3분(180초)입니다(`STOCK_HANDOFF_TIMEOUT_SECONDS`, 기본 60초).
+- P08은 Stock 응답을 210초까지 기다립니다(`VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS`).
+- Stock은 트렌드를 차례로 처리하고 LLM 사용 시 트렌드당 약 9–11초가 걸립니다(live 실측). 트렌드 11개는 약 97–121초로 들어오고, 16개 이상이면 180초를 넘을 수 있습니다.
 
 **live 프로필**
 - 한 번만 실행됩니다. guard 파일(`~/.config/vogue/live-run.done`)이 있으면 다시 실행되지 않습니다.

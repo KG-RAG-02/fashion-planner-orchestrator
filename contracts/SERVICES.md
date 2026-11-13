@@ -100,7 +100,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - 400 `INVALID_REQUEST`, 401
   - 500 `INTERNAL_ERROR`
   - 503 `SOURCE_UNAVAILABLE`: DB, `no_llm`, `llm_unavailable`, 이미지
-  - 504 `TIMEOUT`: 요청 전체 deadline. 기본 60초, `STOCK_HANDOFF_TIMEOUT_SECONDS`로 조정하며 통합 배포는 90초입니다(2026-11-13: 트렌드 11개 요청이 60초를 넘어 504). 트렌드는 차례로 처리하고 LLM 사용 시 트렌드당 약 10초입니다(live 실측 8.8·11.0초)
+  - 504 `TIMEOUT`: 요청 전체 deadline. 기본 60초, `STOCK_HANDOFF_TIMEOUT_SECONDS`로 조정하며 통합 배포는 180초입니다(2026-11-13: 트렌드 11개 요청이 60초를 넘어 504 → 90초 → 사용자 결정으로 3분). 트렌드는 차례로 처리하고 LLM 사용 시 트렌드당 약 10초입니다(live 실측 8.8·11.0초)
   - 처리는 전역 lock 하나로 한 번에 한 건씩입니다.
 - **재고 값**: H&M 기반 가상 재고 스냅샷(2020-09-22, `data_nature: sample`)입니다. 현재 자사 재고가 아닙니다.
 - **환경변수**
@@ -217,7 +217,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 
 **호출자로서의 정책**
 - **연결 대상**: `VOGUE_AGENT_HTTP_PRIVATE_HOSTS`에 있는 호스트에만 평문 HTTP로 연결합니다.
-- **timeout**: connect 3초, read 75초. P06 Draft 호출은 read 600초(`VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS`, P06이 이미지 2장을 만드는 시간), Stock 호출은 read 120초(`VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS`, Stock deadline 90초보다 길게)입니다. 자동 재시도는 없습니다.
+- **timeout**: connect 3초, read 75초. P06 Draft 호출은 read 600초(`VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS`, P06이 이미지 2장을 만드는 시간), Stock 호출은 read 210초(`VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS`, Stock deadline 180초보다 길게)입니다. 자동 재시도는 없습니다.
 - **peer artifact**: `artifact://p07/…`(Review)와 `artifact://p06/…`(Draft 시안 이미지)를 `/peer/<ns>`에서 크기·sha256으로 검증해 저장소로 가져옵니다.
 - **실패 매핑**
 
