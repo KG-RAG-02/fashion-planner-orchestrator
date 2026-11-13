@@ -6,11 +6,11 @@
     "method": "authored",
     "source_repo": "KG-RAG-02/vogue-orchestrator",
     "source_branch": "integration/docker-e2e",
-    "source_commit": "a4a375de812c",
+    "source_commit": "522db6e3dad9",
     "source_files": [
       {
         "path": "src/vogue_orchestrator/workflow_http.py",
-        "sha256": "5448e8b3ffe6a6bf55de3e9a168203e41ea08436337b91ce5cabeea370781ba1"
+        "sha256": "96a15f79969dbed3dde3625c2b732c20b48d73915e5cf51e8f353d36f9b15dc9"
       },
       {
         "path": "src/vogue_orchestrator/workflow_store.py",
@@ -18,7 +18,7 @@
       },
       {
         "path": "src/vogue_orchestrator/workflow_contract.py",
-        "sha256": "e5dbb1dcec4f8748f36d4ca7b7372092c792b694fdf536b6b2decb7311b89f92"
+        "sha256": "a662f943f2580043b6c4e079e47ccb8623e2b79125c2d2b4974202bc2361ea79"
       }
     ],
     "handoff": {

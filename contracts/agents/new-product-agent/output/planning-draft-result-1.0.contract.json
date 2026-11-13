@@ -7,11 +7,11 @@
     "method": "authored",
     "source_repo": "KG-RAG-02/new-product-agent",
     "source_branch": "integration/docker-e2e",
-    "source_commit": "6f05269c91df",
+    "source_commit": "879545815040",
     "source_files": [
       {
         "path": "src/vogue_npp/prototype/server.py",
-        "sha256": "49e9614985415d0254d8adb7c0cbf4f1e6a9a930279c62f32612c61d2e0f277a"
+        "sha256": "ed8c5f2a954366ce5db9cc045909f1f29e35efe78e2472cf1653fd6e035b09e8"
       },
       {
         "path": "src/vogue_npp/adapters/handoff.py",
