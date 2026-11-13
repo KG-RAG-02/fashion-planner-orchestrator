@@ -70,6 +70,12 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - `partial`은 실제로 만들어지지 않습니다.
 - **Evidence ID**: `trend:<article>:<block>:<sha8(quote)>`.
 - **`style.example_images`**: 최대 5개 링크입니다. 소비 측은 링크로만 쓰고 이미지를 내려받거나 페이지에 직접 넣지 않습니다(G-10).
+- **`style.search_outlook`** (2026-11-13 trend 작업 트리, 미커밋. `schema_version`은 1.1 그대로): 객체 또는 `null`입니다.
+  - 내용: 그 트렌드를 이루는 키워드(아이템 명사, 속성 × 하분류)의 **목표 시즌 검색 전망**입니다. 네이버 검색에서 같은 카테고리 안 상대 관심의 방향이고 판매량 예측이 아닙니다.
+  - 그래프에 키워드·전망이 없으면 `null`입니다(지금의 Aura 그래프가 이 상태입니다). stub 그래프에는 합성 값이 들어 있고 `source`가 `synthetic_fixture`입니다.
+  - 방향 확률(`p_up`·`p_down`)은 trend 쪽 백테스트를 통과한 지평에만 있습니다. 그 전에는 계절 달력과 "현재 수준 유지" 배율만 있습니다.
+  - 소비 측은 이 값을 받아들이되 순위·상태·lineage 판단에 쓰지 않습니다. 하위 객체에는 소비 측이 이름만 보고 특별 취급하는 키(`request_id`·`evidence_id(s)`·`errors`·`kind`·`status`·`mode`·`limitations`·`missing_*` 등, 전체 목록은 trend `schemas/trend_analysis_result.py`의 `RESERVED_NESTED_KEYS`)가 없고 NaN이 없습니다.
+  - 구조: `trend-analysis-agent/docs/schemas/trend_analysis_result.md`의 `SearchOutlook`. 이 저장소의 사본(`agents/trend-analysis-agent/output/`)은 trend 커밋 뒤에 다시 만듭니다. 그때까지 `scripts/export_agent_contracts.py --check`는 STALE입니다.
 - **오류**: envelope이 아닌 `{"error":{code,message}}` 형식입니다.
   - 400: `invalid_json`, `unsupported_contract_version`, `request_id_mismatch`, `invalid_trend_query` 등
   - 401, 404
@@ -77,7 +83,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - 503: `search_unavailable`
 - **환경변수**: `VOGUE_AGENT_SERVICE_BEARER_TOKEN`, `NEO4J_URI/USER/PASSWORD`, `TREND_API_MODE/HOST/PORT`
 - **증거**
-  - `tests/test_api_config.py`, `tests/test_api_handler.py`, `tests/test_style_example_images.py`
+  - `tests/test_api_config.py`, `tests/test_api_handler.py`, `tests/test_style_example_images.py`, `tests/test_search_market.py`
   - stub 요청·결과: `examples/stub/trend-request.json` → `ok` (trend 1개, evidence 4개)
 
 ## 2. stock-agent (Stock)

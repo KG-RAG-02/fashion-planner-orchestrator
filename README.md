@@ -1,5 +1,7 @@
 # Project_08 · VOGUE Orchestrator
 
+최신 동결 계약 기준 [통합 시스템 아키텍처·단계별 입출력 다이어그램](docs/architecture/index.html)을 추가했습니다(2026-11-13). [공유용 PDF 3장](output/pdf/vogue-integrated-architecture.pdf), [전체 구성 PNG](docs/architecture/01-integrated-system.png), [실제 순차 처리 PNG](docs/architecture/02-sequential-processing.png), 수정 가능한 SVG와 실행 검증 근거를 함께 제공합니다.
+
 Project_06·07·08의 공통 저장소 레이아웃과 실행 경계는 [`docs/repository-boundaries.md`](docs/repository-boundaries.md)를 참고하세요.
 
 The agreed agent HTTP v0.1 contract, Project_08 client implementation, blockers, and the separate client-facing preview API are documented in [`docs/orchestration-http-api-proposal.md`](docs/orchestration-http-api-proposal.md).

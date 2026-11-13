@@ -40,6 +40,7 @@ Every implementer follows this document; when code and this document disagree, s
   - new `vogue-workflow` endpoints: 422 `UNSUPPORTED_CONTRACT_VERSION`
   - legacy routes: their existing 400 behaviour
 - **Trend 1.1** may carry `trends[].style.example_images` (added on trend main, `schema_version` still `1.1`). Consumers must accept it. The UI links those images; it never downloads or embeds them.
+- **Trend 1.1** may also carry `trends[].style.search_outlook` (trend working tree 2026-11-13, not committed yet; `schema_version` still `1.1`). It is an object or `null`: a target-season outlook of Naver search interest for the trend's component keywords. Consumers must accept it and must not use it for ranking, status or lineage decisions. It is not a sales forecast. The object never uses key names that consumers treat specially at any depth (`request_id`, `evidence_id(s)`, `focus_evidence_ids`, `input_evidence_ids`, `errors`, `kind`, `status`, `mode`, `limitations`, `data_limitations`, `missing_*`, artifact/provenance names; full list: `RESERVED_NESTED_KEYS` in trend `schemas/trend_analysis_result.py`), and never contains NaN (the trend model rejects non-finite numbers). In the stub profile the value is synthetic (`source: "synthetic_fixture"`).
 
 ## 2. Containers: hostnames, ports, binds, health
 
