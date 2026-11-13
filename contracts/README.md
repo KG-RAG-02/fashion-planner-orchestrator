@@ -5,6 +5,8 @@
 오케스트레이터 자신이 만드는 `StructuredQuery`만 이 저장소가 기준입니다.
 
 > **서비스별 I/O 규정 요약**은 [`SERVICES.md`](SERVICES.md)를 봅니다. 다섯 서비스의 엔드포인트·입력·출력·상태·오류·환경변수를 한 곳에 정리했습니다. 순차 워크플로 계약 패키지(`vogue-workflow/0.1`)는 [`workflow/`](workflow/)에 있습니다. 통합 규칙은 [`../docs/workflow-integration-conventions.md`](../docs/workflow-integration-conventions.md)를 봅니다.
+>
+> 통합 작업(2026-11-13)이 바꾼 입력·출력과 전달값 목록은 [`../docs/integration-io-change-report.md`](../docs/integration-io-change-report.md)에 있습니다.
 
 이 폴더는 단계 1(현재 계약을 있는 그대로 등록)의 결과입니다. 각 Agent가 받을 입력을 받는 쪽 기준으로 정의하는 일(단계 3)과 오케스트레이터 매핑 모듈(단계 4)은 아직 하지 않았습니다. 전체 목표와 진행 상황은 [`../docs/agent-contract-integration.md`](../docs/agent-contract-integration.md)를 봅니다.
 
