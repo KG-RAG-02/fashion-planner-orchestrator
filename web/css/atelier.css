@@ -164,6 +164,8 @@ textarea:focus-visible { outline-offset: 0; }
 .btn-primary { background: var(--sage); border-color: var(--sage); color: #FFFFFF; font-weight: 500; }
 .btn-primary:hover:not(:disabled) { background: #435443; }
 .btn-dark { background: var(--ink); border-color: var(--ink); color: #FFFFFF; font-weight: 500; }
+/* Links styled as buttons keep the button colours (a:hover would otherwise turn the label sage on ink). */
+a.btn-dark:hover, a.btn-dark:focus-visible { color: #FFFFFF; background: #3A3834; }
 .btn-ghost { border-color: var(--line); background: var(--raised); }
 .btn-lg { min-height: 52px; font-size: 15px; }
 .btn-small { min-height: 36px; padding: 0 14px; font-size: 13px; align-self: flex-start; }
