@@ -272,6 +272,19 @@ export function runSummary(envelope) {
   };
 }
 
+// 기획서 PNG (GET /api/workflow/runs/{id}/planning-sheet.png): offered only for a finished run.
+const TERMINAL = new Set(['ok', 'partial', 'no_results', 'error']);
+const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+
+export function planningSheetLink(summary, { inFlight = false } = {}) {
+  const id = summary?.requestId;
+  if (inFlight || typeof id !== 'string' || !RUN_ID.test(id) || !TERMINAL.has(summary?.status)) return null;
+  return {
+    href: `/api/workflow/runs/${encodeURIComponent(id)}/planning-sheet.png`,
+    filename: `vogue-planning-sheet-${id}.png`,
+  };
+}
+
 export function lineageRows(result) {
   return (result?.stages ?? []).map((stage) => ({
     n: String(stage.sequence ?? '').padStart(2, '0'),

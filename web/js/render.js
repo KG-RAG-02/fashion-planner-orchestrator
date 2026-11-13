@@ -184,7 +184,7 @@ export function renderReview(section, view) {
 
 // --- Aside -----------------------------------------------------------------
 
-export function renderRun(section, summary) {
+export function renderRun(section, summary, { sheet = null } = {}) {
   section.replaceChildren(
     h('h2', { id: 'run-title' }, '실행 요약'),
     h('dl', { class: 'meta-list' },
@@ -192,6 +192,9 @@ export function renderRun(section, summary) {
       h('dt', {}, '계약'), h('dd', {}, summary.contract ?? '—'),
       h('dt', {}, '이미지'), h('dd', {}, summary.image.status ? `${model.statusMeta(summary.image.status).label}${summary.image.calls !== null ? ` · 호출 ${summary.image.calls}회` : ''}` : '—'),
       h('dt', {}, '요청 ID'), h('dd', { class: 'mono small' }, summary.requestId ?? '—')),
+    sheet ? h('a', { class: 'btn btn-dark btn-block', href: sheet.href, download: sheet.filename },
+      '기획서 PNG 저장') : null,
+    sheet ? h('p', { class: 'small muted' }, '저장된 실행 결과를 근거 연결 기획 보드 양식으로 그린 PNG입니다. 값은 다시 계산하지 않습니다.') : null,
     summary.errors.length ? h('div', { class: 'error-box', role: 'status' }, h('strong', {}, '오류'), h('ul', {}, summary.errors.map((e) => h('li', {}, e)))) : null,
     summary.limitations.length ? h('div', {}, h('p', { class: 'eyebrow' }, 'LIMITATIONS'), h('ul', { class: 'small' }, summary.limitations.map((l) => h('li', {}, l)))) : null);
 }

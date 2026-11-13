@@ -83,7 +83,8 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
   view.renderStock(el.stock, model.stockSlots(model.sourceResult(result, 'stock')));
   view.renderDraft(el.draft, model.draftView(model.sourceResult(result, 'planning_draft')));
   view.renderReview(el.review, model.reviewView(model.sourceResult(result, 'sales_market_review')));
-  view.renderRun(el.runCard, model.runSummary(envelope));
+  const summary = model.runSummary(envelope);
+  view.renderRun(el.runCard, summary, { sheet: model.planningSheetLink(summary, { inFlight }) });
   renderMd();
 }
 

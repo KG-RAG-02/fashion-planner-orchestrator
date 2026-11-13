@@ -118,3 +118,17 @@ test('the integrated-review-no-results fixture keeps the image skipped and the d
   assert.ok(m.draftView(m.sourceResult(result, 'planning_draft')));
   assert.equal(m.rail(result).at(-1).status, 'skipped');
 });
+
+test('planningSheetLink is offered only for a finished run with a safe request id', () => {
+  const done = { requestId: 'e2e-live-xxxxxxxxxxxx', status: 'partial' };
+  assert.deepEqual(m.planningSheetLink(done), {
+    href: '/api/workflow/runs/e2e-live-xxxxxxxxxxxx/planning-sheet.png',
+    filename: 'vogue-planning-sheet-e2e-live-xxxxxxxxxxxx.png',
+  });
+  assert.equal(m.planningSheetLink(done, { inFlight: true }), null);
+  assert.equal(m.planningSheetLink({ ...done, status: 'running' }), null);
+  assert.equal(m.planningSheetLink({ ...done, status: null }), null);
+  assert.equal(m.planningSheetLink({ ...done, requestId: '../x' }), null);
+  assert.equal(m.planningSheetLink({ ...done, requestId: 'a"b' }), null);
+  assert.equal(m.planningSheetLink(null), null);
+});
