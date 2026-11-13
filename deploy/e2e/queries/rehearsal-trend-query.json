@@ -1,0 +1,33 @@
+{
+  "request_id": "rehearsal-placeholder",
+  "original_query": "2027년 봄 여성 스커트 트렌드로 신상품을 기획하고 싶어",
+  "trend_terms": {
+    "season": {
+      "year": 2027,
+      "season": "SS",
+      "raw": "2027년 봄",
+      "origin": "user_requested"
+    },
+    "style_names": [],
+    "item_terms": []
+  },
+  "requested": {
+    "categories": {
+      "include": [
+        {
+          "raw": "스커트",
+          "major": "하의",
+          "minor": "스커트"
+        }
+      ],
+      "exclude": []
+    },
+    "gender": {
+      "raw": "여성",
+      "value": "여"
+    },
+    "attributes": []
+  },
+  "unsupported": [],
+  "missing_fields": []
+}

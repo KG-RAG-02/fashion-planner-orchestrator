@@ -1,0 +1,608 @@
+{
+  "schema_version": 1,
+  "state": "prepared_not_runtime_verified",
+  "workflow_gate": "owner application changes follow coordinator G1; this profile does not freeze contracts",
+  "services": {
+    "orchestrator": {
+      "repo": "vogue-orchestrator",
+      "source_head": "209751a2078a8f93bce2a38fbe4fabad1df8926a",
+      "command": [
+        "python",
+        "app.py"
+      ],
+      "bind": "0.0.0.0",
+      "port": 8765,
+      "url": "http://127.0.0.1:8765",
+      "host_url": "http://127.0.0.1:8765",
+      "python": "3.12",
+      "required_modules": [
+        "pydantic",
+        "openai",
+        "jsonschema",
+        "referencing"
+      ],
+      "dependency_files": [
+        {
+          "path": "vogue-orchestrator/pyproject.toml",
+          "sha256": "ab23fb7b2bb5b9f7ffc96c25bff11fa62abd53a8d8c75185df8ecba2b43b7c32"
+        }
+      ],
+      "image": "vogue-orchestrator:local",
+      "image_verified": false,
+      "resources": {
+        "cpus": "1.0",
+        "memory": "1g",
+        "pids_limit": 128,
+        "basis": "proposed dev ceiling; no measured load claim"
+      },
+      "environment": {
+        "PYTHONPATH": "/app/src:/app",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "VOGUE_AGENT_HTTP_DEV_MODE": "1",
+        "VOGUE_WORKFLOW_IMAGES_ENABLED": "0",
+        "VOGUE_ORCHESTRATOR_HOST": "0.0.0.0",
+        "VOGUE_ORCHESTRATOR_PORT": "8765",
+        "VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND": "1",
+        "VOGUE_TREND_AGENT_URL": "http://127.0.0.1:8768",
+        "VOGUE_STOCK_AGENT_URL": "http://127.0.0.1:8002",
+        "VOGUE_SALES_MARKET_AGENT_URL": "http://127.0.0.1:8766",
+        "VOGUE_NEW_PRODUCT_AGENT_URL": "https://127.0.0.1:8767",
+        "VOGUE_PROJECT06_URL": "https://127.0.0.1:8767",
+        "SSL_CERT_FILE": "/run/secrets/server_ca"
+      },
+      "env_keys": [
+        "LLM_API_KEY",
+        "LLM_BACKEND",
+        "LLM_MODEL",
+        "OPENAI_API_KEY",
+        "PYTHONDONTWRITEBYTECODE",
+        "PYTHONPATH",
+        "SSL_CERT_FILE",
+        "VOGUE_AGENT_HTTP_DEV_MODE",
+        "VOGUE_AGENT_SERVICE_BEARER_TOKEN",
+        "VOGUE_NEW_PRODUCT_AGENT_URL",
+        "VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND",
+        "VOGUE_ORCHESTRATOR_HOST",
+        "VOGUE_ORCHESTRATOR_PORT",
+        "VOGUE_PROJECT06_URL",
+        "VOGUE_SALES_MARKET_AGENT_URL",
+        "VOGUE_STOCK_AGENT_URL",
+        "VOGUE_TREND_AGENT_URL",
+        "VOGUE_WORKFLOW_IMAGES_ENABLED"
+      ],
+      "secret_reference": {
+        "format": "JSON object; explicit allowlisted env injection by launch.py; no dotenv shell evaluation",
+        "compose_secret": "orchestrator_env",
+        "host_path_env": "VOGUE_ORCHESTRATOR_ENV_JSON",
+        "allowed_keys": [
+          "LLM_API_KEY",
+          "LLM_BACKEND",
+          "LLM_MODEL",
+          "OPENAI_API_KEY",
+          "VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+        ],
+        "required_keys": [
+          "VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+        ]
+      },
+      "health": {
+        "path": "/api/health",
+        "meaning": "liveness only; not auth/schema/data readiness",
+        "ca_secret": null
+      },
+      "readiness": {
+        "path": null,
+        "additional_checks": [
+          "auth_missing_wrong_valid_invalid_body",
+          "producer_consumer_schema",
+          "read_only_data_metadata"
+        ],
+        "verified": false
+      },
+      "data_mounts": [
+        {
+          "source": "orchestrator_scratch",
+          "target": "/app/.local",
+          "read_only": false
+        }
+      ],
+      "source_observation": "source can change concurrently; preflight records current hashes"
+    },
+    "trend": {
+      "repo": "trend-analysis-agent",
+      "source_head": "4e9a89bab81dd960f7003bb084fa7a55ae5db2b1",
+      "command": [
+        "python",
+        "-m",
+        "trend_agent.api.server",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8768",
+        "--mode",
+        "service"
+      ],
+      "bind": "0.0.0.0",
+      "port": 8768,
+      "url": "http://127.0.0.1:8768",
+      "host_url": "http://127.0.0.1:8768",
+      "python": "3.12",
+      "required_modules": [
+        "pydantic",
+        "yaml",
+        "neo4j",
+        "certifi"
+      ],
+      "dependency_files": [
+        {
+          "path": "trend-analysis-agent/requirements.txt",
+          "sha256": "0545f39550f2e5fa6704384a0dbe146203d2adca7b682485ebe200e225e0c087"
+        }
+      ],
+      "image": "vogue-trend-api:local",
+      "image_verified": false,
+      "resources": {
+        "cpus": "1.0",
+        "memory": "2g",
+        "pids_limit": 128,
+        "basis": "proposed dev ceiling; no measured load claim"
+      },
+      "environment": {
+        "PYTHONPATH": "/app/src:/app",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "TREND_API_MODE": "service",
+        "TREND_API_HOST": "0.0.0.0",
+        "TREND_API_PORT": "8768",
+        "NEO4J_URI": "${VOGUE_NEO4J_URI:?Set verified existing Neo4j endpoint}",
+        "NEO4J_USER": "neo4j"
+      },
+      "env_keys": [
+        "LLM_API_KEY",
+        "LLM_BACKEND",
+        "LLM_MODEL",
+        "NEO4J_PASSWORD",
+        "NEO4J_URI",
+        "NEO4J_USER",
+        "OPENAI_API_KEY",
+        "PYTHONDONTWRITEBYTECODE",
+        "PYTHONPATH",
+        "TREND_API_HOST",
+        "TREND_API_MODE",
+        "TREND_API_PORT",
+        "VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+      ],
+      "secret_reference": {
+        "format": "JSON object; explicit allowlisted env injection by launch.py; no dotenv shell evaluation",
+        "compose_secret": "trend_env",
+        "host_path_env": "VOGUE_TREND_ENV_JSON",
+        "allowed_keys": [
+          "LLM_API_KEY",
+          "LLM_BACKEND",
+          "LLM_MODEL",
+          "NEO4J_PASSWORD",
+          "OPENAI_API_KEY",
+          "VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+        ],
+        "required_keys": [
+          "VOGUE_AGENT_SERVICE_BEARER_TOKEN",
+          "NEO4J_PASSWORD"
+        ]
+      },
+      "health": {
+        "path": "/health",
+        "meaning": "liveness only; not auth/schema/data readiness",
+        "ca_secret": null
+      },
+      "readiness": {
+        "path": null,
+        "additional_checks": [
+          "auth_missing_wrong_valid_invalid_body",
+          "producer_consumer_schema",
+          "read_only_data_metadata"
+        ],
+        "verified": false
+      },
+      "data_mounts": [
+        {
+          "source": "../../_shared/data/processed/v2",
+          "target": "/app/data/processed",
+          "read_only": true
+        },
+        {
+          "source": "../../_shared/embeddings",
+          "target": "/shared/embeddings",
+          "read_only": true
+        },
+        {
+          "source": "../../_shared/images",
+          "target": "/shared/images",
+          "read_only": true
+        }
+      ],
+      "source_observation": "source can change concurrently; preflight records current hashes"
+    },
+    "stock": {
+      "repo": "stock-agent",
+      "source_head": "416c37c8695e4fc72b72c9af44c8a119608650c3",
+      "command": [
+        "python",
+        "-m",
+        "uvicorn",
+        "stock_agent.api:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8002"
+      ],
+      "bind": "0.0.0.0",
+      "port": 8002,
+      "url": "http://127.0.0.1:8002",
+      "host_url": "http://127.0.0.1:8002",
+      "python": "3.12",
+      "required_modules": [
+        "duckdb",
+        "pandas",
+        "numpy",
+        "fastapi",
+        "uvicorn",
+        "boto3",
+        "openai"
+      ],
+      "dependency_files": [
+        {
+          "path": "stock-agent/requirements.txt",
+          "sha256": "42904be83e07e1884bcca4f06aaeb772eaf5fe0435ba9041e513a6c77b6beb44"
+        }
+      ],
+      "image": "vogue-stock-api:local",
+      "image_verified": false,
+      "resources": {
+        "cpus": "1.0",
+        "memory": "1g",
+        "pids_limit": 128,
+        "basis": "proposed dev ceiling; no measured load claim"
+      },
+      "environment": {
+        "PYTHONPATH": "/app/src:/app",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "STOCK_CACHE_DIR": "/tmp/stock-agent"
+      },
+      "env_keys": [
+        "LLM_API_KEY",
+        "LLM_BACKEND",
+        "LLM_MODEL",
+        "OPENAI_API_KEY",
+        "PYTHONDONTWRITEBYTECODE",
+        "PYTHONPATH",
+        "R2_ACCESS_KEY_ID",
+        "R2_ACCOUNT_ID",
+        "R2_BUCKET",
+        "R2_DB_KEY",
+        "R2_ENDPOINT",
+        "R2_IMAGE_PREFIX",
+        "R2_SECRET_ACCESS_KEY",
+        "STOCK_CACHE_DIR",
+        "VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+      ],
+      "secret_reference": {
+        "format": "JSON object; explicit allowlisted env injection by launch.py; no dotenv shell evaluation",
+        "compose_secret": "stock_env",
+        "host_path_env": "VOGUE_STOCK_ENV_JSON",
+        "allowed_keys": [
+          "LLM_API_KEY",
+          "LLM_BACKEND",
+          "LLM_MODEL",
+          "OPENAI_API_KEY",
+          "R2_ACCESS_KEY_ID",
+          "R2_ACCOUNT_ID",
+          "R2_BUCKET",
+          "R2_DB_KEY",
+          "R2_ENDPOINT",
+          "R2_IMAGE_PREFIX",
+          "R2_SECRET_ACCESS_KEY",
+          "VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+        ],
+        "required_keys": [
+          "VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+        ]
+      },
+      "health": {
+        "path": "/health/live",
+        "meaning": "liveness only; not auth/schema/data readiness",
+        "ca_secret": null
+      },
+      "readiness": {
+        "path": "/health/ready",
+        "additional_checks": [
+          "auth_missing_wrong_valid_invalid_body",
+          "producer_consumer_schema",
+          "read_only_data_metadata"
+        ],
+        "verified": false
+      },
+      "data_mounts": [],
+      "source_observation": "source can change concurrently; preflight records current hashes"
+    },
+    "new-product": {
+      "repo": "new-product-agent",
+      "source_head": "bb0f710078d7087fdab5aa65f4cd276cf9742c1d",
+      "command": [
+        "python",
+        "-m",
+        "vogue_npp.prototype.server"
+      ],
+      "bind": "0.0.0.0",
+      "port": 8767,
+      "url": "https://127.0.0.1:8767",
+      "host_url": "https://127.0.0.1:8767",
+      "python": "3.12",
+      "required_modules": [
+        "dotenv",
+        "boto3",
+        "duckdb",
+        "jsonschema"
+      ],
+      "dependency_files": [
+        {
+          "path": "new-product-agent/requirements.txt",
+          "sha256": "7316f2976dd1adf322e6cc434c0fd3991aa9ba933aa112369bd456332e4d23de"
+        }
+      ],
+      "image": "vogue-new-product-planning:local",
+      "image_verified": false,
+      "resources": {
+        "cpus": "1.0",
+        "memory": "1g",
+        "pids_limit": 128,
+        "basis": "proposed dev ceiling; no measured load claim"
+      },
+      "environment": {
+        "PYTHONPATH": "/app/src:/app",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "VOGUE_EXECUTION_PROFILE": "offline",
+        "VOGUE_HOST": "0.0.0.0",
+        "VOGUE_PORT": "8767",
+        "VOGUE_HTTP_MODE": "service",
+        "VOGUE_DB_PATH": "/app/data/local/prototype.sqlite3",
+        "VOGUE_TLS_CERT_FILE": "/run/secrets/server_cert",
+        "VOGUE_TLS_KEY_FILE": "/run/secrets/server_key",
+        "VOGUE_IMAGE_GENERATION_ENABLED": "0",
+        "VOGUE_SALES_MARKET_AGENT_URL": "http://127.0.0.1:8766"
+      },
+      "env_keys": [
+        "LLM_API_KEY",
+        "LLM_BACKEND",
+        "LLM_MODEL",
+        "OPENAI_API_KEY",
+        "PYTHONDONTWRITEBYTECODE",
+        "PYTHONPATH",
+        "R2_ACCESS_KEY_ID",
+        "R2_ACCOUNT_ID",
+        "R2_BUCKET",
+        "R2_DB_KEY",
+        "R2_ENDPOINT",
+        "R2_IMAGE_PREFIX",
+        "R2_SECRET_ACCESS_KEY",
+        "VOGUE_AGENT_SERVICE_BEARER_TOKEN",
+        "VOGUE_DB_PATH",
+        "VOGUE_DRAFT_DB_PATH",
+        "VOGUE_EXECUTION_PROFILE",
+        "VOGUE_HOST",
+        "VOGUE_HTTP_MODE",
+        "VOGUE_IMAGE_GENERATION_ENABLED",
+        "VOGUE_PORT",
+        "VOGUE_R2_HM_CATALOG_DB_KEY",
+        "VOGUE_SALES_MARKET_AGENT_URL",
+        "VOGUE_TLS_CERT_FILE",
+        "VOGUE_TLS_KEY_FILE",
+        "VOGUE_UPSTREAM_ARTIFACT_ROOT",
+        "VOGUE_WORKFLOW_DRAFT_ENABLED"
+      ],
+      "secret_reference": {
+        "format": "JSON object; explicit allowlisted env injection by launch.py; no dotenv shell evaluation",
+        "compose_secret": "new-product_env",
+        "host_path_env": "VOGUE_NEW_PRODUCT_ENV_JSON",
+        "allowed_keys": [
+          "LLM_API_KEY",
+          "LLM_BACKEND",
+          "LLM_MODEL",
+          "OPENAI_API_KEY",
+          "R2_ACCESS_KEY_ID",
+          "R2_ACCOUNT_ID",
+          "R2_BUCKET",
+          "R2_DB_KEY",
+          "R2_ENDPOINT",
+          "R2_IMAGE_PREFIX",
+          "R2_SECRET_ACCESS_KEY",
+          "VOGUE_AGENT_SERVICE_BEARER_TOKEN",
+          "VOGUE_R2_HM_CATALOG_DB_KEY"
+        ],
+        "required_keys": [
+          "VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+        ]
+      },
+      "health": {
+        "path": "/api/health",
+        "meaning": "liveness only; not auth/schema/data readiness",
+        "ca_secret": "server_ca"
+      },
+      "readiness": {
+        "path": null,
+        "additional_checks": [
+          "auth_missing_wrong_valid_invalid_body",
+          "producer_consumer_schema",
+          "read_only_data_metadata"
+        ],
+        "verified": false
+      },
+      "data_mounts": [
+        {
+          "source": "planning_scratch",
+          "target": "/app/data/local",
+          "read_only": false,
+          "nature": "new isolated local SQLite scratch; never existing graph data"
+        }
+      ],
+      "source_observation": "source can change concurrently; preflight records current hashes",
+      "target_workflow_requirements": {
+        "env_keys": [
+          "VOGUE_WORKFLOW_DRAFT_ENABLED",
+          "VOGUE_UPSTREAM_ARTIFACT_ROOT",
+          "VOGUE_DRAFT_DB_PATH",
+          "VOGUE_EXECUTION_PROFILE"
+        ],
+        "owner_validation_pending": true,
+        "note": "Draft flag remains disabled until artifact reader/root and persistent revision location are agreed by owners; do not invent directory compatibility"
+      }
+    },
+    "sales-market": {
+      "repo": "sales-market-agent",
+      "source_head": "ca07f594fa83356792e4650846e6b7d94a9ba624",
+      "command": [
+        "python",
+        "-m",
+        "market_research_agent.http_server",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8766",
+        "--service-mode"
+      ],
+      "bind": "0.0.0.0",
+      "port": 8766,
+      "url": "http://127.0.0.1:8766",
+      "host_url": "http://127.0.0.1:8766",
+      "python": "3.14",
+      "required_modules": [
+        "boto3",
+        "duckdb",
+        "jsonschema"
+      ],
+      "dependency_files": [
+        {
+          "path": "sales-market-agent/pyproject.toml",
+          "sha256": "dc5c5e4654915d11b4a36374fbc2265771e36d9fc5b8f05cff789d0f2628ff6d"
+        }
+      ],
+      "image": "vogue-market-research-agent:local",
+      "image_verified": false,
+      "resources": {
+        "cpus": "1.0",
+        "memory": "1g",
+        "pids_limit": 128,
+        "basis": "proposed dev ceiling; no measured load claim"
+      },
+      "environment": {
+        "PYTHONPATH": "/app/src:/app",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "VOGUE_PROJECT07_DISABLE_DOTENV": "1",
+        "VOGUE_P07_REVIEW_ARTIFACT_DIR": "/tmp/review-artifacts"
+      },
+      "env_keys": [
+        "LLM_API_KEY",
+        "LLM_BACKEND",
+        "LLM_MODEL",
+        "OPENAI_API_KEY",
+        "PROJECT07_HM_R2_DB_KEY",
+        "PROJECT07_HM_R2_MANIFEST_KEY",
+        "PYTHONDONTWRITEBYTECODE",
+        "PYTHONPATH",
+        "R2_ACCESS_KEY_ID",
+        "R2_ACCOUNT_ID",
+        "R2_BUCKET",
+        "R2_DB_KEY",
+        "R2_ENDPOINT",
+        "R2_IMAGE_PREFIX",
+        "R2_SECRET_ACCESS_KEY",
+        "VOGUE_AGENT_SERVICE_BEARER_TOKEN",
+        "VOGUE_P07_REVIEW_ARTIFACT_DIR",
+        "VOGUE_PROJECT07_DISABLE_DOTENV",
+        "VOGUE_UPSTREAM_ARTIFACT_ROOT"
+      ],
+      "secret_reference": {
+        "format": "JSON object; explicit allowlisted env injection by launch.py; no dotenv shell evaluation",
+        "compose_secret": "sales-market_env",
+        "host_path_env": "VOGUE_SALES_MARKET_ENV_JSON",
+        "allowed_keys": [
+          "LLM_API_KEY",
+          "LLM_BACKEND",
+          "LLM_MODEL",
+          "OPENAI_API_KEY",
+          "R2_ACCESS_KEY_ID",
+          "R2_ACCOUNT_ID",
+          "R2_BUCKET",
+          "R2_DB_KEY",
+          "R2_ENDPOINT",
+          "R2_IMAGE_PREFIX",
+          "R2_SECRET_ACCESS_KEY",
+          "VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+        ],
+        "required_keys": [
+          "VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+        ]
+      },
+      "health": {
+        "path": "/api/health",
+        "meaning": "liveness only; not auth/schema/data readiness",
+        "ca_secret": null
+      },
+      "readiness": {
+        "path": null,
+        "additional_checks": [
+          "auth_missing_wrong_valid_invalid_body",
+          "producer_consumer_schema",
+          "read_only_data_metadata"
+        ],
+        "verified": false
+      },
+      "data_mounts": [],
+      "source_observation": "source can change concurrently; preflight records current hashes",
+      "target_workflow_requirements": {
+        "env_keys": [
+          "VOGUE_UPSTREAM_ARTIFACT_ROOT",
+          "VOGUE_P07_REVIEW_ARTIFACT_DIR",
+          "PROJECT07_HM_R2_MANIFEST_KEY",
+          "PROJECT07_HM_R2_DB_KEY"
+        ],
+        "owner_validation_pending": true,
+        "note": "P08 artifact store and P06/P07 artifact readers need independently proven shared layout"
+      }
+    }
+  },
+  "neo4j": {
+    "managed": false,
+    "existing_volume_name": null,
+    "candidate_from_source_only": "trend-agent_neo4j_data",
+    "identity_verified": false,
+    "policy": "Never create/recreate/reset graph container or volume. Connect existing endpoint only; inspect projection must identify /data mount first.",
+    "read_only_queries": "probe_data.py"
+  },
+  "resolutions": {
+    "stock": "8002 in manifest+container+consumer URL; legacy8769 monitored as alternate only",
+    "p06": "TLS service in Compose; HTTP local dev binds loopback only; never disable verification",
+    "sibling_names": [
+      "trend-analysis-agent",
+      "stock-agent",
+      "new-product-agent",
+      "sales-market-agent",
+      "vogue-orchestrator"
+    ],
+    "host_dotenv": "not automatically injected; secret JSON file mounts explicitly loaded as allowlisted env",
+    "data": "v2 paths explicit; old worktrees untouched"
+  },
+  "verification_order": [
+    "built_image_import",
+    "start",
+    "health",
+    "auth",
+    "schema",
+    "data"
+  ],
+  "limits": [
+    "engine socket denied",
+    "R2 HEAD DNS failure",
+    "current graph/DB unverified",
+    "two independent sessions request-response-ACK unverified"
+  ],
+  "network_topology": "five owner containers share orchestrator network namespace; all published ports host-loopback; private HTTP remains loopback for existing consumer policy; P06 verifies TLS SAN127.0.0.1"
+}

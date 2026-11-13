@@ -6,17 +6,21 @@
     "payload_schema_version": "1.0",
     "method": "authored",
     "source_repo": "KG-RAG-02/new-product-agent",
-    "source_branch": "main",
-    "source_commit": "fef9548cf5c5",
+    "source_branch": "integration/docker-e2e",
+    "source_commit": "879545815040",
     "source_files": [
       {
         "path": "src/vogue_npp/prototype/server.py",
-        "sha256": "c52ed2abfc858a07c044a46ade39d2fb9a902f7dbd954de2172828a4482af1b8"
+        "sha256": "ed8c5f2a954366ce5db9cc045909f1f29e35efe78e2472cf1653fd6e035b09e8"
+      },
+      {
+        "path": "src/vogue_npp/adapters/handoff.py",
+        "sha256": "c05e15149a1fc720b447bfdd08eeb660612edc9c5bdfd016a664d83cfc4362d1"
       }
     ],
     "handoff": {
       "route": "/v1/agents/new-product-agent/runs",
-      "contract_version": "vogue-handoff/0.2",
+      "contract_version": "vogue-handoff/0.3",
       "detected_from": "src/vogue_npp/adapters/handoff.py:CONTRACT_VERSION"
     },
     "generated_by": "scripts/export_agent_contracts.py",
@@ -26,20 +30,22 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "urn:vogue:orchestrator:snapshot:new-product-agent:result:1.0",
     "title": "new-product-agent planning draft result 1.0",
-    "description": "/runs 응답 envelope의 result. envelope는 {contract_version: \"vogue-handoff/0.2\", request_id, producer: {agent_id: \"new-product-agent\", schema_version: \"1.0\"}, status, result}이고 status는 result.status와 같다. result 자체에는 schema_version·agent_id가 없다. 하위 객체 구조는 아직 고정하지 않았다 (server.py _build_planning_draft_response).",
+    "description": "/runs 응답 envelope의 result. envelope는 {contract_version: \"vogue-handoff/0.3\", request_id, producer: {agent_id: \"new-product-agent\", schema_version: \"1.0\"}, status, result}이고 status는 result.status와 같다. result에는 schema_version \"1.0\"이 있고 agent_id는 없다. planning_knowledge는 2026-11-12 340a7d4에서 빠졌다. 최상위 키는 고정이고 하위 객체 구조는 아직 고정하지 않았다 (server.py _build_planning_draft_response·_build_handoff_result, compatibility는 adapters/handoff.py).",
     "type": "object",
+    "additionalProperties": false,
     "required": [
+      "schema_version",
       "status",
       "request_id",
       "input_statuses",
       "draft",
       "generation_metadata",
-      "planning_knowledge",
       "planning_analysis",
       "input_evidence",
       "stock_trend_results",
       "image",
       "outfit_image",
+      "hm_visual_references",
       "planning_board",
       "validation_issues",
       "evidence_ids",
@@ -49,56 +55,141 @@
       "compatibility"
     ],
     "properties": {
+      "schema_version": {
+        "const": "1.0"
+      },
       "status": {
         "enum": [
           "ok",
           "partial"
         ],
-        "description": "limitations·conflicts가 있거나 sales_market_result가 ok가 아니면 partial"
+        "description": "planning context에 limitations·conflicts가 있으면 partial. ok가 아닌 입력 status, 매핑 문제, 입력의 errors·missing_*도 limitation이 된다"
       },
       "request_id": {
         "type": "string"
       },
       "input_statuses": {
         "type": "object",
-        "additionalProperties": {
-          "type": "string"
+        "additionalProperties": false,
+        "required": [
+          "planning_request",
+          "trend_result",
+          "inventory_product_result"
+        ],
+        "properties": {
+          "planning_request": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_results",
+              "error"
+            ]
+          },
+          "trend_result": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_results",
+              "error"
+            ]
+          },
+          "inventory_product_result": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_results",
+              "error"
+            ]
+          }
         }
       },
       "draft": {
         "type": "object",
-        "description": "기획 초안"
+        "description": "기획 초안 (domain ProductConceptDraft를 asdict한 값 + title, review_status, limitations)",
+        "required": [
+          "title",
+          "review_status",
+          "limitations"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "review_status": {
+            "const": "md_review_required"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "generation_metadata": {
-        "type": "object"
-      },
-      "planning_knowledge": {
-        "type": "object"
+        "type": "object",
+        "description": "engine, status, prompt_version, model 등"
       },
       "planning_analysis": {
-        "type": "object"
+        "type": "object",
+        "required": [
+          "observations",
+          "hm_visual_reference_analysis",
+          "interpretations",
+          "proposals",
+          "unresolved_questions",
+          "hm_visual_analysis_used",
+          "limitations"
+        ]
       },
       "input_evidence": {
         "type": "object",
-        "description": "입력별 원본 payload, 출처, 버전 추적"
+        "additionalProperties": false,
+        "required": [
+          "planning_request",
+          "trend_result",
+          "inventory_product_result"
+        ],
+        "description": "입력별 원본 payload, 출처, 버전 추적. trend_result.payload는 받은 1.1 원본이고 source_schema_version 1.1, internal_schema_version 1.0",
+        "properties": {
+          "planning_request": {
+            "$ref": "#/$defs/input_evidence"
+          },
+          "trend_result": {
+            "$ref": "#/$defs/input_evidence"
+          },
+          "inventory_product_result": {
+            "$ref": "#/$defs/input_evidence"
+          }
+        }
       },
       "stock_trend_results": {
         "type": "array",
         "items": {
           "type": "object"
-        }
+        },
+        "description": "stock-agent trend_results를 products와 연결한 결과 (mapping_status 등)"
       },
       "image": {
         "type": [
           "object",
           "null"
-        ]
+        ],
+        "description": "/runs에서는 늘 객체 (status, model, image_url, evidence_ids, evidence_uses, excluded_evidence, limitations, error_code, review_only). 실제 생성은 legacy_generation·legacy_visual 프로필에서 VOGUE_IMAGE_GENERATION_ENABLED와 키가 있을 때만"
       },
       "outfit_image": {
         "type": [
           "object",
           "null"
-        ]
+        ],
+        "description": "착장 프롬프트가 없으면 null"
+      },
+      "hm_visual_references": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "legacy_visual 프로필과 VOGUE_HM_IMAGE_ANALYSIS_ENABLED=true일 때만 객체, 아니면 null"
       },
       "planning_board": {
         "type": [
@@ -127,7 +218,8 @@
       "conflicts": {
         "type": "array",
         "items": {
-          "type": "object"
+          "type": "object",
+          "description": "field, values, message"
         }
       },
       "questions_for_validation": {
@@ -138,7 +230,164 @@
       },
       "compatibility": {
         "type": "object",
-        "description": "/runs 경로에서만. 입력 정규화 추적(adapter_version, source_payload_sha256 등)"
+        "description": "입력 정규화 추적 (adapters/handoff.py)",
+        "required": [
+          "adapter_version",
+          "source_payloads_preserved",
+          "input_schemas"
+        ],
+        "properties": {
+          "adapter_version": {
+            "type": "string",
+            "description": "현재 project06-input-normalizer/1.3"
+          },
+          "source_payloads_preserved": {
+            "const": true
+          },
+          "input_schemas": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "planning_request",
+              "trend_result",
+              "inventory_product_result"
+            ],
+            "properties": {
+              "planning_request": {
+                "$ref": "#/$defs/compatibility"
+              },
+              "trend_result": {
+                "$ref": "#/$defs/compatibility"
+              },
+              "inventory_product_result": {
+                "$ref": "#/$defs/compatibility"
+              }
+            }
+          }
+        }
+      }
+    },
+    "$defs": {
+      "input_evidence": {
+        "type": "object",
+        "required": [
+          "status",
+          "producer_id",
+          "producer_id_origin",
+          "source_schema_version",
+          "schema_version_origin",
+          "internal_schema_version",
+          "status_origin",
+          "errors",
+          "missing_data",
+          "limitations",
+          "evidence_ids",
+          "payload"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_results",
+              "error"
+            ]
+          },
+          "producer_id": {
+            "type": "string"
+          },
+          "producer_id_origin": {
+            "enum": [
+              "payload",
+              "adapter_assumption"
+            ]
+          },
+          "source_schema_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version_origin": {
+            "enum": [
+              "payload",
+              "planning_request_fallback"
+            ]
+          },
+          "internal_schema_version": {
+            "type": "string"
+          },
+          "status_origin": {
+            "enum": [
+              "payload",
+              "adapter_default"
+            ]
+          },
+          "errors": {
+            "type": "array"
+          },
+          "missing_data": {
+            "type": "array"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "payload": {
+            "type": "object",
+            "description": "받은 producer payload 원본"
+          }
+        }
+      },
+      "compatibility": {
+        "type": "object",
+        "required": [
+          "producer_id",
+          "source_schema_version",
+          "normalized_schema_version",
+          "internal_schema_version",
+          "adapter_version",
+          "transformed",
+          "source_payload_sha256"
+        ],
+        "properties": {
+          "producer_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "payload의 agent_id (없으면 null)"
+          },
+          "source_schema_version": {
+            "type": "string"
+          },
+          "normalized_schema_version": {
+            "type": "string"
+          },
+          "internal_schema_version": {
+            "type": "string"
+          },
+          "adapter_version": {
+            "type": "string"
+          },
+          "transformed": {
+            "type": "boolean",
+            "description": "trend_result만 true (1.1 → 1.0)"
+          },
+          "source_payload_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "sort_keys·ensure_ascii=False·(',', ':') JSON의 sha256"
+          }
+        }
       }
     }
   }

@@ -29,6 +29,11 @@ from ..domain.styling import StylingRelationship
 ImageStatus = Literal["not_requested", "ready", "generated", "blocked", "failed"]
 PROMPT_VERSION = prompt_version_id("concept_image")
 DEFAULT_IMAGE_MODEL = "gpt-image-2.5-sunburst"
+# Documented prompt limit of /v1/images/generations and /v1/images/edits for GPT image models.
+IMAGE_PROMPT_MAX_CHARS = 32_000
+# Documented input-image limit of /v1/images/edits for GPT image models.
+IMAGE_REFERENCE_MAX = 16
+_OUTPUT_MIME = {"png": "image/png", "jpeg": "image/jpeg", "webp": "image/webp"}
 DEFAULT_IMAGE_DIR = Path("data/local/generated_images")
 IMAGE_DESIGNER_SYSTEM_PROMPT = load_prompt("concept_image", "system")
 _DESIGN_ATTRIBUTE_NAMES = {
@@ -37,6 +42,11 @@ _DESIGN_ATTRIBUTE_NAMES = {
     "material", "fabric", "소재", "원단", "fit", "핏", "디테일", "detail",
     "decoration", "장식", "texture", "조직감", "length", "기장",
 }
+
+def compose_full_prompt(system_prompt: str, prompt: str) -> str:
+    """The exact text both Images API adapters send as `prompt` (system instructions first)."""
+    return "SYSTEM INSTRUCTIONS (follow throughout):\n" + system_prompt + "\n\nUSER DESIGN BRIEF:\n" + prompt
+
 
 @dataclass(frozen=True)
 class ImageGenerationRequest:
@@ -55,6 +65,10 @@ class ImageGenerationRequest:
     purpose: str = "MD/디자이너 검토용 상품 콘셉트 시안"
     evidence_uses: tuple["ImageEvidenceUse", ...] = ()
     excluded_evidence: tuple["ImageEvidenceExclusion", ...] = ()
+    # Optional Images API output options; None leaves the API default (the legacy concept path).
+    size: str | None = None
+    quality: str | None = None
+    output_format: str | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +92,9 @@ class GeneratedImage:
     mime_type: str
     provider: str
     model: str
+    # Diagnostics (no secrets): the response `usage` block and the `x-request-id` header.
+    usage: dict | None = None
+    request_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -435,9 +452,80 @@ def run_concept_to_image(
 
 
 class ImageProviderError(RuntimeError):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, meta: dict | None = None) -> None:
         super().__init__(code)
         self.code = code
+        # Safe diagnostics only: HTTP status, error.code/type/param, x-request-id. Never the message or body.
+        self.meta = dict(meta or {})
+
+
+_ERROR_BODY_LIMIT = 65_536
+_ERROR_TOKEN = re.compile(r"[A-Za-z0-9_.\-\[\]]{1,64}")
+
+
+def _error_meta(exc: urllib.error.HTTPError) -> dict:
+    meta: dict = {"http_status": exc.code}
+    request_id = exc.headers.get("x-request-id") if exc.headers else None
+    if isinstance(request_id, str) and _ERROR_TOKEN.fullmatch(request_id):
+        meta["provider_request_id"] = request_id
+    try:
+        error = json.loads(exc.read(_ERROR_BODY_LIMIT).decode("utf-8")).get("error") or {}
+    except Exception:
+        error = {}
+    for key in ("code", "type", "param"):
+        value = error.get(key) if isinstance(error, dict) else None
+        if isinstance(value, str) and _ERROR_TOKEN.fullmatch(value):
+            meta["error_" + key] = value
+    return meta
+
+
+def _http_error(exc: urllib.error.HTTPError) -> ImageProviderError:
+    meta = _error_meta(exc)
+    detail = meta.get("error_code") or meta.get("error_type")
+    code = f"IMAGE_API_HTTP_{exc.code}" + (f":{detail}" if detail else "") + (f":{meta['error_param']}" if meta.get("error_param") else "")
+    return ImageProviderError(code[:80], meta)
+
+
+def _post_images_api(endpoint: str, body: bytes, api_key: str, timeout_seconds: float) -> tuple[dict, str | None]:
+    """POST one Images API request (no retries). Returns (parsed JSON, x-request-id)."""
+    http_request = urllib.request.Request(
+        endpoint, data=body, method="POST",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(http_request, timeout=timeout_seconds) as response:
+            request_id = response.headers.get("x-request-id")
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise _http_error(exc) from None
+    except urllib.error.URLError as exc:
+        reason = exc.reason
+        if isinstance(reason, TimeoutError):
+            raise ImageProviderError("IMAGE_API_TIMEOUT") from None
+        if isinstance(reason, OSError) and getattr(reason, "errno", None) in {-2, 8}:
+            raise ImageProviderError("IMAGE_API_DNS_FAILURE") from None
+        if isinstance(reason, ssl.SSLError):
+            raise ImageProviderError("IMAGE_API_TLS_FAILURE") from None
+        raise ImageProviderError("IMAGE_API_UNAVAILABLE") from None
+    except TimeoutError:
+        raise ImageProviderError("IMAGE_API_TIMEOUT") from None
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ImageProviderError("IMAGE_API_INVALID_RESPONSE") from None
+    if not isinstance(payload, dict):
+        raise ImageProviderError("IMAGE_API_INVALID_RESPONSE")
+    return payload, request_id if isinstance(request_id, str) and _ERROR_TOKEN.fullmatch(request_id) else None
+
+
+def _decoded_image(payload: dict) -> bytes:
+    try:
+        return base64.b64decode(payload["data"][0]["b64_json"], validate=True)
+    except (KeyError, IndexError, TypeError, ValueError):
+        raise ImageProviderError("IMAGE_API_IMAGE_MISSING") from None
+
+
+def _usage(payload: dict) -> dict | None:
+    usage = payload.get("usage")
+    return usage if isinstance(usage, dict) else None
 
 
 @dataclass
@@ -453,46 +541,22 @@ class OpenAIImageProvider:
     def generate(self, request: ImageGenerationRequest) -> GeneratedImage:
         if not self.api_key.strip():
             raise ImageProviderError("IMAGE_API_KEY_MISSING")
-        full_prompt = (
-            "SYSTEM INSTRUCTIONS (follow throughout):\n"
-            + request.system_prompt
-            + "\n\nUSER DESIGN BRIEF:\n"
-            + request.prompt
-        )
-        body = json.dumps({"model": self.model, "prompt": full_prompt, "n": 1}, ensure_ascii=False).encode("utf-8")
-        http_request = urllib.request.Request(
-            self.endpoint, data=body, method="POST",
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-        )
-        try:
-            with urllib.request.urlopen(http_request, timeout=self.timeout_seconds) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            raise ImageProviderError(f"IMAGE_API_HTTP_{exc.code}") from None
-        except urllib.error.URLError as exc:
-            reason = exc.reason
-            if isinstance(reason, TimeoutError):
-                raise ImageProviderError("IMAGE_API_TIMEOUT") from None
-            if isinstance(reason, OSError) and getattr(reason, "errno", None) in {-2, 8}:
-                raise ImageProviderError("IMAGE_API_DNS_FAILURE") from None
-            if isinstance(reason, ssl.SSLError):
-                raise ImageProviderError("IMAGE_API_TLS_FAILURE") from None
-            raise ImageProviderError("IMAGE_API_UNAVAILABLE") from None
-        except TimeoutError:
-            raise ImageProviderError("IMAGE_API_TIMEOUT") from None
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            raise ImageProviderError("IMAGE_API_INVALID_RESPONSE") from None
-        try:
-            encoded = payload["data"][0]["b64_json"]
-            image_bytes = base64.b64decode(encoded, validate=True)
-        except (KeyError, IndexError, TypeError, ValueError):
-            raise ImageProviderError("IMAGE_API_IMAGE_MISSING") from None
-        return GeneratedImage(image_bytes=image_bytes, mime_type="image/png", provider=self.provider_name, model=self.model)
+        full_prompt = compose_full_prompt(request.system_prompt, request.prompt)
+        if len(full_prompt) > IMAGE_PROMPT_MAX_CHARS:
+            raise ImageProviderError("IMAGE_PROMPT_TOO_LONG", {"prompt_chars": len(full_prompt)})
+        options = {key: value for key, value in (("size", request.size), ("quality", request.quality),
+                                                 ("output_format", request.output_format)) if value}
+        body = json.dumps({"model": self.model, "prompt": full_prompt, "n": 1, **options}, ensure_ascii=False).encode("utf-8")
+        payload, request_id = _post_images_api(self.endpoint, body, self.api_key, self.timeout_seconds)
+        image_bytes = _decoded_image(payload)
+        mime = _OUTPUT_MIME.get(request.output_format or "png", "image/png")
+        return GeneratedImage(image_bytes=image_bytes, mime_type=mime, provider=self.provider_name, model=self.model,
+                              usage=_usage(payload), request_id=request_id)
 
 
 @dataclass
 class OpenAIImageEditProvider:
-    """Generate a new image from a prompt and one already generated reference image."""
+    """Generate a new image from a prompt and up to IMAGE_REFERENCE_MAX reference images (JSON body, data URLs)."""
 
     api_key: str = field(repr=False)
     model: str = "gpt-image-2.5-sunburst"
@@ -513,8 +577,10 @@ class OpenAIImageEditProvider:
         if mime_type not in {"image/png", "image/jpeg", "image/webp"}:
             raise ImageProviderError("IMAGE_API_REFERENCE_FORMAT_UNSUPPORTED")
         references = (reference_image,) if isinstance(reference_image, bytes) else reference_image
-        if not references or len(references) > 4:
+        if not references or len(references) > IMAGE_REFERENCE_MAX:
             raise ImageProviderError("IMAGE_API_REFERENCE_COUNT_UNSUPPORTED")
+        if len(prompt) > IMAGE_PROMPT_MAX_CHARS:
+            raise ImageProviderError("IMAGE_PROMPT_TOO_LONG", {"prompt_chars": len(prompt)})
         data_urls = []
         for reference in references:
             image, image_mime = reference if isinstance(reference, tuple) else (reference, mime_type)
@@ -530,36 +596,9 @@ class OpenAIImageEditProvider:
             "output_format": "png",
             "n": 1,
         }, ensure_ascii=False).encode("utf-8")
-        http_request = urllib.request.Request(
-            self.endpoint,
-            data=body,
-            method="POST",
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-        )
-        try:
-            with urllib.request.urlopen(http_request, timeout=self.timeout_seconds) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            raise ImageProviderError(f"IMAGE_API_HTTP_{exc.code}") from None
-        except urllib.error.URLError as exc:
-            reason = exc.reason
-            if isinstance(reason, TimeoutError):
-                raise ImageProviderError("IMAGE_API_TIMEOUT") from None
-            if isinstance(reason, OSError) and getattr(reason, "errno", None) in {-2, 8}:
-                raise ImageProviderError("IMAGE_API_DNS_FAILURE") from None
-            if isinstance(reason, ssl.SSLError):
-                raise ImageProviderError("IMAGE_API_TLS_FAILURE") from None
-            raise ImageProviderError("IMAGE_API_UNAVAILABLE") from None
-        except TimeoutError:
-            raise ImageProviderError("IMAGE_API_TIMEOUT") from None
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            raise ImageProviderError("IMAGE_API_INVALID_RESPONSE") from None
-        try:
-            encoded = payload["data"][0]["b64_json"]
-            image_bytes = base64.b64decode(encoded, validate=True)
-        except (KeyError, IndexError, TypeError, ValueError):
-            raise ImageProviderError("IMAGE_API_IMAGE_MISSING") from None
-        return GeneratedImage(image_bytes, "image/png", self.provider_name, self.model)
+        payload, request_id = _post_images_api(self.endpoint, body, self.api_key, self.timeout_seconds)
+        image_bytes = _decoded_image(payload)
+        return GeneratedImage(image_bytes, "image/png", self.provider_name, self.model, usage=_usage(payload), request_id=request_id)
 
 
 def fetch_inventory_image(url: str, *, timeout_seconds: int = 8, max_bytes: int = 8_000_000) -> tuple[bytes, str]:

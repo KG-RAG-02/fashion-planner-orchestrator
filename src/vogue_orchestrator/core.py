@@ -41,7 +41,15 @@ class ContractError(ValueError):
 
 
 class TransportError(RuntimeError):
-    """An agent request failed before a valid producer result was received."""
+    """An agent request failed before a valid producer result was received.
+
+    `code`/`http_status` follow the outbound failure mapping (UPSTREAM_TIMEOUT 504,
+    UPSTREAM_UNAVAILABLE 503, UPSTREAM_AUTH, UPSTREAM_HTTP_ERROR 502, CONTRACT_VIOLATION 502).
+    """
+
+    def __init__(self, message: str = "", *, code: str | None = None, http_status: int | None = None):
+        super().__init__(message)
+        self.code, self.http_status = code, http_status
 
 
 @dataclass(frozen=True)
@@ -486,7 +494,8 @@ class Orchestrator:
                 result.stages.append(StageRecord(
                     stage=stage, status="error", request_id=rid,
                     raw_response=raw, error_code=("CONTRACT_ERROR" if isinstance(exc, ContractError) else
-                                                  "TRANSPORT_ERROR" if isinstance(exc, TransportError) else "STAGE_FAILURE"),
+                                                  (exc.code or "TRANSPORT_ERROR") if isinstance(exc, TransportError)
+                                                  else "STAGE_FAILURE"),
                     error_message=(str(exc) if isinstance(exc, (ContractError, TransportError))
                                    else "Stage adapter failed; details suppressed."),
                 ))

@@ -1,25 +1,25 @@
 {
   "_provenance": {
     "agent_id": "new-product-agent",
-    "contract": "new-product-agent /runs input (four producer payloads)",
+    "contract": "new-product-agent /runs input (three producer payloads)",
     "direction": "input",
     "method": "authored",
     "source_repo": "KG-RAG-02/new-product-agent",
-    "source_branch": "main",
-    "source_commit": "fef9548cf5c5",
+    "source_branch": "integration/docker-e2e",
+    "source_commit": "879545815040",
     "source_files": [
       {
         "path": "src/vogue_npp/adapters/handoff.py",
-        "sha256": "820dc6b79ae88e2249899e0caa163c164e5b79f177c56bc0c45626d8764d70d4"
+        "sha256": "c05e15149a1fc720b447bfdd08eeb660612edc9c5bdfd016a664d83cfc4362d1"
       },
       {
         "path": "src/vogue_npp/prototype/server.py",
-        "sha256": "c52ed2abfc858a07c044a46ade39d2fb9a902f7dbd954de2172828a4482af1b8"
+        "sha256": "ed8c5f2a954366ce5db9cc045909f1f29e35efe78e2472cf1653fd6e035b09e8"
       }
     ],
     "handoff": {
       "route": "/v1/agents/new-product-agent/runs",
-      "contract_version": "vogue-handoff/0.2",
+      "contract_version": "vogue-handoff/0.3",
       "detected_from": "src/vogue_npp/adapters/handoff.py:CONTRACT_VERSION"
     },
     "generated_by": "scripts/export_agent_contracts.py",
@@ -27,20 +27,20 @@
   },
   "json_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "urn:vogue:orchestrator:snapshot:new-product-agent:input:handoff-0.2",
-    "title": "new-product-agent /runs input (vogue-handoff/0.2)",
-    "description": "envelope의 input 객체. 요청 최상위는 정확히 {contract_version: \"vogue-handoff/0.2\", request_id, input}이고, input은 정확히 아래 네 키를 가진다. 네 payload의 request_id는 모두 envelope request_id와 같아야 한다 (JSON Schema로 표현 불가, adapters/handoff.py가 검사). 실패 시 HTTP 422 {error:{code,message}}. 각 payload의 '읽는 필드' 설명은 server.py가 실제로 꺼내 쓰는 값이며, 나머지는 input_evidence에 원본으로 보존된다.",
+    "$id": "urn:vogue:orchestrator:snapshot:new-product-agent:input:handoff-0.3",
+    "title": "new-product-agent /runs input (vogue-handoff/0.3)",
+    "description": "envelope의 input 객체. 요청 최상위는 정확히 {contract_version: \"vogue-handoff/0.3\", request_id, input}이고(아니면 422 INVALID_ENVELOPE·UNSUPPORTED_CONTRACT_VERSION, request_id가 빈 문자열이면 INVALID_REQUEST_ID), input은 정확히 아래 세 키를 가진다(아니면 422 INVALID_INPUT; 0.2의 sales_market_result는 더 이상 받지 않는다). 세 payload의 request_id는 모두 envelope request_id와 같아야 하고, server.py가 planning_request.request_id를 strip()[:160]한 값과 다시 비교하므로 앞뒤 공백 없이 160자 이하여야 한다 (JSON Schema로 표현 불가, adapters/handoff.py·prototype/server.py가 검사). 본문은 application/json, 1,000,000 bytes 이하. 실패 시 HTTP 4xx {error:{code,message}}. 성공은 입력 status가 no_results·error여도 HTTP 200. 각 payload의 '읽는 필드' 설명은 server.py가 실제로 꺼내 쓰는 값이며, 나머지는 input_evidence에 원본으로 보존된다.",
     "type": "object",
     "additionalProperties": false,
     "required": [
       "planning_request",
       "trend_result",
-      "inventory_product_result",
-      "sales_market_result"
+      "inventory_product_result"
     ],
     "properties": {
       "planning_request": {
         "type": "object",
+        "description": "PlanningRequest 1.0. adapters/handoff.py는 request_id·schema_version만 보고 아래 필드는 server.py가 읽는다. payload 어디에 있든 evidence_id·evidence_ids, limitations·data_limitations, errors, missing_data·missing_fields·missing_attributes를 재귀 수집한다.",
         "required": [
           "request_id",
           "schema_version"
@@ -48,10 +48,26 @@
         "properties": {
           "request_id": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 160,
+            "description": "envelope request_id와 같아야 한다 (adapters/handoff.py: 422 REQUEST_ID_MISMATCH)."
           },
           "schema_version": {
             "const": "1.0"
+          },
+          "agent_id": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "생략 가능 (없으면 user-request). 있으면 공백만이 아닌 문자열이어야 한다 (아니면 422 INVALID_PRODUCER_PAYLOAD). 값은 검사하지 않는다."
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_results",
+              "error"
+            ],
+            "description": "생략 가능 (없으면 ok). 다른 값은 422 INVALID_PRODUCER_PAYLOAD"
           },
           "query": {
             "type": "string",
@@ -62,10 +78,10 @@
           },
           "context": {
             "type": "object",
-            "description": "아래 키를 읽는다. context에 없으면 같은 이름의 최상위 키를 대신 읽는다.",
+            "description": "아래 키를 읽는다. context에 없으면 같은 이름의 최상위 키를 대신 읽는다. 객체가 아니면 무시한다.",
             "properties": {
               "season": {
-                "description": "예: {value:\"2027SS\", source:\"user\"}. 문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 출처를 unknown으로 본다.",
+                "description": "예: {value:\"2027SS\", source:\"user\"}. 문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 field_origins에 unknown으로 적는다. evidence_ids는 field_evidence_ids가 된다.",
                 "anyOf": [
                   {
                     "type": [
@@ -92,7 +108,7 @@
                 ]
               },
               "category": {
-                "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 출처를 unknown으로 본다.",
+                "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 field_origins에 unknown으로 적는다. evidence_ids는 field_evidence_ids가 된다.",
                 "anyOf": [
                   {
                     "type": [
@@ -121,7 +137,7 @@
               "market": {
                 "type": "array",
                 "items": {
-                  "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 출처를 unknown으로 본다.",
+                  "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓴다.",
                   "anyOf": [
                     {
                       "type": [
@@ -151,7 +167,7 @@
               "channel": {
                 "type": "array",
                 "items": {
-                  "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 출처를 unknown으로 본다.",
+                  "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓴다.",
                   "anyOf": [
                     {
                       "type": [
@@ -179,7 +195,7 @@
                 }
               },
               "product_role": {
-                "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 출처를 unknown으로 본다.",
+                "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓴다.",
                 "anyOf": [
                   {
                     "type": [
@@ -206,7 +222,7 @@
                 ]
               },
               "target_customer": {
-                "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 출처를 unknown으로 본다.",
+                "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 field_origins에 unknown으로 적는다. evidence_ids는 field_evidence_ids가 된다.",
                 "anyOf": [
                   {
                     "type": [
@@ -235,7 +251,7 @@
             }
           },
           "requested_attributes": {
-            "description": "[{name, value, source, evidence_ids}] 또는 {name: value | [values] | {value, ...}}",
+            "description": "[{name, value, source, evidence_ids}] 또는 {name: value | [values] | {value, ...}}. source가 user이면 user_requested, 아니면 unknown 출처. 배열 항목에 name이 없으면 422 INVALID_PRODUCER_PAYLOAD",
             "anyOf": [
               {
                 "type": "array",
@@ -270,19 +286,21 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "항목마다 'Confirm missing planning input: <항목>.' 확인 질문이 된다"
           },
           "constraints": {
             "type": "array"
           },
           "field_origins": {
-            "type": "object"
+            "type": "object",
+            "description": "season·category·target_customer에서 계산한 출처 위에 덮어쓴다. 객체가 아니면 422 INVALID_PRODUCER_PAYLOAD"
           }
         }
       },
       "trend_result": {
         "type": "object",
-        "description": "trend-analysis-agent TrendAnalysisResult 원본. 1.1만 허용하고 내부 사본에서만 1.0으로 표기를 바꾼다.",
+        "description": "trend-analysis-agent TrendAnalysisResult 1.1 원본. 1.1만 받고(422 UNSUPPORTED_PRODUCER_SCHEMA) 내부 사본에서만 schema_version을 1.0으로 바꾼다. 원본은 result.input_evidence.trend_result.payload에 그대로 남고, 읽지 않는 필드(예: trends[].style.example_images)도 보존된다.",
         "required": [
           "request_id",
           "schema_version",
@@ -290,17 +308,17 @@
         ],
         "properties": {
           "request_id": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "description": "envelope request_id와 같아야 한다 (adapters/handoff.py: 422 REQUEST_ID_MISMATCH)."
           },
           "schema_version": {
             "const": "1.1"
           },
           "agent_id": {
-            "enum": [
-              "trend-analysis-agent",
-              null
-            ],
-            "description": "없거나 null이어도 됨"
+            "const": "trend-analysis-agent",
+            "description": "생략 가능 (생략하면 trend-analysis-agent로 본다). null은 adapter를 통과하지만 server.py가 422 INVALID_PRODUCER_PAYLOAD로 거절한다. 다른 값은 422 PRODUCER_MISMATCH"
           },
           "status": {
             "enum": [
@@ -308,7 +326,8 @@
               "partial",
               "no_results",
               "error"
-            ]
+            ],
+            "description": "필수. 없거나 다른 값이면 422 INVALID_DOMAIN_STATUS"
           },
           "trends": {
             "type": "array",
@@ -317,7 +336,7 @@
               "properties": {
                 "style": {
                   "type": "object",
-                  "description": "읽는 필드: id, name, definition, description[].text/evidence_ids, seasons, focus_evidence_ids"
+                  "description": "읽는 필드: id, name(없으면 이 trend를 건너뜀), description[].text/evidence_ids, seasons(하나일 때만 season으로 씀), focus_evidence_ids"
                 },
                 "items": {
                   "type": "array",
@@ -336,7 +355,7 @@
                       "fit": {},
                       "shape": {},
                       "length": {
-                        "description": "받는 쪽은 length를 읽지만 trend는 length_body·length_sleeve로 내보낸다. 현재 항상 비어 있음 (어긋남)"
+                        "description": "받는 쪽은 length를 읽지만 trend 1.1은 length_body·length_sleeve로 내보낸다. 현재 항상 비어 있음 (어긋남)"
                       },
                       "details": {
                         "type": "array",
@@ -356,7 +375,7 @@
           },
           "trend_candidates": {
             "type": "array",
-            "description": "legacy 형식. 있으면 trends 대신 읽음"
+            "description": "legacy 형식 (키 candidates도 같음). 있으면 trends 대신 읽음: name(없으면 건너뜀), qualification, season, market, channel, category, attributes, evidence_ids, description, description_evidence_ids, id(없으면 style_id)"
           },
           "evidence": {
             "type": "array",
@@ -378,13 +397,17 @@
         ],
         "properties": {
           "request_id": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "description": "envelope request_id와 같아야 한다 (adapters/handoff.py: 422 REQUEST_ID_MISMATCH)."
           },
           "schema_version": {
             "const": "1.0"
           },
           "agent_id": {
-            "const": "stock-agent"
+            "const": "stock-agent",
+            "description": "필수. 없거나 다르면 422 PRODUCER_MISMATCH"
           },
           "status": {
             "enum": [
@@ -392,10 +415,12 @@
               "partial",
               "no_results",
               "error"
-            ]
+            ],
+            "description": "필수. 없거나 다른 값이면 422 INVALID_DOMAIN_STATUS"
           },
           "products": {
             "type": "array",
+            "description": "배열이 아니면 상품을 정규화하지 않고 limitation으로 남긴다. 객체가 아닌 항목은 건너뛴다.",
             "items": {
               "type": [
                 "object",
@@ -407,12 +432,23 @@
                   "description": "style_id가 없을 때"
                 },
                 "sku_ids": {
-                  "type": "array"
+                  "type": "array",
+                  "description": "article_id가 없으면 첫 숫자 값을 H&M article ID로 씀"
                 },
-                "article_id": {},
+                "article_id": {
+                  "description": "숫자이면 H&M article ID"
+                },
                 "season": {},
                 "category": {},
-                "attributes": {},
+                "market": {
+                  "type": "array"
+                },
+                "channel": {
+                  "type": "array"
+                },
+                "attributes": {
+                  "description": "[{name, value, origin, evidence_ids}] 또는 {name: value | [values] | {value, ...}}. 배열 항목에 name이 없으면 422 INVALID_PRODUCER_PAYLOAD"
+                },
                 "evidence_ids": {
                   "type": "array",
                   "items": {
@@ -421,7 +457,7 @@
                 },
                 "inventory": {
                   "type": "object",
-                  "description": "읽는 필드: quantity, unit, as_of, definition"
+                  "description": "읽는 필드: quantity, unit, as_of, definition. 없으면 상품의 quantity, unit, as_of, inventory_definition"
                 },
                 "image": {
                   "type": "object",
@@ -431,46 +467,21 @@
                     }
                   }
                 },
+                "product_role": {},
                 "note": {},
-                "reason": {}
+                "reason": {
+                  "description": "note가 없을 때"
+                }
               }
             }
           },
           "trend_results": {
             "type": "array",
-            "description": "읽는 필드: product_index(products 원래 인덱스), style.id/name, status, rank, reason, summary"
+            "description": "읽는 필드: style.id/name, product_index(products 원래 인덱스, 정수), status, rank(정수), summary, evidence_ids(없으면 같은 style_id인 루트 evidence[]의 evidence_id), limitations·errors·missing_*. 배열이 아니면 연결을 해석하지 않고 limitation으로 남긴다"
           },
           "evidence": {
-            "type": "array"
-          }
-        }
-      },
-      "sales_market_result": {
-        "type": "object",
-        "description": "sales-market-agent result 1.0 원본. 불투명 보존하고 status, evidence_ids, limitations, errors만 재귀 수집. null·생략 불가(없으면 status no_results)",
-        "required": [
-          "request_id",
-          "schema_version",
-          "agent_id",
-          "status"
-        ],
-        "properties": {
-          "request_id": {
-            "type": "string"
-          },
-          "schema_version": {
-            "const": "1.0"
-          },
-          "agent_id": {
-            "const": "sales-market-agent"
-          },
-          "status": {
-            "enum": [
-              "ok",
-              "partial",
-              "no_results",
-              "error"
-            ]
+            "type": "array",
+            "description": "읽는 필드: evidence_id, style_id"
           }
         }
       }

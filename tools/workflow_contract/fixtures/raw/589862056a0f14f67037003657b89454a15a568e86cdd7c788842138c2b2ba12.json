@@ -1,0 +1,108 @@
+{
+  "contract_version": "vogue-handoff/0.1",
+  "producer": {
+    "agent_id": "stock-agent",
+    "schema_version": "1.0"
+  },
+  "request_id": "fixture:workflow:001",
+  "result": {
+    "agent_id": "stock-agent",
+    "errors": [],
+    "evidence": [
+      {
+        "data_nature": "sample",
+        "evidence_id": "stock-agent:fixture:sample",
+        "fetched_at": "2026-11-12T06:00:00Z",
+        "locator": null,
+        "manifest_id": "fixture:manifest",
+        "observed_at": "2020-09-22",
+        "permission_status": "synthetic_test_only",
+        "published_at": null,
+        "source_id": "fixture:stock",
+        "source_name": "Fixture sample inventory",
+        "source_type": "synthetic_fixture",
+        "style_id": "fixture:style"
+      }
+    ],
+    "input_provenance": {
+      "adapter_version": "stock-trend-input-adapter/1.0",
+      "internal_schema_version": null,
+      "source_agent_id": "trend-analysis-agent",
+      "source_payload_sha256": "4da8ff8d6f1d34e184418ea1153100fe99d693a4d7516c2f39dd0a4996cfe5ea",
+      "source_schema_version": "1.1",
+      "transformed": true
+    },
+    "products": [
+      {
+        "attributes": {
+          "color": "화이트",
+          "fit": "노멀",
+          "material": [
+            "면"
+          ]
+        },
+        "category": "셔츠",
+        "image": null,
+        "inventory": {
+          "as_of": "2020-09-22",
+          "data_nature": "sample",
+          "definition": "Synthetic test quantity only",
+          "quantity": 7,
+          "unit": "pieces"
+        },
+        "season": "2027SS",
+        "sku_ids": [
+          "fixture:sku"
+        ],
+        "style_id": "fixture:style"
+      },
+      null
+    ],
+    "request_id": "fixture:workflow:001",
+    "schema_version": "1.0",
+    "season_basis": null,
+    "status": "partial",
+    "summary": "Synthetic fixture only",
+    "trend_results": [
+      {
+        "attribute_summary": null,
+        "errors": [],
+        "evidence_ids": [
+          "stock-agent:fixture:sample"
+        ],
+        "limitations": [
+          "Sample inventory as of 2020-09-22; not current company stock."
+        ],
+        "product_index": 0,
+        "rank": null,
+        "reason": null,
+        "search": {},
+        "status": "ok",
+        "style": {
+          "id": "fixture:style",
+          "name": "합성 셔츠"
+        },
+        "summary": "Synthetic stock match"
+      },
+      {
+        "attribute_summary": null,
+        "errors": [],
+        "evidence_ids": [],
+        "limitations": [
+          "No eligible product; null slot is not zero stock."
+        ],
+        "product_index": 1,
+        "rank": null,
+        "reason": null,
+        "search": {},
+        "status": "no_results",
+        "style": {
+          "id": "fixture:style:empty",
+          "name": "빈 합성 트렌드"
+        },
+        "summary": "Synthetic stock match"
+      }
+    ]
+  },
+  "status": "partial"
+}

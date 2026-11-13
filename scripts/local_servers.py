@@ -77,50 +77,11 @@ class Service:
 
 
 def configured_services() -> list[Service]:
-    root_env = read_env(ROOT / ".env")
-    siblings = {
-        "trend": ROOT.parent / "trend-analysis-agent",
-        "stock": ROOT.parent / "stock-agent",
-        "market": ROOT.parent / "project_07",
-        "planning": ROOT.parent / "project_06",
-    }
-    trend = siblings["trend"]
-    stock = siblings["stock"]
-    market = siblings["market"]
-    planning = siblings["planning"]
-    shared = root_env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN", "")
-    dev_mode = root_env.get("VOGUE_AGENT_HTTP_DEV_MODE", "1")
-
-    specs = [
-        Service("trend", "Trend", trend, loopback_port(root_env, "VOGUE_TREND_AGENT_URL", 8768),
-                "/health", trend / ".venv" / "bin" / "python", ("-m", "trend_agent.api.server"),
-                ("trend_agent.api.server",), (("VOGUE_AGENT_SERVICE_BEARER_TOKEN", shared),)),
-        Service("stock", "Stock", stock, loopback_port(root_env, "VOGUE_STOCK_AGENT_URL", 8769),
-                "/health", stock / ".venv" / "bin" / "python",
-                ("-m", "uvicorn", "stock_agent.api:app", "--host", "127.0.0.1", "--port",
-                 str(loopback_port(root_env, "VOGUE_STOCK_AGENT_URL", 8769))),
-                ("uvicorn", "stock_agent.api:app"), (("VOGUE_AGENT_SERVICE_BEARER_TOKEN", shared),)),
-        Service("market", "Sales Market", market, loopback_port(root_env, "VOGUE_SALES_MARKET_AGENT_URL", 8766),
-                "/api/health", market / ".venv" / "bin" / "python",
-                ("-m", "market_research_agent.http_server", "--host", "127.0.0.1", "--port",
-                 str(loopback_port(root_env, "VOGUE_SALES_MARKET_AGENT_URL", 8766))),
-                ("market_research_agent.http_server",), (("VOGUE_AGENT_SERVICE_BEARER_TOKEN", shared),)),
-        Service("planning", "Project_06", planning, loopback_port(root_env, "VOGUE_NEW_PRODUCT_AGENT_URL", 8767),
-                "/api/health", planning / ".venv" / "bin" / "python", ("-m", "vogue_npp.prototype.server"),
-                ("vogue_npp.prototype.server",),
-                (("VOGUE_HTTP_MODE", "local"), ("VOGUE_HOST", "127.0.0.1"),
-                 ("VOGUE_PORT", str(loopback_port(root_env, "VOGUE_NEW_PRODUCT_AGENT_URL", 8767))),
-                 ("VOGUE_AGENT_SERVICE_BEARER_TOKEN", shared))),
-        Service("orchestrator", "Orchestrator UI", ROOT, int(root_env.get("VOGUE_ORCHESTRATOR_PORT", "8765")),
-                "/api/health", ROOT / ".venv" / "bin" / "python", ("app.py",),
-                ("vogue_orchestrator.server", "app.py"),
-                (("VOGUE_ORCHESTRATOR_HOST", "127.0.0.1"),
-                 ("VOGUE_AGENT_HTTP_DEV_MODE", dev_mode))),
-    ]
-    for service in specs:
-        if not service.python.is_file():
-            raise RuntimeError(f"{service.label} Python 환경을 찾을 수 없습니다: {service.python}")
-    return specs
+    sys.path.insert(0, str(ROOT / "src"))
+    from vogue_orchestrator.service_manifest import services
+    return [Service(entry["name"], entry.get("label", entry["name"]), entry["repo"], entry["port"],
+                    entry["health_path"], entry["python"], tuple(entry["args"]), tuple(entry["markers"]),
+                    tuple(entry["env"].items())) for entry in services()]
 
 
 def process_command(pid: int) -> str:
@@ -207,9 +168,7 @@ def service_env(service: Service) -> dict[str, str]:
 def start_service(service: Service) -> None:
     occupants = listening_pids(service.port)
     if occupants:
-        stop_service(service)
-        if listening_pids(service.port):
-            raise RuntimeError(f"{service.port} 포트를 비우지 못했습니다.")
+        raise RuntimeError(f"{service.port} 포트가 사용 중입니다. start는 기존 프로세스를 종료하지 않습니다.")
     STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     log = service.log_file.open("ab", buffering=0)
     process = subprocess.Popen(
@@ -270,6 +229,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         services = configured_services()
+        if not services:
+            print("서비스 manifest가 없습니다: deploy/service-manifest.json 또는 VOGUE_SERVICE_MANIFEST를 확인해 주세요.",
+                  file=sys.stderr)
+            return 1
         if args.action == "status":
             return 0 if show_status(services) else 1
         if args.action == "stop":

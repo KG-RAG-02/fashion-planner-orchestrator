@@ -1,0 +1,193 @@
+{
+  "contract_version": "vogue-workflow/0.1",
+  "request_id": "fixture:workflow:001",
+  "input": {
+    "mode": "draft_only",
+    "user_input": {
+      "text": "2027SS 합성 셔츠 검토용 초안",
+      "images": []
+    },
+    "planning_request": {
+      "schema_version": "1.0",
+      "request_id": "fixture:workflow:001",
+      "query": "2027SS 합성 셔츠 검토용 초안",
+      "context": {
+        "category": "셔츠",
+        "season": "2027SS"
+      }
+    },
+    "trend_response": {
+      "raw_response": {
+        "contract_version": "vogue-handoff/0.1",
+        "request_id": "fixture:workflow:001",
+        "producer": {
+          "agent_id": "trend-analysis-agent",
+          "schema_version": "1.1"
+        },
+        "status": "ok",
+        "result": {
+          "request_id": "fixture:workflow:001",
+          "status": "ok",
+          "applied_filters": {
+            "season": {
+              "year": 2027,
+              "season": "SS",
+              "raw": null,
+              "origin": "user_requested"
+            },
+            "categories": {
+              "include": [],
+              "exclude": []
+            },
+            "gender": null,
+            "attributes": []
+          },
+          "trends": [],
+          "evidence": [],
+          "limitations": [
+            "Synthetic fixture article, not an external citation."
+          ],
+          "schema_version": "1.1"
+        }
+      },
+      "content_sha256": "07ca79653ba9558cfdb1559a6b434a2066459f5505ef7f9b5bfd8300d0a6a001",
+      "hash_profile": "python-json-sort/1",
+      "raw_artifact": {
+        "artifact_id": "fixture:89c4c97bf3a8becde872f301993125cb19e2730c54187f4282ec5a239b31b874",
+        "uri": "artifact://fixtures/raw/89c4c97bf3a8becde872f301993125cb19e2730c54187f4282ec5a239b31b874.json",
+        "sha256": "89c4c97bf3a8becde872f301993125cb19e2730c54187f4282ec5a239b31b874",
+        "media_type": "application/json",
+        "size_bytes": 711,
+        "immutable": true
+      },
+      "observation": {
+        "observed_at": "2026-11-12T06:00:00Z",
+        "as_of": null,
+        "synthetic": true,
+        "data_nature": "synthetic_fixture",
+        "source": "coordinator synthetic fixture; no real company data",
+        "limitations": [
+          "Fixture only; not current inventory or actual sales."
+        ]
+      }
+    },
+    "stock_response": {
+      "raw_response": {
+        "contract_version": "vogue-handoff/0.1",
+        "request_id": "fixture:workflow:001",
+        "producer": {
+          "agent_id": "stock-agent",
+          "schema_version": "1.0"
+        },
+        "status": "ok",
+        "result": {
+          "schema_version": "1.0",
+          "request_id": "fixture:workflow:001",
+          "agent_id": "stock-agent",
+          "status": "ok",
+          "summary": "Synthetic fixture only",
+          "products": [
+            {
+              "style_id": "fixture:style",
+              "sku_ids": [
+                "fixture:sku"
+              ],
+              "category": "셔츠",
+              "season": "2027SS",
+              "attributes": {
+                "color": "화이트",
+                "material": [
+                  "면"
+                ],
+                "fit": "노멀"
+              },
+              "inventory": {
+                "quantity": 7,
+                "unit": "pieces",
+                "as_of": "2020-09-22",
+                "definition": "Synthetic test quantity only",
+                "data_nature": "sample"
+              },
+              "image": null
+            }
+          ],
+          "trend_results": [
+            {
+              "style": {
+                "id": "fixture:style",
+                "name": "합성 셔츠"
+              },
+              "status": "ok",
+              "product_index": 0,
+              "rank": null,
+              "reason": null,
+              "summary": "Synthetic stock match",
+              "attribute_summary": null,
+              "search": {},
+              "limitations": [
+                "Sample inventory as of 2020-09-22; not current company stock."
+              ],
+              "errors": [],
+              "evidence_ids": [
+                "stock-agent:fixture:sample"
+              ]
+            }
+          ],
+          "season_basis": null,
+          "evidence": [
+            {
+              "evidence_id": "stock-agent:fixture:sample",
+              "style_id": "fixture:style",
+              "source_id": "fixture:stock",
+              "source_type": "synthetic_fixture",
+              "source_name": "Fixture sample inventory",
+              "locator": null,
+              "published_at": null,
+              "observed_at": "2020-09-22",
+              "fetched_at": "2026-11-12T06:00:00Z",
+              "permission_status": "synthetic_test_only",
+              "manifest_id": "fixture:manifest",
+              "data_nature": "sample"
+            }
+          ],
+          "errors": [],
+          "input_provenance": {
+            "source_agent_id": "trend-analysis-agent",
+            "source_schema_version": "1.1",
+            "internal_schema_version": null,
+            "adapter_version": "stock-trend-input-adapter/1.0",
+            "transformed": true,
+            "source_payload_sha256": "8a7a91e7b613a024bd75d3946d05849aee8511627da999fb9c2adf061acb82e7"
+          }
+        }
+      },
+      "content_sha256": "9668660b28458bef2ed38da8c6c97191bcf584284d81fb76d883310f21549908",
+      "hash_profile": "python-json-sort/1",
+      "raw_artifact": {
+        "artifact_id": "fixture:33419951b98bbbcf5f084829f79d5ad0fae9c1e5cee696bdd0a6031294d141d3",
+        "uri": "artifact://fixtures/raw/33419951b98bbbcf5f084829f79d5ad0fae9c1e5cee696bdd0a6031294d141d3.json",
+        "sha256": "33419951b98bbbcf5f084829f79d5ad0fae9c1e5cee696bdd0a6031294d141d3",
+        "media_type": "application/json",
+        "size_bytes": 2401,
+        "immutable": true
+      },
+      "observation": {
+        "observed_at": "2026-11-12T06:00:00Z",
+        "as_of": "2020-09-22",
+        "synthetic": true,
+        "data_nature": "sample",
+        "source": "coordinator synthetic fixture; no real company data",
+        "limitations": [
+          "Fixture only; not current inventory or actual sales."
+        ]
+      }
+    },
+    "stock_call_context": {
+      "planning_request_sha256": "87752b6aabe82d6a5285310f97da9b3c4ec368cdbe5bc4f112499350a057ce0f",
+      "trend_response_sha256": "07ca79653ba9558cfdb1559a6b434a2066459f5505ef7f9b5bfd8300d0a6a001",
+      "stock_input_sha256": "8a7a91e7b613a024bd75d3946d05849aee8511627da999fb9c2adf061acb82e7",
+      "stock_wire_request_sha256": "65ec50449d0a8d447f659745c845e4371d2ab8df04a8e1699c8d2e5f436aadbf",
+      "stock_response_sha256": "9668660b28458bef2ed38da8c6c97191bcf584284d81fb76d883310f21549908"
+    }
+  }
+}

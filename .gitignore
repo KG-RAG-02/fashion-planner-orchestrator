@@ -4,3 +4,7 @@ __pycache__/
 .env
 .pytest_cache/
 .local/
+
+# iCloud Drive conflict copies (e.g. "server 2.py"); never commit them.
+* [0-9]
+* [0-9].*

@@ -1,0 +1,26 @@
+# Paid-model layer — the ONLY file that references the OpenAI key.
+#   deploy/bin/vogue live "<planning brief>"   (refuses a second run; see LIVE_GUARD in bin/vogue)
+# Calls per run: P08 query structuring (1 LLM call + retries on error), stock tool-calling agent
+# (a few calls per trend), and P06's two Draft images (product + worn outfit; workflow-contract 0.2.0).
+# P08 makes no image call: stage 06 composes the planning sheet locally.
+
+services:
+  stock:
+    environment:
+      STOCK_LLM_PROVIDER: openai
+      LLM_API_KEY: ${VOGUE_OPENAI_API_KEY:?VOGUE_OPENAI_API_KEY missing in the env file}
+      LLM_MODEL: ${VOGUE_STOCK_LLM_MODEL:?VOGUE_STOCK_LLM_MODEL missing in the env file}
+
+  orchestrator:
+    environment:
+      VOGUE_QUERY_STRUCTURING_MODE: llm
+      LLM_API_KEY: ${VOGUE_OPENAI_API_KEY:?VOGUE_OPENAI_API_KEY missing in the env file}
+      LLM_MODEL: ${VOGUE_P08_LLM_MODEL:?VOGUE_P08_LLM_MODEL missing in the env file}
+
+  new-product:
+    environment:
+      VOGUE_DRAFT_IMAGE_PROVIDER: openai
+      OPENAI_API_KEY: ${VOGUE_OPENAI_API_KEY:?VOGUE_OPENAI_API_KEY missing in the env file}
+      # Blank means P06's default image model (gpt-image-2.5-sunburst).
+      VOGUE_DRAFT_IMAGE_MODEL: ${VOGUE_IMAGE_MODEL:-}
+    networks: [backend, egress]

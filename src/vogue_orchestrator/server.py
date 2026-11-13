@@ -35,6 +35,14 @@ from .new_product import GENERATED_IMAGE_ROOT
 
 
 WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
+# The UI is served as ES modules with web fonts and every response carries nosniff, so these types
+# must not depend on the host's mime.types (macOS/Debian tables differ; .woff2 may be missing).
+for _mime, _suffix in (("text/javascript", ".js"), ("text/javascript", ".mjs"), ("text/css", ".css"),
+                       ("font/woff2", ".woff2"), ("font/woff", ".woff"), ("image/svg+xml", ".svg")):
+    mimetypes.add_type(_mime, _suffix)
+CONTENT_SECURITY_POLICY = ("default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; "
+                           "img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+                           "frame-ancestors 'none'; form-action 'self'")
 MAX_BODY_BYTES = 32_000
 MAX_QUERY_CHARS = 1_000
 MAX_REQUEST_ID_CHARS = 128
@@ -44,13 +52,7 @@ MAX_LATEST_RUN_BYTES = 12 * 1024 * 1024
 LATEST_RUN_PATH = Path(__file__).resolve().parents[2] / ".local" / "latest-run.json"
 RUN_HISTORY_DIR = LATEST_RUN_PATH.parent / "runs"
 MAX_SAVED_RUNS = 20
-LOCAL_SERVICE_ENDPOINTS = (
-    ("trend", "트렌드", "VOGUE_TREND_AGENT_URL", "http://127.0.0.1:8768", "/health"),
-    ("stock", "상품·재고", "VOGUE_STOCK_AGENT_URL", "http://127.0.0.1:8769", "/health"),
-    ("market", "시장 조사", "VOGUE_SALES_MARKET_AGENT_URL", "http://127.0.0.1:8766", "/api/health"),
-    ("planning", "기획 초안", "", "http://127.0.0.1:8765", "/api/health"),
-    ("orchestrator", "기획 UI", "", "http://127.0.0.1:8765", "/api/health"),
-)
+
 
 
 ProviderFactory = Callable[[], tuple[Callable[[Any], Any], dict[str, Any]]]
@@ -176,10 +178,6 @@ def _image_attachment_failed(result: dict[str, Any]) -> bool:
 
 
 def _run_save_exclusion_reason(result: dict[str, Any]) -> str | None:
-    if result.get("status") == "error":
-        return "전체 실행이 오류로 끝나 저장하지 않았습니다."
-    if _image_attachment_failed(result):
-        return "이미지 또는 기획서 보드 첨부에 실패해 실행 기록에 저장하지 않았습니다."
     return None
 
 
@@ -226,7 +224,15 @@ def _load_latest_run() -> dict[str, Any] | None:
 
 def _local_services_status() -> dict[str, Any]:
     services = []
-    for service_id, label, env_key, default_url, health_path in LOCAL_SERVICE_ENDPOINTS:
+    from .service_manifest import services as manifest_services
+    try:
+        entries = manifest_services(require_runtime=False)
+    except (RuntimeError, ValueError, OSError):
+        return {"services": [], "healthy": 0, "total": 0, "all_healthy": False, "manifest_status": "unavailable_or_invalid"}
+    if not entries:
+        return {"services": [], "healthy": 0, "total": 0, "all_healthy": False, "manifest_status": "unconfigured"}
+    endpoints = [(e["name"], e.get("label", e["name"]), "", f"http://127.0.0.1:{e['port']}", e["health_path"]) for e in entries]
+    for service_id, label, env_key, default_url, health_path in endpoints:
         base_url = os.environ.get(env_key, default_url) if env_key else default_url
         parsed = urlsplit(base_url)
         try:
@@ -250,18 +256,78 @@ def _local_services_status() -> dict[str, Any]:
             "total": len(services), "all_healthy": all(item["status"] == "running" for item in services)}
 
 
-def _request_is_loopback(handler: BaseHTTPRequestHandler) -> bool:
+RUNTIME_MODES = {"host", "container"}
+
+
+def runtime_mode(environ: Mapping[str, str] | None = None) -> str:
+    """`container` when VOGUE_ORCHESTRATOR_RUNTIME=container; unknown values fail closed to container."""
+    value = str((os.environ if environ is None else environ).get("VOGUE_ORCHESTRATOR_RUNTIME") or "").strip().lower()
+    return "host" if value in {"", "host"} else "container"
+
+
+def trusted_peer_networks(environ: Mapping[str, str] | None = None) -> tuple[list[Any], bool]:
+    """Parse VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS; an invalid list trusts nothing beyond loopback."""
+    networks = []
+    for item in str((os.environ if environ is None else environ).get("VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS") or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(item, strict=False))
+        except ValueError:
+            return [], False
+    return networks, True
+
+
+def _server_port(handler: BaseHTTPRequestHandler) -> int:
+    port = getattr(getattr(handler, "server", None), "server_port", None)
+    if isinstance(port, int):
+        return port
     try:
-        if not ipaddress.ip_address(handler.client_address[0]).is_loopback:
-            return False
-    except (ValueError, IndexError):
+        return int(os.environ.get("VOGUE_ORCHESTRATOR_PORT", "8765"))
+    except ValueError:
+        return 8765
+
+
+def allowed_hosts(handler: BaseHTTPRequestHandler, environ: Mapping[str, str] | None = None) -> set[str]:
+    """VOGUE_ORCHESTRATOR_ALLOWED_HOSTS, default 127.0.0.1:<port> and localhost:<port>."""
+    raw = str((os.environ if environ is None else environ).get("VOGUE_ORCHESTRATOR_ALLOWED_HOSTS") or "")
+    configured = {item.strip().lower() for item in raw.split(",") if item.strip()}
+    if configured:
+        return configured
+    port = _server_port(handler)
+    return {f"127.0.0.1:{port}", f"localhost:{port}"}
+
+
+def _single_header(handler: BaseHTTPRequestHandler, name: str) -> tuple[bool, str | None]:
+    headers = handler.headers
+    values = headers.get_all(name) if hasattr(headers, "get_all") else None
+    if values is not None and len(values) > 1:
+        return False, None
+    return True, headers.get(name)
+
+
+def _request_is_trusted_local(handler: BaseHTTPRequestHandler) -> bool:
+    """Conventions section 5: (loopback peer or peer in VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS)
+    and Host in VOGUE_ORCHESTRATOR_ALLOWED_HOSTS and (no Origin or Origin == http://<Host>)."""
+    try:
+        peer = ipaddress.ip_address(handler.client_address[0])
+    except (ValueError, IndexError, TypeError, AttributeError):
         return False
-    origin = handler.headers.get("Origin")
-    if origin:
-        parsed = urlsplit(origin)
-        if parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+    if getattr(peer, "ipv4_mapped", None) is not None:
+        peer = peer.ipv4_mapped
+    if not peer.is_loopback:
+        networks, _ = trusted_peer_networks()
+        if not any(peer in network for network in networks):
             return False
-    return True
+    single_host, host = _single_header(handler, "Host")
+    single_origin, origin = _single_header(handler, "Origin")
+    if not single_host or not single_origin:
+        return False
+    host = (host or "").strip().lower()
+    if not host or host not in allowed_hosts(handler):
+        return False
+    return origin is None or origin.strip().lower() == "http://" + host
 
 
 def _history_id_is_safe(history_id: str) -> bool:
@@ -369,6 +435,87 @@ def _fetch_project06_image(filename: str) -> tuple[bytes, str]:
         conn.close()
 
 
+
+def _legacy_migrated_followup(execution, result, mode, query, scope, trend_query):
+    """Explicit historical P08 migration path; never the target workflow."""
+    upstream = {stage.get("stage"): stage for stage in result.get("stages", [])}
+    planning_body = None
+    if mode in {"agent_http_v01", "legacy_migrated"} and result.get("status") != "error" and not result.get("stopped_at") and upstream.get("trend", {}).get("status") == "ok":
+        try:
+            trend_envelope = upstream.get("trend", {}).get("raw_response", {})
+            stock_envelope = upstream.get("stock", {}).get("raw_response", {})
+            trend_body = trend_envelope.get("result", trend_envelope)
+            stock_body = stock_envelope.get("result", stock_envelope)
+            if not isinstance(trend_body, Mapping) or not isinstance(stock_body, Mapping):
+                raise ValueError("Upstream trend or stock result is missing")
+            planning_body = build_migrated_planning_draft(
+                execution.request_id, query.strip(), scope, trend_query, trend_body, stock_body,
+            )
+            plan_stage = {"stage": "planning_draft", "status": planning_body.get("status", "partial"),
+                          "request_id": execution.request_id, "producer_id": "vogue-orchestrator",
+                          "producer_schema_version": "1.0",
+                          "raw_response": {"contract_version": "vogue-planning-draft/1.0",
+                                           "request_id": execution.request_id,
+                                           "producer": {"agent_id": "vogue-orchestrator", "schema_version": "1.0"},
+                                           "status": planning_body.get("status", "partial"), "result": planning_body}}
+            result["stages"].append(plan_stage)
+            draft_data = planning_body.get("draft") if isinstance(planning_body.get("draft"), Mapping) else {}
+            category = draft_data.get("category")
+            if not isinstance(category, str) or not category.strip():
+                result["sales_market_review"] = {"status": "not_run", "request_id": execution.request_id,
+                                                   "reason": "planning_draft_category_missing"}
+                result["stages"].append({"stage": "project_07", "status": "not_run",
+                                         "request_id": execution.request_id,
+                                         "error_code": "PLANNING_DRAFT_CATEGORY_MISSING"})
+                result["status"] = "partial"
+            else:
+                product = {"category": category.strip()}
+                for source_key, target_key in (("season", "season"), ("material", "material"),
+                                               ("product_type", "product_type"), ("gender", "gender")):
+                    val = draft_data.get(source_key)
+                    if isinstance(val, str) and val.strip():
+                        product[target_key] = val.strip()
+                p07_draft = {"schema_version": "1.0", "draft_id": execution.request_id, "product": product}
+                review_envelope = request_sales_market_review(execution.request_id, p07_draft)
+                review_body = review_envelope.get("result")
+                producer = review_envelope.get("producer")
+                if (review_envelope.get("contract_version") != "vogue-sales-market-review/0.1-proposal"
+                        or review_envelope.get("request_id") != execution.request_id
+                        or not isinstance(producer, Mapping) or producer.get("agent_id") != "sales-market-agent"
+                        or not isinstance(review_body, Mapping)
+                        or review_body.get("request_id") != execution.request_id
+                        or review_body.get("schema_version") != producer.get("schema_version")
+                        or review_body.get("status") != review_envelope.get("status")):
+                    raise ValueError("Sales Market review envelope failed validation")
+                result["sales_market_review"] = review_envelope
+                result["stages"].append({"stage": "project_07", "status": review_envelope.get("status", "error"),
+                                         "request_id": execution.request_id,
+                                         "producer_id": producer.get("agent_id"),
+                                         "producer_schema_version": producer.get("schema_version"),
+                                         "raw_response": review_envelope})
+                if review_envelope.get("status") == "error":
+                    result["status"] = "error"
+                    result["stopped_at"] = "project_07"
+                elif review_envelope.get("status") != "ok":
+                    result["status"] = "partial"
+        except Exception as exc:
+            result["sales_market_review"] = {"status": "error", "request_id": execution.request_id,
+                                               "error_code": "SALES_MARKET_REVIEW_FAILED",
+                                               "error_type": type(exc).__name__}
+            result["stages"].append({"stage": "project_07", "status": "error",
+                                     "request_id": execution.request_id,
+                                     "error_code": "SALES_MARKET_REVIEW_FAILED",
+                                     "error_type": type(exc).__name__})
+            result["status"] = "error"
+            result["stopped_at"] = "legacy_migrated_followup"
+    if isinstance(planning_body, Mapping):
+        result["image_generation"] = _image_display_urls({
+            "status": (planning_body.get("image") or {}).get("status", "not_available")
+                if isinstance(planning_body.get("image"), Mapping) else "not_available",
+            "image": planning_body.get("image"), "planning_board": planning_body.get("planning_board"),
+        })
+    return planning_body
+
 class OrchestratorHandler(BaseHTTPRequestHandler):
     server_version = "VOGUEOrchestratorDemo/0.1"
 
@@ -376,22 +523,49 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
         # User-entered queries and pipeline payloads are kept out of HTTP logs.
         return
 
-    def _send(self, status: int, body: bytes, content_type: str) -> None:
+    def _send(self, status: int, body: bytes, content_type: str, headers: Mapping[str, str] | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+        self.send_header("Content-Security-Policy", CONTENT_SECURITY_POLICY)
         self.end_headers()
         self.wfile.write(body)
 
-    def _json(self, status: int, value: object) -> None:
+    def _json(self, status: int, value: object, headers: Mapping[str, str] | None = None) -> None:
         body = json.dumps(value, ensure_ascii=False).encode("utf-8")
-        self._send(status, body, "application/json; charset=utf-8")
+        self._send(status, body, "application/json; charset=utf-8", headers)
+
+    def _container_gate(self, path: str) -> bool:
+        """Container mode: every route except GET /api/health and static files needs a trusted
+        local request (legacy mutating routes included); /api/local-services/* does not exist.
+        Returns True when the response has been sent."""
+        if runtime_mode() != "container":
+            return False
+        if path == "/api/local-services" or path.startswith("/api/local-services/"):
+            self._json(404, {"error": "not_found"})
+            return True
+        if self.command == "GET" and (path == "/api/health" or not path.startswith(("/api/", "/v1/"))):
+            return False
+        if _request_is_trusted_local(self):
+            return False
+        from .workflow_http import owns, problem
+        if owns(path):
+            problem(self, 403, "LOCAL_WORKFLOW_ONLY")
+        else:
+            self._json(403, {"error": "trusted_local_only"})
+        return True
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        if self._container_gate(path):
+            return
+        from .workflow_http import routes
+        if routes(self, path):
+            return
         if path == "/api/health":
             self._json(200, {"status": "ok", "mode": "local-orchestrator-ui"})
             return
@@ -399,7 +573,10 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             self._json(200, _local_services_status())
             return
         if path == "/api/connections":
-            self._json(200, connection_status())
+            from .workflow_http import readiness
+            configuration = connection_status()
+            configuration["connection_modes"]["workflow_v01"] = readiness()
+            self._json(200, configuration)
             return
         if path == "/api/latest-run":
             value = _load_latest_run()
@@ -463,6 +640,11 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         path = urlparse(self.path).path
+        if self._container_gate(path):
+            return
+        from .workflow_http import routes
+        if routes(self, path):
+            return
         if path == "/api/run-history":
             try:
                 for item in RUN_HISTORY_DIR.glob("*"):
@@ -499,10 +681,27 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
             return
         self._json(200, {"cleared": True})
 
+    def _unsupported_method(self) -> None:
+        """PUT/PATCH: workflow paths answer 404/405 problem bodies; nothing else accepts them."""
+        path = urlparse(self.path).path
+        if self._container_gate(path):
+            return
+        from .workflow_http import routes
+        if routes(self, path):
+            return
+        self._json(405, {"error": "method_not_allowed"})
+
+    do_PUT = do_PATCH = _unsupported_method
+
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if self._container_gate(path):
+            return
+        from .workflow_http import routes
+        if routes(self, path):
+            return
         if path == "/api/local-services/restart":
-            if not _request_is_loopback(self):
+            if not _request_is_trusted_local(self):
                 self._json(403, {"error": "local_restart_only"})
                 return
             root = Path(__file__).resolve().parents[2]
@@ -566,9 +765,17 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
         public_api = path == "/v1/orchestrations"
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length <= 0 or length > MAX_BODY_BYTES:
+            if length <= 0 or length > (8388608 if path == "/v1/orchestrations" else MAX_BODY_BYTES):
                 raise ValueError("요청 크기를 확인해 주세요.")
-            value = json.loads(self.rfile.read(length))
+            from .workflow_store import strict_json
+            value = strict_json(self.rfile.read(length))
+            if path == "/v1/orchestrations" and isinstance(value, dict) and value.get("contract_version") == "vogue-workflow/0.1":
+                from .workflow_http import dispatch, problem
+                if not _request_is_trusted_local(self):
+                    problem(self, 403, "LOCAL_WORKFLOW_ONLY")
+                    return
+                dispatch(self, value)
+                return
             structure = False
             if public_api:
                 if not isinstance(value, dict):
@@ -610,11 +817,11 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 structure = value.get("structure", mode != "agent_http_v01") if isinstance(value, dict) else not public_api
             if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
                 raise ValueError(f"쿼리는 1~{MAX_QUERY_CHARS}자로 입력해 주세요.")
-            if mode not in {"demo", "connected", "agent_http_v01"}:
+            if mode not in {"demo", "connected", "agent_http_v01", "legacy_migrated"}:
                 raise ValueError("지원하지 않는 실행 모드입니다.")
             if not isinstance(structure, bool):
                 raise ValueError("structure 값은 true/false여야 합니다.")
-            if not public_api and mode == "agent_http_v01" and not structure:
+            if not public_api and mode in {"agent_http_v01", "legacy_migrated"} and not structure:
                 self._json(400, {"error": "invalid_request", "message": "에이전트 API 실행에는 질의 구조화 동의가 필요합니다."})
                 return
         except (ValueError, json.JSONDecodeError) as exc:
@@ -623,7 +830,7 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
         try:
             if mode == "connected":
                 orchestrator = build_connected_orchestrator()
-            elif mode == "agent_http_v01":
+            elif mode in {"agent_http_v01", "legacy_migrated"}:
                 orchestrator = build_v01_http_orchestrator()
             else:
                 orchestrator = build_demo_orchestrator()
@@ -632,7 +839,7 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                 # Keep one request ID from query structuring through all pipeline stages.
                 request_id = str(uuid.uuid4())
                 structuring = structure_query_for_ui(query.strip(), request_id, enabled=structure)
-                if mode == "agent_http_v01" and structure:
+                if mode in {"agent_http_v01", "legacy_migrated"} and structure:
                     if structuring.get("status") != "ok":
                         self._json(422, {"error": "query_structuring_failed", "query_structuring": structuring})
                         return
@@ -653,83 +860,14 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
                     return
                 structuring["trend_input_preview"]["sent"] = mode == "agent_http_v01"
             run_options: dict[str, Any] = {"request_id": request_id, "scope": scope}
-            if mode == "agent_http_v01" and trend_query is not None:
+            if mode in {"agent_http_v01", "legacy_migrated"} and trend_query is not None:
                 run_options["trend_query"] = trend_query
             execution = orchestrator.run(query.strip(), **run_options)
             result = execution.to_dict()
+            result["execution_profile"] = "legacy_migrated" if mode in {"agent_http_v01", "legacy_migrated"} else mode
             result["input"] = {"original_query": query.strip(), "trend_query": trend_query}
             upstream = {stage.get("stage"): stage for stage in result.get("stages", [])}
-            planning_body = None
-            if mode == "agent_http_v01":
-                try:
-                    trend_envelope = upstream.get("trend", {}).get("raw_response", {})
-                    stock_envelope = upstream.get("stock", {}).get("raw_response", {})
-                    trend_body = trend_envelope.get("result", trend_envelope)
-                    stock_body = stock_envelope.get("result", stock_envelope)
-                    if not isinstance(trend_body, Mapping) or not isinstance(stock_body, Mapping):
-                        raise ValueError("Upstream trend or stock result is missing")
-                    planning_body = build_migrated_planning_draft(
-                        execution.request_id, query.strip(), scope, trend_query, trend_body, stock_body,
-                    )
-                    plan_stage = {"stage": "planning_draft", "status": planning_body.get("status", "partial"),
-                                  "request_id": execution.request_id, "producer_id": "vogue-orchestrator",
-                                  "producer_schema_version": "1.0",
-                                  "raw_response": {"contract_version": "vogue-planning-draft/1.0",
-                                                   "request_id": execution.request_id,
-                                                   "producer": {"agent_id": "vogue-orchestrator", "schema_version": "1.0"},
-                                                   "status": planning_body.get("status", "partial"), "result": planning_body}}
-                    result["stages"].append(plan_stage)
-                    draft_data = planning_body.get("draft") if isinstance(planning_body.get("draft"), Mapping) else {}
-                    category = draft_data.get("category")
-                    if not isinstance(category, str) or not category.strip():
-                        result["sales_market_review"] = {"status": "not_run", "request_id": execution.request_id,
-                                                           "reason": "planning_draft_category_missing"}
-                        result["stages"].append({"stage": "project_07", "status": "not_run",
-                                                 "request_id": execution.request_id,
-                                                 "error_code": "PLANNING_DRAFT_CATEGORY_MISSING"})
-                        result["status"] = "partial"
-                    else:
-                        product = {"category": category.strip()}
-                        for source_key, target_key in (("season", "season"), ("material", "material"),
-                                                       ("product_type", "product_type"), ("gender", "gender")):
-                            val = draft_data.get(source_key)
-                            if isinstance(val, str) and val.strip():
-                                product[target_key] = val.strip()
-                        p07_draft = {"schema_version": "1.0", "draft_id": execution.request_id, "product": product}
-                        review_envelope = request_sales_market_review(execution.request_id, p07_draft)
-                        review_body = review_envelope.get("result")
-                        producer = review_envelope.get("producer")
-                        if (review_envelope.get("contract_version") != "vogue-sales-market-review/0.1-proposal"
-                                or review_envelope.get("request_id") != execution.request_id
-                                or not isinstance(producer, Mapping) or producer.get("agent_id") != "sales-market-agent"
-                                or not isinstance(review_body, Mapping)
-                                or review_body.get("request_id") != execution.request_id
-                                or review_body.get("schema_version") != producer.get("schema_version")
-                                or review_body.get("status") != review_envelope.get("status")):
-                            raise ValueError("Sales Market review envelope failed validation")
-                        result["sales_market_review"] = review_envelope
-                        result["stages"].append({"stage": "project_07", "status": review_envelope.get("status", "error"),
-                                                 "request_id": execution.request_id,
-                                                 "producer_id": producer.get("agent_id"),
-                                                 "producer_schema_version": producer.get("schema_version"),
-                                                 "raw_response": review_envelope})
-                        if review_envelope.get("status") != "ok":
-                            result["status"] = "partial"
-                except Exception as exc:
-                    result["sales_market_review"] = {"status": "error", "request_id": execution.request_id,
-                                                       "error_code": "SALES_MARKET_REVIEW_FAILED",
-                                                       "error_type": type(exc).__name__}
-                    result["stages"].append({"stage": "project_07", "status": "error",
-                                             "request_id": execution.request_id,
-                                             "error_code": "SALES_MARKET_REVIEW_FAILED",
-                                             "error_type": type(exc).__name__})
-                    result["status"] = "partial"
-            if isinstance(planning_body, Mapping):
-                result["image_generation"] = _image_display_urls({
-                    "status": (planning_body.get("image") or {}).get("status", "not_available")
-                        if isinstance(planning_body.get("image"), Mapping) else "not_available",
-                    "image": planning_body.get("image"), "planning_board": planning_body.get("planning_board"),
-                })
+            planning_body = _legacy_migrated_followup(execution, result, mode, query, scope, trend_query)
             if public_api:
                 result["input"] = {"original_query": query.strip(), "scope": scope}
                 if trend_query is not None:
@@ -768,8 +906,11 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
-    host = os.environ.get("VOGUE_ORCHESTRATOR_HOST", host)
-    port = int(os.environ.get("VOGUE_ORCHESTRATOR_PORT", str(port)))
+    host = (os.environ.get("VOGUE_ORCHESTRATOR_HOST") or "").strip() or host  # blank = default
+    port = int((os.environ.get("VOGUE_ORCHESTRATOR_PORT") or "").strip() or port)
+    runtime = str(os.environ.get("VOGUE_ORCHESTRATOR_RUNTIME") or "").strip().lower()
+    if runtime and runtime not in RUNTIME_MODES:
+        raise ValueError("VOGUE_ORCHESTRATOR_RUNTIME must be 'host' or 'container'.")
     if host not in {"127.0.0.1", "localhost"} and os.environ.get("VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND") != "1":
         raise ValueError("Binding outside loopback requires VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND=1.")
     server = ThreadingHTTPServer((host, port), OrchestratorHandler)

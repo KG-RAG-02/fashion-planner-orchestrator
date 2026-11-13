@@ -6,13 +6,13 @@
     "payload_schema_version": "1.1",
     "method": "pydantic",
     "source_repo": "KG-RAG-02/trend-analysis-agent",
-    "source_branch": "feature/scope-2026-baseline",
-    "source_commit": "741860cd1400",
+    "source_branch": "integration/docker-e2e",
+    "source_commit": "c9ae0dd69172",
     "source_model": "trend_agent.schemas.trend_analysis_result:TrendAnalysisResult",
     "source_files": [
       {
         "path": "src/trend_agent/schemas/trend_analysis_result.py",
-        "sha256": "2cd2fed0387e6eaafaad65bd7b3803b40d16f0b84775dface3fe45d11635950f"
+        "sha256": "596fc4bacf787b3bb209b97eb1d11ad84b98ef67185a00cf5ca5ac8aa2c04c01"
       },
       {
         "path": "src/trend_agent/schemas/trend_query.py",
@@ -408,6 +408,30 @@
           "quote"
         ],
         "title": "EvidenceRecord",
+        "type": "object"
+      },
+      "ExampleImage": {
+        "description": "Style 예시 사진 (D-48). Vogue URL — 결과물 표현은 G-10(링크로만)을 따른다.",
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "basis": {
+            "enum": [
+              "item_link",
+              "section",
+              "article"
+            ],
+            "title": "Basis",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "basis"
+        ],
+        "title": "ExampleImage",
         "type": "object"
       },
       "Fit": {
@@ -1165,6 +1189,13 @@
             ],
             "default": null,
             "title": "Article Id"
+          },
+          "example_images": {
+            "items": {
+              "$ref": "#/$defs/ExampleImage"
+            },
+            "title": "Example Images",
+            "type": "array"
           }
         },
         "required": [
