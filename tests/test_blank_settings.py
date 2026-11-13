@@ -44,6 +44,7 @@ class BlankSettingTests(unittest.TestCase):
             workflow = workflow_http.build_workflow()
             workflow.adapters['trend']({})
             workflow.adapters['planning_draft']({})
+            workflow.adapters['stock']({})
         self.assertIsNone(workflow.artifact_reader)
         self.assertIs(workflow.image, workflow_http.planning_sheet_image)  # the default stage 06 provider
         self.assertEqual(workflow.draft_mode, 'draft_with_visuals')
@@ -51,6 +52,12 @@ class BlankSettingTests(unittest.TestCase):
         self.assertEqual(wire.call_args_list[0].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))
         # P06 makes its two images inside the Draft call: that read waits up to 600 s.
         self.assertEqual(wire.call_args_list[1].kwargs, dict(connect_timeout=3.0, read_timeout=600.0))
+        # A blank stock read timeout means the general read timeout.
+        self.assertEqual(wire.call_args_list[2].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))
+        with environment(**dict(base, VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS='120')), \
+                patch.object(workflow_http, 'post_wire', return_value='sent') as wire:
+            workflow_http.build_workflow().adapters['stock']({})
+        self.assertEqual(wire.call_args.kwargs, dict(connect_timeout=3.0, read_timeout=120.0))
         https = {k: 'https://agents.example.invalid' for k in AGENTS}
         with environment(**dict(base, VOGUE_AGENT_HTTP_DEV_MODE='', **https)), \
                 self.assertRaisesRegex(ConnectorConfigurationError, 'Bearer token is required'):

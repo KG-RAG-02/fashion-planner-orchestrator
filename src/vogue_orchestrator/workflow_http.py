@@ -185,12 +185,16 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
     # P06 generates its two images inside the Draft call, so that one read may take minutes.
     draft_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS',
                                     max(read_timeout, DRAFT_WITH_VISUALS_READ_TIMEOUT_SECONDS) if mode == 'draft_with_visuals' else read_timeout)
+    # Stock works through the trends one after another (about 10 s each with its LLM agent). Keep this read
+    # above the stock agent's own deadline (STOCK_HANDOFF_TIMEOUT_SECONDS) so its TIMEOUT envelope arrives first.
+    stock_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS', read_timeout)
+    stage_timeouts = {'draft': draft_timeout, 'stock': stock_timeout}
     adapters = {}
     for key, variable, route in specs:
         if not env.get(variable):
             raise ConnectorConfigurationError(variable + ' is required.')
         url = _service_url(env, variable, '/v1/agents/' + route)
-        adapters[key] = lambda payload, u=url, t=(draft_timeout if key == 'draft' else read_timeout): post_wire(
+        adapters[key] = lambda payload, u=url, t=stage_timeouts.get(key, read_timeout): post_wire(
             u, payload, token, connect_timeout=connect_timeout, read_timeout=t)
     image = None
     if images_enabled(env):

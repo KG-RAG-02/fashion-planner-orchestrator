@@ -97,6 +97,9 @@ services:
       STOCK_CACHE_DIR: /cache
       STOCK_IMAGE_CACHE_DIR: /tmp/stock-images
       STOCK_LLM_PROVIDER: policy
+      # Whole-request deadline of the stock routes (default 60 s): trends are processed one after another,
+      # about 10 s each with the LLM agent; 2026-11-13: 60 -> 90 s after an 11-trend run timed out.
+      STOCK_HANDOFF_TIMEOUT_SECONDS: "90"
     networks: [backend]
     mem_limit: 2g
 
@@ -172,6 +175,8 @@ services:
       VOGUE_WORKFLOW_STORE_DIR: /app/.local/workflow
       VOGUE_PEER_ARTIFACT_ROOT: /peer
       VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS: "75"
+      # Above the stock deadline (90 s) so the stock TIMEOUT envelope arrives before P08 gives up.
+      VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS: "120"
       # P06 generates two images inside the Draft call; only that read waits longer.
       VOGUE_WORKFLOW_DRAFT_MODE: draft_with_visuals
       VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS: "600"

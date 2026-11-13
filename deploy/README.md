@@ -36,6 +36,11 @@ browser ──127.0.0.1:8765──► orchestrator (UI · workflow · artifact s
 - 실데이터(Aura 그래프, R2 DuckDB)로 연결·데이터·지연·payload 크기를 확인합니다. 유료 모델은 부르지 않습니다. P06 시안 이미지는 fixture입니다.
 - 질의 구조화도 생략합니다. 대신 `e2e/queries/rehearsal-trend-query.json`의 TrendQuery를 그대로 보냅니다.
 
+**요청 시간 제한** (2026-11-13)
+- Stock 요청 전체 deadline은 90초입니다(`STOCK_HANDOFF_TIMEOUT_SECONDS`, 기본 60초).
+- P08은 Stock 응답을 120초까지 기다립니다(`VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS`).
+- Stock은 트렌드를 차례로 처리하고 LLM 사용 시 트렌드당 약 10초가 걸립니다. 트렌드가 많으면(예: 11개) 90초도 넘을 수 있습니다.
+
 **live 프로필**
 - 한 번만 실행됩니다. guard 파일(`~/.config/vogue/live-run.done`)이 있으면 다시 실행되지 않습니다.
 - 이미지 재시도는 꺼져 있습니다.
