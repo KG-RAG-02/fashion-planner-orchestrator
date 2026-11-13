@@ -180,6 +180,11 @@ class FakeAgent(BaseHTTPRequestHandler):
 
 
 class SystemStatusTests(EndpointTestBase, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        from _baseline_support import pin_proposed_baseline
+        pin_proposed_baseline(self)
+
     def agent(self, status):
         server = ThreadingHTTPServer(('127.0.0.1', 0), FakeAgent)
         FakeAgent.statuses[server.server_port] = status

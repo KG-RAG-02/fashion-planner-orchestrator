@@ -38,6 +38,8 @@ def frozen(baseline):
 class ContractGateTests(unittest.TestCase):
     def setUp(self):
         self.baseline = json.loads((CONTRACT_ROOT / 'baseline.json').read_text(encoding='utf-8'))
+        from _baseline_support import pin_proposed_baseline
+        self.baseline = pin_proposed_baseline(self)
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = Path(tmp.name)

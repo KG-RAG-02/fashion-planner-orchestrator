@@ -14,6 +14,10 @@ from vogue_orchestrator.workflow_contract import WorkflowContract
 
 
 class BoundaryTests(unittest.TestCase):
+    def setUp(self):
+        from _baseline_support import pin_proposed_baseline
+        pin_proposed_baseline(self)
+
     def handler(self, body, path='/api/workflow/run'):
         h=object.__new__(OrchestratorHandler)
         h.path=path;h.command='POST';h.client_address=('127.0.0.1',12345)
