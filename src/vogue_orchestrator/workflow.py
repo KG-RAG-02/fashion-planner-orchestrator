@@ -27,6 +27,14 @@ class WireResponse:
     truncated: bool = False
 
 
+class ImageStageError(RuntimeError):
+    """An image-stage failure decided by P08 itself (e.g. the provider ignored the prompt)."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
 class StageFailure(RuntimeError):
     def __init__(self, code, http_status=502, artifact=None):
         self.code, self.http_status, self.artifact = code, http_status, artifact
@@ -174,6 +182,15 @@ class Workflow:
                                    status=status, input_sha256=logical_hash, response_sha256=response_hash,
                                    started_at=start, completed_at=now(), errors=errors or []))
 
+    def _image_input(self, body, image_request):
+        """Build the provider input; the user's uploaded reference images are read back from the store."""
+        from .image_request import build_image_input
+        rid = body['request_id']
+        uploads = []
+        for ref in (body.get('user_input') or {}).get('images') or []:
+            uploads.append((self.store.verify(ref, owner=rid), ref.get('media_type')))
+        return build_image_input(image_request, user_images=uploads)
+
     def _image(self, body, attempt):
         if self.image is None:
             body['status'] = 'partial'
@@ -194,6 +211,7 @@ class Workflow:
         if checkpoint and checkpoint[0] == 'done':
             record = dict(checkpoint[1])
             provider_error = record.pop('provider_error', None)
+            record.pop('provider_meta', None)  # diagnostics live in the checkpoint only (final_image allows no extra keys)
             body['final_image'] = record
         elif checkpoint:
             # Crash after provider invocation must not silently issue a second charge.
@@ -202,17 +220,36 @@ class Workflow:
             request_artifact = self.store.put(canonical(image_request))
             self.store.checkpoint_write(key + ':request', 'done', dict(stage='final_image', request_artifact=request_artifact))
             self.store.checkpoint_write(key, 'started')
+            provider_meta = {}
             try:
-                data, mime = self.image(copy.deepcopy(image_request))
+                # What the provider receives (image_request.py): ordered verbatim sections, evidence as codes,
+                # reference photos as images. Recorded before the call so a failed paid call stays diagnosable.
+                image_input = self._image_input(body, image_request)
+                provider_meta.update(prompt_artifact=self.store.put(canonical(image_input.record())), prompt_version=image_input.prompt_version,
+                                     prompt_chars=len(image_input.full_prompt), reference_images=[ref.meta() for ref in image_input.references],
+                                     trends_kept=image_input.stats['trends_kept'], trends_total=image_input.stats['trends_total'])
+                self.store.checkpoint_write(key + ':prompt', 'done', dict(provider_meta))
+                result = self.image(dict(copy.deepcopy(image_request), image_input=image_input.provider_fields()))
+                data, mime = result[0], result[1]
+                provider_meta.update(getattr(result, 'meta', None) or {})
                 checked_image(data, mime)
+                if provider_meta.get('prompt_ignored'):
+                    # Generated without reading the prompt: keep the bytes privately, do not present them.
+                    provider_meta['ignored_image_artifact'] = self.store.put(data, mime)
+                    raise ImageStageError('IMAGE_PROMPT_IGNORED')
                 artifact = self.store.put(data, mime)
                 body['final_image'] = dict(status='generated', artifact=artifact, lineage=lineage, reason=None, provider_calls=1)
             except Exception as exc:
-                # Keep the provider's own code (e.g. IMAGE_API_HTTP_403) so a failed paid call is diagnosable;
-                # codes and exception type names carry no secrets. It lives in the checkpoint, not in final_image.
+                # Keep the provider's own code (e.g. IMAGE_API_HTTP_400:string_above_max_length:prompt) so a failed
+                # call is diagnosable; codes carry no secrets. They live in the checkpoint, not in final_image.
                 provider_error = str(getattr(exc, 'code', '') or type(exc).__name__)[:80]
+                provider_meta.update(getattr(exc, 'meta', None) or {})
                 body['final_image'] = dict(status='failed', artifact=None, lineage=lineage, reason='IMAGE_GENERATION_FAILED', provider_calls=1)
-            stored = dict(body['final_image'], provider_error=provider_error) if provider_error else body['final_image']
+            stored = dict(body['final_image'])
+            if provider_error:
+                stored['provider_error'] = provider_error
+            if provider_meta:
+                stored['provider_meta'] = provider_meta
             self.store.checkpoint_write(key, 'done', stored)
         image = body['final_image']
         message = 'Final image unavailable; prior sources retained.' + (f' Provider error: {provider_error}.' if provider_error else '')

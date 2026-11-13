@@ -10,7 +10,7 @@
     "source_files": [
       {
         "path": "src/vogue_orchestrator/workflow_http.py",
-        "sha256": "aa668aebcae5e34983d93be52668a69d20c090e5c7cdd6e1ab3d2b1982647c4d"
+        "sha256": "5448e8b3ffe6a6bf55de3e9a168203e41ea08436337b91ce5cabeea370781ba1"
       },
       {
         "path": "src/vogue_orchestrator/workflow_store.py",

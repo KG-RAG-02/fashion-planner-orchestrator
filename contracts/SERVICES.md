@@ -222,6 +222,26 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - Trend나 Draft가 `no_results` → 그 자리에서 멈추고 결과를 `no_results`로 둡니다.
   - 어느 단계든 `error` → 즉시 멈추고 이미지는 0회입니다.
   - Review가 `no_results` → 결과는 `partial`이고 이미지는 0회입니다.
+- **최종 이미지 요청** (P08 → OpenAI Images API, `src/vogue_orchestrator/image_request.py`, prompt `reviewed_image` v2 = `p08-reviewed-image/2`)
+  - 원천 값은 원문 그대로 보내고, 요약·재작성·잘라내기를 하지 않습니다.
+  - 섹션 순서는 `1_request → 2_draft → 3_trend → 4_stock → 5_review → 6_limitations`입니다.
+  - 근거는 ID 코드로 보냅니다(evidence_id, product_id, similar_product_codes).
+  - P07 원본 지표·근거는 이미지 요청에서만 제외합니다. P07 응답, 실행 기록, 기획서 PNG는 그대로입니다.
+  - 완전 중복과 무결성 메타데이터(해시, artifact 참조, lineage)는 prompt에 넣지 않고 저장 기록에 둡니다.
+  - 트렌드는 Trend 응답 순서로 앞의 3개만 보냅니다. 나머지는 이름·코드를 기록에 남깁니다.
+  - 전송 경로
+    - Stock 상품 사진과 사용자 업로드 이미지는 base64 텍스트가 아니라 참고 이미지로 보냅니다(`/v1/images/edits`, data URL, 최대 16장).
+    - 참고 이미지가 없으면 `/v1/images/generations`로 보냅니다.
+    - 공통 옵션: `size=1536x1024`, `quality=high`, `output_format=png`.
+  - prompt가 32,000자(문서상 한도)를 넘으면 HTTP 호출 없이 `IMAGE_PROMPT_TOO_LONG`으로 실패합니다.
+  - 진단 정보는 checkpoint에만 남고 `final_image`에는 넣지 않습니다.
+    - 남기는 것: 발신 prompt artifact, 길이, endpoint, `usage`(`text_tokens`), `x-request-id`, 오류 본문의 code·type·param(message는 저장하지 않음)
+    - `text_tokens`가 64 미만이면 prompt가 무시된 것으로 보고 `IMAGE_PROMPT_IGNORED`로 실패 처리합니다. 이때 이미지는 private로만 보관합니다.
+  - 측정(2026-11-13)
+    - live: 4,026,589자 → 13,968자(참고 이미지 1장)
+    - rehearsal(트렌드 7개): 26,337자(트렌드 3개)
+    - stub: 10,113자
+  - 확인: `python -m vogue_orchestrator.image_request --input <envelope.json>`, `--diagnostics --request-id <id> --store-dir <dir>`(읽기 전용)
 - **계약 gate**: `contracts/workflow/baseline.json`이 frozen이어야 실행합니다. 아니면 409 `CONTRACT_NOT_FROZEN`입니다. stub은 `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`로 development 모드로 돌며, 이때 결과에 limitation이 붙습니다.
 
 **증거**
