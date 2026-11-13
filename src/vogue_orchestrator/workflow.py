@@ -190,8 +190,11 @@ class Workflow:
         key = self._key(rid, 'final_image', payload, attempt)
         start = now()
         checkpoint = self.store.checkpoint(key)
+        provider_error = None
         if checkpoint and checkpoint[0] == 'done':
-            body['final_image'] = checkpoint[1]
+            record = dict(checkpoint[1])
+            provider_error = record.pop('provider_error', None)
+            body['final_image'] = record
         elif checkpoint:
             # Crash after provider invocation must not silently issue a second charge.
             body['final_image'] = dict(status='failed', artifact=None, lineage=lineage, reason='IMAGE_OUTCOME_UNKNOWN', provider_calls=1)
@@ -204,11 +207,16 @@ class Workflow:
                 checked_image(data, mime)
                 artifact = self.store.put(data, mime)
                 body['final_image'] = dict(status='generated', artifact=artifact, lineage=lineage, reason=None, provider_calls=1)
-            except Exception:
+            except Exception as exc:
+                # Keep the provider's own code (e.g. IMAGE_API_HTTP_403) so a failed paid call is diagnosable;
+                # codes and exception type names carry no secrets. It lives in the checkpoint, not in final_image.
+                provider_error = str(getattr(exc, 'code', '') or type(exc).__name__)[:80]
                 body['final_image'] = dict(status='failed', artifact=None, lineage=lineage, reason='IMAGE_GENERATION_FAILED', provider_calls=1)
-            self.store.checkpoint_write(key, 'done', body['final_image'])
+            stored = dict(body['final_image'], provider_error=provider_error) if provider_error else body['final_image']
+            self.store.checkpoint_write(key, 'done', stored)
         image = body['final_image']
-        errors = [] if image['status'] == 'generated' else [dict(code=image['reason'], message='Final image unavailable; prior sources retained.', stage='final_image', fatal=False, retryable=True)]
+        message = 'Final image unavailable; prior sources retained.' + (f' Provider error: {provider_error}.' if provider_error else '')
+        errors = [] if image['status'] == 'generated' else [dict(code=image['reason'], message=message, stage='final_image', fatal=False, retryable=True)]
         self._trace(body, 'final_image', payload, start, 'ok' if not errors else 'error', image['artifact']['sha256'] if image['artifact'] else None, errors)
         body['errors'].extend(errors)
         if errors:

@@ -157,6 +157,21 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.run_flow(),retried)
         self.assertEqual(len(self.trace),6)
 
+    def test_image_failure_keeps_the_provider_code_in_the_error_message(self):
+        from vogue_orchestrator.workflows.image_generation import ImageProviderError
+        def failing(payload):
+            self.trace.append('final_image')
+            raise ImageProviderError('IMAGE_API_HTTP_403')
+        self.workflow.image = failing
+        first = self.run_flow()
+        result = first['envelope']['result']
+        self.assertEqual(result['final_image']['reason'], 'IMAGE_GENERATION_FAILED')
+        self.assertNotIn('provider_error', result['final_image'])
+        self.assertEqual(result['errors'][-1]['code'], 'IMAGE_GENERATION_FAILED')
+        self.assertIn('Provider error: IMAGE_API_HTTP_403.', result['errors'][-1]['message'])
+        self.assertEqual(self.run_flow(), first)
+        self.assertEqual(self.trace.count('final_image'), 1)
+
     def test_text_and_image_reference_reaches_full_draft(self):
         image = self.store.upload(self.image_data, 'image/png', self.rid)
         self.sample['input']['user_input']['images'] = [image]
