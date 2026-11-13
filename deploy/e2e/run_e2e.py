@@ -16,6 +16,7 @@ Profiles:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -195,7 +196,28 @@ def main(argv=None):
         check("md-decision POST records the decision", status == 201, status)
         status, after, _, _, _ = call(base, "GET", f"/api/workflow/runs/{request_id}/md-decision")
         check("decision history has the new record", status == 200 and len((after or {}).get("decisions", [])) >= 1)
+
+    print("4. planning sheet (기획서 PNG)")
+    status, _, png, elapsed, ctype = call(base, "GET", f"/api/workflow/runs/{request_id}/planning-sheet.png", timeout=120)
+    size = png_size(png)
+    check("planning sheet is a PNG", status == 200 and ctype == "image/png" and size is not None, f"{status} {ctype} {len(png)}B in {elapsed}s")
+    check("planning sheet has the board width (3200 px)", bool(size) and size[0] == 3200, size)
+    if status == 200 and size:
+        target = Path(args.out).expanduser().with_suffix("") if args.out else Path.cwd() / f"{args.profile}-{request_id}"
+        sheet_path = target.parent / (target.name + "-planning-sheet.png")
+        sheet_path.parent.mkdir(parents=True, exist_ok=True)
+        sheet_path.write_bytes(png)
+        evidence["planning_sheet"] = {"path": str(sheet_path), "bytes": len(png), "width": size[0], "height": size[1],
+                                      "sha256": hashlib.sha256(png).hexdigest()}
+        print(f"planning sheet: {sheet_path}")
     return finish(check, evidence, args.out)
+
+
+def png_size(data):
+    """(width, height) from the IHDR chunk, or None when the bytes are not a PNG."""
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        return None
+    return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
 
 
 def finish(check, evidence, out):

@@ -82,6 +82,15 @@ deploy/bin/vogue down stub
 
 - end-to-end 결과는 `~/VOGUE-archive/e2e/<profile>-<시각>.json`에 남습니다.
   - 내용: 단계별 상태, 지연, 응답 크기, 이미지 호출 수, 검증 결과.
+- **실행 결과물(기획서 PNG)** 은 같은 위치의 `<profile>-<시각>-planning-sheet.png`입니다.
+  - 양식: new-product-agent `docs/design/evidence-linked-planning-board.md`의 근거 연결 기획 보드(ISSUE → INSIGHT → PROPOSAL, 섹션 8개, 신제품 이미지, 근거 요약)와 상품기획서 항목(CandidateBrief).
+  - 저장된 실행 결과만 그립니다. 값을 다시 계산하지 않고, 없는 값은 "미제공·미확인"으로 둡니다.
+  - UI에서는 실행 요약 카드의 **기획서 PNG 저장** 버튼, API로는 `GET /api/workflow/runs/{id}/planning-sheet.png`입니다.
+  - 스택을 띄우지 않고 저장된 실행을 다시 그리려면(volume 읽기 전용, 네트워크 없음):
+
+```bash
+deploy/bin/vogue sheet live e2e-live-xxxxxxxxxxxx
+```
 - 실행 기록은 P08 volume에 보존됩니다. UI의 Runs 화면이나 `GET /api/workflow/runs`로 다시 볼 수 있습니다.
 - MD 결정(채택/수정/보류)은 append-only로 기록됩니다. 결과 원문은 바뀌지 않습니다.
 

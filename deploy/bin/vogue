@@ -8,6 +8,7 @@
 #   vogue rehearsal                   Aura + R2 data, no paid model, on 127.0.0.1:8765 + end-to-end check
 #   vogue live "<planning brief>"     the single paid run (guarded: refuses a second run)
 #   vogue probe <profile>             in-stack auth (401/401/4xx) and inbound-gate (403) probes
+#   vogue sheet <profile> <request>   render a stored run's 기획서 PNG offline (read-only volume, no network)
 #   vogue up|ps|logs|down <profile>   lifecycle helpers (down never removes volumes)
 set -euo pipefail
 
@@ -113,6 +114,16 @@ case "$cmd" in
     date -u +%Y-%m-%dT%H:%M:%SZ > "$LIVE_GUARD"
     "$PY" "$DEPLOY/e2e/run_e2e.py" --base "http://127.0.0.1:8765" --profile live --query "$query" \
       --skip-replay --timeout 900 --out "$EVIDENCE_DIR/live-$(stamp).json" "$@" ;;
+  sheet)
+    profile="${1:?usage: vogue sheet <stub|rehearsal|live> <request_id>}"; rid="${2:?usage: vogue sheet <profile> <request_id>}"
+    profile_settings "$profile"
+    [[ "$rid" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$ ]] || die "invalid request id: $rid"
+    mkdir -p "$EVIDENCE_DIR"
+    out="$EVIDENCE_DIR/${profile}-${rid}-planning-sheet.png"
+    docker run --rm --network none --read-only -v "vogue_${LABEL}_p08_state:/state:ro" vogue/orchestrator:dev \
+      python -m vogue_orchestrator.planning_sheet --request-id "$rid" --store-dir /state/workflow --output - > "$out.tmp"
+    mv "$out.tmp" "$out"
+    echo "planning sheet: $out" ;;
   ps)
     compose "${1:?profile}" ps -a ;;
   logs)
@@ -121,7 +132,7 @@ case "$cmd" in
   down)
     compose "${1:?profile}" down --remove-orphans ;;
   help|-h|--help)
-    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' ;;
   *)
     die "unknown command '$cmd' (try: vogue help)" ;;
 esac
