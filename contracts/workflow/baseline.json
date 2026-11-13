@@ -2,8 +2,8 @@
   "format": "vogue-workflow-baseline/1",
   "contract_version": "workflow-contract/0.2.0",
   "transport_version": "vogue-workflow/0.1",
-  "state": "proposed",
-  "producer_consumer_validated": false,
+  "state": "frozen",
+  "producer_consumer_validated": true,
   "snapshot_sha256": "703548af01c2f94492300922840f82536a26023a31393365f68d81cd4be3011f",
   "files": {
     "common.schema.json": "3b975dbc370c84673399bc14526bbb4de4d3bc27c75a0fda8e89bce6a6930568",
@@ -15,10 +15,113 @@
     "upstream/stock-result-1.0.schema.json": "f2b6984bb37cca4333559e4e05b88312ecf511f578803adee51885c344e6ce00",
     "upstream/trend-result-1.1.schema.json": "7618fb459eb68f56bb12d2c5b171ff0a1fcd066a9ae987c2b4f9a3095d74dbef"
   },
-  "evidence": {},
-  "sources": {},
-  "recorded_at": "2026-11-13T05:26:54+00:00",
+  "evidence": {
+    "reference_fixtures": {
+      "cases": 76,
+      "passed": 76,
+      "failed": 0,
+      "failed_cases": []
+    },
+    "mutation_probes": {
+      "cases": 7,
+      "rejected": 7,
+      "accepted": []
+    },
+    "vendored_copies": {
+      "new-product-agent": {
+        "path": "new-product-agent/contracts/workflow-proposed",
+        "files": {
+          "common.schema.json": "match",
+          "integrated-result.schema.json": "match",
+          "planning-draft-request.schema.json": "match",
+          "planning-draft-response.schema.json": "match",
+          "sales-market-review-request.schema.json": "match",
+          "sales-market-review-response.schema.json": "match",
+          "upstream/stock-result-1.0.schema.json": "match",
+          "upstream/trend-result-1.1.schema.json": "match"
+        },
+        "status": "match"
+      },
+      "sales-market-agent": {
+        "path": "sales-market-agent/src/market_research_agent/resources/workflow_contract",
+        "files": {
+          "common.schema.json": "match",
+          "integrated-result.schema.json": "match",
+          "planning-draft-request.schema.json": "match",
+          "planning-draft-response.schema.json": "match",
+          "sales-market-review-request.schema.json": "match",
+          "sales-market-review-response.schema.json": "match",
+          "upstream/stock-result-1.0.schema.json": "match",
+          "upstream/trend-result-1.1.schema.json": "match"
+        },
+        "status": "match"
+      }
+    },
+    "suites": [
+      {
+        "command": "env PYTHONPATH=src PYTHONPYCACHEPREFIX=~/.cache/vogue-pycache ~/.cache/vogue-venvs/orchestrator/bin/python -m unittest discover -s tests",
+        "returncode": 0,
+        "output_sha256": "41cfae3dec0f91fa5e306588c81a774cb55b8565a159a18d03aba14e0716e43f",
+        "output_tail": [
+          "Ran 470 tests in 9.704s",
+          "",
+          "OK"
+        ],
+        "started_at": "2026-11-13T05:33:28+00:00"
+      },
+      {
+        "command": "node --test web/tests/model.test.mjs",
+        "returncode": 0,
+        "output_sha256": "008c5ca5b5f3d7de6c2f1f02461fcecf69b54c55261af794df6fa037b060ba9a",
+        "output_tail": [
+          "ℹ skipped 0",
+          "ℹ todo 0",
+          "ℹ duration_ms 80.573916"
+        ],
+        "started_at": "2026-11-13T05:33:38+00:00"
+      },
+      {
+        "command": "deploy/bin/vogue stub",
+        "returncode": 0,
+        "output_sha256": "bedfe86dcc1893175ad29894058301ba13d39c4df63c3f2627fc0ca1f3646502",
+        "output_tail": [
+          " Container vogue-stub-volume-init-1 Exited ",
+          " Container vogue-stub-stock-1 Healthy ",
+          " Container vogue-stub-new-product-1 Healthy"
+        ],
+        "started_at": "2026-11-13T05:33:38+00:00"
+      }
+    ]
+  },
+  "sources": {
+    "trend-analysis-agent": {
+      "branch": "integration/docker-e2e",
+      "head": "c9ae0dd691725aab61de3b506df721c64bfc6c02",
+      "clean": true
+    },
+    "stock-agent": {
+      "branch": "integration/docker-e2e",
+      "head": "2572be16e7145200db7f306d1680af28cf51e2b3",
+      "clean": true
+    },
+    "new-product-agent": {
+      "branch": "integration/docker-e2e",
+      "head": "87954581504076bc8501e9ab88c31aac684acf60",
+      "clean": true
+    },
+    "sales-market-agent": {
+      "branch": "integration/docker-e2e",
+      "head": "775b6b915c29df7cc69e59a800ba8b7355bcb7ac",
+      "clean": true
+    },
+    "vogue-orchestrator": {
+      "branch": "integration/docker-e2e",
+      "head": "72e706f528516059bea278d5c0029f938b092030",
+      "clean": true
+    }
+  },
+  "recorded_at": "2026-11-13T05:33:27+00:00",
   "notes": [
-    "Proposed baseline: no producer/consumer validation claimed. Run --freeze to record evidence."
+    "Frozen = contract evidence only (offline fixtures, owner serializer/parser boundary and in-process TCP suites). Live data, model quality and browser acceptance are recorded separately."
   ]
 }
