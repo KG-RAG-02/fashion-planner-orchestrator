@@ -241,7 +241,8 @@ class SystemStatusTests(EndpointTestBase, unittest.TestCase):
         errors = {a['id']: a['error'] for a in body['agents']}
         self.assertEqual(errors, {'trend': 'URL_POLICY_REJECTED', 'stock': 'TIMEOUT', 'new-product': 'NOT_CONFIGURED',
                                   'sales-market': 'NOT_CONFIGURED'})
-        self.assertEqual((body['runtime'], body['contract']['gate'], body['image']['provider']), ('container', 'closed', 'openai'))
+        self.assertEqual((body['runtime'], body['contract']['gate'], body['image']['provider'], body['draft']['mode']),
+                         ('container', 'closed', 'planning_sheet', 'draft_with_visuals'))
 
     def test_status_is_trusted_local_only(self):
         with environment():

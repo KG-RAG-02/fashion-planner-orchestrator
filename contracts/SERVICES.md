@@ -19,8 +19,9 @@ UI ─POST /api/workflow/run─► orchestrator(P08)
   1. trend        POST /v1/agents/trend-analysis-agent/runs     vogue-handoff/0.1  → Trend 1.1
   2. stock        POST /v1/agents/stock-agent/runs              vogue-handoff/0.1  (input = Trend result 원문) → Stock 1.0
   3. new-product  POST /v1/agents/new-product-agent/drafts      vogue-workflow/0.1 → planning-draft/1.0
+                  (mode draft_with_visuals: 트렌드 반영 신상품 이미지 + 착장 이미지를 P06이 생성)
   4. sales-market POST /v1/agents/sales-market-agent/reviews    vogue-workflow/0.1 → sales-market-review/1.0
-  5. integration  (P08 내부)  6. final_image (P08, 리뷰 이후 최대 1회)
+  5. integration  (P08 내부)  6. final_image (P08이 기획안 사진을 합성, 이미지 모델 호출 없음)
   → integrated-result/1.0 → UI · MD 채택/수정/보류
 ```
 
@@ -121,13 +122,21 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | 이미지 · 포트 · 호스트 | `vogue/new-product:dev` · 8767 · `new-product` |
 | 실행 | `VOGUE_HTTP_MODE=private`: 평문 HTTP이며 모든 경로에 bearer 필요. TLS가 필요하면 `service` 모드를 씀 |
 | liveness | `GET /api/health`. private·service 모드에서는 bearer 필요 |
-| 쓰기 경로 | `/app/data/local`(초안 revision ledger SQLite). 이 경로가 없으면 시작하지 않음 |
+| 쓰기 경로 | `/app/data/local`(초안 revision ledger SQLite, 시안 이미지 `p06-artifacts/images/<sha256>.<ext>`). 이 경로가 없으면 시작하지 않음 |
 
 | 메서드 · 경로 | 입력 | 출력 |
 |---|---|---|
-| `POST /v1/agents/new-product-agent/drafts` | `vogue-workflow/0.1`. 본문 최대 8 MiB. `input{mode:"draft_only", user_input, planning_request, trend_response, stock_response, stock_call_context}`. 보존된 Trend·Stock 원문 bytes를 `/artifacts/p08/blobs`에서 크기·sha256으로 검증 → `agents/new-product-agent/input/planning-draft-request-1.0.contract.json` | `planning-draft/1.0`. `draft_identity{draft_id, revision, content_sha256}`, `draft{title, category, season, claims[evidence_refs], open_questions, md_decision_required, limitations}`, `source_request`와 그 sha, `image_generation_calls:0`, `review_calls:0` → `.../output/planning-draft-response-1.0.contract.json` |
+| `POST /v1/agents/new-product-agent/drafts` | `vogue-workflow/0.1`. 본문 최대 8 MiB. `input{mode:"draft_only"\|"draft_with_visuals", user_input, planning_request, trend_response, stock_response, stock_call_context}`. 보존된 Trend·Stock 원문 bytes를 `/artifacts/p08/blobs`에서 크기·sha256으로 검증 → `agents/new-product-agent/input/planning-draft-request-1.0.contract.json` | `planning-draft/1.0`. `draft_identity{draft_id, revision, content_sha256}`, `draft{title, category, season, claims[evidence_refs], open_questions, md_decision_required, limitations, concept?, visuals?}`, `source_request`와 그 sha, `image_generation_calls`(0–2, visuals의 provider_calls 합), `review_calls:0` → `.../output/planning-draft-response-1.0.contract.json` |
 
-- **상태**: 200 응답은 **항상 `partial`**입니다. 규칙 기반 초안이라 한계 문구가 항상 붙습니다. `ok`·`no_results`는 아직 만들어지지 않습니다.
+- **mode `draft_with_visuals`** (workflow-contract 0.2.0, P08 기본값)
+  - `draft.concept`: 규칙 기반 상품 사양(product_definition, attributes, risks, questions). 텍스트 모델은 쓰지 않으며, 근거는 evidence_id 코드입니다.
+  - `draft.visuals.product`: Trend 근거로 만든 신상품 이미지(`concept_image` prompt, Images API generations)
+  - `draft.visuals.outfit`: 같은 신상품을 입은 착장 이미지(Images API edits, 신상품 이미지가 참고 이미지)
+    - 착장 역할 규칙 `outfit-role-pairing-v2`가 Stock 상품을 상의·하의로 짝지으면, Stock 응답에 들어 있는 그 상품 사진을 함께 참고합니다. 짝이 없으면 단독 착용입니다.
+  - 이미지는 `artifact://p06/images/<sha256>.<ext>`로 참조합니다. P08이 `/peer/p06` 읽기 전용 마운트에서 크기·sha256을 검증해 가져갑니다.
+  - 같은 요청은 저장된 응답을 그대로 돌려줍니다. 재시도해도 다시 과금되지 않습니다.
+  - 공급자: `VOGUE_DRAFT_IMAGE_PROVIDER=fixture`(오프라인 결정적 PNG, stub·rehearsal) 또는 `openai`(live 전용, `OPENAI_API_KEY`, 모델 `VOGUE_DRAFT_IMAGE_MODEL`, 기본 `gpt-image-2.5-sunburst`). 공급자가 없으면 503 `VISUALS_PROVIDER_REQUIRED`입니다.
+- **상태**: 맡은 산출물 기준입니다(2026-11-13 결정). 그 mode의 산출물(초안, visuals 모드면 두 이미지)을 모두 만들고 Stock이 `ok`이면 `ok`입니다. 데이터 공백은 limitations에 남깁니다. 이미지 하나라도 실패·생략이면 `partial`입니다.
 - **revision**: 같은 입력을 다시 보내면 저장된 결과를 그대로 돌려줍니다. 입력이 바뀌면 revision이 1 올라갑니다.
 - **오류**
   - 400: `INVALID_JSON`, `INVALID_CONTENT_LENGTH`, `INCOMPLETE_BODY`
@@ -135,15 +144,15 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - 405: `METHOD_NOT_ALLOWED`, `Allow: POST` 헤더 포함
   - 413, 415
   - 422: `UNSUPPORTED_CONTRACT_VERSION`, `SCHEMA_VIOLATION`, `INVALID_ARTIFACT_PATH`, `ARTIFACT_SIZE_MISMATCH`, `ARTIFACT_HASH_MISMATCH`, `UPSTREAM_STOP_REQUIRED`
-  - 503: `PROPOSED_CONTRACT_DISABLED`, `SERVICE_BUSY`, `ARTIFACT_READER_REQUIRED`, `ARTIFACT_UNAVAILABLE`
+  - 503: `PROPOSED_CONTRACT_DISABLED`, `SERVICE_BUSY`, `ARTIFACT_READER_REQUIRED`, `ARTIFACT_UNAVAILABLE`, `VISUALS_PROVIDER_REQUIRED`
   - 504, 500
 - **계약 고정**: `contracts/workflow-proposed/snapshot.json`이 schema bytes를 sha256으로 고정합니다.
-- **환경변수**: `VOGUE_HTTP_MODE`, `VOGUE_HOST/PORT`, `VOGUE_AGENT_SERVICE_BEARER_TOKEN`, `VOGUE_EXECUTION_PROFILE=draft_only`, `VOGUE_WORKFLOW_DRAFT_ENABLED=true`, `VOGUE_UPSTREAM_ARTIFACT_ROOT=/artifacts`
+- **환경변수**: `VOGUE_HTTP_MODE`, `VOGUE_HOST/PORT`, `VOGUE_AGENT_SERVICE_BEARER_TOKEN`, `VOGUE_EXECUTION_PROFILE=draft_only`, `VOGUE_WORKFLOW_DRAFT_ENABLED=true`, `VOGUE_UPSTREAM_ARTIFACT_ROOT=/artifacts`, `VOGUE_DRAFT_IMAGE_PROVIDER`, `VOGUE_DRAFT_ARTIFACT_DIR=/app/data/local/p06-artifacts`, (live) `OPENAI_API_KEY`, `VOGUE_DRAFT_IMAGE_MODEL`
 - **기존 경로**
   - `POST /v1/agents/new-product-agent/runs`(`vogue-handoff/0.3`) → `.../input/planning-draft-input-0.3.contract.json`
   - `/api/*` 프로토타입 경로
   - 모두 private 모드에서 bearer가 필요합니다.
-- **증거**: 테스트 142건(`tests/test_draft_only.py`, `tests/test_private_mode.py`, `tests/test_healthcheck.py`)
+- **증거**: 테스트 155건(`tests/test_draft_only.py`, `tests/test_draft_visuals.py`, `tests/test_private_mode.py`, `tests/test_healthcheck.py`)
 
 ## 4. sales-market-agent (P07 · 시장 검토)
 
@@ -158,7 +167,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 |---|---|---|
 | `POST /v1/agents/sales-market-agent/reviews` | `vogue-workflow/0.1`. 본문 최대 8 MiB. `input{planning_draft: 보존된 Draft 전체, derived_view\|null}`. Draft의 원문 bytes를 `/artifacts/p08/blobs`에서 검증 → `agents/sales-market-agent/input/sales-market-review-request-1.0.contract.json` | `sales-market-review/1.0`. `review_identity`와 `review{reviewed_draft, draft_response_sha256, findings, evidence, metrics, limitations, observation}`. artifact는 `artifact://p07/reviews/<sha>.json` → `.../output/sales-market-review-response-1.0.contract.json` |
 
-- **상태**: `partial`·`no_results`는 200, `error`는 503/504입니다. **`ok`는 만들어지지 않습니다.**
+- **상태**: `ok`·`no_results`는 200, `error`는 503/504입니다. 소견이나 지표를 만들면 `ok`입니다(2026-11-13 결정, 맡은 산출물 기준). 데이터 공백은 limitations와 `missing_reason`에 남깁니다.
 - **metric**: `current_company_sales`는 항상 `null`이고 `missing_reason`이 붙습니다.
 - **오류**
   - 400, 401, 405(`Allow: POST`)
@@ -192,22 +201,23 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | `POST /v1/input-images` | PNG·JPEG·WebP, 최대 10 MiB. `X-Request-ID` 헤더 필요. 201과 private artifact ref 반환 |
 | `GET /api/workflow/runs?limit=N` · `GET /api/workflow/runs/{rid}` | 실행 목록(최신순)과 보존된 integrated envelope |
 | `GET`/`POST /api/workflow/runs/{rid}/md-decision` | append-only MD 결정 → `agents/vogue-orchestrator/input/md-decision-request-1.0.contract.json`. GET은 `integrated_response_sha256`과 결정 이력을 반환 |
-| `GET /api/workflow/artifacts/{id}` | 최종 이미지 등 private artifact |
-| `GET /api/workflow/runs/{rid}/planning-sheet.png` | 끝난 실행의 기획서 PNG(3200 px 폭, `image/png`, attachment). 저장된 integrated envelope, 검증된 최종 이미지, MD 결정 이력을 근거 연결 기획 보드 양식(`new-product-agent/docs/design/evidence-linked-planning-board.md`)으로 그림. 표시 전용이며 agent를 부르지 않고 저장값을 바꾸지 않음. 진행 중 409 `RUN_NOT_FINISHED`, 없음 404, 한글 글꼴 없음 503 `PLANNING_SHEET_FONT_MISSING` |
-| `POST /v1/orchestrations/image-retries` | 이미지 단계만 다시 시도. `VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=1`일 때만 동작, 기본은 409 |
+| `GET /api/workflow/artifacts/{sha256}` | 저장된 private artifact(기획안 사진, 가져온 P06 시안 이미지 등) |
+| `GET /api/workflow/runs/{rid}/planning-sheet.png` | 끝난 실행의 기획서 PNG(3200 px 폭, `image/png`, attachment). 저장된 integrated envelope, 검증된 P06 시안 이미지(0.2.0 이전 실행은 최종 이미지), MD 결정 이력을 근거 연결 기획 보드 양식(`new-product-agent/docs/design/evidence-linked-planning-board.md`)으로 그림. 표시 전용이며 agent를 부르지 않고 저장값을 바꾸지 않음. 진행 중 409 `RUN_NOT_FINISHED`, 없음 404, 한글 글꼴 없음 503 `PLANNING_SHEET_FONT_MISSING` |
+| `POST /v1/orchestrations/image-retries` | 6단계(기획안 사진 합성)만 다시 실행. 무료이며 P06 이미지는 다시 만들지 않음. `VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=1`일 때만 동작, 기본은 409 |
 | `GET /api/system/status` · `GET /api/health` | agent liveness 집계, 계약 gate 상태, 이미지·구조화 설정 / liveness |
 
 **출력** — `integrated-result/1.0` → `agents/vogue-orchestrator/output/integrated-result-1.0.contract.json`
 - `sources`: 원문 응답, bytes artifact, `content_sha256`, `observation`
 - `stages[6]`: 각 단계의 입력·응답 sha
 - `integration`
-- `final_image{status: generated|skipped|failed, provider_calls≤1, lineage}`
+- `final_image{status: generated|skipped|failed, provider_calls≤1, lineage}`: 0.2.0부터 **기획안 사진(기획서 PNG)** 입니다. P08이 실행 기록으로 결정적으로 합성하고, `provider_calls: 1`은 합성 함수 호출 1회입니다(유료 호출 아님).
 - `limitations`, `errors`
 - `md_review{status: pending, choices: adopt|revise|hold}`
 
 **호출자로서의 정책**
 - **연결 대상**: `VOGUE_AGENT_HTTP_PRIVATE_HOSTS`에 있는 호스트에만 평문 HTTP로 연결합니다.
-- **timeout**: connect 3초, read 75초. 자동 재시도는 없습니다.
+- **timeout**: connect 3초, read 75초. P06 Draft 호출만 read 600초(`VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS`, P06이 이미지 2장을 만드는 시간). 자동 재시도는 없습니다.
+- **peer artifact**: `artifact://p07/…`(Review)와 `artifact://p06/…`(Draft 시안 이미지)를 `/peer/<ns>`에서 크기·sha256으로 검증해 저장소로 가져옵니다.
 - **실패 매핑**
 
   | 상황 | 결과 |
@@ -222,31 +232,23 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - Trend나 Draft가 `no_results` → 그 자리에서 멈추고 결과를 `no_results`로 둡니다.
   - 어느 단계든 `error` → 즉시 멈추고 이미지는 0회입니다.
   - Review가 `no_results` → 결과는 `partial`이고 이미지는 0회입니다.
-- **최종 이미지 요청** (P08 → OpenAI Images API, `src/vogue_orchestrator/image_request.py`, prompt `reviewed_image` v2 = `p08-reviewed-image/2`)
-  - 원천 값은 원문 그대로 보내고, 요약·재작성·잘라내기를 하지 않습니다.
-  - 섹션 순서는 `1_request → 2_draft → 3_trend → 4_stock → 5_review → 6_limitations`입니다.
-  - 근거는 ID 코드로 보냅니다(evidence_id, product_id, similar_product_codes).
-  - P07 원본 지표·근거는 이미지 요청에서만 제외합니다. P07 응답, 실행 기록, 기획서 PNG는 그대로입니다.
-  - 완전 중복과 무결성 메타데이터(해시, artifact 참조, lineage)는 prompt에 넣지 않고 저장 기록에 둡니다.
-  - 트렌드는 Trend 응답 순서로 앞의 3개만 보냅니다. 나머지는 이름·코드를 기록에 남깁니다.
-  - 전송 경로
-    - Stock 상품 사진과 사용자 업로드 이미지는 base64 텍스트가 아니라 참고 이미지로 보냅니다(`/v1/images/edits`, data URL, 최대 16장).
-    - 참고 이미지가 없으면 `/v1/images/generations`로 보냅니다.
-    - 공통 옵션: `size=1536x1024`, `quality=high`, `output_format=png`.
-  - prompt가 32,000자(문서상 한도)를 넘으면 HTTP 호출 없이 `IMAGE_PROMPT_TOO_LONG`으로 실패합니다.
-  - 진단 정보는 checkpoint에만 남고 `final_image`에는 넣지 않습니다.
-    - 남기는 것: 발신 prompt artifact, 길이, endpoint, `usage`(`text_tokens`), `x-request-id`, 오류 본문의 code·type·param(message는 저장하지 않음)
-    - `text_tokens`가 64 미만이면 prompt가 무시된 것으로 보고 `IMAGE_PROMPT_IGNORED`로 실패 처리합니다. 이때 이미지는 private로만 보관합니다.
-  - 측정(2026-11-13)
-    - live: 4,026,589자 → 13,968자(참고 이미지 1장)
-    - rehearsal(트렌드 7개): 26,337자(트렌드 3개)
-    - stub: 10,113자
-  - 확인: `python -m vogue_orchestrator.image_request --input <envelope.json>`, `--diagnostics --request-id <id> --store-dir <dir>`(읽기 전용)
+- **기획안 사진 (6단계, `VOGUE_WORKFLOW_IMAGE_PROVIDER=planning_sheet`)** (2026-11-13 결정)
+  - P08의 이미지 코드는 기획안 사진만 만듭니다. 이미지 모델을 부르지 않습니다. 트렌드 반영 신상품 이미지와 착장 이미지는 P06이 만듭니다.
+  - 리뷰가 끝난 실행 기록(1–5단계)과 가져온 P06 시안 이미지로 `planning_sheet.py`가 PNG를 그립니다.
+  - lineage·hash 규약은 0.1.1과 같습니다.
+  - 이전의 OpenAI 최종 이미지 경로(`image_request.py`, prompt `reviewed_image`)는 제거했습니다. `openai` 값은 409 `IMAGE_PROVIDER_INVALID`로 거부합니다.
 - **계약 gate**: `contracts/workflow/baseline.json`이 frozen이어야 실행합니다. 아니면 409 `CONTRACT_NOT_FROZEN`입니다. stub은 `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`로 development 모드로 돌며, 이때 결과에 limitation이 붙습니다.
 
 **증거**
-- 테스트 452건과 UI 테스트 13건
-- `deploy/e2e/run_e2e.py` 18개 검사: 단계 순서, 이미지 최대 1회, replay 때 upstream 호출 0회, schema 검증, MD 결정
+- 테스트 470건과 UI 테스트 15건
+- `deploy/e2e/run_e2e.py` 검사
+  - 단계 순서와 6단계 모두 `ok`
+  - P06 신상품·착장 이미지 생성, 가져오기와 sha256 검증
+  - 6단계가 3200 px 기획안 사진인지
+  - P08 이미지 모델 호출 0회
+  - replay 때 upstream 호출 0회
+  - schema 검증
+  - MD 결정
 - `deploy/e2e/probe_auth.py` 21개 검사
 
 ## 6. 버전 표
@@ -255,8 +257,8 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 |---|---|---|---|
 | P08 → Trend | `vogue-handoff/0.1` | Trend `1.1` | 기존 계약 유지 |
 | P08 → Stock | `vogue-handoff/0.1` | Stock `1.0` | 기존 계약 유지 |
-| P08 → P06 | `vogue-workflow/0.1` | `planning-draft/1.0` | workflow-contract 0.1.1 |
-| P08 → P07 | `vogue-workflow/0.1` | `sales-market-review/1.0` | workflow-contract 0.1.1 |
-| UI → P08 | `vogue-workflow/0.1` | `integrated-result/1.0` | workflow-contract 0.1.1 |
+| P08 → P06 | `vogue-workflow/0.1` | `planning-draft/1.0` | workflow-contract 0.2.0 |
+| P08 → P07 | `vogue-workflow/0.1` | `sales-market-review/1.0` | workflow-contract 0.2.0 |
+| UI → P08 | `vogue-workflow/0.1` | `integrated-result/1.0` | workflow-contract 0.2.0 |
 
 이 표에 없는 버전은 모델 호출이나 DB 조회 전에 거부합니다. 새 경로는 422, 기존 경로는 400을 돌려줍니다.

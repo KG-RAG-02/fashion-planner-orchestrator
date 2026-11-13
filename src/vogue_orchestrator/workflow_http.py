@@ -12,8 +12,8 @@ from urllib.parse import parse_qs, urlsplit, unquote
 
 from .connectors import (ConnectorConfigurationError, WORKFLOW_CONNECT_TIMEOUT_SECONDS,
                          WORKFLOW_READ_TIMEOUT_SECONDS, _service_url, timeout_seconds)
-from .workflow import Workflow, WireResponse, StageFailure
-from .workflow_contract import (WorkflowContract, VERSION, require, contract_gate_status,
+from .workflow import PEER_NAMESPACES, Workflow, WireResponse, StageFailure
+from .workflow_contract import (WorkflowContract, VERSION, DRAFT_MODES, require, contract_gate_status,
                                 development_limitation, truthy)
 from .workflow_store import (ArtifactError, MD_DECISIONS, PeerArtifactReader, RunStateError, SHA256_HEX,
                              WorkflowStore, canonical, p08_artifact, strict_json)
@@ -45,9 +45,9 @@ def store():
 
 
 def peer_artifact_reader(env=None):
-    """PeerArtifactReader rooted at VOGUE_PEER_ARTIFACT_ROOT, or None when it is not configured."""
+    """PeerArtifactReader rooted at VOGUE_PEER_ARTIFACT_ROOT (p07 reviews, p06 visuals), or None when unset."""
     value = setting(env, 'VOGUE_PEER_ARTIFACT_ROOT')
-    return PeerArtifactReader(_repo_path(value)) if value else None
+    return PeerArtifactReader(_repo_path(value), namespaces=PEER_NAMESPACES) if value else None
 
 
 def ensure_live_contract(contract=None, env=None):
@@ -90,9 +90,16 @@ def post_wire(url, payload, token=None, *, connect_timeout=WORKFLOW_CONNECT_TIME
         conn.close()
 
 
-IMAGE_PROVIDERS = ('openai', 'fixture')
+# Stage 06 providers (workflow-contract 0.2.0, 2026-11-13 decision): P08 calls no image model. The product and worn
+# (outfit) images are P06's Draft visuals; stage 06 composes the planning sheet (기획안 사진) from the run.
+IMAGE_PROVIDERS = ('planning_sheet', 'fixture')
 FIXTURE_IMAGE_LIMITATION = ('Final image comes from the deterministic local fixture provider '
                             '(VOGUE_WORKFLOW_IMAGE_PROVIDER=fixture): a placeholder, not a generated concept.')
+PLANNING_SHEET_LIMITATION = ('The final image (stage 06) is the planning sheet composed by P08 from this run '
+                             '(VOGUE_WORKFLOW_IMAGE_PROVIDER=planning_sheet); P08 calls no image model. '
+                             'The product and outfit images are P06 Draft visuals.')
+# P06 makes two images inside the Draft call when draft_with_visuals is requested; its reads may take minutes.
+DRAFT_WITH_VISUALS_READ_TIMEOUT_SECONDS = 600.0
 
 
 def setting(env, name):
@@ -105,9 +112,15 @@ def images_enabled(env=None):
 
 
 def image_provider_name(env=None):
-    """VOGUE_WORKFLOW_IMAGE_PROVIDER: openai (default) or fixture; anything else is None (invalid)."""
-    value = setting(env, 'VOGUE_WORKFLOW_IMAGE_PROVIDER').lower() or 'openai'
+    """VOGUE_WORKFLOW_IMAGE_PROVIDER: planning_sheet (default) or fixture; anything else (openai included) is None."""
+    value = setting(env, 'VOGUE_WORKFLOW_IMAGE_PROVIDER').lower() or 'planning_sheet'
     return value if value in IMAGE_PROVIDERS else None
+
+
+def draft_mode(env=None):
+    """VOGUE_WORKFLOW_DRAFT_MODE: draft_with_visuals (default) or draft_only; anything else is None (invalid)."""
+    value = setting(env, 'VOGUE_WORKFLOW_DRAFT_MODE').lower() or 'draft_with_visuals'
+    return value if value in DRAFT_MODES else None
 
 
 def image_retry_enabled(env=None):
@@ -136,62 +149,15 @@ def fixture_image(payload):
     return buffer.getvalue(), 'image/png'
 
 
-FINAL_IMAGE_SIZE = '1536x1024'
-# usage.input_tokens_details.text_tokens this low for a long prompt means the provider ignored the prompt
-# (reported for GPT image 2.x above ~8k tokens: no error, text_tokens=8). The image is then not presented.
-PROMPT_IGNORED_TOKENS = 64
+def planning_sheet_image(payload):
+    """Stage 06 provider: the planning sheet PNG of this run (planning_sheet.py), deterministic and local.
 
-
-class ImageResult(tuple):
-    """(image bytes, mime type) — equal to a plain 2-tuple — plus provider diagnostics in ``meta``."""
-
-    def __new__(cls, data, mime, meta=None):
-        result = super().__new__(cls, (data, mime))
-        result.meta = dict(meta or {})
-        return result
-
-
-def final_image(payload):
-    """Called only by the state machine after an eligible, hash-linked review.
-
-    The provider receives the ordered, verbatim image input built by image_request.py (P07 raw metrics and
-    evidence excluded, evidence as codes, first three trends): with reference photos through
-    /v1/images/edits, otherwise /v1/images/generations. Prompts over the documented 32,000 characters are
-    refused before any HTTP call.
+    ``payload['envelope']`` is the run as it stands when stage 06 starts; ``payload['load_artifact']`` returns
+    verified bytes for the P06 visuals already imported into the store. No network, no model.
     """
-    import base64
-    from .image_request import build_image_input
-    from .workflows.image_generation import (OpenAIImageProvider, OpenAIImageEditProvider, ImageGenerationRequest,
-                                             DEFAULT_IMAGE_MODEL, compose_full_prompt)
-    require(os.environ.get('VOGUE_WORKFLOW_IMAGES_ENABLED') == '1', 'IMAGE_PROVIDER_DISABLED')
-    fields = payload.get('image_input') if isinstance(payload.get('image_input'), dict) else build_image_input(payload).provider_fields()
-    system_prompt, user_prompt = fields['system_prompt'], fields['user_prompt']
-    full_prompt = compose_full_prompt(system_prompt, user_prompt)
-    references = tuple((base64.b64decode(ref['data_base64'], validate=True), ref['media_type']) for ref in fields.get('references') or ())
-    api_key, model = setting(None, 'OPENAI_API_KEY'), setting(None, 'VOGUE_IMAGE_MODEL') or DEFAULT_IMAGE_MODEL
-    meta = dict(model=model, size=FINAL_IMAGE_SIZE, prompt_chars=len(full_prompt),
-                prompt_sha256=hashlib.sha256(full_prompt.encode()).hexdigest())
-    if references:
-        meta['endpoint'] = 'images/edits'
-        generated = OpenAIImageEditProvider(api_key=api_key, model=model).generate_from_reference(
-            full_prompt, references, size=FINAL_IMAGE_SIZE)
-    else:
-        meta['endpoint'] = 'images/generations'
-        request = ImageGenerationRequest(request_id=str(payload.get('request_id') or 'unknown'), season=None, category=None,
-                                         prompt=user_prompt, prompt_version=fields['prompt_version'],
-                                         prompt_sha256=meta['prompt_sha256'], evidence_ids=(), proposal_fields=('integration',),
-                                         limitations=('MD review required.',), conflicts=(), system_prompt=system_prompt,
-                                         size=FINAL_IMAGE_SIZE, quality='high', output_format='png')
-        generated = OpenAIImageProvider(api_key=api_key, model=model).generate(request)
-    usage, provider_request_id = getattr(generated, 'usage', None), getattr(generated, 'request_id', None)
-    if usage:
-        meta['usage'] = usage
-    if provider_request_id:
-        meta['provider_request_id'] = provider_request_id
-    text_tokens = ((usage or {}).get('input_tokens_details') or {}).get('text_tokens') if isinstance(usage, dict) else None
-    if isinstance(text_tokens, int) and text_tokens < PROMPT_IGNORED_TOKENS and len(full_prompt) >= 2000:
-        meta['prompt_ignored'] = True
-    return ImageResult(generated.image_bytes, generated.mime_type, meta)
+    require(images_enabled(), 'IMAGE_PROVIDER_DISABLED')
+    from .planning_sheet import planning_sheet_png
+    return planning_sheet_png(payload['envelope'], load_artifact=payload.get('load_artifact')), 'image/png'
 
 
 _FROM_ENV = object()
@@ -213,25 +179,33 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
              ('review','VOGUE_SALES_MARKET_AGENT_URL','sales-market-agent/reviews')]
     connect_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS', WORKFLOW_CONNECT_TIMEOUT_SECONDS)
     read_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS', WORKFLOW_READ_TIMEOUT_SECONDS)
+    mode = draft_mode(env)
+    if mode is None:
+        raise WorkflowUnavailable('DRAFT_MODE_INVALID', 409, 'VOGUE_WORKFLOW_DRAFT_MODE must be draft_with_visuals or draft_only.')
+    # P06 generates its two images inside the Draft call, so that one read may take minutes.
+    draft_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS',
+                                    max(read_timeout, DRAFT_WITH_VISUALS_READ_TIMEOUT_SECONDS) if mode == 'draft_with_visuals' else read_timeout)
     adapters = {}
     for key, variable, route in specs:
         if not env.get(variable):
             raise ConnectorConfigurationError(variable + ' is required.')
         url = _service_url(env, variable, '/v1/agents/' + route)
-        adapters[key] = lambda payload, u=url: post_wire(u, payload, token, connect_timeout=connect_timeout,
-                                                         read_timeout=read_timeout)
+        adapters[key] = lambda payload, u=url, t=(draft_timeout if key == 'draft' else read_timeout): post_wire(
+            u, payload, token, connect_timeout=connect_timeout, read_timeout=t)
     image = None
     if images_enabled(env):
         provider = image_provider_name(env)
         if provider is None:
-            raise WorkflowUnavailable('IMAGE_PROVIDER_INVALID', 409, 'VOGUE_WORKFLOW_IMAGE_PROVIDER must be openai or fixture.')
+            raise WorkflowUnavailable('IMAGE_PROVIDER_INVALID', 409,
+                                      'VOGUE_WORKFLOW_IMAGE_PROVIDER must be planning_sheet or fixture (P08 calls no image model).')
         if provider == 'fixture':
             image = fixture_image
             limitations = [*limitations, FIXTURE_IMAGE_LIMITATION]
-        elif setting(env, 'OPENAI_API_KEY'):
-            image = final_image
+        else:
+            image = planning_sheet_image
+            limitations = [*limitations, PLANNING_SHEET_LIMITATION]
     return Workflow(**adapters, image=image, store=store(), contract=contract, artifact_reader=artifact_reader,
-                    limitations=limitations)
+                    limitations=limitations, draft_mode=mode)
 
 
 def problem(handler, status, code, message=None, *, request_id=None, stage='input', headers=None):

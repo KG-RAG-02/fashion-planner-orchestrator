@@ -3,15 +3,18 @@
 다섯 서비스를 한 번에 띄우는 배포 정의입니다. 대상 서비스는 trend-analysis-agent, stock-agent, new-product-agent(P06), sales-market-agent(P07), vogue-orchestrator(P08)입니다. 이 폴더는 orchestrator 저장소 안에 있습니다. 실행하려면 다섯 저장소가 같은 상위 폴더 아래에 나란히 체크아웃돼 있어야 합니다.
 
 ```
-browser ──127.0.0.1:8765──► orchestrator (UI · workflow · artifact store · 최종 이미지)
+browser ──127.0.0.1:8765──► orchestrator (UI · workflow · artifact store · 기획안 사진 합성)
                                │ backend 네트워크 (internal, bearer 인증, 허용된 호스트만 평문 HTTP)
         ┌──────────────┬───────┴──────┬────────────────┐
      trend:8768     stock:8002   new-product:8767  sales-market:8766
 ```
 
 - **외부 공개 포트**는 orchestrator의 `127.0.0.1` 포트 하나뿐입니다. 에이전트끼리는 `backend` 내부 네트워크에서 공유 bearer 토큰으로 호출합니다.
-- **artifact 교환**: P08 blob과 P07 review artifact는 읽기 전용 volume subpath로 주고받습니다. 크기와 sha256을 검증합니다(`docs/workflow-integration-conventions.md` §8).
-- **실행 순서**: 단계는 순차로만 실행됩니다. Trend → Stock → Draft(P06) → Review(P07) → 통합 → 최종 이미지 순이며, 이미지는 리뷰 뒤에 최대 1회입니다.
+- **artifact 교환**: P08 blob, P07 review artifact, P06 시안 이미지(`artifact://p06/images/…`)는 읽기 전용 volume subpath로 주고받습니다. 크기와 sha256을 검증합니다(`docs/workflow-integration-conventions.md` §8).
+- **실행 순서**: 단계는 순차로만 실행됩니다. 순서는 Trend → Stock → Draft(P06) → Review(P07) → 통합 → 기획안 사진입니다.
+- **이미지 담당** (workflow-contract 0.2.0)
+  - P06이 Draft 호출 안에서 트렌드 반영 신상품 이미지와 착장 이미지를 만듭니다. live에서만 유료이며 실행당 최대 2회입니다.
+  - P08은 6단계에서 기획안 사진(기획서 PNG)만 합성합니다. 이미지 모델은 부르지 않습니다.
 
 ## 프로필
 
@@ -19,17 +22,18 @@ browser ──127.0.0.1:8765──► orchestrator (UI · workflow · artifact s
 |---|---|---|---|
 | `vogue stub` | `compose.yaml` + `compose.stub.yaml` | 없음 | `http://127.0.0.1:18765` |
 | `vogue rehearsal` | + `compose.data.yaml` | Aura·R2 읽기, 유료 모델 0회 | `http://127.0.0.1:8765` |
-| `vogue live "<기획 질의>"` | + `compose.paid.yaml` | 위 항목 + OpenAI | `http://127.0.0.1:8765` |
+| `vogue live "<기획 질의>"` | + `compose.paid.yaml` | 위 항목 + OpenAI(P08 질의 구조화, Stock 도구 호출, P06 이미지 2장) | `http://127.0.0.1:8765` |
 
 **stub 프로필 구성**
 - 임시 Neo4j(tmpfs)에 합성 그래프를 적재합니다.
 - 재고는 합성 DuckDB에 결정적 PolicyLLM을 붙여 계산합니다.
 - 시장 검토는 합성 source를 씁니다(합성 표기).
-- 이미지는 fixture 렌더러로 만듭니다.
+- P06 시안 이미지는 fixture 렌더러로 만듭니다(무료, `VOGUE_DRAFT_IMAGE_PROVIDER=fixture`).
+- 기획안 사진은 실제 합성기로 만듭니다.
 - 예시 질의: `2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하고 싶어`
 
 **rehearsal 프로필**
-- 실데이터(Aura 그래프, R2 DuckDB)로 연결·데이터·지연·payload 크기를 확인합니다. 유료 모델은 부르지 않습니다.
+- 실데이터(Aura 그래프, R2 DuckDB)로 연결·데이터·지연·payload 크기를 확인합니다. 유료 모델은 부르지 않습니다. P06 시안 이미지는 fixture입니다.
 - 질의 구조화도 생략합니다. 대신 `e2e/queries/rehearsal-trend-query.json`의 TrendQuery를 그대로 보냅니다.
 
 **live 프로필**
@@ -92,15 +96,14 @@ deploy/bin/vogue down stub
 deploy/bin/vogue sheet live e2e-live-xxxxxxxxxxxx
 ```
 
-- **최종 이미지만 다시 만들기 (유료 1회)**
-  - live 실행의 이미지 단계만 다시 호출합니다. 다른 단계는 다시 부르지 않습니다.
-  - 재시도 스위치는 이 호출 동안만 켜고, 끝나면 다시 끕니다.
-  - 같은 실행에 두 번째 재시도는 거부합니다(`~/.config/vogue/image-retry-<id>.done`).
-  - 결과는 `~/VOGUE-archive/e2e/live-<id>-image-retry-<시각>.json`과 `-final-image.png`, `-planning-sheet.png`, `-diagnostics.json`에 저장됩니다. 진단 파일에는 prompt 길이, endpoint, `usage.text_tokens`, 오류 code가 들어갑니다.
-  - 비용이 드는 명령이라 실행 전에 승인을 받으세요.
+- **6단계(기획안 사진)만 다시 합성 (무료)**
+  - 저장된 실행의 6단계만 다시 실행합니다. 다른 단계와 P06 이미지는 다시 만들지 않습니다.
+  - 6단계가 `failed`·`skipped`인 실행에만 동작합니다.
+  - 재시도 스위치는 이 호출 동안만 켜고, 끝나면 다시 끕니다. 유료 프로필은 필요 없습니다. live 실행 기록도 rehearsal과 같은 volume에 있습니다.
+  - 결과는 `~/VOGUE-archive/e2e/<profile>-<id>-image-retry-<시각>.json`, `-final-image.png`, `-planning-sheet.png`에 저장됩니다.
 
 ```bash
-deploy/bin/vogue image-retry e2e-live-xxxxxxxxxxxx
+deploy/bin/vogue image-retry rehearsal <request_id>
 ```
 - 실행 기록은 P08 volume에 보존됩니다. UI의 Runs 화면이나 `GET /api/workflow/runs`로 다시 볼 수 있습니다.
 - MD 결정(채택/수정/보류)은 append-only로 기록됩니다. 결과 원문은 바뀌지 않습니다.

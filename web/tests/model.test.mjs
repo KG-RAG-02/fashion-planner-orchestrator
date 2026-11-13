@@ -132,3 +132,19 @@ test('planningSheetLink is offered only for a finished run with a safe request i
   assert.equal(m.planningSheetLink({ ...done, requestId: 'a"b' }), null);
   assert.equal(m.planningSheetLink(null), null);
 });
+
+test('P06 visuals (workflow-contract 0.2.0) are shown only from verified generated references', () => {
+  const sha = 'a'.repeat(64);
+  const visuals = m.draftVisuals({
+    product: { status: 'generated', artifact: { sha256: sha }, model: 'fixture', reason: null },
+    outfit: { status: 'failed', artifact: null, model: 'fixture', reason: 'IMAGE_API_HTTP_400:moderation_blocked' },
+  });
+  assert.deepEqual(visuals.map((v) => [v.key, v.label, v.status, v.sha256]),
+    [['product', '신상품', 'generated', sha], ['outfit', '착장', 'failed', null]]);
+  assert.equal(visuals[1].reason, 'IMAGE_API_HTTP_400:moderation_blocked');
+  assert.deepEqual(m.draftVisuals(undefined), []);
+  assert.equal(m.draftVisuals({ product: { status: 'generated', artifact: { sha256: '../x' } } })[0].sha256, null);
+  const view = m.draftView({ draft: { title: 't', claims: [], visuals: { product: { status: 'skipped', reason: 'r' } } }, image_generation_calls: 0 });
+  assert.equal(view.imageCalls, 0);
+  assert.equal(m.STAGES.at(-1).en, 'Sheet');
+});

@@ -6,16 +6,16 @@
     "method": "copy",
     "source_repo": "KG-RAG-02/new-product-agent",
     "source_branch": "integration/docker-e2e",
-    "source_commit": "6f05269c91df",
+    "source_commit": "470b75841d94",
     "source_schema": "contracts/workflow-proposed/planning-draft-request.schema.json",
     "source_files": [
       {
         "path": "contracts/workflow-proposed/planning-draft-request.schema.json",
-        "sha256": "a4c5b72f1de38203f582856ef7e216c480ab4f91afa5342697dec8414bfdf631"
+        "sha256": "f8b41e14d9a129b3c4a0ad59986944719d4164862b29f77a636baba06a69e079"
       },
       {
         "path": "contracts/workflow-proposed/common.schema.json",
-        "sha256": "801b975ba1032444af5e47f417e3f53e306eba76b77882af62693c2e64d17710"
+        "sha256": "3b975dbc370c84673399bc14526bbb4de4d3bc27c75a0fda8e89bce6a6930568"
       },
       {
         "path": "contracts/workflow-proposed/upstream/trend-result-1.1.schema.json",
@@ -37,8 +37,8 @@
   "json_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://contracts.vogue.invalid/workflow/0.1/planning-draft-request.schema.json",
-    "title": "P08 → P06 Draft-only request",
-    "$comment": "PROPOSED workflow-contract/0.1.1: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.",
+    "title": "P08 → P06 Draft request (draft_only | draft_with_visuals)",
+    "$comment": "PROPOSED workflow-contract/0.2.0: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -66,7 +66,10 @@
         ],
         "properties": {
           "mode": {
-            "const": "draft_only"
+            "enum": [
+              "draft_only",
+              "draft_with_visuals"
+            ]
           },
           "user_input": {
             "$ref": "common.schema.json#/$defs/user_input"

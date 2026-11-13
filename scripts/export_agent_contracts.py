@@ -175,7 +175,7 @@ ENTRIES = (
           "new-product-agent planning draft result", "1.0", "authored",
           ("src/vogue_npp/prototype/server.py", "src/vogue_npp/adapters/handoff.py")),
     workflow_entry("new-product-agent", "input", "planning-draft-request",
-                   "new-product-agent /drafts request (P08 → P06 Draft-only)", None,
+                   "new-product-agent /drafts request (P08 → P06 Draft: draft_only | draft_with_visuals)", None,
                    VENDORED["new-product-agent"], WORKFLOW_ENVELOPES["new-product-agent"]),
     workflow_entry("new-product-agent", "output", "planning-draft-response",
                    "new-product-agent /drafts response (PlanningDraft envelope)", "planning-draft/1.0",

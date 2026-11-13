@@ -71,8 +71,9 @@ def dataless_files(limit=20):
 
 
 def default_image_model():
-    """DEFAULT_IMAGE_MODEL from the orchestrator source (single source of truth), or None if unreadable."""
-    source = Path(__file__).resolve().parents[2] / "src" / "vogue_orchestrator" / "workflows" / "image_generation.py"
+    """DEFAULT_IMAGE_MODEL from the new-product-agent source (P06 makes the images since workflow-contract 0.2.0),
+    or None if unreadable."""
+    source = WORKSPACE / "new-product-agent" / "src" / "vogue_npp" / "workflows" / "image_generation.py"
     try:
         match = re.search(r'^DEFAULT_IMAGE_MODEL = "([A-Za-z0-9._:-]+)"$', source.read_text(encoding="utf-8"), re.M)
     except OSError:

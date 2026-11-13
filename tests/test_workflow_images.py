@@ -41,22 +41,27 @@ class FixtureImageProviderTests(unittest.TestCase):
         cases = [({}, None, False), ({'VOGUE_WORKFLOW_IMAGE_PROVIDER': 'fixture'}, None, False),
                  ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1', 'VOGUE_WORKFLOW_IMAGE_PROVIDER': 'fixture'}, 'fixture_image', True),
                  ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1', 'VOGUE_WORKFLOW_IMAGE_PROVIDER': 'FIXTURE'}, 'fixture_image', True),
-                 ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}, None, False),  # openai without a key: skipped, 0 calls
-                 ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1', 'OPENAI_API_KEY': 'dummy-not-a-key'}, 'final_image', False)]
+                 # 0.2.0: the default stage 06 provider composes the planning sheet; a key never selects an image model.
+                 ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}, 'planning_sheet_image', False),
+                 ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1', 'OPENAI_API_KEY': 'dummy-not-a-key'}, 'planning_sheet_image', False)]
         for extra, expected, labelled in cases:
             with self.subTest(extra=extra), environment(VOGUE_WORKFLOW_STORE_DIR=store_dir, **base, **extra):
                 workflow = workflow_http.build_workflow()
                 self.assertEqual(getattr(workflow.image, '__name__', None), expected)
                 self.assertEqual(workflow_http.FIXTURE_IMAGE_LIMITATION in workflow.limitations, labelled)
+                self.assertEqual(workflow_http.PLANNING_SHEET_LIMITATION in workflow.limitations, expected == 'planning_sheet_image')
 
     def test_invalid_provider_is_a_409_when_images_are_enabled(self):
-        handler = Mock()
-        request = dict(contract_version='vogue-workflow/0.1', request_id='r-1', input=dict(user_input=dict(text='t', images=[])))
-        with environment(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1', VOGUE_WORKFLOW_IMAGES_ENABLED='1',
-                         VOGUE_WORKFLOW_IMAGE_PROVIDER='dall-e', VOGUE_WORKFLOW_STORE_DIR=str(real_tempdir(self)), **AGENTS):
-            workflow_http.dispatch(handler, request)
-        status, body = handler._json.call_args.args
-        self.assertEqual((status, body['error']['code']), (409, 'IMAGE_PROVIDER_INVALID'))
+        # openai is refused too: since 0.2.0 P08 calls no image model (P06 makes the images).
+        for provider in ('dall-e', 'openai'):
+            with self.subTest(provider=provider):
+                handler = Mock()
+                request = dict(contract_version='vogue-workflow/0.1', request_id='r-1', input=dict(user_input=dict(text='t', images=[])))
+                with environment(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1', VOGUE_WORKFLOW_IMAGES_ENABLED='1',
+                                 VOGUE_WORKFLOW_IMAGE_PROVIDER=provider, VOGUE_WORKFLOW_STORE_DIR=str(real_tempdir(self)), **AGENTS):
+                    workflow_http.dispatch(handler, request)
+                status, body = handler._json.call_args.args
+                self.assertEqual((status, body['error']['code']), (409, 'IMAGE_PROVIDER_INVALID'))
 
 
 class ImageRetrySwitchTests(LiveServerMixin, unittest.TestCase):

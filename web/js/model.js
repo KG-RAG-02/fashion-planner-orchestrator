@@ -8,7 +8,7 @@ export const STAGES = Object.freeze([
   { key: 'planning_draft', n: '03', en: 'Draft', ko: '기획 초안' },
   { key: 'sales_market_review', n: '04', en: 'Review', ko: '시장 검토' },
   { key: 'integration', n: '05', en: 'Integrate', ko: '통합' },
-  { key: 'final_image', n: '06', en: 'Image', ko: '최종 이미지' },
+  { key: 'final_image', n: '06', en: 'Sheet', ko: '기획안 사진' },
 ]);
 
 const STATUS = Object.freeze({
@@ -206,7 +206,23 @@ export function draftView(draftResult) {
     mdRequired: Array.isArray(draft.md_decision_required) ? draft.md_decision_required : [],
     limitations: unique([...(draft.limitations ?? []), ...(draftResult.limitations ?? [])]),
     identity: draftResult.draft_identity ?? null,
+    visuals: draftVisuals(draft.visuals),
+    imageCalls: Number.isInteger(draftResult.image_generation_calls) ? draftResult.image_generation_calls : null,
+    concept: typeof draft.concept?.product_definition?.value === 'string' ? draft.concept.product_definition.value : null,
   };
+}
+
+// workflow-contract 0.2.0: P06 returns the product image and the worn (outfit) image with the Draft.
+const DRAFT_VISUALS = Object.freeze([['product', '신상품'], ['outfit', '착장']]);
+
+export function draftVisuals(visuals) {
+  if (!visuals || typeof visuals !== 'object') return [];
+  return DRAFT_VISUALS.map(([key, label]) => {
+    const item = visuals[key] ?? {};
+    const sha = typeof item.artifact?.sha256 === 'string' && /^[0-9a-f]{64}$/.test(item.artifact.sha256) ? item.artifact.sha256 : null;
+    return { key, label, status: item.status ?? null, reason: item.reason ?? '', model: item.model ?? null,
+      sha256: item.status === 'generated' ? sha : null };
+  });
 }
 
 const METRIC_LABELS = Object.freeze({

@@ -40,7 +40,7 @@ class WorkflowContractReferenceTest(unittest.TestCase):
         summary = self.validate.collect()
         failed = [r["case"] for r in summary["results"] if not r["pass"]]
         self.assertEqual(failed, [])
-        self.assertGreaterEqual(summary["fixtures"], 66)
+        self.assertGreaterEqual(summary["fixtures"], 76)
         self.assertEqual(summary["schemas_checked"], 8)
 
     def test_semantic_mutations_are_all_rejected(self):

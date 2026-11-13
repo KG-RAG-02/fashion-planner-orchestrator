@@ -199,6 +199,14 @@ def semantic(document, schema_name, store):
             require(fingerprint(node["source_request"]) == node["source_request_sha256"], "SOURCE_REQUEST_HASH_MISMATCH")
             upstream_status = node["source_request"]["input"]["stock_response"]["raw_response"]["status"]
             require(node["status"] != "ok" or upstream_status == "ok", "UPSTREAM_STATUS_HIDDEN")
+            # 0.2.0: the image call count is the sum of the visuals' own calls (0 for draft_only).
+            visuals = (node.get("draft") or {}).get("visuals") or {}
+            require(node.get("image_generation_calls", 0) == sum(v["provider_calls"] for v in visuals.values()), "IMAGE_CALLS_MISMATCH")
+            concept = (node.get("draft") or {}).get("concept")
+            if concept is not None:
+                known_ids = {n["evidence_id"] for n in walk(node["source_request"]) if isinstance(n.get("evidence_id"), str)}
+                cited = {i for n in walk(concept) for i in n.get("evidence_ids", [])}
+                require(cited <= known_ids, "CONCEPT_EVIDENCE_UNKNOWN")
         if "status" in node and "errors" in node:
             if any(e.get("fatal") is True for e in node["errors"] if isinstance(e, dict)):
                 require(node["status"] == "error", "FATAL_ERROR_HIDDEN")
@@ -214,7 +222,7 @@ def semantic(document, schema_name, store):
             require(review["reviewed_draft"] == source["result"]["draft_identity"], "DRAFT_REVISION_MISMATCH")
             if node["status"] in {"ok", "partial"}:
                 require(any(f["evidence_refs"] for f in review["findings"]) or any(m["value"] is not None for m in review["metrics"]), "REVIEW_HAS_NO_ELIGIBLE_BASIS")
-        if "mode" in node and node["mode"] == "draft_only":
+        if "mode" in node and node["mode"] in {"draft_only", "draft_with_visuals"}:
             require(node["planning_request"]["query"] == node["user_input"]["text"], "USER_INPUT_MISMATCH")
             trend = node["trend_response"]["raw_response"]
             stock = node["stock_response"]["raw_response"]
@@ -332,9 +340,12 @@ def semantic(document, schema_name, store):
                 wire = {"contract_version": "vogue-handoff/0.1", "request_id": rid, "input": t["raw_response"]["result"]}
                 context = {"planning_request_sha256": fingerprint(body["planning_request"]), "trend_response_sha256": t["content_sha256"],
                            "stock_input_sha256": fingerprint(t["raw_response"]["result"]), "stock_wire_request_sha256": fingerprint(wire), "stock_response_sha256": s["content_sha256"]}
-                expected = fingerprint({"contract_version": document["contract_version"], "request_id": rid,
-                    "input": {"mode": "draft_only", "user_input": body["user_input"], "planning_request": body["planning_request"],
+                # Either Draft mode (0.2.0) may have been sent; the trace must match one of them.
+                candidates = {fingerprint({"contract_version": document["contract_version"], "request_id": rid,
+                    "input": {"mode": mode, "user_input": body["user_input"], "planning_request": body["planning_request"],
                               "trend_response": t, "stock_response": s, "stock_call_context": context}})
+                    for mode in ("draft_only", "draft_with_visuals")}
+                expected = stage["input_sha256"] if stage["input_sha256"] in candidates else next(iter(sorted(candidates)))
         elif name == "sales_market_review" and draft is not None:
             expected = draft["content_sha256"]
         elif name == "integration" and draft is not None and review is not None:

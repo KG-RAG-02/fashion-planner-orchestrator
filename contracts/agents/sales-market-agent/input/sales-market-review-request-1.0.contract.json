@@ -6,16 +6,16 @@
     "method": "copy",
     "source_repo": "KG-RAG-02/sales-market-agent",
     "source_branch": "integration/docker-e2e",
-    "source_commit": "93ea49e9418b",
+    "source_commit": "775b6b915c29",
     "source_schema": "src/market_research_agent/resources/workflow_contract/sales-market-review-request.schema.json",
     "source_files": [
       {
         "path": "src/market_research_agent/resources/workflow_contract/sales-market-review-request.schema.json",
-        "sha256": "881d6f584cf417a1fc873ec2d4b458123a69513e4d8f2b4b00d5e8b7aa1f9a5c"
+        "sha256": "2b2e130402371f537089067a86b50626dd28d38897a428fb70ae7a33ad829415"
       },
       {
         "path": "src/market_research_agent/resources/workflow_contract/common.schema.json",
-        "sha256": "801b975ba1032444af5e47f417e3f53e306eba76b77882af62693c2e64d17710"
+        "sha256": "3b975dbc370c84673399bc14526bbb4de4d3bc27c75a0fda8e89bce6a6930568"
       },
       {
         "path": "src/market_research_agent/resources/workflow_contract/upstream/trend-result-1.1.schema.json",
@@ -38,7 +38,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://contracts.vogue.invalid/workflow/0.1/sales-market-review-request.schema.json",
     "title": "P08 → P07 full-Draft direct review",
-    "$comment": "PROPOSED workflow-contract/0.1.1: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.",
+    "$comment": "PROPOSED workflow-contract/0.2.0: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.",
     "type": "object",
     "additionalProperties": false,
     "required": [

@@ -104,7 +104,6 @@ services:
   orchestrator:
     environment:
       VOGUE_QUERY_STRUCTURING_MODE: synthetic_fixture
-      VOGUE_WORKFLOW_IMAGE_PROVIDER: fixture
       # Stub is the integration-test profile: until the baseline is frozen the gate runs in
       # development mode and every result carries the 'not frozen; development run' limitation.
       VOGUE_WORKFLOW_ALLOW_PROPOSED: "1"

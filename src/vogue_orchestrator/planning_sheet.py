@@ -38,10 +38,14 @@ PROCESS = ('ISSUE', 'INSIGHT', 'PROPOSAL')
 FOOTER_NOTE = '검토용 초안 · 근거 미연결 값은 확정 사실이 아닙니다 · 승인·발주·생산 가능성 확정이 아닙니다.'
 # P08 writes this limitation itself when the deterministic fixture image provider is used.
 FIXTURE_IMAGE_MARKER = 'VOGUE_WORKFLOW_IMAGE_PROVIDER=fixture'
+# P06 writes this limitation into the Draft when its visuals come from the offline fixture provider.
+DRAFT_FIXTURE_MARKER = 'VOGUE_DRAFT_IMAGE_PROVIDER=fixture'
+# workflow-contract 0.2.0: the two P06 visuals of a Draft (draft.visuals), in display order.
+DRAFT_VISUALS = (('product', '신상품 · Product'), ('outfit', '착장 · Outfit'))
 MAX_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024
 
 STAGES = (('trend', '01', 'Trend'), ('stock', '02', 'Stock'), ('planning_draft', '03', 'Draft'),
-          ('sales_market_review', '04', 'Review'), ('integration', '05', 'Integrate'), ('final_image', '06', 'Image'))
+          ('sales_market_review', '04', 'Review'), ('integration', '05', 'Integrate'), ('final_image', '06', 'Sheet'))
 STATE_LABELS = {'available': '근거 확인', 'partial': '일부 근거/입력 확인 필요', 'no_results': '조회 결과 없음',
                 'not_provided': '입력 미제공', 'unverified': '근거 미확인', 'blocked': '상세 해석 보류',
                 'failed': '처리 실패'}
@@ -415,12 +419,22 @@ def _specifications(result: Mapping[str, Any]) -> BoardSection:
     raw, body, _ = _draft_parts(result)
     draft = _mapping(body.get('draft'))
     agent = _mapping(raw.get('producer')).get('agent_id') if raw else None
-    attributes = [_mapping(item) for item in _list(draft.get('attributes'))]
-    claims = tuple(
+    # 0.2.0: P06's concept (draft.concept) carries the design spec; earlier Drafts have no spec field.
+    concept = _mapping(draft.get('concept'))
+    base = 'draft.concept.attributes' if concept else 'draft.attributes'
+    attributes = [_mapping(item) for item in _list(concept.get('attributes') if concept else draft.get('attributes'))]
+    claims = []
+    for key, label in (('product_definition', '상품 정의'), ('target_customer', '대상 고객')):
+        item = _mapping(concept.get(key))
+        if isinstance(item.get('value'), str) and item['value'].strip():
+            claims.append(_claim(f"{label}: {item['value'].strip()}", item.get('kind') if item.get('kind') in KIND_LABELS else 'proposal',
+                                 _strings(item.get('evidence_ids')), source=agent, source_ref=f'draft.concept.{key}'))
+    claims += [
         _claim(f"{item['name']}={_scalar_text(item.get('value'))}", item.get('kind') if item.get('kind') in KIND_LABELS else 'proposal',
                _strings(item.get('evidence_ids')) or _evidence_ids(item.get('evidence_refs')),
-               source=agent, source_ref=f'draft.attributes[{index}]')
-        for index, item in enumerate(attributes) if isinstance(item.get('name'), str) and _scalar_text(item.get('value')))
+               source=agent, source_ref=f'{base}[{index}]')
+        for index, item in enumerate(attributes) if isinstance(item.get('name'), str) and _scalar_text(item.get('value'))]
+    claims = tuple(claims)
     if claims:
         return BoardSection('specifications', '분석 기반 상품 사양', agent or 'new-product-agent', 'ok', None,
                             _state('ok', has_claims=True, has_unverified=any(not c.evidence_ids for c in claims)), claims,
@@ -477,6 +491,18 @@ def _finance(result: Mapping[str, Any]) -> BoardSection:
 # --- sheet model ---------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
+class DraftVisual:
+    """One P06 visual (draft.visuals.product | outfit, workflow-contract 0.2.0)."""
+    key: str
+    label: str
+    status: str | None
+    reason: str | None
+    artifact: Mapping[str, Any] | None
+    model: str | None
+    prompt_version: str | None
+
+
+@dataclass(frozen=True)
 class SheetVisual:
     status: str | None
     reason: str | None
@@ -484,6 +510,10 @@ class SheetVisual:
     artifact: Mapping[str, Any] | None
     fixture: bool
     message: str | None
+    # 0.2.0: the P06 visuals shown in the visual panel; empty for earlier runs (then the final image is shown).
+    draft_visuals: tuple[DraftVisual, ...] = ()
+    draft_fixture: bool = False
+    image_generation_calls: int | None = None
 
 
 @dataclass(frozen=True)
@@ -545,13 +575,27 @@ def build_sheet(envelope: Mapping[str, Any], *, decisions: Sequence[Mapping[str,
     image = _mapping(result.get('final_image'))
     fixture = any(FIXTURE_IMAGE_MARKER in text for text in limitations)
     image_errors = [_mapping(error) for error in _list(result.get('errors')) if _mapping(error).get('stage') == 'final_image']
+    visuals = _mapping(draft.get('visuals'))
+    draft_visuals = tuple(
+        DraftVisual(key=key, label=label,
+                    status=_mapping(visuals.get(key)).get('status') if isinstance(_mapping(visuals.get(key)).get('status'), str) else None,
+                    reason=_mapping(visuals.get(key)).get('reason') if isinstance(_mapping(visuals.get(key)).get('reason'), str) else None,
+                    artifact=_mapping(visuals.get(key)).get('artifact') if isinstance(_mapping(visuals.get(key)).get('artifact'), Mapping) else None,
+                    model=_mapping(visuals.get(key)).get('model') if isinstance(_mapping(visuals.get(key)).get('model'), str) else None,
+                    prompt_version=_mapping(visuals.get(key)).get('prompt_version')
+                    if isinstance(_mapping(visuals.get(key)).get('prompt_version'), str) else None)
+        for key, label in DRAFT_VISUALS) if visuals else ()
+    calls = draft_body.get('image_generation_calls')
     visual = SheetVisual(
         status=image.get('status') if isinstance(image.get('status'), str) else None,
         reason=image.get('reason') if isinstance(image.get('reason'), str) else None,
         provider_calls=image.get('provider_calls') if isinstance(image.get('provider_calls'), int) else None,
         artifact=image.get('artifact') if isinstance(image.get('artifact'), Mapping) else None,
         fixture=fixture,
-        message=image_errors[0].get('message') if image_errors and isinstance(image_errors[0].get('message'), str) else None)
+        message=image_errors[0].get('message') if image_errors and isinstance(image_errors[0].get('message'), str) else None,
+        draft_visuals=draft_visuals,
+        draft_fixture=any(DRAFT_FIXTURE_MARKER in text for text in _strings(draft.get('limitations'))),
+        image_generation_calls=calls if isinstance(calls, int) and not isinstance(calls, bool) else None)
     stage_map = _stage_map(result)
     stages = []
     for key, number, label in STAGES:
@@ -591,6 +635,11 @@ def _brief_rows(body, draft, md_review, limitations, visual, category, season) -
     assumptions = _strings(draft.get('assumptions'))
     score = draft.get('score')
     image = RUN_STATUS_LABELS.get(visual.status or '', visual.status or '상태 미제공')
+    visual_row = ('시안', ' · '.join(text for text in (image, visual.reason or '') if text))
+    if visual.draft_visuals:  # 0.2.0: the visuals are P06's; stage 06 is this sheet itself
+        visual_row = ('시안 (P06)', ' · '.join(
+            f"{item.label.split(' · ')[0]} {RUN_STATUS_LABELS.get(item.status or '', item.status or '미제공')}"
+            + (f' ({item.reason})' if item.status != 'generated' and item.reason else '') for item in visual.draft_visuals))
     return (
         ('후보 ID', (draft_id + (f' · rev {revision}' if isinstance(revision, int) else '')) if draft_id else '미제공'),
         ('후보 유형', _scalar_text(draft.get('candidate_type')) or '미제공 (초안에 없음)'),
@@ -600,7 +649,7 @@ def _brief_rows(body, draft, md_review, limitations, visual, category, season) -
         ('미확정', f"MD 판단 {len(reserved)}건: {', '.join(DECISION_LABELS.get(key, key) for key in reserved)}" if reserved else '없음'),
         ('리스크·한계', f'{len(limitations):,}건 → 하단 Limitations'),
         ('검증 질문', f'{len(questions)}건 → Insight 카드 ※' if questions else '없음'),
-        ('시안', ' · '.join(text for text in (image, visual.reason or '') if text)),
+        visual_row,
     )
 
 
@@ -884,8 +933,49 @@ def _decode_thumbs(encoded: Sequence[str]) -> list[bytes]:
     return out
 
 
+def _draw_draft_visuals(c, visual: SheetVisual, vx: float, y: float, vw: float, visual_h: float,
+                        images: Mapping[str, bytes | None], unreadable: Sequence[str]) -> None:
+    """The two P06 visuals side by side (workflow-contract 0.2.0). Stage 06 is this sheet, so it is never embedded."""
+    c.rect(vx, y, vw, visual_h, 'surface', 12, 'line')
+    c.text(vx + 20, y + 16, '신제품 시안 / P06 Product · Outfit', 'bold', 18, 'ink')
+    box_x, box_y, box_w, box_h = vx + 20, y + 52, vw - 40, 520
+    gap = 12
+    panel_w = (box_w - gap) / len(visual.draft_visuals)
+    for index, item in enumerate(visual.draft_visuals):
+        px = box_x + index * (panel_w + gap)
+        status_text = RUN_STATUS_LABELS.get(item.status or '', item.status or '미제공')
+        c.text(px + 2, box_y, item.label, 'bold', 12, 'ink')
+        c.text(px + panel_w - c.width(status_text, 'regular', 11) - 2, box_y + 1, status_text, 'regular', 11,
+               'brick' if item.status == 'failed' else 'sub')
+        iy, ih = box_y + 22, box_h - 22
+        data = images.get(item.key)
+        if data:
+            c.rect(px, iy, panel_w, ih, 'raised', 10)
+            c.image(px + 4, iy + 4, panel_w - 8, ih - 8, data, 'contain')
+            continue
+        c.rect(px, iy, panel_w, ih, 'placeholder', 10)
+        headline = '이미지를 읽지 못했습니다' if item.key in unreadable else \
+            {'failed': '생성 실패', 'skipped': '생략'}.get(item.status or '', '이미지 없음')
+        c.text(px + (panel_w - c.width(headline, 'bold', 16)) / 2, iy + ih / 2 - 24, headline, 'bold', 16, 'sub')
+        for line_no, line in enumerate(c.wrap(item.reason or '', 'regular', 10.5, panel_w - 24, 4)):
+            c.text(px + (panel_w - c.width(line, 'regular', 10.5)) / 2, iy + ih / 2 + 2 + line_no * 14, line, 'regular', 10.5, 'sub')
+    caption = ['P06 시안']
+    if visual.image_generation_calls is not None:
+        caption.append(f'이미지 호출 {visual.image_generation_calls}회')
+    models = list(dict.fromkeys(item.model for item in visual.draft_visuals if item.model))
+    if models:
+        caption.append('model ' + ', '.join(models))
+    if visual.draft_fixture:
+        caption.append('로컬 fixture 이미지 — 생성된 컨셉 아님')
+    caption.append('06 기획안 = 이 문서 (P08 합성, 이미지 모델 호출 없음)')
+    failed = any(item.status == 'failed' for item in visual.draft_visuals)
+    for index, line in enumerate(c.wrap(' · '.join(caption), 'regular', 11, vw - 40, 2)):
+        c.text(vx + 20, y + 584 + index * 15, line, 'regular', 11, 'brick' if failed else 'sub')
+
+
 def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_unreadable: bool = False,
-               fonts: Fonts | None = None) -> bytes:
+               fonts: Fonts | None = None, draft_images: Mapping[str, bytes | None] | None = None,
+               draft_unreadable: Sequence[str] = ()) -> bytes:
     c = _Canvas(fonts or Fonts())
     board = sheet.board
     # header band
@@ -936,36 +1026,39 @@ def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_
     vx, vw = COL[2]
     y = top
     visual_h = 640
-    c.rect(vx, y, vw, visual_h, 'surface', 12, 'line')
-    c.text(vx + 20, y + 16, '신제품 이미지 / Product Visual', 'bold', 18, 'ink')
-    box_x, box_y, box_w, box_h = vx + 20, y + 52, vw - 40, 520
-    visual = sheet.visual
-    if image_bytes:
-        c.rect(box_x, box_y, box_w, box_h, 'raised', 10)
-        c.image(box_x + 6, box_y + 6, box_w - 12, box_h - 12, image_bytes, 'contain')
-    else:
-        c.rect(box_x, box_y, box_w, box_h, 'placeholder', 10)
-        headline = '시안 이미지를 읽지 못했습니다' if image_unreadable else \
-            {'failed': '시안 이미지 생성 실패', 'skipped': '시안 이미지 생략'}.get(visual.status or '', '시안 이미지 없음')
-        c.text(box_x + (box_w - c.width(headline, 'bold', 20)) / 2, box_y + box_h / 2 - 30, headline, 'bold', 20, 'sub')
-        detail = ' · '.join(text for text in (visual.reason or '', f'provider_calls {visual.provider_calls}'
-                                              if visual.provider_calls is not None else '') if text)
-        if detail:
-            c.text(box_x + (box_w - c.width(detail, 'regular', 12)) / 2, box_y + box_h / 2 + 4, detail, 'regular', 12, 'sub')
-        if visual.message:
-            for index, line in enumerate(c.wrap(visual.message, 'regular', 11, box_w - 60, 2)):
-                c.text(box_x + (box_w - c.width(line, 'regular', 11)) / 2, box_y + box_h / 2 + 26 + index * 15, line, 'regular', 11, 'sub')
-    status_text = RUN_STATUS_LABELS.get(visual.status or '', visual.status or '상태 미제공')
-    caption = [f'최종 이미지: {status_text}']
-    if visual.provider_calls is not None:
-        caption.append(f'provider_calls {visual.provider_calls}')
-    if visual.fixture:
-        caption.append('로컬 fixture 이미지 — 생성된 컨셉 아님')
-    artifact = _mapping(visual.artifact)
-    if isinstance(artifact.get('sha256'), str):
-        caption.append(f"sha256 {artifact['sha256'][:12]}")
-    for index, line in enumerate(c.wrap(' · '.join(caption), 'regular', 11, vw - 40, 2)):
-        c.text(vx + 20, y + 584 + index * 15, line, 'regular', 11, 'brick' if visual.status == 'failed' else 'sub')
+    if sheet.visual.draft_visuals:  # 0.2.0: P06's product and outfit images
+        _draw_draft_visuals(c, sheet.visual, vx, y, vw, visual_h, draft_images or {}, draft_unreadable)
+    else:  # earlier runs: the final image
+        c.rect(vx, y, vw, visual_h, 'surface', 12, 'line')
+        c.text(vx + 20, y + 16, '신제품 이미지 / Product Visual', 'bold', 18, 'ink')
+        box_x, box_y, box_w, box_h = vx + 20, y + 52, vw - 40, 520
+        visual = sheet.visual
+        if image_bytes:
+            c.rect(box_x, box_y, box_w, box_h, 'raised', 10)
+            c.image(box_x + 6, box_y + 6, box_w - 12, box_h - 12, image_bytes, 'contain')
+        else:
+            c.rect(box_x, box_y, box_w, box_h, 'placeholder', 10)
+            headline = '시안 이미지를 읽지 못했습니다' if image_unreadable else \
+                {'failed': '시안 이미지 생성 실패', 'skipped': '시안 이미지 생략'}.get(visual.status or '', '시안 이미지 없음')
+            c.text(box_x + (box_w - c.width(headline, 'bold', 20)) / 2, box_y + box_h / 2 - 30, headline, 'bold', 20, 'sub')
+            detail = ' · '.join(text for text in (visual.reason or '', f'provider_calls {visual.provider_calls}'
+                                                  if visual.provider_calls is not None else '') if text)
+            if detail:
+                c.text(box_x + (box_w - c.width(detail, 'regular', 12)) / 2, box_y + box_h / 2 + 4, detail, 'regular', 12, 'sub')
+            if visual.message:
+                for index, line in enumerate(c.wrap(visual.message, 'regular', 11, box_w - 60, 2)):
+                    c.text(box_x + (box_w - c.width(line, 'regular', 11)) / 2, box_y + box_h / 2 + 26 + index * 15, line, 'regular', 11, 'sub')
+        status_text = RUN_STATUS_LABELS.get(visual.status or '', visual.status or '상태 미제공')
+        caption = [f'최종 이미지: {status_text}']
+        if visual.provider_calls is not None:
+            caption.append(f'provider_calls {visual.provider_calls}')
+        if visual.fixture:
+            caption.append('로컬 fixture 이미지 — 생성된 컨셉 아님')
+        artifact = _mapping(visual.artifact)
+        if isinstance(artifact.get('sha256'), str):
+            caption.append(f"sha256 {artifact['sha256'][:12]}")
+        for index, line in enumerate(c.wrap(' · '.join(caption), 'regular', 11, vw - 40, 2)):
+            c.text(vx + 20, y + 584 + index * 15, line, 'regular', 11, 'brick' if visual.status == 'failed' else 'sub')
     y += visual_h + GAP
     # review notes
     notes_top = y
@@ -1074,9 +1167,25 @@ def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_
 
 def planning_sheet_png(envelope: Mapping[str, Any], *, load_artifact: Callable[[Mapping[str, Any]], bytes] | None = None,
                        decisions: Sequence[Mapping[str, Any]] = (), fonts: Fonts | None = None) -> bytes:
-    """PNG bytes for a stored run. ``load_artifact`` returns verified bytes for the final image reference."""
+    """PNG bytes for a run. ``load_artifact`` returns verified bytes for an image reference: the P06 visuals
+    (workflow-contract 0.2.0) or, for earlier runs, the final image."""
     sheet = build_sheet(envelope, decisions=decisions)
     image_bytes, unreadable = None, False
+    if sheet.visual.draft_visuals:
+        # 0.2.0: embed P06's verified visuals; the final image of such a run is this sheet and is never embedded.
+        images, missing = {}, []
+        for item in sheet.visual.draft_visuals:
+            if item.status != 'generated' or not item.artifact or item.artifact.get('media_type') not in IMAGE_MEDIA:
+                continue
+            try:
+                data = load_artifact(dict(item.artifact)) if load_artifact else None
+            except Exception:  # an unreadable artifact is reported on the sheet; the sheet still renders
+                data = None
+            if not isinstance(data, bytes) or len(data) > MAX_EMBEDDED_IMAGE_BYTES:
+                data = None
+                missing.append(item.key)
+            images[item.key] = data
+        return render_png(sheet, fonts=fonts, draft_images=images, draft_unreadable=tuple(missing))
     artifact = sheet.visual.artifact
     if artifact and sheet.visual.status == 'generated' and artifact.get('media_type') in IMAGE_MEDIA:
         try:

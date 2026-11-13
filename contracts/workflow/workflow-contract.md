@@ -1,4 +1,4 @@
-# 목표 워크플로우 계약 후보 — 0.1.1
+# 목표 워크플로우 계약 후보 — 0.2.0
 
 > **Migrated 2026-11-13** from the local `_workflow/contracts/` workspace into `vogue-orchestrator/contracts/workflow/`. References below to `decisions/contract-baseline.json`, `handoffs/…` or `PLAN.md` are historical: the baseline now lives in `contracts/workflow/baseline.json` (written only by `scripts/freeze_workflow_contract.py`), the reference validator and fixtures in `tools/workflow_contract/`.
 
@@ -6,7 +6,7 @@
 
 ## 1. 버전과 호출 책임
 
-새 transport는 `vogue-workflow/0.1`, baseline 식별자는 `workflow-contract/0.1.1`으로 제안한다. 새 producer schema는 각각 `planning-draft/1.0`, `sales-market-review/1.0`, `integrated-result/1.0`이다. 기존 Trend1.1/Stock1.0/PlanningRequest1.0와 기존 transport handoff0.1/P06 handoff0.3는 바꾸지 않는다. 전체 현재·제안 matrix는 `source-consumer-matrix.json`이다.
+새 transport는 `vogue-workflow/0.1`, baseline 식별자는 `workflow-contract/0.2.0`으로 제안한다(0.1.1 → 0.2.0 변경은 7-1절). 새 producer schema는 각각 `planning-draft/1.0`, `sales-market-review/1.0`, `integrated-result/1.0`이다. 기존 Trend1.1/Stock1.0/PlanningRequest1.0와 기존 transport handoff0.1/P06 handoff0.3는 바꾸지 않는다. 전체 현재·제안 matrix는 `source-consumer-matrix.json`이다.
 
 | 순서 | 호출자 → 수신자 | 경로 | 입력 / 반환 |
 |---|---|---|---|
@@ -104,6 +104,28 @@ TrendQuery wire 요청, Review derived_view 포함 요청은 위 논리 hash와 
 Trend/Draft no_results로 멈춘 결과는 integrated no_results다. Review no_results는 유효 Draft를 유지한 partial이며 이미지0회다. 이 경우 텍스트 통합은 가능하며 통합 자체가 error면 error로 중단한다. 최종 이미지 실패만 partial/image.failed다. 원 producer status는 어느 경우에도 고쳐 쓰지 않는다.
 
 Draft ID는 planning thread에 안정적이다. 선택적 `planning_request.planning_thread_id`는 common ID 문법을 따라야 하며 없으면 request_id를 thread 키로 사용한다. 같은 입력의 retry는 저장된 identity/응답을 재사용하고 새 revision을 만들지 않는다. source_request 또는 draft 내용이 달라지면 같은 draft_id의 revision을 증가시키고 이전 결과·Review·이미지를 덮어쓰지 않는다. Review는 정확한 Draft identity 전체와 envelope hash에 고정한다. 같은 Review 재전달은 review_id/revision/hash를 재사용하며 재평가는 새 review identity 또는 증가한 revision으로 구분한다. 같은 ID/revision에 다른 hash가 나타나면 충돌로 거부한다. 서로 다른 request_id를 가진 revision도 각 실행 내부의 ID 일치는 유지한다. 이 영속 이력 검증은 단일 fixture 검증과 별도로 owner/QA가 수행한다.
+
+## 7-1. 0.2.0 변경: P06 시각 산출물과 기획안 사진 (2026-11-13)
+
+사용자 결정(2026-11-13): 트렌드가 반영된 옷 이미지와 그 옷을 입은 모습(착장) 이미지는 **P06(new-product-agent)** 이 만든다. P08의 이미지 단계(`final_image`)는 실행 기록으로 **기획안 사진(기획서 PNG)** 만 결정적으로 합성한다. 상태는 각 에이전트가 맡은 산출물을 모두 만들면 `ok`이고, 데이터 공백은 limitations로 남긴다.
+
+transport `vogue-workflow/0.1`과 세 producer schema 이름(`planning-draft/1.0`, `sales-market-review/1.0`, `integrated-result/1.0`)은 그대로 둔다. 바뀐 것은 아래 셋이며, 모두 **선택 필드와 새 mode 값**이다. 그래서 0.1.x의 `draft_only` 요청·응답은 0.2.0에서도 그대로 유효하다.
+
+| 위치 | 0.1.1 | 0.2.0 |
+|---|---|---|
+| `planning-draft-request.input.mode` | `const draft_only` | `draft_only` 또는 `draft_with_visuals` |
+| `planning-draft-response.result.image_generation_calls` | `const 0` | 0–2. `draft_only`이면 0. 값은 `draft.visuals`의 `provider_calls` 합과 같아야 함(의미 규칙 `IMAGE_CALLS_MISMATCH`) |
+| `draft` | 7개 필드 | 선택 필드 2개 추가: `concept`(P06 상품 사양: product_definition, attributes 등, 근거는 evidence_id 코드), `visuals{product, outfit}` |
+
+- `visuals.product`: 트렌드 근거로 만든 신상품 이미지. `visuals.outfit`: 그 신상품을 입은 착장 이미지(Stock 매칭 상품이 있으면 함께 착용).
+- 각 visual은 `status: generated | failed | skipped`, `artifact`(P06 저장소 `artifact://p06/images/<sha256>.png`), `provider_calls` 0–1, `model`, `prompt_version`, `reason`이다. `generated`에는 artifact가 필수다. `failed`·`skipped`는 artifact 없이 reason이 필수다. `skipped`이면 provider_calls는 0이다.
+- `draft_only`면 `visuals`가 없어야 한다. `draft_with_visuals`가 `ok`이면 두 visual이 모두 `generated`여야 한다. 하나라도 만들지 못하면 `partial`이다.
+- `concept`의 evidence_id는 모두 Draft 요청 안에 실제로 있어야 한다(의미 규칙 `CONCEPT_EVIDENCE_UNKNOWN`).
+- Draft 응답이 없는 실행의 `planning_draft` 단계 input hash는 두 mode 중 하나와 일치해야 한다.
+- P08은 `artifact://p06/` 참조를 `/peer/p06` 읽기 전용 마운트에서 크기·sha256으로 검증해 가져온다(p07과 같은 방식).
+- `final_image`의 구조·lineage·hash 규약(7절 표)은 바꾸지 않는다. 0.2.0에서 P08은 이 단계에서 외부 이미지 모델을 부르지 않는다. 기획안 사진을 합성하고 `provider_calls: 1`(합성 함수 호출 1회, 유료 호출 아님)로 기록한다.
+
+reference fixture는 76건이다(기존 66건과 0.2.0의 10건). 0.2.0 10건 중 통과 기대는 5건이고(요청 1, 응답 3, 통합 1), 거부 기대는 5건이다. 거부 기대 5건의 내역은 schema 3건(`draft_only`+visuals, ok인데 outfit failed, generated인데 artifact 없음)과 의미 규칙 2건(호출 수 불일치, 모르는 근거 코드)이다. 이 fixture를 다시 만들 때 Trend producer의 현재 serializer(style의 `example_images`, `search_outlook` 포함)를 그대로 썼다. 그래서 기존 fixture bytes와 hash도 함께 바뀌었다.
 
 ## 8. 수동 세션 전달·수용 조건
 

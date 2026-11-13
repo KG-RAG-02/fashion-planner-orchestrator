@@ -10,9 +10,11 @@ from .workflow_store import digest, strict_json
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_ROOT = REPO_ROOT / 'contracts/workflow'
 BASELINE_FORMAT = 'vogue-workflow-baseline/1'
-DEFAULT_CONTRACT_PACKAGE = 'workflow-contract/0.1.1'
+DEFAULT_CONTRACT_PACKAGE = 'workflow-contract/0.2.0'
 VERSION = 'vogue-workflow/0.1'
 STAGES = ('trend', 'stock', 'planning_draft', 'sales_market_review', 'integration', 'final_image')
+# planning-draft-request input.mode (0.2.0): draft_with_visuals asks P06 for the product and worn (outfit) images.
+DRAFT_MODES = ('draft_only', 'draft_with_visuals')
 SCHEMAS = {'trend': ('trend-analysis-agent', '1.1', 'vogue-handoff/0.1'),
            'stock': ('stock-agent', '1.0', 'vogue-handoff/0.1'),
            'planning_draft': ('new-product-agent', 'planning-draft/1.0', VERSION),
@@ -250,6 +252,14 @@ class WorkflowContract:
                 require(isinstance(record, dict) and record.get('evidence_id') == node['evidence_id'], 'EVIDENCE_ID_MISMATCH')
             if 'source_request_sha256' in node:
                 require(digest(node['source_request']) == node['source_request_sha256'], 'SOURCE_REQUEST_HASH_MISMATCH')
+                # 0.2.0: the image call count is the sum of the visuals' own calls (0 for draft_only), and the
+                # concept cites only evidence that exists in the request it was drawn from.
+                draft = node.get('draft') if isinstance(node.get('draft'), dict) else {}
+                visuals = draft.get('visuals') or {}
+                require(node.get('image_generation_calls', 0) == sum(v['provider_calls'] for v in visuals.values()), 'IMAGE_CALLS_MISMATCH')
+                if draft.get('concept') is not None:
+                    known_ids = {n['evidence_id'] for n in walk(node['source_request']) if isinstance(n.get('evidence_id'), str)}
+                    require({i for n in walk(draft['concept']) for i in n.get('evidence_ids', [])} <= known_ids, 'CONCEPT_EVIDENCE_UNKNOWN')
             if node.get('draft') is not None and 'draft_identity' in node:
                 require(digest(node['draft']) == node['draft_identity']['content_sha256'], 'DRAFT_CONTENT_HASH_MISMATCH')
             if 'review_identity' in node and 'review' in node:
@@ -260,7 +270,7 @@ class WorkflowContract:
                 require(source['result']['draft_identity'] == review['reviewed_draft'], 'REVIEW_DRAFT_IDENTITY_MISMATCH')
                 if node['status'] in {'ok', 'partial'}:
                     require(any(f['evidence_refs'] for f in review['findings']) or any(m['value'] is not None for m in review['metrics']), 'REVIEW_HAS_NO_ELIGIBLE_BASIS')
-            if node.get('mode') == 'draft_only':
+            if node.get('mode') in DRAFT_MODES:
                 require(node['planning_request']['query'] == node['user_input']['text'], 'USER_TEXT_MISMATCH')
                 trend = node['trend_response']['raw_response']
                 stock = node['stock_response']['raw_response']
@@ -335,7 +345,9 @@ class WorkflowContract:
                     t,s = sources['trend'],sources['stock']
                     wire = dict(contract_version='vogue-handoff/0.1', request_id=body['request_id'], input=t['raw_response']['result'])
                     context = dict(planning_request_sha256=digest(body['planning_request']),trend_response_sha256=t['content_sha256'],stock_input_sha256=digest(t['raw_response']['result']),stock_wire_request_sha256=digest(wire),stock_response_sha256=s['content_sha256'])
-                    expected = digest(dict(contract_version=VERSION,request_id=body['request_id'],input=dict(mode='draft_only',user_input=body['user_input'],planning_request=body['planning_request'],trend_response=t,stock_response=s,stock_call_context=context)))
+                    # Either Draft mode may have been sent (0.2.0); the trace must match one of them.
+                    candidates = {digest(dict(contract_version=VERSION,request_id=body['request_id'],input=dict(mode=mode,user_input=body['user_input'],planning_request=body['planning_request'],trend_response=t,stock_response=s,stock_call_context=context))) for mode in DRAFT_MODES}
+                    expected = stage['input_sha256'] if stage['input_sha256'] in candidates else None
             elif name == 'sales_market_review': expected = draft['content_sha256']
             elif name == 'integration': expected = digest(dict(draft_response_sha256=draft['content_sha256'],review_response_sha256=review['content_sha256']))
             else: expected = digest(dict(draft_response_sha256=draft['content_sha256'],review_response_sha256=review['content_sha256'],integration=body['integration']))

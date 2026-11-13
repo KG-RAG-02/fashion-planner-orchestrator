@@ -18,7 +18,8 @@ from vogue_orchestrator.workflow_store import WorkflowStore, digest
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'tools' / 'workflow_contract' / 'fixtures'
 INTEGRATED = ('integrated-ok', 'integrated-image-failed', 'integrated-review-no-results', 'integrated-review-error',
-              'integrated-stock-partial', 'integrated-trend-no-results', 'integrated-draft-no-results', 'integrated-auth-error')
+              'integrated-stock-partial', 'integrated-trend-no-results', 'integrated-draft-no-results', 'integrated-auth-error',
+              'integrated-visuals-ok')
 SECTION_ORDER = ('concept', 'trend', 'inventory', 'sales_market', 'insight', 'specifications', 'references', 'finance')
 PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
 
@@ -38,10 +39,10 @@ def strings(value):
             yield from strings(item)
 
 
-def red_png(size=12):
+def red_png(size=12, colour=(220, 20, 20)):
     from PIL import Image
     out = io.BytesIO()
-    Image.new('RGB', (size, size), (220, 20, 20)).save(out, format='PNG')
+    Image.new('RGB', (size, size), colour).save(out, format='PNG')
     return out.getvalue()
 
 
@@ -112,6 +113,20 @@ class BoardMappingTests(unittest.TestCase):
         self.assertEqual((section.state, section.claims), ('failed', ()))
         self.assertIn('UPSTREAM_TIMEOUT: timed out', section.notes)
 
+    def test_p06_concept_and_visuals_are_mapped_from_the_draft(self):
+        # workflow-contract 0.2.0: draft.concept fills the spec section; draft.visuals are the panel; 06 is the sheet.
+        sheet = build_sheet(fixture('integrated-visuals-ok'))
+        spec = next(section for section in sheet.board.sections if section.section_id == 'specifications')
+        texts = [claim.text for claim in spec.claims]
+        self.assertEqual(texts[0], '상품 정의: 합성 셔츠 콘셉트 (fixture)')
+        self.assertIn('color=화이트', texts)
+        self.assertEqual([(v.key, v.status, v.model) for v in sheet.visual.draft_visuals],
+                         [('product', 'generated', 'fixture'), ('outfit', 'generated', 'fixture')])
+        self.assertEqual(sheet.visual.image_generation_calls, 2)
+        self.assertEqual(sheet.stages[-1][:3], ('final_image', '06', 'Sheet'))
+        self.assertEqual(dict(sheet.brief)['시안 (P06)'], '신상품 생성됨 · 착장 생성됨')
+        self.assertEqual(build_sheet(fixture('integrated-ok')).visual.draft_visuals, ())  # earlier runs: final image panel
+
     def test_brief_rows_report_missing_fields_as_missing(self):
         brief = dict(build_sheet(fixture('integrated-ok')).brief)
         self.assertTrue(brief['점수'].startswith('미제공'))
@@ -154,6 +169,26 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
             red, green, blue = image.convert('RGB').getpixel((2624, 960))  # centre of the visual box
         self.assertGreater(red, 180)
         self.assertLess(green, 80)
+
+    def test_p06_visuals_are_embedded_and_the_final_image_never_is(self):
+        fonts = self.fonts()
+        envelope = fixture('integrated-visuals-ok')
+        visuals = envelope['result']['sources']['planning_draft']['raw_response']['result']['draft']['visuals']
+        colours = {visuals['product']['artifact']['sha256']: (220, 20, 20), visuals['outfit']['artifact']['sha256']: (20, 40, 220)}
+        calls = []
+
+        def load(artifact):
+            calls.append(artifact)
+            return red_png(colour=colours[artifact['sha256']])
+
+        png = planning_sheet_png(envelope, load_artifact=load, fonts=fonts)
+        self.assertEqual(calls, [visuals['product']['artifact'], visuals['outfit']['artifact']])  # never the final image
+        from PIL import Image
+        with Image.open(io.BytesIO(png)) as image:
+            rgb = image.convert('RGB')
+            left, right = rgb.getpixel((2378, 982)), rgb.getpixel((2870, 982))  # centres of the two panels
+        self.assertTrue(left[0] > 180 and left[2] < 80, left)
+        self.assertTrue(right[2] > 180 and right[0] < 80, right)
 
     def test_a_failed_image_is_never_loaded(self):
         fonts = self.fonts()

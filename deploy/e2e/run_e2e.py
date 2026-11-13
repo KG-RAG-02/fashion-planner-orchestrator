@@ -8,10 +8,10 @@ protected by the trusted-local policy, not by the inter-service token).
   python deploy/e2e/run_e2e.py --base http://127.0.0.1:18765 --profile stub \
       --trend-query deploy/e2e/queries/stub-trend-query.json --out ~/VOGUE-archive/e2e/stub.json
 
-Profiles:
-  stub       explicit TrendQuery, fixture image provider; expects all six stages and exactly one image
-  rehearsal  explicit TrendQuery against real Aura/R2 data, fixture image provider; zero paid calls
-  live       free-text query structured by the LLM, real image provider; a single run, no retries
+Profiles (workflow-contract 0.2.0: P06 makes the product and worn images, stage 06 composes the planning sheet):
+  stub       explicit TrendQuery, P06 fixture visuals; expects all six stages ok and the composed sheet
+  rehearsal  explicit TrendQuery against real Aura/R2 data, P06 fixture visuals; zero paid calls
+  live       free-text query structured by the LLM, P06 OpenAI visuals (2 image calls); a single run, no retries
 """
 from __future__ import annotations
 
@@ -155,24 +155,54 @@ def main(argv=None):
     result = envelope["result"]
     stages = result.get("stages", [])
     names = [s.get("stage") for s in stages]
+    draft_body = ((result.get("sources") or {}).get("planning_draft") or {}).get("raw_response", {}).get("result") or {}
+    visuals = (draft_body.get("draft") or {}).get("visuals") or {}
     evidence.update(status=result.get("status"), stages=[{k: s.get(k) for k in ("stage", "status", "started_at", "completed_at")} for s in stages],
                     final_image={k: result.get("final_image", {}).get(k) for k in ("status", "provider_calls", "reason")},
+                    draft_visuals={key: {k: (v or {}).get(k) for k in ("status", "provider_calls", "model", "prompt_version", "reason")}
+                                   for key, v in visuals.items()},
+                    draft_image_generation_calls=draft_body.get("image_generation_calls"),
                     limitations=result.get("limitations"), errors=result.get("errors"))
     check("stages run in contract order", names == STAGE_ORDER[: len(names)], names)
     check("every stage keeps the same request_id", all(s.get("request_id") == request_id for s in stages))
     image = result.get("final_image", {})
     calls = image.get("provider_calls")
     check("at most one image provider call", isinstance(calls, int) and calls <= 1, calls)
+    check("every stage completed (ok)", names == STAGE_ORDER and all(s.get("status") == "ok" for s in stages) and result.get("status") == "ok",
+          [f"{s.get('stage')}={s.get('status')}" for s in stages])
+    # 0.2.0: P06 returns the trend-reflecting product image and the worn (outfit) image with the Draft.
+    check("P06 made the product and outfit visuals", [visuals.get(k, {}).get("status") for k in ("product", "outfit")] == ["generated", "generated"],
+          {k: (v or {}).get("status") for k, v in visuals.items()} or "no draft.visuals")
+    for key in ("product", "outfit"):
+        sha = ((visuals.get(key) or {}).get("artifact") or {}).get("sha256")
+        if sha:
+            status, _, data, _, ctype = call(base, "GET", f"/api/workflow/artifacts/{sha}")
+            ok = status == 200 and ctype.startswith("image/") and hashlib.sha256(data).hexdigest() == sha
+            check(f"P06 {key} image is imported and served (sha256 verified)", ok, f"{status} {ctype} {len(data)}B")
+            if ok:
+                target = Path(args.out).expanduser().with_suffix("") if args.out else Path.cwd() / f"{args.profile}-{request_id}"
+                path = target.parent / (target.name + f"-p06-{key}.{'png' if ctype == 'image/png' else ctype.split('/')[-1]}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+                evidence.setdefault("p06_visual_files", {})[key] = {"path": str(path), "bytes": len(data), "sha256": sha}
     if image.get("status") == "generated":
         check("image only after a review", "sales_market_review" in names and "integration" in names, names)
         artifact = (image.get("artifact") or {}).get("artifact_id")
         status, _, img_raw, _, ctype = call(base, "GET", f"/api/workflow/artifacts/{artifact}")
-        check("final image artifact is served", status == 200 and ctype.startswith("image/") and len(img_raw) > 0, f"{status} {ctype} {len(img_raw)}B")
-    if args.profile == "stub":
-        check("stub reaches all six stages", names == STAGE_ORDER, names)
-        check("stub generates exactly one fixture image", image.get("status") == "generated" and calls == 1, image.get("status"))
+        size = png_size(img_raw) if status == 200 else None
+        check("stage 06 is the composed planning sheet (PNG, 3200 px)", status == 200 and ctype == "image/png" and bool(size) and size[0] == 3200,
+              f"{status} {ctype} {len(img_raw)}B {size}")
+        if status == 200 and size:
+            target = Path(args.out).expanduser().with_suffix("") if args.out else Path.cwd() / f"{args.profile}-{request_id}"
+            path = target.parent / (target.name + "-stage06-sheet.png")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(img_raw)
+            evidence["stage06_sheet"] = {"path": str(path), "bytes": len(img_raw), "sha256": hashlib.sha256(img_raw).hexdigest()}
+    check("P08 calls no image model (stage 06 provider)", ((system or {}).get("image") or {}).get("provider") == "planning_sheet",
+          ((system or {}).get("image") or {}).get("provider"))
     if args.profile in ("stub", "rehearsal"):
-        check("no paid image call outside live", image.get("status") != "generated" or ((system or {}).get("image") or {}).get("provider") == "fixture", ((system or {}).get("image") or {}).get("provider"))
+        check("no paid image call outside live (P06 fixture visuals)", all((v or {}).get("model") in (None, "fixture") for v in visuals.values()),
+              [(v or {}).get("model") for v in visuals.values()])
     validator = schema_validator()
     if validator is None:
         check("integrated-result schema validation (jsonschema missing — skipped)", True, "skipped: install jsonschema to enable")

@@ -80,7 +80,7 @@ def probe_agent(env: Mapping[str, str], agent_id: str, variable: str, health_pat
 def system_status(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     from .server import runtime_mode, trusted_peer_networks
     from .workflow_contract import contract_gate_status
-    from .workflow_http import image_provider_name, image_retry_enabled, images_enabled
+    from .workflow_http import draft_mode, image_provider_name, image_retry_enabled, images_enabled
     env = os.environ if env is None else env
     with ThreadPoolExecutor(max_workers=len(AGENTS)) as pool:
         agents = list(pool.map(lambda spec: probe_agent(env, *spec), AGENTS))
@@ -99,8 +99,11 @@ def system_status(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         agents=agents,
         contract={key: gate[key] for key in ('contract_version', 'state', 'consistent', 'frozen', 'gate',
                                              'allow_proposed', 'source', 'problems')},
+        # Stage 06 needs no key: planning_sheet composes the sheet locally (P08 calls no image model).
         image=dict(enabled=enabled, provider=provider or 'invalid', retry_enabled=image_retry_enabled(env),
-                   ready=enabled and (provider == 'fixture' or (provider == 'openai' and bool(str(env.get('OPENAI_API_KEY') or '').strip())))),
+                   ready=enabled and provider is not None),
+        # draft_with_visuals: P06 makes the product and worn images inside the Draft call.
+        draft=dict(mode=draft_mode(env) or 'invalid'),
         query_structuring=dict(mode='synthetic_fixture' if structuring == 'synthetic_fixture' else 'llm'),
         outbound=dict(private_hosts=hosts, private_hosts_valid=hosts_valid,
                       dev_mode=str(env.get('VOGUE_AGENT_HTTP_DEV_MODE') or '').lower() in {'1', 'true', 'yes'},

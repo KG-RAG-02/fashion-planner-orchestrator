@@ -106,7 +106,7 @@ def make_stock(trend, status="ok"):
     return retain(env("stock-agent", "1.0", payload, "vogue-handoff/0.1"), "sample" if status in {"ok", "partial"} else "synthetic_fixture", "2020-09-22" if status in {"ok", "partial"} else None)
 
 
-def make_request(trend=None, stock_status="ok", with_image=False):
+def make_request(trend=None, stock_status="ok", with_image=False, mode="draft_only"):
     trend = trend or make_trend()
     stock = make_stock(trend, stock_status)
     images = []
@@ -116,7 +116,7 @@ def make_request(trend=None, stock_status="ok", with_image=False):
     planning = {"schema_version": "1.0", "request_id": RID, "query": user["text"], "context": {"category": "셔츠", "season": "2027SS"}}
     wire_request = {"contract_version": "vogue-handoff/0.1", "request_id": RID, "input": trend["raw_response"]["result"]}
     return {"contract_version": TRANSPORT, "request_id": RID,
-            "input": {"mode": "draft_only", "user_input": user,
+            "input": {"mode": mode, "user_input": user,
                       "planning_request": planning, "trend_response": trend, "stock_response": stock,
                       "stock_call_context": {"planning_request_sha256": fingerprint(planning), "trend_response_sha256": trend["content_sha256"],
                                              "stock_input_sha256": fingerprint(trend["raw_response"]["result"]), "stock_wire_request_sha256": fingerprint(wire_request),
@@ -129,16 +129,39 @@ def evidence_ref(request):
             "source_response_sha256": t["content_sha256"], "source_pointer": "/result/evidence/0"}
 
 
-def make_draft(request, status="ok"):
+def visual(status, seed):
+    """One P06 visual (0.2.0). A generated visual carries a fixed synthetic PNG; nothing is generated here."""
+    if status == "generated":
+        return {"status": "generated", "artifact": image_fixture(seed), "provider_calls": 1, "model": "fixture",
+                "prompt_version": "fixture-visual/1", "reason": None}
+    return {"status": status, "artifact": None, "provider_calls": 1 if status == "failed" else 0, "model": "fixture" if status == "failed" else None,
+            "prompt_version": "fixture-visual/1" if status == "failed" else None,
+            "reason": "Synthetic provider failure" if status == "failed" else "Product image not generated; outfit not attempted."}
+
+
+def make_concept(request):
+    eid = request["input"]["trend_response"]["raw_response"]["result"]["evidence"][0]["evidence_id"]
+    return {"engine": "rule_based", "product_definition": {"value": "합성 셔츠 콘셉트 (fixture)", "kind": "proposal", "evidence_ids": [eid]},
+            "opportunity": None, "target_customer": None,
+            "attributes": [{"name": "color", "value": "화이트", "kind": "to_validate", "evidence_ids": []}],
+            "differentiation": [], "risks": [], "questions_for_validation": ["색상은 MD 확인 필요"]}
+
+
+def make_draft(request, status="ok", visuals=None):
     draft = {"title": "합성 검토용 셔츠 초안", "category": "셔츠", "season": "2027SS",
              "claims": [{"kind": "fact", "text": "Fixture evidence contains a test item.", "evidence_refs": [evidence_ref(request)]},
                         {"kind": "proposal", "text": "MD 검토용 합성 디자인 제안", "evidence_refs": []}],
              "open_questions": ["현재 자사 재고와 판매 근거는 미확인"], "md_decision_required": MD,
              "limitations": ["Synthetic fixture; price, cost and order quantity remain MD decisions."]}
+    calls = 0
+    if visuals is not None:  # draft_with_visuals (0.2.0): the design spec and the two P06 images travel with the Draft
+        draft["concept"] = make_concept(request)
+        draft["visuals"] = {"product": visual(visuals[0], 1), "outfit": visual(visuals[1], 2)}
+        calls = sum(v["provider_calls"] for v in draft["visuals"].values())
     body = {"schema_version": "planning-draft/1.0", "agent_id": "new-product-agent", "request_id": RID, "status": status,
             "draft_identity": {"draft_id": "fixture:draft:001", "revision": 1, "content_sha256": fingerprint(draft)}, "draft": draft,
             "source_request": copy.deepcopy(request), "source_request_sha256": fingerprint(request),
-            "limitations": ["Synthetic contract fixture only."], "errors": [], "artifacts": [], "image_generation_calls": 0, "review_calls": 0}
+            "limitations": ["Synthetic contract fixture only."], "errors": [], "artifacts": [], "image_generation_calls": calls, "review_calls": 0}
     if status in {"no_results", "error"}:
         body.update(draft_identity=None, draft=None)
     if status == "error":
@@ -169,12 +192,13 @@ def make_review(draft, status="ok"):
     return retain(env("sales-market-agent", "sales-market-review/1.0", result))
 
 
-def image_fixture():
-    # Fixed one-pixel RGBA PNG with computed CRCs; no model/provider is called.
+def image_fixture(seed=0):
+    # Fixed one-pixel RGBA PNG with computed CRCs; no model/provider is called. seed 0 is the original white pixel.
     def chunk(kind, payload):
         return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload))
+    pixel = bytes([255 - seed, 255, 255 - 2 * seed, 255])
     data = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
-    data += chunk(b"IDAT", zlib.compress(b"\0\xff\xff\xff\xff")) + chunk(b"IEND", b"")
+    data += chunk(b"IDAT", zlib.compress(b"\0" + pixel)) + chunk(b"IEND", b"")
     return blob(data, "image/png", "png")
 
 
@@ -373,6 +397,28 @@ def main():
     raw["result"]["products"][0]["inventory"]["quantity"] = 7.0
     bad["input"]["stock_response"]["content_sha256"] = fingerprint(raw)
     case("bad-raw-number-type-rewritten", "planning-draft-request", bad, semantic_ok=False, code="RAW_ARTIFACT_OBJECT_MISMATCH")
+    # 0.2.0: draft_with_visuals. P06 returns the trend-reflecting product image and the worn (outfit) image.
+    visual_request = make_request(mode="draft_with_visuals")
+    visual_draft = make_draft(visual_request, "ok", ("generated", "generated"))
+    visual_review = make_review(visual_draft)
+    case("draft-request-visuals-ok", "planning-draft-request", visual_request)
+    case("draft-response-visuals-ok", "planning-draft-response", visual_draft["raw_response"])
+    case("draft-response-visuals-outfit-failed", "planning-draft-response", make_draft(visual_request, "partial", ("generated", "failed"))["raw_response"])
+    case("draft-response-visuals-product-failed", "planning-draft-response", make_draft(visual_request, "partial", ("failed", "skipped"))["raw_response"])
+    case("integrated-visuals-ok", "integrated-result", make_integrated(visual_request, visual_draft, visual_review))
+    bad = make_draft(request, "ok", ("generated", "generated"))["raw_response"]
+    case("bad-draft-only-with-visuals", "planning-draft-response", bad, schema_ok=False)
+    bad = make_draft(visual_request, "ok", ("generated", "failed"))["raw_response"]
+    case("bad-visuals-ok-outfit-failed", "planning-draft-response", bad, schema_ok=False)
+    bad = make_draft(visual_request, "partial", ("generated", "generated"))["raw_response"]
+    bad["result"]["draft"]["visuals"]["outfit"]["artifact"] = None
+    bad["result"]["draft_identity"]["content_sha256"] = fingerprint(bad["result"]["draft"])
+    case("bad-visual-generated-without-artifact", "planning-draft-response", bad, schema_ok=False)
+    bad = copy.deepcopy(visual_draft["raw_response"]); bad["result"]["image_generation_calls"] = 1
+    case("bad-visual-calls-mismatch", "planning-draft-response", bad, semantic_ok=False, code="IMAGE_CALLS_MISMATCH")
+    bad = copy.deepcopy(visual_draft["raw_response"]); bad["result"]["draft"]["concept"]["product_definition"]["evidence_ids"] = ["missing:evidence"]
+    bad["result"]["draft_identity"]["content_sha256"] = fingerprint(bad["result"]["draft"])
+    case("bad-concept-unknown-evidence", "planning-draft-response", bad, semantic_ok=False, code="CONCEPT_EVIDENCE_UNKNOWN")
     write_json(FIXTURES / "artifacts.json", dict(sorted(ARTIFACTS.items())))
     write_json(FIXTURES / "index.json", {"synthetic": True, "note": "All documents are fabricated; trace provider_calls are expectations. Actual external calls = 0.", "cases": CASES})
     # Preserve historical/unreferenced blobs; a new manifest is not deletion authority.

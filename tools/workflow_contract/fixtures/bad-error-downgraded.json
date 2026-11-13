@@ -68,7 +68,8 @@
                     "trend:fixture:article:0:bd1ee873"
                   ],
                   "aliases": [],
-                  "article_id": null
+                  "article_id": null,
+                  "example_images": []
                 },
                 "items": [
                   {
@@ -121,14 +122,14 @@
             "schema_version": "1.1"
           }
         },
-        "content_sha256": "d360118bc820e8395df8a59c7f2e81685082bda6d78e141a7cf7372315c283bc",
+        "content_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325",
         "hash_profile": "python-json-sort/1",
         "raw_artifact": {
-          "artifact_id": "fixture:20398762d44bcfb70cd0aae524b92266ccc570fdc4165eeb36e6fdf231524111",
-          "uri": "artifact://fixtures/raw/20398762d44bcfb70cd0aae524b92266ccc570fdc4165eeb36e6fdf231524111.json",
-          "sha256": "20398762d44bcfb70cd0aae524b92266ccc570fdc4165eeb36e6fdf231524111",
+          "artifact_id": "fixture:38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b",
+          "uri": "artifact://fixtures/raw/38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b.json",
+          "sha256": "38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b",
           "media_type": "application/json",
-          "size_bytes": 2411,
+          "size_bytes": 2443,
           "immutable": true
         },
         "observation": {
@@ -153,7 +154,7 @@
         "request_id": "fixture:workflow:001",
         "status": "ok",
         "input_sha256": "87752b6aabe82d6a5285310f97da9b3c4ec368cdbe5bc4f112499350a057ce0f",
-        "response_sha256": "d360118bc820e8395df8a59c7f2e81685082bda6d78e141a7cf7372315c283bc",
+        "response_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325",
         "started_at": "2026-11-12T06:00:00Z",
         "completed_at": "2026-11-12T06:00:01Z",
         "errors": []
@@ -163,7 +164,7 @@
         "stage": "stock",
         "request_id": "fixture:workflow:001",
         "status": "error",
-        "input_sha256": "041556b19d893aed9a18e4fccc433dadfe29c7554b6adfd962d0b564c25c0efb",
+        "input_sha256": "4da8ff8d6f1d34e184418ea1153100fe99d693a4d7516c2f39dd0a4996cfe5ea",
         "response_sha256": null,
         "started_at": "2026-11-12T06:00:02Z",
         "completed_at": "2026-11-12T06:00:03Z",

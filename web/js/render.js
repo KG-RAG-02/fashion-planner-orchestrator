@@ -78,9 +78,13 @@ export function renderConcept(section, envelope, { retryEnabled = false, onRetry
   const image = result.final_image ?? {};
   const lineage = image.lineage ?? {};
   let figure;
+  // 0.2.0: the visuals are P06's (Draft section); stage 06 is the planning sheet composed by P08.
+  const sheet = Boolean(draft?.visuals?.length);
   if (image.status === 'generated' && image.artifact?.artifact_id) {
-    figure = h('figure', { class: 'concept-figure' },
-      h('img', { src: artifactUrl(image.artifact.artifact_id), alt: `${draft?.title ?? '기획'} — 시장 검토 이후 생성한 최종 기획 이미지`, loading: 'lazy' }));
+    const src = artifactUrl(image.artifact.artifact_id);
+    figure = h('figure', { class: `concept-figure${sheet ? ' is-sheet' : ''}` },
+      h('a', { href: src, target: '_blank', rel: 'noopener', title: '원본 크기로 열기' },
+        h('img', { src, alt: sheet ? `${draft?.title ?? '기획'} — 기획안 사진 (P08 합성)` : `${draft?.title ?? '기획'} — 시장 검토 이후 생성한 최종 기획 이미지`, loading: 'lazy' })));
   } else {
     const label = image.status === 'failed' ? '이미지 생성 실패' : image.status === 'skipped' ? '이미지 생략' : '이미지 없음';
     figure = h('figure', { class: `concept-figure is-empty state-${image.status ?? 'none'}` },
@@ -153,11 +157,24 @@ function claimList(claims) {
     h('span', { class: 'muted small' }, `근거 ${claim.refs}건`))));
 }
 
+function draftVisualsFigure(view) {
+  const calls = Number.isInteger(view.imageCalls) ? ` · 이미지 호출 ${view.imageCalls}회` : '';
+  return h('div', { class: 'draft-visuals', role: 'group', 'aria-label': 'P06 시안 이미지' },
+    view.visuals.map((item) => h('figure', { class: `draft-visual state-${item.status ?? 'none'}` },
+      item.sha256
+        ? h('a', { href: artifactUrl(item.sha256), target: '_blank', rel: 'noopener' },
+            h('img', { src: artifactUrl(item.sha256), alt: `${view.title} — ${item.label} 시안 (P06)`, loading: 'lazy' }))
+        : h('div', { class: 'draft-visual-empty' }, item.reason || '이미지 없음'),
+      h('figcaption', {}, h('strong', {}, item.label), ` ${model.statusMeta(item.status).label}${item.model ? ` · ${item.model}` : ''}`))),
+    h('p', { class: 'small muted draft-visuals-note' }, `P06(new-product-agent)가 트렌드 근거로 만든 검토용 시안${calls}`));
+}
+
 export function renderDraft(section, view) {
   if (!view) { section.replaceChildren(sectionHead('draft-title', '기획 초안'), emptyNote('초안이 아직 없습니다.')); return; }
   section.replaceChildren(
     sectionHead('draft-title', '기획 초안', `planning-draft/1.0${view.category ? ` · ${view.category}` : ''}${view.season ? ` · ${view.season}` : ''}`),
     h('h3', { class: 'draft-title' }, view.title),
+    view.visuals?.length ? draftVisualsFigure(view) : null,
     view.claims.length ? claimList(view.claims) : emptyNote('주장이 없습니다.'),
     h('div', { class: 'open-questions' },
       h('p', { class: 'eyebrow' }, 'OPEN QUESTIONS · MD'),
@@ -270,7 +287,8 @@ export function renderSystem(container, status) {
         svc.reachable ? `${svc.healthy ? '정상' : '비정상'} · ${svc.http_status ?? '—'}${Number.isInteger(svc.latency_ms) ? ` · ${svc.latency_ms}ms` : ''}` : '응답 없음')))),
     h('dl', { class: 'meta-list' },
       h('dt', {}, '계약 baseline'), h('dd', {}, `${status.contract?.state ?? '—'}${status.contract?.gate ? ` · gate ${status.contract.gate}` : ''}`),
-      h('dt', {}, '이미지 공급자'), h('dd', {}, status.image ? `${status.image.provider}${status.image.enabled ? '' : ' (비활성)'}` : '—'),
+      h('dt', {}, '06 기획안 사진'), h('dd', {}, status.image ? `${status.image.provider}${status.image.enabled ? '' : ' (비활성)'}` : '—'),
+      h('dt', {}, 'Draft 요청'), h('dd', {}, status.draft?.mode === 'draft_with_visuals' ? 'P06 신상품·착장 이미지 포함' : (status.draft?.mode ?? '—')),
       h('dt', {}, '질의 구조화'), h('dd', {}, status.query_structuring?.mode || 'llm'),
       h('dt', {}, '실행 모드'), h('dd', {}, status.runtime ?? '—')));
 }

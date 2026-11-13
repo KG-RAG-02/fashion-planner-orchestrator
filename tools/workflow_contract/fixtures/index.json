@@ -497,6 +497,78 @@
       "expected_schema": true,
       "expected_semantic": false,
       "expected_code": "RAW_ARTIFACT_OBJECT_MISMATCH"
+    },
+    {
+      "id": "draft-request-visuals-ok",
+      "file": "draft-request-visuals-ok.json",
+      "schema": "planning-draft-request.schema.json",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "draft-response-visuals-ok",
+      "file": "draft-response-visuals-ok.json",
+      "schema": "planning-draft-response.schema.json",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "draft-response-visuals-outfit-failed",
+      "file": "draft-response-visuals-outfit-failed.json",
+      "schema": "planning-draft-response.schema.json",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "draft-response-visuals-product-failed",
+      "file": "draft-response-visuals-product-failed.json",
+      "schema": "planning-draft-response.schema.json",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "integrated-visuals-ok",
+      "file": "integrated-visuals-ok.json",
+      "schema": "integrated-result.schema.json",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "bad-draft-only-with-visuals",
+      "file": "bad-draft-only-with-visuals.json",
+      "schema": "planning-draft-response.schema.json",
+      "expected_schema": false,
+      "expected_semantic": null
+    },
+    {
+      "id": "bad-visuals-ok-outfit-failed",
+      "file": "bad-visuals-ok-outfit-failed.json",
+      "schema": "planning-draft-response.schema.json",
+      "expected_schema": false,
+      "expected_semantic": null
+    },
+    {
+      "id": "bad-visual-generated-without-artifact",
+      "file": "bad-visual-generated-without-artifact.json",
+      "schema": "planning-draft-response.schema.json",
+      "expected_schema": false,
+      "expected_semantic": null
+    },
+    {
+      "id": "bad-visual-calls-mismatch",
+      "file": "bad-visual-calls-mismatch.json",
+      "schema": "planning-draft-response.schema.json",
+      "expected_schema": true,
+      "expected_semantic": false,
+      "expected_code": "IMAGE_CALLS_MISMATCH"
+    },
+    {
+      "id": "bad-concept-unknown-evidence",
+      "file": "bad-concept-unknown-evidence.json",
+      "schema": "planning-draft-response.schema.json",
+      "expected_schema": true,
+      "expected_semantic": false,
+      "expected_code": "CONCEPT_EVIDENCE_UNKNOWN"
     }
   ]
 }

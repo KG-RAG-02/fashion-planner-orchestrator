@@ -8,10 +8,5 @@
     "version": "v2",
     "version_id": "product-concept-image-prompt-v2-designer",
     "directory": "concept_image/v2"
-  },
-  "reviewed_image": {
-    "version": "v2",
-    "version_id": "p08-reviewed-image/2",
-    "directory": "reviewed_image/v2"
   }
 }

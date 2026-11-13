@@ -226,6 +226,16 @@ a.btn-dark:hover, a.btn-dark:focus-visible { color: #FFFFFF; background: #3A3834
 .concept-figure.is-empty { display: flex; align-items: flex-end; padding: 18px; background: transparent; border-style: dashed; border-color: #A39B8F; }
 .concept-figure.state-failed { border-style: solid; border-color: var(--brick); background: var(--brick-tint); color: var(--brick); }
 .concept-figure figcaption { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.concept-figure.is-sheet img { object-fit: contain; object-position: top; background: var(--surface, #fff); }
+.concept-figure a { display: block; width: 100%; height: 100%; }
+.draft-visuals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.draft-visual { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.draft-visual img, .draft-visual-empty { width: 100%; aspect-ratio: 2 / 3; object-fit: contain; display: block;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--placeholder); }
+.draft-visual-empty { display: flex; align-items: center; justify-content: center; padding: 12px; font-size: 13px; color: var(--sub); text-align: center; }
+.draft-visual.state-failed .draft-visual-empty { border-color: var(--brick); color: var(--brick); background: var(--brick-tint); }
+.draft-visual figcaption { font-size: 13px; }
+.draft-visuals-note { grid-column: 1 / -1; margin: 0; }
 .concept-body { flex: 999 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .concept-title { margin: 0; font-weight: 500; font-size: 26px; line-height: 1.35; }
 .meta-list { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; font-size: 14px; }

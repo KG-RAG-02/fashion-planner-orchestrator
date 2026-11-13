@@ -54,7 +54,7 @@ def nullable(value):
 
 def document(name, title, body):
     return {"$schema": SCHEMA, "$id": BASE + name, "title": title,
-            "$comment": "PROPOSED workflow-contract/0.1.1: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.", **body}
+            "$comment": "PROPOSED workflow-contract/0.2.0: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.", **body}
 
 
 def producer(agent, version):
@@ -145,22 +145,52 @@ def main():
     defs["review_identity"] = obj({"review_id": ref("id"), "revision": {"type": "integer", "minimum": 1}, "content_sha256": ref("sha256")})
     defs["claim"] = obj({"kind": {"enum": ["fact", "interpretation", "proposal"]},
                          "text": {"type": "string", "minLength": 1}, "evidence_refs": arr(ref("evidence_ref"))})
+    # 0.2.0: P06 owns the trend-reflecting product image and the worn (outfit) image; the design spec
+    # they were drawn from travels with the Draft. Both are optional: draft_only Drafts are unchanged.
+    defs["concept_claim"] = obj({"value": {"type": "string", "minLength": 1}, "kind": {"type": "string", "minLength": 1},
+                                 "evidence_ids": arr({"type": "string", "minLength": 1})})
+    defs["concept_attribute"] = obj({"name": {"type": "string", "minLength": 1},
+                                     "value": {"type": ["string", "number", "boolean"]},
+                                     "kind": {"type": "string", "minLength": 1}, "evidence_ids": arr({"type": "string", "minLength": 1})})
+    defs["concept"] = obj({
+        "engine": {"type": "string", "minLength": 1},
+        "product_definition": nullable(ref("concept_claim")), "opportunity": nullable(ref("concept_claim")),
+        "target_customer": nullable(ref("concept_claim")), "attributes": arr(ref("concept_attribute")),
+        "differentiation": arr(ref("concept_claim")), "risks": arr(ref("concept_claim")),
+        "questions_for_validation": ref("strings"),
+    })
+    defs["visual"] = obj({
+        "status": {"enum": ["generated", "failed", "skipped"]}, "artifact": nullable(ref("image_artifact")),
+        "provider_calls": {"type": "integer", "minimum": 0, "maximum": 1},
+        "model": nullable({"type": "string", "minLength": 1}), "prompt_version": nullable({"type": "string", "minLength": 1}),
+        "reason": nullable({"type": "string", "minLength": 1}),
+    })
+    defs["visual"]["allOf"] = [
+        {"if": {"properties": {"status": {"const": "generated"}}, "required": ["status"]},
+         "then": {"properties": {"artifact": ref("image_artifact"), "provider_calls": {"const": 1}, "reason": {"type": "null"}}}},
+        {"if": {"properties": {"status": {"enum": ["failed", "skipped"]}}, "required": ["status"]},
+         "then": {"properties": {"artifact": {"type": "null"}, "reason": {"type": "string", "minLength": 1}}}},
+        {"if": {"properties": {"status": {"const": "skipped"}}, "required": ["status"]},
+         "then": {"properties": {"provider_calls": {"const": 0}}}},
+    ]
+    defs["draft_visuals"] = obj({"product": ref("visual"), "outfit": ref("visual")})
+    draft_required = ["title", "category", "season", "claims", "open_questions", "md_decision_required", "limitations"]
     defs["draft"] = obj({
         "title": {"type": "string", "minLength": 1}, "category": nullable({"type": "string", "minLength": 1}),
         "season": nullable({"type": "string", "minLength": 1}),
         "claims": arr(ref("claim"), 1), "open_questions": ref("strings"),
         "md_decision_required": {"const": ["price", "cost", "quantity", "purchase_order", "adoption"]},
-        "limitations": ref("strings"),
-    })
+        "limitations": ref("strings"), "concept": ref("concept"), "visuals": ref("draft_visuals"),
+    }, required=draft_required)
     defs["stock_call_context"] = obj({
         "planning_request_sha256": ref("sha256"), "trend_response_sha256": ref("sha256"),
         "stock_input_sha256": ref("sha256"), "stock_wire_request_sha256": ref("sha256"),
         "stock_response_sha256": ref("sha256"),
     })
 
-    draft_request = document("planning-draft-request.schema.json", "P08 → P06 Draft-only request", obj({
+    draft_request = document("planning-draft-request.schema.json", "P08 → P06 Draft request (draft_only | draft_with_visuals)", obj({
         "contract_version": {"const": TRANSPORT}, "request_id": ref("id"),
-        "input": obj({"mode": {"const": "draft_only"}, "user_input": ref("user_input"),
+        "input": obj({"mode": {"enum": ["draft_only", "draft_with_visuals"]}, "user_input": ref("user_input"),
                       "planning_request": ref("planning_request"), "trend_response": ref("retained_trend"),
                       "stock_response": ref("retained_stock"), "stock_call_context": ref("stock_call_context")}),
     }))
@@ -169,12 +199,23 @@ def main():
         "request_id": ref("id"), "status": ref("status"), "draft_identity": nullable(ref("draft_identity")),
         "draft": nullable(ref("draft")), "source_request": {"$ref": "planning-draft-request.schema.json"},
         "source_request_sha256": ref("sha256"), "limitations": ref("strings"), "errors": arr(ref("error")),
-        "artifacts": arr(ref("json_artifact")), "image_generation_calls": {"const": 0}, "review_calls": {"const": 0},
+        "artifacts": arr(ref("json_artifact")), "image_generation_calls": {"type": "integer", "minimum": 0, "maximum": 2},
+        "review_calls": {"const": 0},
     })
     draft_body["allOf"] = [condition(["ok", "partial"], {"draft_identity": ref("draft_identity"), "draft": ref("draft")}),
                             condition(["no_results", "error"], {"draft_identity": {"type": "null"}, "draft": {"type": "null"}}),
                             condition(["error"], {"errors": arr(ref("error"), 1)}),
-                            condition(["no_results"], {"limitations": {"type": "array", "minItems": 1}})]
+                            condition(["no_results"], {"limitations": {"type": "array", "minItems": 1}}),
+                            # draft_only: no image call and no visuals (as in 0.1.x).
+                            {"if": {"properties": {"source_request": {"properties": {"input": {"properties": {"mode": {"const": "draft_only"}}}}}}},
+                             "then": {"properties": {"image_generation_calls": {"const": 0},
+                                                     "draft": {"anyOf": [{"type": "null"}, {"not": {"required": ["visuals"]}}]}}}},
+                            # draft_with_visuals: ok means both visuals were generated (deliverable-based status).
+                            {"if": {"properties": {"status": {"const": "ok"}, "source_request": {"properties": {"input": {"properties": {
+                                "mode": {"const": "draft_with_visuals"}}}}}}, "required": ["status"]},
+                             "then": {"properties": {"draft": {"required": ["visuals"], "properties": {"visuals": {"properties": {
+                                 "product": {"properties": {"status": {"const": "generated"}}},
+                                 "outfit": {"properties": {"status": {"const": "generated"}}}}}}}}}}]
     draft_response = document("planning-draft-response.schema.json", "P06 → P08 PlanningDraft envelope", envelope("new-product-agent", "planning-draft/1.0", draft_body))
     defs["retained_draft"] = retained({"$ref": "planning-draft-response.schema.json"})
     defs["derived_view"] = obj({

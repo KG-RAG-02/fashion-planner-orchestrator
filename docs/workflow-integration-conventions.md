@@ -32,7 +32,7 @@ Every implementer follows this document; when code and this document disagree, s
 | P08 → P07 | `POST /v1/agents/sales-market-agent/reviews` | `vogue-workflow/0.1` | `sales-market-review/1.0` |
 | UI → P08 | `POST /api/workflow/run`, `POST /v1/orchestrations` (`contract_version: vogue-workflow/0.1`) | `vogue-workflow/0.1` | `integrated-result/1.0` |
 
-- **Contract package:** `workflow-contract/0.1.1`, in `vogue-orchestrator/contracts/workflow/`.
+- **Contract package:** `workflow-contract/0.2.0`, in `vogue-orchestrator/contracts/workflow/`.
   - The schema bytes are pinned by SHA-256 (`snapshot.json`).
   - Byte-identical copies live in `new-product-agent/contracts/workflow-proposed/` and `sales-market-agent/src/market_research_agent/resources/workflow_contract/`.
   - **Never edit pinned schema bytes or the vendored copies.**
@@ -150,12 +150,14 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - Bytes live at `<store>/blobs/<sha256>`.
   - Store root is `VOGUE_WORKFLOW_STORE_DIR` (default `<repo>/.local/workflow`; container `/app/.local/workflow`).
 - **P07** mints `artifact://p07/reviews/<sha256>.json` under `VOGUE_P07_REVIEW_ARTIFACT_DIR` (container `/data/reviews`).
+- **P06** (workflow-contract 0.2.0) mints `artifact://p06/images/<sha256>.<ext>` for its Draft visuals under
+  `VOGUE_DRAFT_ARTIFACT_DIR` (container `/app/data/local/p06-artifacts`).
 - **Read-only mounts in compose:**
 
   | Reader | Env | Mount |
   |---|---|---|
   | P06 and P07 | `VOGUE_UPSTREAM_ARTIFACT_ROOT=/artifacts` | P08 blobs at `/artifacts/p08/blobs` |
-  | P08 | `VOGUE_PEER_ARTIFACT_ROOT=/peer` | P07 reviews at `/peer/p07/reviews` |
+  | P08 | `VOGUE_PEER_ARTIFACT_ROOT=/peer` | P07 reviews at `/peer/p07/reviews`, P06 visuals at `/peer/p06` |
 
   P08 imports peer artifacts through the store's `import_verified`.
 - **Error codes:**
@@ -184,7 +186,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 
 **Contract gate** (P08, `contracts/workflow/baseline.json`):
 - Run when `state == "frozen"`, `producer_consumer_validated` is true, `snapshot_sha256` matches the current `snapshot.json` bytes, the files map matches, and evidence shows 0 failures.
-- Otherwise, with `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`, run and add the limitation `"workflow-contract/0.1.1 not frozen; development run"`.
+- Otherwise, with `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`, run and add the limitation `"workflow-contract/0.2.0 not frozen; development run"`.
 - Otherwise return 409 `CONTRACT_NOT_FROZEN`.
 - No code may read anything under `../_workflow`.
 

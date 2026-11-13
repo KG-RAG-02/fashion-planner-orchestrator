@@ -60,7 +60,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
-        mkdir -p /v/p08/workflow/blobs /v/p07/reviews /v/p07/hm-cache /v/p06 &&
+        mkdir -p /v/p08/workflow/blobs /v/p07/reviews /v/p07/hm-cache /v/p06/p06-artifacts/images &&
         chown -R 10001:10001 /v/p08 /v/p07 /v/p06 &&
         chmod 0750 /v/p08 /v/p07 /v/p06 && echo volume-init-ok
     volumes:
@@ -112,6 +112,10 @@ services:
       VOGUE_EXECUTION_PROFILE: draft_only
       VOGUE_WORKFLOW_DRAFT_ENABLED: "true"
       VOGUE_UPSTREAM_ARTIFACT_ROOT: /artifacts
+      # draft_with_visuals (workflow-contract 0.2.0): P06 makes the product and worn images.
+      # fixture = deterministic offline PNGs (no key, no cost); compose.paid.yaml switches to openai.
+      VOGUE_DRAFT_IMAGE_PROVIDER: fixture
+      VOGUE_DRAFT_ARTIFACT_DIR: /app/data/local/p06-artifacts
     volumes:
       - p06_data:/app/data/local
       - type: volume
@@ -168,9 +172,14 @@ services:
       VOGUE_WORKFLOW_STORE_DIR: /app/.local/workflow
       VOGUE_PEER_ARTIFACT_ROOT: /peer
       VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS: "75"
+      # P06 generates two images inside the Draft call; only that read waits longer.
+      VOGUE_WORKFLOW_DRAFT_MODE: draft_with_visuals
+      VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS: "600"
       VOGUE_WORKFLOW_IMAGES_ENABLED: "1"
-      VOGUE_WORKFLOW_IMAGE_PROVIDER: fixture
-      VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED: "0"
+      # Stage 06 composes the planning sheet (기획안 사진) locally; P08 never calls an image model.
+      VOGUE_WORKFLOW_IMAGE_PROVIDER: planning_sheet
+      # Off by default; `vogue image-retry <profile> <request_id>` turns it on for one re-composition.
+      VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED: ${VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED:-0}
       VOGUE_QUERY_STRUCTURING_MODE: synthetic_fixture
     ports:
       - "127.0.0.1:${VOGUE_UI_PORT:-8765}:8765"
@@ -181,6 +190,12 @@ services:
         target: /peer/p07/reviews
         read_only: true
         volume: { subpath: reviews }
+      # P06 Draft visuals: artifact://p06/images/<sha256>.<ext>, verified by size + sha256 on import.
+      - type: volume
+        source: p06_data
+        target: /peer/p06
+        read_only: true
+        volume: { subpath: p06-artifacts }
     networks: [edge, backend]
     mem_limit: 512m
     depends_on:

@@ -1,127 +1,24 @@
 {
   "format": "vogue-workflow-baseline/1",
-  "contract_version": "workflow-contract/0.1.1",
+  "contract_version": "workflow-contract/0.2.0",
   "transport_version": "vogue-workflow/0.1",
-  "state": "frozen",
-  "producer_consumer_validated": true,
-  "snapshot_sha256": "cc4cf99533b709efa78e7fa4f4834242c17227fa8c9a88cfbafaf5572b94d4fe",
+  "state": "proposed",
+  "producer_consumer_validated": false,
+  "snapshot_sha256": "703548af01c2f94492300922840f82536a26023a31393365f68d81cd4be3011f",
   "files": {
-    "common.schema.json": "801b975ba1032444af5e47f417e3f53e306eba76b77882af62693c2e64d17710",
-    "integrated-result.schema.json": "bb43e1dbe1b1819b341f922f85cb468c81d298b2dd409acb009e783085d3dbd3",
-    "planning-draft-request.schema.json": "a4c5b72f1de38203f582856ef7e216c480ab4f91afa5342697dec8414bfdf631",
-    "planning-draft-response.schema.json": "4a91b659b18c37e0b20b2b6f30a728c06408f63a8535825d8a2159ba4b2dd1b5",
-    "sales-market-review-request.schema.json": "881d6f584cf417a1fc873ec2d4b458123a69513e4d8f2b4b00d5e8b7aa1f9a5c",
-    "sales-market-review-response.schema.json": "a68127ac936772ada1fc7157297e7f9441b306ddf1afe11f28615863f27e6c2e",
+    "common.schema.json": "3b975dbc370c84673399bc14526bbb4de4d3bc27c75a0fda8e89bce6a6930568",
+    "integrated-result.schema.json": "221f7e04c9751b3c9fb6be6ca6390b14f29f5194caeea28657c9a895a108c5d3",
+    "planning-draft-request.schema.json": "f8b41e14d9a129b3c4a0ad59986944719d4164862b29f77a636baba06a69e079",
+    "planning-draft-response.schema.json": "9f07bc07ca153c2cc09b9dfea5989bf009aeb4c0a318b37ee08dde440a9f3eaa",
+    "sales-market-review-request.schema.json": "2b2e130402371f537089067a86b50626dd28d38897a428fb70ae7a33ad829415",
+    "sales-market-review-response.schema.json": "a2614dffbd8256a01e81c776a9c046f3663d49d1834104cf5bf890555067e9e4",
     "upstream/stock-result-1.0.schema.json": "f2b6984bb37cca4333559e4e05b88312ecf511f578803adee51885c344e6ce00",
     "upstream/trend-result-1.1.schema.json": "7618fb459eb68f56bb12d2c5b171ff0a1fcd066a9ae987c2b4f9a3095d74dbef"
   },
-  "evidence": {
-    "reference_fixtures": {
-      "cases": 66,
-      "passed": 66,
-      "failed": 0,
-      "failed_cases": []
-    },
-    "mutation_probes": {
-      "cases": 7,
-      "rejected": 7,
-      "accepted": []
-    },
-    "vendored_copies": {
-      "new-product-agent": {
-        "path": "new-product-agent/contracts/workflow-proposed",
-        "files": {
-          "common.schema.json": "match",
-          "integrated-result.schema.json": "match",
-          "planning-draft-request.schema.json": "match",
-          "planning-draft-response.schema.json": "match",
-          "sales-market-review-request.schema.json": "match",
-          "sales-market-review-response.schema.json": "match",
-          "upstream/stock-result-1.0.schema.json": "match",
-          "upstream/trend-result-1.1.schema.json": "match"
-        },
-        "status": "match"
-      },
-      "sales-market-agent": {
-        "path": "sales-market-agent/src/market_research_agent/resources/workflow_contract",
-        "files": {
-          "common.schema.json": "match",
-          "integrated-result.schema.json": "match",
-          "planning-draft-request.schema.json": "match",
-          "planning-draft-response.schema.json": "match",
-          "sales-market-review-request.schema.json": "match",
-          "sales-market-review-response.schema.json": "match",
-          "upstream/stock-result-1.0.schema.json": "match",
-          "upstream/trend-result-1.1.schema.json": "match"
-        },
-        "status": "match"
-      }
-    },
-    "suites": [
-      {
-        "command": "env PYTHONPATH=src ~/.cache/vogue-venvs/orchestrator/bin/python -m unittest discover -s tests",
-        "returncode": 0,
-        "output_sha256": "121658884a9bcaba6130274d1a977851251321e02d96ea892e7a5a08be0b4a69",
-        "output_tail": [
-          "Ran 453 tests in 5.902s",
-          "",
-          "OK"
-        ],
-        "started_at": "2026-11-13T01:00:41+00:00"
-      },
-      {
-        "command": "node --test web/tests/model.test.mjs",
-        "returncode": 0,
-        "output_sha256": "b49a78507c3f235f8374d64ef286865242d791bc9b79d2988bc69fce3335de35",
-        "output_tail": [
-          "ℹ skipped 0",
-          "ℹ todo 0",
-          "ℹ duration_ms 84.057958"
-        ],
-        "started_at": "2026-11-13T01:00:48+00:00"
-      },
-      {
-        "command": "deploy/bin/vogue stub",
-        "returncode": 0,
-        "output_sha256": "ae1cf6c122b3ed5ca28cab5e5730a0ca5b993b670ee14085fd76a9b5f3c49d7b",
-        "output_tail": [
-          " Container vogue-stub-orchestrator-1 Starting ",
-          " Container vogue-stub-orchestrator-1 Started ",
-          "curl: (52) Empty reply from server"
-        ],
-        "started_at": "2026-11-13T01:00:48+00:00"
-      }
-    ]
-  },
-  "sources": {
-    "trend-analysis-agent": {
-      "branch": "integration/docker-e2e",
-      "head": "c9ae0dd691725aab61de3b506df721c64bfc6c02",
-      "clean": true
-    },
-    "stock-agent": {
-      "branch": "integration/docker-e2e",
-      "head": "5815f28cbb3fd320a00ba8591f0fc3323e05c4f4",
-      "clean": true
-    },
-    "new-product-agent": {
-      "branch": "integration/docker-e2e",
-      "head": "6f05269c91df57e50bd564323704276535446e8e",
-      "clean": true
-    },
-    "sales-market-agent": {
-      "branch": "integration/docker-e2e",
-      "head": "98e6351893e2ee9aa3d738c09d11e35b89915bcd",
-      "clean": true
-    },
-    "vogue-orchestrator": {
-      "branch": "integration/docker-e2e",
-      "head": "5e726a708e235497c392e2809db805f3f820233f",
-      "clean": true
-    }
-  },
-  "recorded_at": "2026-11-13T01:00:41+00:00",
+  "evidence": {},
+  "sources": {},
+  "recorded_at": "2026-11-13T05:26:54+00:00",
   "notes": [
-    "Frozen = contract evidence only (offline fixtures, owner serializer/parser boundary and in-process TCP suites). Live data, model quality and browser acceptance are recorded separately."
+    "Proposed baseline: no producer/consumer validation claimed. Run --freeze to record evidence."
   ]
 }

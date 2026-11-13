@@ -16,32 +16,16 @@ AGENTS = {k: 'http://127.0.0.1:9' for k in ('VOGUE_TREND_AGENT_URL', 'VOGUE_STOC
 HAVE_WORKFLOW_EXTRA = bool(importlib.util.find_spec('jsonschema') and importlib.util.find_spec('PIL'))
 
 
-class FakeImageProvider:
-    models = []
-
-    def __init__(self, *, api_key, model):
-        FakeImageProvider.models.append((api_key, model))
-
-    def generate(self, request):
-        from types import SimpleNamespace
-        return SimpleNamespace(image_bytes=b'png', mime_type='image/png')
-
-
 class BlankSettingTests(unittest.TestCase):
-    def test_blank_image_model_means_the_default_model(self):
-        from vogue_orchestrator.workflows.image_generation import DEFAULT_IMAGE_MODEL
-        payload = {'request_id': 'r-1', 'lineage': {}}
-        for value, expected in [(None, DEFAULT_IMAGE_MODEL), *[(b, DEFAULT_IMAGE_MODEL) for b in BLANKS],
-                                ('custom-image-model', 'custom-image-model'), ('  custom-image-model ', 'custom-image-model')]:
-            with self.subTest(value=value):
-                FakeImageProvider.models = []
-                env = dict(VOGUE_WORKFLOW_IMAGES_ENABLED='1', OPENAI_API_KEY=' dummy-not-a-key ')
-                if value is not None:
-                    env['VOGUE_IMAGE_MODEL'] = value
-                with environment(**env), \
-                        patch('vogue_orchestrator.workflows.image_generation.OpenAIImageProvider', FakeImageProvider):
-                    self.assertEqual(workflow_http.final_image(payload), (b'png', 'image/png'))
-                self.assertEqual(FakeImageProvider.models, [('dummy-not-a-key', expected)])
+    def test_blank_image_provider_and_draft_mode_mean_the_defaults(self):
+        # 0.2.0: P08 composes the planning sheet (no image model); P06 is asked for its visuals.
+        for blank in BLANKS:
+            with self.subTest(blank=repr(blank)):
+                self.assertEqual(workflow_http.image_provider_name({'VOGUE_WORKFLOW_IMAGE_PROVIDER': blank}), 'planning_sheet')
+                self.assertEqual(workflow_http.draft_mode({'VOGUE_WORKFLOW_DRAFT_MODE': blank}), 'draft_with_visuals')
+        self.assertIsNone(workflow_http.image_provider_name({'VOGUE_WORKFLOW_IMAGE_PROVIDER': 'openai'}))
+        self.assertIsNone(workflow_http.draft_mode({'VOGUE_WORKFLOW_DRAFT_MODE': 'images'}))
+        self.assertEqual(workflow_http.draft_mode({'VOGUE_WORKFLOW_DRAFT_MODE': ' Draft_Only '}), 'draft_only')
 
     def test_blank_timeouts_mean_3_and_75_seconds(self):
         for blank in BLANKS:
@@ -59,10 +43,14 @@ class BlankSettingTests(unittest.TestCase):
         with environment(**base), patch.object(workflow_http, 'post_wire', return_value='sent') as wire:
             workflow = workflow_http.build_workflow()
             workflow.adapters['trend']({})
+            workflow.adapters['planning_draft']({})
         self.assertIsNone(workflow.artifact_reader)
-        self.assertIsNone(workflow.image)  # provider defaults to openai; a blank key is no key
-        wire.assert_called_once_with('http://127.0.0.1:9/v1/agents/trend-analysis-agent/runs', {}, None,
-                                     connect_timeout=3.0, read_timeout=75.0)
+        self.assertIs(workflow.image, workflow_http.planning_sheet_image)  # the default stage 06 provider
+        self.assertEqual(workflow.draft_mode, 'draft_with_visuals')
+        self.assertEqual(wire.call_args_list[0].args, ('http://127.0.0.1:9/v1/agents/trend-analysis-agent/runs', {}, None))
+        self.assertEqual(wire.call_args_list[0].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))
+        # P06 makes its two images inside the Draft call: that read waits up to 600 s.
+        self.assertEqual(wire.call_args_list[1].kwargs, dict(connect_timeout=3.0, read_timeout=600.0))
         https = {k: 'https://agents.example.invalid' for k in AGENTS}
         with environment(**dict(base, VOGUE_AGENT_HTTP_DEV_MODE='', **https)), \
                 self.assertRaisesRegex(ConnectorConfigurationError, 'Bearer token is required'):
@@ -73,7 +61,7 @@ class BlankSettingTests(unittest.TestCase):
             with self.subTest(blank=repr(blank)):
                 self.assertEqual(workflow_http.store_root({'VOGUE_WORKFLOW_STORE_DIR': blank}), workflow_http.ROOT / '.local' / 'workflow')
                 self.assertIsNone(workflow_http.peer_artifact_reader({'VOGUE_PEER_ARTIFACT_ROOT': blank}))
-                self.assertEqual(workflow_http.image_provider_name({'VOGUE_WORKFLOW_IMAGE_PROVIDER': blank}), 'openai')
+                self.assertEqual(workflow_http.image_provider_name({'VOGUE_WORKFLOW_IMAGE_PROVIDER': blank}), 'planning_sheet')
 
     def test_blank_launcher_and_server_settings(self):
         with patch.dict(os.environ, {'VOGUE_VENV_ROOT': '  ', 'VOGUE_SERVICE_MANIFEST': ' '}):

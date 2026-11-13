@@ -30,6 +30,9 @@ class WorkflowTests(unittest.TestCase):
         self.mutate = lambda stage, value: value
         self.fail_image = False
         self.image_data = next((FIXTURES/'raw').glob('*.png')).read_bytes()
+        # These fakes answer with Draft-only responses; draft_with_visuals runs are in DraftVisualsWorkflowTests.
+        self.draft_mode = 'draft_only'
+        self.artifact_reader = None
         self.workflow = self.build()
 
     def build(self):
@@ -66,7 +69,8 @@ class WorkflowTests(unittest.TestCase):
             return self.image_data, 'image/png'
         return Workflow(trend=lambda p: call('trend', p), stock=lambda p: call('stock', p),
                         draft=lambda p: call('planning_draft', p), review=lambda p: call('sales_market_review', p),
-                        image=image, store=self.store, contract=self.contract)
+                        image=image, store=self.store, contract=self.contract, draft_mode=self.draft_mode,
+                        artifact_reader=self.artifact_reader)
 
     def run_flow(self, **options):
         request = self.sample['input']
@@ -360,10 +364,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('final_image', self.trace)
 
     def test_run_level_limitations_are_appended_to_the_result(self):
-        note = 'workflow-contract/0.1.1 not frozen; development run'
+        note = 'workflow-contract/0.2.0 not frozen; development run'
         self.workflow = Workflow(**{k: self.workflow.adapters[s] for k, s in (('trend', 'trend'), ('stock', 'stock'),
                                     ('draft', 'planning_draft'), ('review', 'sales_market_review'))},
-                                 image=self.workflow.image, store=self.store, contract=self.contract, limitations=[note])
+                                 image=self.workflow.image, store=self.store, contract=self.contract, limitations=[note],
+                                 draft_mode=self.draft_mode)
         result = self.run_flow()
         self.assertEqual(result['envelope']['status'], 'ok', result)
         self.assertEqual(result['envelope']['result']['limitations'].count(note), 1)
@@ -377,6 +382,118 @@ class WorkflowTests(unittest.TestCase):
         link=Path(self.tmp.name)/'symlink'
         link.symlink_to(self.store.blobs, target_is_directory=True)
         with self.assertRaises(ValueError): WorkflowStore(link)
+
+
+def _png(colour, size=(48, 72)):
+    import io
+    from PIL import Image
+    buffer = io.BytesIO()
+    Image.new('RGB', size, colour).save(buffer, format='PNG')
+    return buffer.getvalue()
+
+
+@unittest.skipUnless(importlib.util.find_spec('jsonschema') and importlib.util.find_spec('PIL'), 'Install the workflow extra.')
+class DraftVisualsWorkflowTests(unittest.TestCase):
+    """workflow-contract 0.2.0: P06 returns the product and outfit images; stage 06 composes the planning sheet."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='p08-visuals-')
+        self.addCleanup(self.tmp.cleanup)
+        self.store = WorkflowStore(os.path.realpath(self.tmp.name))
+        self.contract = WorkflowContract()
+        self.sample = json.loads((FIXTURES/'draft-request-text-ok.json').read_bytes())
+        self.rid = self.sample['request_id']
+        self.sent = {}
+        self.images = {'product': _png((180, 40, 60)), 'outfit': _png((40, 60, 180))}
+        self.outfit_status = 'generated'
+        self.blobs = {}
+
+    def visual(self, key):
+        data = self.images[key]
+        sha = digest_bytes(data)
+        self.blobs[sha] = data
+        artifact = dict(artifact_id='p06:image:' + sha, uri=f'artifact://p06/images/{sha}.png', sha256=sha,
+                        media_type='image/png', size_bytes=len(data), immutable=True)
+        if key == 'outfit' and self.outfit_status == 'failed':
+            return dict(status='failed', artifact=None, provider_calls=1, model='fixture', prompt_version='fixture-visual/1',
+                        reason='IMAGE_API_HTTP_400:moderation_blocked')
+        return dict(status='generated', artifact=artifact, provider_calls=1, model='fixture', prompt_version='fixture-visual/1', reason=None)
+
+    def call(self, stage, payload):
+        self.sent[stage] = payload
+        if stage in {'trend', 'stock'}:
+            value = copy.deepcopy(self.sample['input'][stage + '_response']['raw_response'])
+        elif stage == 'planning_draft':
+            value = json.loads((FIXTURES/'draft-response-ok.json').read_bytes())
+            body = value['result']
+            evidence = payload['input']['trend_response']['raw_response']['result']['evidence'][0]['evidence_id']
+            body['draft']['concept'] = dict(engine='rule_based', product_definition=dict(value='합성 셔츠 콘셉트', kind='proposal', evidence_ids=[evidence]),
+                                            opportunity=None, target_customer=None, attributes=[], differentiation=[], risks=[],
+                                            questions_for_validation=['색상은 MD 확인 필요'])
+            body['draft']['visuals'] = {key: self.visual(key) for key in ('product', 'outfit')}
+            body['image_generation_calls'] = 2
+            body['draft_identity']['content_sha256'] = digest(body['draft'])
+            body['source_request'], body['source_request_sha256'] = copy.deepcopy(payload), digest(payload)
+            if self.outfit_status != 'generated':
+                value['status'] = body['status'] = 'partial'
+        else:
+            value = json.loads((FIXTURES/'review-response-ok.json').read_bytes())
+            source = payload['input']['planning_draft']
+            value['result']['review']['draft_response_sha256'] = source['content_sha256']
+            value['result']['review']['reviewed_draft'] = source['raw_response']['result']['draft_identity']
+            value['result']['review_identity']['content_sha256'] = digest(value['result']['review'])
+        return WireResponse(json.dumps(value, ensure_ascii=False).encode())
+
+    def reader(self, node):
+        return self.blobs[node['sha256']]
+
+    def run_flow(self, reader=True):
+        from unittest.mock import patch
+        from vogue_orchestrator.workflow_http import planning_sheet_image
+        workflow = Workflow(trend=lambda p: self.call('trend', p), stock=lambda p: self.call('stock', p),
+                            draft=lambda p: self.call('planning_draft', p), review=lambda p: self.call('sales_market_review', p),
+                            image=planning_sheet_image, store=self.store, contract=self.contract,
+                            artifact_reader=self.reader if reader else None)
+        request = self.sample['input']
+        with patch.dict(os.environ, {'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}):
+            return workflow.run(request_id=self.rid, user_input=request['user_input'], planning_request=request['planning_request'],
+                                trend_query=dict(request_id=self.rid, original_query=request['user_input']['text']))
+
+    def test_p06_visuals_are_imported_and_stage_06_is_the_composed_sheet(self):
+        from PIL import Image
+        import io
+        from vogue_orchestrator.planning_sheet import build_sheet
+        result = self.run_flow()
+        envelope = result['envelope']
+        body = envelope['result']
+        self.assertEqual(self.sent['planning_draft']['input']['mode'], 'draft_with_visuals')
+        self.assertEqual((envelope['status'], [s['status'] for s in body['stages']]), ('ok', ['ok'] * 6), body['errors'])
+        self.contract.schema(envelope, 'integrated-result.schema.json')
+        self.contract.semantic(envelope, self.rid, self.store)
+        for key, visual in body['sources']['planning_draft']['raw_response']['result']['draft']['visuals'].items():
+            self.assertEqual(self.store.verify(visual['artifact']), self.images[key])  # imported through the reader
+        image = body['final_image']
+        self.assertEqual((image['status'], image['provider_calls']), ('generated', 1))
+        with Image.open(io.BytesIO(self.store.verify(image['artifact']))) as sheet:
+            self.assertEqual((sheet.format, sheet.width), ('PNG', 3200))
+        visuals = build_sheet(envelope).visual.draft_visuals
+        self.assertEqual([(v.key, v.status) for v in visuals], [('product', 'generated'), ('outfit', 'generated')])
+
+    def test_a_failed_outfit_keeps_the_run_partial_and_still_composes_the_sheet(self):
+        self.outfit_status = 'failed'
+        result = self.run_flow()
+        body = result['envelope']['result']
+        self.assertEqual((result['envelope']['status'], body['final_image']['status']), ('partial', 'generated'))
+        self.assertEqual(body['stages'][2]['status'], 'partial')
+
+    def test_p06_visuals_without_a_reader_stop_with_artifact_reader_required(self):
+        result = self.run_flow(reader=False)
+        self.assertEqual((result['http_status'], result['envelope']['result']['errors'][-1]['code']), (503, 'ARTIFACT_READER_REQUIRED'))
+
+
+def digest_bytes(data):
+    import hashlib
+    return hashlib.sha256(data).hexdigest()
 
 if __name__ == '__main__':
     unittest.main()
