@@ -933,21 +933,43 @@ def _decode_thumbs(encoded: Sequence[str]) -> list[bytes]:
     return out
 
 
+def _image_size(data: bytes | None) -> tuple[int, int] | None:
+    if not data:
+        return None
+    try:
+        from PIL import Image
+        with Image.open(io.BytesIO(data)) as picture:
+            return picture.size
+    except Exception:  # undecodable bytes are drawn as a failure later; layout falls back to side by side
+        return None
+
+
+def _any_landscape(images: Mapping[str, bytes | None]) -> bool:
+    """True when an embedded P06 visual is wider than tall (the outfit is 1536x1024): then the panels are stacked
+    full width, since side by side a landscape image would shrink to a quarter of the panel."""
+    sizes = [_image_size(data) for data in images.values() if data]
+    return any(size is not None and size[0] > size[1] for size in sizes)
+
+
 def _draw_draft_visuals(c, visual: SheetVisual, vx: float, y: float, vw: float, visual_h: float,
-                        images: Mapping[str, bytes | None], unreadable: Sequence[str]) -> None:
-    """The two P06 visuals side by side (workflow-contract 0.2.0). Stage 06 is this sheet, so it is never embedded."""
+                        images: Mapping[str, bytes | None], unreadable: Sequence[str], *, stacked: bool = False) -> None:
+    """The two P06 visuals (workflow-contract 0.2.0): side by side, or stacked when they are landscape.
+    Stage 06 is this sheet, so it is never embedded."""
     c.rect(vx, y, vw, visual_h, 'surface', 12, 'line')
     c.text(vx + 20, y + 16, '신제품 시안 / P06 Product · Outfit', 'bold', 18, 'ink')
-    box_x, box_y, box_w, box_h = vx + 20, y + 52, vw - 40, 520
+    box_x, box_y, box_w, box_h = vx + 20, y + 52, vw - 40, visual_h - 120
     gap = 12
-    panel_w = (box_w - gap) / len(visual.draft_visuals)
+    count = len(visual.draft_visuals)
+    panel_w = box_w if stacked else (box_w - gap) / count
+    panel_h = (box_h - gap) / count if stacked else box_h
     for index, item in enumerate(visual.draft_visuals):
-        px = box_x + index * (panel_w + gap)
+        px = box_x if stacked else box_x + index * (panel_w + gap)
+        py = box_y + index * (panel_h + gap) if stacked else box_y
         status_text = RUN_STATUS_LABELS.get(item.status or '', item.status or '미제공')
-        c.text(px + 2, box_y, item.label, 'bold', 12, 'ink')
-        c.text(px + panel_w - c.width(status_text, 'regular', 11) - 2, box_y + 1, status_text, 'regular', 11,
+        c.text(px + 2, py, item.label, 'bold', 12, 'ink')
+        c.text(px + panel_w - c.width(status_text, 'regular', 11) - 2, py + 1, status_text, 'regular', 11,
                'brick' if item.status == 'failed' else 'sub')
-        iy, ih = box_y + 22, box_h - 22
+        iy, ih = py + 22, panel_h - 22
         data = images.get(item.key)
         if data:
             c.rect(px, iy, panel_w, ih, 'raised', 10)
@@ -970,7 +992,7 @@ def _draw_draft_visuals(c, visual: SheetVisual, vx: float, y: float, vw: float, 
     caption.append('06 기획안 = 이 문서 (P08 합성, 이미지 모델 호출 없음)')
     failed = any(item.status == 'failed' for item in visual.draft_visuals)
     for index, line in enumerate(c.wrap(' · '.join(caption), 'regular', 11, vw - 40, 2)):
-        c.text(vx + 20, y + 584 + index * 15, line, 'regular', 11, 'brick' if failed else 'sub')
+        c.text(vx + 20, box_y + box_h + 12 + index * 15, line, 'regular', 11, 'brick' if failed else 'sub')
 
 
 def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_unreadable: bool = False,
@@ -1027,7 +1049,9 @@ def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_
     y = top
     visual_h = 640
     if sheet.visual.draft_visuals:  # 0.2.0: P06's product and outfit images
-        _draw_draft_visuals(c, sheet.visual, vx, y, vw, visual_h, draft_images or {}, draft_unreadable)
+        stacked = _any_landscape(draft_images or {})
+        visual_h = 800 if stacked else visual_h
+        _draw_draft_visuals(c, sheet.visual, vx, y, vw, visual_h, draft_images or {}, draft_unreadable, stacked=stacked)
     else:  # earlier runs: the final image
         c.rect(vx, y, vw, visual_h, 'surface', 12, 'line')
         c.text(vx + 20, y + 16, '신제품 이미지 / Product Visual', 'bold', 18, 'ink')

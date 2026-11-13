@@ -190,6 +190,26 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
         self.assertTrue(left[0] > 180 and left[2] < 80, left)
         self.assertTrue(right[2] > 180 and right[0] < 80, right)
 
+    def test_landscape_p06_visuals_are_stacked_full_width(self):
+        # OpenAI returns landscape visuals (e.g. 1536x1024); side by side they would be shrunk to a quarter.
+        fonts = self.fonts()
+        envelope = fixture('integrated-visuals-ok')
+        visuals = envelope['result']['sources']['planning_draft']['raw_response']['result']['draft']['visuals']
+        colours = {visuals['product']['artifact']['sha256']: (220, 20, 20), visuals['outfit']['artifact']['sha256']: (20, 40, 220)}
+
+        def load(artifact):
+            from PIL import Image
+            out = io.BytesIO()
+            Image.new('RGB', (30, 12), colours[artifact['sha256']]).save(out, format='PNG')
+            return out.getvalue()
+
+        from PIL import Image
+        with Image.open(io.BytesIO(planning_sheet_png(envelope, load_artifact=load, fonts=fonts))) as image:
+            rgb = image.convert('RGB')
+            top, bottom = rgb.getpixel((2624, 796)), rgb.getpixel((2624, 1488))  # centres of the two stacked panels
+        self.assertTrue(top[0] > 180 and top[2] < 80, top)
+        self.assertTrue(bottom[2] > 180 and bottom[0] < 80, bottom)
+
     def test_a_failed_image_is_never_loaded(self):
         fonts = self.fonts()
 
