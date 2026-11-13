@@ -269,6 +269,7 @@ EXACT_ROUTES = {
 PATTERN_ROUTES = (
     (('runs', None), {'GET': 'get_run'}),
     (('runs', None, 'md-decision'), {'GET': 'get_md_decisions', 'POST': 'post_md_decision'}),
+    (('runs', None, 'planning-sheet.png'), {'GET': 'get_planning_sheet'}),
     (('artifacts', None), {'GET': 'get_artifact'}),
 )
 NAMESPACE = '/api/workflow'
@@ -498,6 +499,33 @@ def _get_md_decisions(handler, value):
                         'decisions': private.md_decisions(rid)})
 
 
+def _get_planning_sheet(handler, value):
+    """GET /api/workflow/runs/{id}/planning-sheet.png: the 기획서 PNG of a finished run.
+
+    Presentation only (planning_sheet.py): renders the stored integrated envelope, the verified final
+    image bytes and the MD decision history; it calls no agent and changes no stored value."""
+    from .planning_sheet import PlanningSheetError, planning_sheet_png
+    rid = value
+    if not ID_PATTERN.fullmatch(rid):
+        problem(handler, 404, 'RUN_NOT_FOUND')
+        return
+    private = store()
+    final = private.run(rid, 'current') or private.run(rid)
+    if not final:
+        if private.run(rid, 'progress'):
+            problem(handler, 409, 'RUN_NOT_FINISHED', request_id=rid)
+        else:
+            problem(handler, 404, 'RUN_NOT_FOUND', request_id=rid)
+        return
+    try:
+        png = planning_sheet_png(final['envelope'], load_artifact=private.verify, decisions=private.md_decisions(rid))
+    except PlanningSheetError as exc:
+        problem(handler, exc.http_status, exc.code, request_id=rid)
+        return
+    handler._send(200, png, 'image/png',
+                  {'Content-Disposition': f'attachment; filename="vogue-planning-sheet-{rid}.png"'})
+
+
 def _system_status(handler):
     from .system_status import system_status
     handler._json(200, system_status())
@@ -546,6 +574,7 @@ ROUTE_HANDLERS = {
     'get_md_decisions': _get_md_decisions,
     'post_md_decision': _post_md_decision,
     'get_artifact': _get_artifact,
+    'get_planning_sheet': _get_planning_sheet,
 }
 
 

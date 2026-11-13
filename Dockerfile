@@ -17,6 +17,12 @@ WORKDIR /app
 RUN groupadd --system --gid 10001 vogue \
  && useradd --system --uid 10001 --gid 10001 --home-dir /tmp --no-create-home --shell /usr/sbin/nologin vogue
 
+# Korean glyphs for the 기획서 PNG (src/vogue_orchestrator/planning_sheet.py): NanumBarunGothic from
+# fonts-nanum (SIL OFL 1.1). Latin display text uses the self-hosted Jost in web/fonts.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends fonts-nanum \
+ && rm -rf /var/lib/apt/lists/*
+
 # Dependencies only (the package runs from /app/src via PYTHONPATH): the query, workflow and LLM extras.
 COPY pyproject.toml ./pyproject.toml
 RUN python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb'))['project']; extras = p['optional-dependencies']; print('\n'.join(p.get('dependencies', []) + [r for name in ('query', 'workflow', 'llm-openai', 'llm-anthropic') for r in extras[name]]))" > /tmp/requirements.txt \

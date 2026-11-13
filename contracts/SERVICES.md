@@ -193,6 +193,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | `GET /api/workflow/runs?limit=N` · `GET /api/workflow/runs/{rid}` | 실행 목록(최신순)과 보존된 integrated envelope |
 | `GET`/`POST /api/workflow/runs/{rid}/md-decision` | append-only MD 결정 → `agents/vogue-orchestrator/input/md-decision-request-1.0.contract.json`. GET은 `integrated_response_sha256`과 결정 이력을 반환 |
 | `GET /api/workflow/artifacts/{id}` | 최종 이미지 등 private artifact |
+| `GET /api/workflow/runs/{rid}/planning-sheet.png` | 끝난 실행의 기획서 PNG(3200 px 폭, `image/png`, attachment). 저장된 integrated envelope, 검증된 최종 이미지, MD 결정 이력을 근거 연결 기획 보드 양식(`new-product-agent/docs/design/evidence-linked-planning-board.md`)으로 그림. 표시 전용이며 agent를 부르지 않고 저장값을 바꾸지 않음. 진행 중 409 `RUN_NOT_FINISHED`, 없음 404, 한글 글꼴 없음 503 `PLANNING_SHEET_FONT_MISSING` |
 | `POST /v1/orchestrations/image-retries` | 이미지 단계만 다시 시도. `VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=1`일 때만 동작, 기본은 409 |
 | `GET /api/system/status` · `GET /api/health` | agent liveness 집계, 계약 gate 상태, 이미지·구조화 설정 / liveness |
 
