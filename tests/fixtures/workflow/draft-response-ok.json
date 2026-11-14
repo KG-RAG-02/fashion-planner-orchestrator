@@ -14,7 +14,7 @@
     "draft_identity": {
       "draft_id": "fixture:draft:001",
       "revision": 1,
-      "content_sha256": "8c97b7ecef6ad142bb382c0ed11659798a23cbce6cb3bfccca30611e0a2a11a9"
+      "content_sha256": "a74ed0f1d1b3c20ca4aa4aafb4ca770c020f20b865f2aeddfce6a24b50f090bc"
     },
     "draft": {
       "title": "합성 검토용 셔츠 초안",
@@ -50,7 +50,34 @@
       ],
       "limitations": [
         "Synthetic fixture; price, cost and order quantity remain MD decisions."
-      ]
+      ],
+      "product_profile": {
+        "category": {
+          "value": "셔츠",
+          "kind": "user_requested",
+          "evidence_ids": []
+        },
+        "product_type": {
+          "value": null,
+          "kind": "unknown",
+          "evidence_ids": []
+        },
+        "gender": {
+          "value": null,
+          "kind": "unknown",
+          "evidence_ids": []
+        },
+        "season": {
+          "value": "2027SS",
+          "kind": "user_requested",
+          "evidence_ids": []
+        },
+        "material": {
+          "value": null,
+          "kind": "unknown",
+          "evidence_ids": []
+        }
+      }
     },
     "source_request": {
       "contract_version": "vogue-workflow/0.1",
@@ -314,6 +341,7 @@
     "errors": [],
     "artifacts": [],
     "image_generation_calls": 0,
-    "review_calls": 0
+    "review_calls": 0,
+    "evidence_ids": []
   }
 }

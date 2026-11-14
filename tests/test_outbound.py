@@ -9,8 +9,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from vogue_orchestrator.connectors import (ConnectorConfigurationError, TransportError, _post_json, _service_url,
-                                           agent_http_v01_adapter, private_http_hosts, timeout_seconds)
+from vogue_orchestrator.connectors import (ConnectorConfigurationError, _service_url, private_http_hosts, timeout_seconds)
 from vogue_orchestrator.workflow import StageFailure, stage_failure
 
 TOKEN = 'dummy-test-token'
@@ -56,18 +55,6 @@ class PrivateHostAllowlistTests(unittest.TestCase):
             with self.subTest(target=target), self.assertRaises(ConnectorConfigurationError):
                 url(target, **env)
 
-    def test_legacy_v01_adapter_honours_the_allowlist(self):
-        with self.assertRaises(ConnectorConfigurationError):
-            agent_http_v01_adapter('http://stock:8002', 'stock-agent', bearer_token=TOKEN)
-        adapter = agent_http_v01_adapter('http://stock:8002', 'stock-agent', bearer_token=TOKEN,
-                                         private_hosts='stock')
-        sent = {}
-        with patch('vogue_orchestrator.connectors._post_json', side_effect=lambda u, p, bearer_token=None:
-                   sent.update(url=u, token=bearer_token) or {'ok': True}):
-            adapter({'request_id': 'req-1'})
-        self.assertEqual(sent, {'url': 'http://stock:8002/v1/agents/stock-agent/runs', 'token': TOKEN})
-
-
 class TimeoutConfigurationTests(unittest.TestCase):
     def test_defaults_and_bounds(self):
         self.assertEqual(timeout_seconds({}, 'T', 75), 75.0)
@@ -104,7 +91,7 @@ class TimeoutConfigurationTests(unittest.TestCase):
         env = {**PRIVATE, 'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_TREND_AGENT_URL': 'http://trend:8768',
                'VOGUE_STOCK_AGENT_URL': 'http://stock:8002', 'VOGUE_NEW_PRODUCT_AGENT_URL': 'http://new-product:8767',
                'VOGUE_SALES_MARKET_AGENT_URL': 'http://sales-market:8766', 'VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS': 'never'}
-        request = dict(contract_version='vogue-workflow/0.1', request_id='r-1',
+        request = dict(contract_version='vogue-workflow/0.2', request_id='r-1',
                        input=dict(user_input=dict(text='t', images=[])))
         with patch.dict(os.environ, env):
             os.environ.pop('VOGUE_WORKFLOW_CONTRACT_BASELINE', None)
@@ -114,6 +101,21 @@ class TimeoutConfigurationTests(unittest.TestCase):
 
 class WireTransportTests(unittest.TestCase):
     """post_wire against loopback sockets: the transport itself maps timeouts and refusals."""
+
+    def test_post_wire_reports_transport_elapsed_time(self):
+        from types import SimpleNamespace
+        from vogue_orchestrator.workflow_http import post_wire
+        response = SimpleNamespace(status=200, read=lambda limit: b'{}',
+                                   getheader=lambda name, default: 'application/json')
+        connection = SimpleNamespace(sock=SimpleNamespace(settimeout=lambda value: None),
+                                     connect=lambda: None, request=lambda *args, **kwargs: None,
+                                     getresponse=lambda: response, close=lambda: None)
+        with patch('vogue_orchestrator.workflow_http.http.client.HTTPConnection', return_value=connection):
+            wire = post_wire('http://127.0.0.1:8768/v1/test', {'safe': True}, connect_timeout=1, read_timeout=2)
+        self.assertEqual((wire.body, wire.status, wire.media_type, wire.truncated),
+                         (b'{}', 200, 'application/json', False))
+        self.assertIsInstance(wire.elapsed_ms, float)
+        self.assertGreaterEqual(wire.elapsed_ms, 0)
 
     def listener(self):
         server = socket.socket()
@@ -165,75 +167,6 @@ class WireTransportTests(unittest.TestCase):
                 failure = stage_failure(exc, art)
                 self.assertEqual((failure.code, failure.http_status, failure.artifact), (code, status, art))
 
-
-class LegacyPostJsonTests(unittest.TestCase):
-    """The legacy transport carries the same codes; the legacy stage record shows them."""
-
-    def call(self, connection):
-        with patch('vogue_orchestrator.connectors.http.client.HTTPConnection', return_value=connection):
-            with self.assertRaises(TransportError) as raised:
-                _post_json('http://127.0.0.1:8080/run', {'synthetic': True})
-        return raised.exception.code, raised.exception.http_status
-
-    def fake(self, *, connect_error=None, status=200, body=b'{}'):
-        class Response:
-            def __init__(self):
-                self.status = status
-
-            def read(self):
-                return body
-
-        class Connection:
-            sock = None
-
-            def connect(self):
-                if connect_error:
-                    raise connect_error
-
-            def request(self, *args, **kwargs):
-                pass
-
-            def getresponse(self):
-                return Response()
-
-            def close(self):
-                pass
-        return Connection()
-
-    def test_codes(self):
-        cases = [(dict(connect_error=TimeoutError()), ('UPSTREAM_TIMEOUT', 504)),
-                 (dict(connect_error=socket.timeout()), ('UPSTREAM_TIMEOUT', 504)),
-                 (dict(connect_error=ConnectionRefusedError()), ('UPSTREAM_UNAVAILABLE', 503)),
-                 (dict(status=401), ('UPSTREAM_AUTH', 401)), (dict(status=403), ('UPSTREAM_AUTH', 403)),
-                 (dict(status=500), ('UPSTREAM_HTTP_ERROR', 502)), (dict(status=502), ('UPSTREAM_HTTP_ERROR', 502)),
-                 (dict(status=503), ('UPSTREAM_UNAVAILABLE', 503)), (dict(status=504), ('UPSTREAM_TIMEOUT', 504)),
-                 (dict(body=b'not-json'), ('CONTRACT_VIOLATION', 502)), (dict(body=b'[1]'), ('CONTRACT_VIOLATION', 502))]
-        for options, expected in cases:
-            with self.subTest(options=options):
-                self.assertEqual(self.call(self.fake(**options)), expected)
-
-    def test_real_socket_read_timeout(self):
-        server = socket.socket()
-        server.bind(('127.0.0.1', 0))
-        server.listen(1)
-        self.addCleanup(server.close)
-        with patch('vogue_orchestrator.connectors.AGENT_REQUEST_TIMEOUT_SECONDS', 0.2):
-            with self.assertRaises(TransportError) as raised:
-                _post_json('http://127.0.0.1:%d/run' % server.getsockname()[1], {'a': 1})
-        self.assertEqual(raised.exception.code, 'UPSTREAM_TIMEOUT')
-
-    def test_legacy_stage_record_uses_the_transport_code(self):
-        from vogue_orchestrator.core import Orchestrator
-
-        def trend(_payload):
-            raise TransportError('agent request timed out', code='UPSTREAM_TIMEOUT', http_status=504)
-        unused = lambda _payload: {}  # noqa: E731
-        result = Orchestrator(trend=trend, stock=unused, project_06=unused, project_07=unused,
-                              require_envelopes=True).run('synthetic', request_id='legacy-timeout',
-                                                          trend_query={'request_id': 'legacy-timeout',
-                                                                       'original_query': 'synthetic'})
-        stage = result.to_dict()['stages'][0]
-        self.assertEqual((stage['status'], stage['error_code']), ('error', 'UPSTREAM_TIMEOUT'))
 
 
 if __name__ == '__main__':

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.vogue.invalid/workflow/0.1/common.schema.json",
+  "$id": "https://contracts.vogue.invalid/workflow/2.0/common.schema.json",
   "title": "Shared definitions; equality/hash/order require semantic validator",
-  "$comment": "PROPOSED workflow-contract/0.2.0: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.",
+  "$comment": "PROPOSED workflow-contract/0.5.0: structural validation plus versioned semantic rules are required; see baseline.json. Not service compatibility.",
   "$defs": {
     "id": {
       "type": "string",
@@ -207,7 +207,7 @@
       ],
       "properties": {
         "contract_version": {
-          "const": "vogue-workflow/0.1"
+          "const": "vogue-workflow/0.2"
         },
         "request_id": {
           "anyOf": [
@@ -980,7 +980,14 @@
       ],
       "properties": {
         "raw_response": {
-          "$ref": "planning-draft-response.schema.json"
+          "type": "object",
+          "description": "Unmodified response from the P06 vogue-handoff/0.3 endpoint."
+        },
+        "call_request_sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "call_request_artifact": {
+          "$ref": "common.schema.json#/$defs/json_artifact"
         },
         "content_sha256": {
           "$ref": "common.schema.json#/$defs/sha256"
@@ -1231,7 +1238,14 @@
       ],
       "properties": {
         "raw_response": {
-          "$ref": "sales-market-review-response.schema.json"
+          "type": "object",
+          "description": "Unmodified response from the P07 vogue-sales-market-review/0.2-proposal endpoint."
+        },
+        "call_request_sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "call_request_artifact": {
+          "$ref": "common.schema.json#/$defs/json_artifact"
         },
         "content_sha256": {
           "$ref": "common.schema.json#/$defs/sha256"

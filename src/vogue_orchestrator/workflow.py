@@ -5,19 +5,34 @@ import copy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import http.client
-from .workflow_contract import VERSION, STAGES, DRAFT_MODES, require, walk
+import json
+import logging
+import time
+from .workflow_contract import (VERSION, HANDOFF_VERSION, P06_HANDOFF_VERSION, P06_REVIEW_BRIDGE_VERSION, P07_REVIEW_VERSION,
+                                STAGES, DRAFT_MODES, p07_product_projection, require, walk)
 from .workflow_store import ArtifactError, RESOLVER_CODES, canonical, digest, strict_json, checked_image
 
-# Namespaces whose artifacts P08 imports through a reader (conventions section 8): P07 review artifacts and,
-# since workflow-contract 0.2.0, P06's Draft visuals (artifact://p06/images/<sha256>.<ext>).
+# Namespaces whose artifacts P08 imports through a reader (conventions section 8): peer review artifacts.
 PEER_NAMESPACES = ('p07', 'p06')
 # An upstream that itself answers 503/504 keeps that meaning (the contract's error table): the same
 # codes as a refused connection or a socket timeout, retryable. Every other non-2xx is 502.
 UPSTREAM_STATUS_CODES = {503: 'UPSTREAM_UNAVAILABLE', 504: 'UPSTREAM_TIMEOUT'}
+LOGGER = logging.getLogger(__name__)
+STAGE_PRODUCERS = {
+    'trend': 'trend-analysis-agent',
+    'stock': 'stock-agent',
+    'planning_draft': 'new-product-agent',
+    'sales_market_review': 'sales-market-agent',
+}
 
 
 def now():
     return datetime.now(timezone.utc).isoformat()
+
+
+def _log_event(level, event, **fields):
+    """Emit one parseable, content-free JSON line; never include request/response payloads."""
+    LOGGER.log(level, json.dumps({'event': event, **fields}, sort_keys=True, separators=(',', ':')))
 
 
 @dataclass(frozen=True)
@@ -26,11 +41,12 @@ class WireResponse:
     status: int = 200
     media_type: str = 'application/json'
     truncated: bool = False
+    elapsed_ms: float | None = None
 
 
 class StageFailure(RuntimeError):
-    def __init__(self, code, http_status=502, artifact=None):
-        self.code, self.http_status, self.artifact = code, http_status, artifact
+    def __init__(self, code, http_status=502, artifact=None, elapsed_ms=None):
+        self.code, self.http_status, self.artifact, self.elapsed_ms = code, http_status, artifact, elapsed_ms
         super().__init__(code)
 
 
@@ -59,13 +75,14 @@ def stage_failure(exc, artifact=None):
 class Workflow:
     """Injected producers return actual WireResponse bytes. No implicit fallbacks."""
     def __init__(self, *, trend, stock, draft, review, image, store, contract, artifact_reader=None, limitations=(),
-                 draft_mode='draft_with_visuals'):
+                 draft_mode='draft_with_visuals', review_projection=None):
         require(draft_mode in DRAFT_MODES, 'DRAFT_MODE_INVALID')
         self.adapters = dict(trend=trend, stock=stock, planning_draft=draft, sales_market_review=review)
-        # draft_with_visuals (0.2.0): P06 returns the product and worn images with the Draft.
+        # P06 handoff/0.3 currently returns the native draft without P08 image references.
         self.draft_mode = draft_mode
         self.image, self.store, self.contract = image, store, contract
         self.artifact_reader = artifact_reader
+        self.review_projection = review_projection
         # Run-level limitations decided by the caller (e.g. a development run on a proposed contract).
         self.limitations = tuple(limitations)
 
@@ -92,6 +109,66 @@ class Workflow:
         return digest(dict(request_id=rid, stage=stage, input_sha256=digest(payload), contract_version=VERSION,
                            contract_sha256=self.contract.profile_sha256, attempt=attempt))
 
+    def _project_review_with_p06(self, request, expected):
+        started = time.monotonic()
+        wire_elapsed_ms, artifact, attempted = None, None, False
+        try:
+            require(len(canonical(request)) <= 1_000_000, 'P06_REVIEW_BRIDGE_REQUEST_TOO_LARGE')
+            attempted = True
+            wire = self.review_projection(copy.deepcopy(request))
+            require(isinstance(wire, WireResponse), 'WIRE_BYTES_REQUIRED')
+            wire_elapsed_ms = wire.elapsed_ms
+            if wire.media_type != 'application/json':
+                artifact = self.store.put(wire.body, wire.media_type)
+                raise StageFailure('UPSTREAM_CONTENT_TYPE_INVALID', 502, artifact)
+            if wire.truncated or len(wire.body) > 16777216:
+                artifact = self.store.put(wire.body, wire.media_type)
+                raise StageFailure('UPSTREAM_BODY_TOO_LARGE', 502, artifact)
+            if not 200 <= wire.status < 300:
+                artifact = self.store.put(wire.body, wire.media_type)
+                code = 'UPSTREAM_HTTP_ERROR'
+                try:
+                    error = strict_json(wire.body).get('error', {})
+                    if isinstance(error, dict) and isinstance(error.get('code'), str) and error['code'].strip():
+                        code = error['code']
+                except (AttributeError, TypeError, ValueError):
+                    pass
+                if wire.status in {401, 403}:
+                    code, status = 'UPSTREAM_AUTH', wire.status
+                elif wire.status in UPSTREAM_STATUS_CODES:
+                    code, status = UPSTREAM_STATUS_CODES[wire.status], wire.status
+                else:
+                    status = 502
+                raise StageFailure(code, status, artifact)
+            try:
+                projected = strict_json(wire.body)
+                self.contract.schema(projected, 'sales-market-review-request.schema.json')
+                require(projected == expected, 'P06_REVIEW_BRIDGE_PROJECTION_MISMATCH')
+            except Exception:
+                artifact = self.store.put(wire.body, wire.media_type)
+                raise StageFailure('CONTRACT_VIOLATION', 502, artifact) from None
+            elapsed = (time.monotonic() - started) * 1000
+            _log_event(logging.INFO, 'workflow_agent_call', request_id=request['request_id'],
+                       stage='sales_market_projection', agent_id='new-product-agent', status='ok',
+                       duration_ms=round(elapsed, 3),
+                       upstream_http_ms=round(wire_elapsed_ms, 3) if wire_elapsed_ms is not None else None,
+                       p08_call_overhead_ms=round(max(0.0, elapsed - wire_elapsed_ms), 3)
+                       if wire_elapsed_ms is not None else None,
+                       retryable=False, fatal=False, cache_hit=False, outbound_attempted=True)
+            return projected
+        except Exception as exc:
+            failure = stage_failure(exc, artifact)
+            elapsed = (time.monotonic() - started) * 1000
+            _log_event(logging.WARNING, 'workflow_agent_call', request_id=request['request_id'],
+                       stage='sales_market_projection', agent_id='new-product-agent', status='error',
+                       duration_ms=round(elapsed, 3),
+                       upstream_http_ms=round(wire_elapsed_ms, 3) if wire_elapsed_ms is not None else None,
+                       p08_call_overhead_ms=round(max(0.0, elapsed - wire_elapsed_ms), 3)
+                       if wire_elapsed_ms is not None else None,
+                       retryable=failure.http_status in {503, 504}, fatal=True, error_code=failure.code,
+                       cache_hit=False, outbound_attempted=attempted)
+            raise failure from None
+
     def _call(self, stage, payload, rid, known):
         key = self._key(rid, stage, payload)
         cached = self.store.checkpoint(key)
@@ -99,17 +176,34 @@ class Workflow:
             state, value = cached
             if state == 'done':
                 self.contract.semantic(value, rid, self.store, known)
+                raw = value.get('raw_response', {})
+                _log_event(logging.INFO, 'workflow_agent_call', request_id=rid, stage=stage,
+                           agent_id=STAGE_PRODUCERS[stage], status=raw.get('status', 'cached'),
+                           duration_ms=0.0, upstream_http_ms=0.0, p08_call_overhead_ms=0.0,
+                           retryable=False, fatal=False, cache_hit=True, outbound_attempted=False)
                 return value
             if state == 'failed':
+                _log_event(logging.WARNING, 'workflow_agent_call', request_id=rid, stage=stage,
+                           agent_id=STAGE_PRODUCERS[stage], status='error', duration_ms=0.0,
+                           upstream_http_ms=0.0, p08_call_overhead_ms=0.0,
+                           retryable=value.get('http_status') in {503, 504}, fatal=True,
+                           error_code=value['code'], cache_hit=True, outbound_attempted=False)
                 raise StageFailure(value['code'], value['http_status'], value.get('artifact'))
+            _log_event(logging.WARNING, 'workflow_agent_call', request_id=rid, stage=stage,
+                       agent_id=STAGE_PRODUCERS[stage], status='error', duration_ms=0.0,
+                       upstream_http_ms=0.0, p08_call_overhead_ms=0.0, retryable=False, fatal=True,
+                       error_code='STAGE_OUTCOME_UNKNOWN', cache_hit=True, outbound_attempted=False)
             raise StageFailure('STAGE_OUTCOME_UNKNOWN', 409)
         request_artifact = self.store.put(canonical(payload))
         self.store.checkpoint_write(key + ':request', 'done', dict(stage=stage, request_artifact=request_artifact))
         self.store.checkpoint_write(key, 'started')
         artifact = None
+        call_started = time.monotonic()
+        wire_elapsed_ms = None
         try:
             wire = self.adapters[stage](copy.deepcopy(payload))
             require(isinstance(wire, WireResponse), 'WIRE_BYTES_REQUIRED')
+            wire_elapsed_ms = wire.elapsed_ms
             artifact = self.store.put(wire.body, 'application/vnd.vogue.truncated-response' if wire.truncated else wire.media_type)
             if wire.truncated or len(wire.body) > 16777216:
                 raise StageFailure('UPSTREAM_BODY_TOO_LARGE', 502, artifact)
@@ -118,6 +212,27 @@ class Workflow:
                 # The body stays retained privately as the rejected response artifact.
                 if wire.status in {401, 403}:
                     raise StageFailure('UPSTREAM_AUTH', wire.status, artifact)
+                if wire.status in UPSTREAM_STATUS_CODES:
+                    failure_status = wire.status
+                else:
+                    failure_status = 502
+                if stage == 'sales_market_review':
+                    try:
+                        error_body = strict_json(wire.body)
+                        self.contract.schema(error_body, 'sales-market-review-error.schema.json')
+                        error = error_body.get('error') if isinstance(error_body, dict) else None
+                        if (isinstance(error_body, dict)
+                                and error_body.get('contract_version') == P07_REVIEW_VERSION
+                                and error_body.get('request_id') in {rid, None}
+                                and set(error_body) == {'contract_version', 'request_id', 'error'}
+                                and isinstance(error, dict) and set(error) == {'code', 'message'}
+                                and isinstance(error.get('code'), str) and error['code'].strip()
+                                and isinstance(error.get('message'), str) and error['message'].strip()):
+                            raise StageFailure(error['code'], failure_status, artifact)
+                    except StageFailure:
+                        raise
+                    except (ValueError, TypeError, AttributeError):
+                        pass
                 if wire.status in UPSTREAM_STATUS_CODES:
                     raise StageFailure(UPSTREAM_STATUS_CODES[wire.status], wire.status, artifact)
                 raise StageFailure('UPSTREAM_HTTP_ERROR', 502, artifact)
@@ -130,18 +245,40 @@ class Workflow:
                     applied = raw['result']['applied_filters']['season'] or {}
                     require(all(applied.get(k) == season.get(k) for k in ('year','season')), 'APPLIED_FILTER_CONFLICT')
             retained = self._retained(raw, artifact)
+            if stage in {'planning_draft', 'sales_market_review'}:
+                retained['call_request_sha256'] = digest(payload)
+                retained['call_request_artifact'] = request_artifact
             self.contract.semantic(retained, rid, self.store, known)
             if stage == 'planning_draft':
-                require(raw['result']['source_request'] == payload, 'SOURCE_REQUEST_REWRITTEN')
+                require(raw['result']['request_id'] == rid, 'P06_REQUEST_ID_MISMATCH')
                 if raw['status'] == 'ok':
-                    require(payload['input']['stock_response']['raw_response']['status'] == 'ok', 'UPSTREAM_STATUS_HIDDEN')
+                    require(payload['input']['inventory_product_result']['status'] == 'ok', 'UPSTREAM_STATUS_HIDDEN')
             if stage == 'sales_market_review':
-                require(raw['result']['review']['draft_response_sha256'] == payload['input']['planning_draft']['content_sha256'], 'REVIEW_DRAFT_HASH_MISMATCH')
+                require(raw['result']['request_id'] == rid, 'P07_REQUEST_ID_MISMATCH')
             self.store.checkpoint_write(key, 'done', retained)
+            producer_errors = raw['result'].get('errors', [])
+            duration_ms = (time.monotonic() - call_started) * 1000
+            _log_event(logging.INFO, 'workflow_agent_call', request_id=rid, stage=stage,
+                       agent_id=STAGE_PRODUCERS[stage], status=raw['status'],
+                       duration_ms=round(duration_ms, 3),
+                       upstream_http_ms=round(wire_elapsed_ms, 3) if wire_elapsed_ms is not None else None,
+                       p08_call_overhead_ms=round(max(0.0, duration_ms - wire_elapsed_ms), 3)
+                       if wire_elapsed_ms is not None else None,
+                       retryable=any(bool(e.get('retryable')) for e in producer_errors if isinstance(e, dict)),
+                       fatal=raw['status'] == 'error', cache_hit=False, outbound_attempted=True)
             return retained
         except Exception as exc:
+            wire_elapsed_ms = getattr(exc, 'elapsed_ms', wire_elapsed_ms)
             failure = stage_failure(exc, artifact)
             self.store.checkpoint_write(key, 'failed', dict(code=failure.code, http_status=failure.http_status, artifact=failure.artifact))
+            duration_ms = (time.monotonic() - call_started) * 1000
+            _log_event(logging.WARNING, 'workflow_agent_call', request_id=rid, stage=stage,
+                       agent_id=STAGE_PRODUCERS[stage], status='error', duration_ms=round(duration_ms, 3),
+                       upstream_http_ms=round(wire_elapsed_ms, 3) if wire_elapsed_ms is not None else None,
+                       p08_call_overhead_ms=round(max(0.0, duration_ms - wire_elapsed_ms), 3)
+                       if wire_elapsed_ms is not None else None,
+                       retryable=failure.http_status in {503, 504}, fatal=True, error_code=failure.code,
+                       cache_hit=False, outbound_attempted=True)
             raise failure from None
 
     def _import_peer_artifacts(self, raw):
@@ -165,19 +302,29 @@ class Workflow:
                 raise ArtifactError('ARTIFACT_READER_REQUIRED')
             self.store.import_verified(node, self.artifact_reader(node))
 
-    def _trace(self, body, stage, payload, start, status, response_hash=None, errors=None):
+    def _trace(self, body, stage, payload, start, status, response_hash=None, errors=None, duration_ms=None):
         logical_hash = digest(payload)
         if stage == 'trend':
             logical_hash = digest(body['planning_request'])
         elif stage == 'stock':
             logical_hash = digest(body['sources']['trend']['raw_response']['result'])
+        elif stage == 'planning_draft':
+            source = body['sources']['planning_draft']
+            result = source['raw_response']['result'] if source else {}
+            logical_hash = result.get('source_request_sha256', source['call_request_sha256'] if source else digest(payload))
         elif stage == 'sales_market_review':
             logical_hash = body['sources']['planning_draft']['content_sha256']
         elif stage == 'integration':
             logical_hash = digest({k + '_response_sha256': body['sources'][v]['content_sha256'] for k,v in [('draft','planning_draft'),('review','sales_market_review')]})
+        completed = now()
         body['stages'].append(dict(sequence=len(body['stages']) + 1, stage=stage, request_id=body['request_id'],
                                    status=status, input_sha256=logical_hash, response_sha256=response_hash,
-                                   started_at=start, completed_at=now(), errors=errors or []))
+                                   started_at=start, completed_at=completed, errors=errors or []))
+        _log_event(logging.INFO, 'workflow_stage_completed', request_id=body['request_id'], stage=stage,
+                   agent_id=STAGE_PRODUCERS.get(stage, 'vogue-orchestrator'), status=status,
+                   duration_ms=round(duration_ms, 3) if duration_ms is not None else None,
+                   retryable=any(bool(error.get('retryable')) for error in (errors or [])),
+                   fatal=any(bool(error.get('fatal')) for error in (errors or [])))
 
     def _image(self, body, attempt):
         if self.image is None:
@@ -188,12 +335,20 @@ class Workflow:
         draft, review = sources['planning_draft'], sources['sales_market_review']
         dr, rr = draft['raw_response']['result'], review['raw_response']['result']
         payload = dict(draft_response_sha256=draft['content_sha256'], review_response_sha256=review['content_sha256'], integration=body['integration'])
-        lineage = dict(draft_identity=dr['draft_identity'], draft_response_sha256=draft['content_sha256'],
-                       review_identity=rr['review_identity'], review_response_sha256=review['content_sha256'], integration_input_sha256=digest(payload))
+        # The current peer contracts do not issue stable draft/review identities. These P08-local IDs
+        # identify the immutable response bytes retained by this run; they make no producer-side claim.
+        rid_tag = digest(body['request_id'])[:16]
+        lineage = dict(draft_identity=dr.get('draft_identity') or dict(draft_id='p08-draft-' + rid_tag, revision=1,
+                                           content_sha256=draft['content_sha256']),
+                       draft_response_sha256=draft['content_sha256'],
+                       review_identity=rr.get('review_identity') or dict(review_id='p08-review-' + rid_tag, revision=1,
+                                            content_sha256=review['content_sha256']),
+                       review_response_sha256=review['content_sha256'], integration_input_sha256=digest(payload))
         rid = body['request_id']
         image_request = dict(request_id=rid, **payload, lineage=lineage, planning_draft=draft, sales_market_review=review)
         key = self._key(rid, 'final_image', payload, attempt)
         start = now()
+        started_monotonic = time.monotonic()
         checkpoint = self.store.checkpoint(key)
         provider_error = None
         if checkpoint and checkpoint[0] == 'done':
@@ -236,12 +391,68 @@ class Workflow:
         image = body['final_image']
         message = 'Final image unavailable; prior sources retained.' + (f' Provider error: {provider_error}.' if provider_error else '')
         errors = [] if image['status'] == 'generated' else [dict(code=image['reason'], message=message, stage='final_image', fatal=False, retryable=True)]
-        self._trace(body, 'final_image', payload, start, 'ok' if not errors else 'error', image['artifact']['sha256'] if image['artifact'] else None, errors)
+        self._trace(body, 'final_image', payload, start, 'ok' if not errors else 'error', image['artifact']['sha256'] if image['artifact'] else None,
+                    errors, (time.monotonic() - started_monotonic) * 1000)
         body['errors'].extend(errors)
         if errors:
             body['status'] = 'partial'
 
+    def _stage_payload(self, stage, request_id, planning_request, trend_query, body):
+        """Build one producer request from already validated upstream results."""
+        if stage == 'trend':
+            return dict(contract_version=HANDOFF_VERSION, request_id=request_id, input=trend_query)
+        if stage == 'stock':
+            return dict(contract_version=HANDOFF_VERSION, request_id=request_id,
+                        input=body['sources']['trend']['raw_response']['result'])
+        if stage == 'planning_draft':
+            trend, stock = body['sources']['trend'], body['sources']['stock']
+            return dict(contract_version=P06_HANDOFF_VERSION, request_id=request_id, input=dict(
+                planning_request=planning_request,
+                trend_result=trend['raw_response']['result'],
+                inventory_product_result=stock['raw_response']['result']))
+        if stage == 'sales_market_review':
+            planning_draft = body['sources']['planning_draft']['raw_response']['result']
+            product = p07_product_projection(planning_draft)
+            expected = dict(contract_version=P07_REVIEW_VERSION, request_id=request_id,
+                            input=dict(request_id=request_id, product=product))
+            if self.review_projection is None:
+                return expected
+            bridge_request = dict(contract_version=P06_REVIEW_BRIDGE_VERSION, request_id=request_id,
+                                  input=dict(request_id=request_id, planning_draft=planning_draft))
+            self.contract.schema(bridge_request, 'sales-market-review-bridge-request.schema.json')
+            return self._project_review_with_p06(bridge_request, expected)
+        raise StageFailure('WORKFLOW_STAGE_UNKNOWN', 409)
+
+    def _integrate(self, body, request_id, http_status):
+        """Integrate successful Draft/Review responses and compose the final sheet."""
+        review_source = body['sources']['sales_market_review']
+        if not review_source or body['status'] in {'error', 'no_results'}:
+            return
+        if review_source['raw_response']['status'] not in {'ok', 'partial'}:
+            return
+
+        start = now()
+        started_monotonic = time.monotonic()
+        draft = body['sources']['planning_draft']['raw_response']['result']['draft']
+        review = review_source['raw_response']['result']
+        claims = []
+        for key in ('opportunity', 'product_definition'):
+            item = draft.get(key)
+            if isinstance(item, dict) and isinstance(item.get('value'), str) and item['value'].strip():
+                claims.append(dict(kind='proposal', text=item['value'].strip(), evidence_refs=[]))
+        if not claims:
+            claims.append(dict(kind='interpretation', text='P06 Draft and P07 product review were retained for this request.', evidence_refs=[]))
+        body['integration'] = dict(claims=claims,
+            limitations=list(dict.fromkeys(body['limitations'] + draft.get('limitations', []) + review.get('limitations', []) + [
+                'P07 received only the allowlisted product fields under vogue-sales-market-review/0.2-proposal; per-field provenance remained in P08/P06 and was not sent to P07.',
+                'P07 0.2-proposal does not echo an immutable P06 Draft ID or response hash, so P08 cannot claim that P07 attested to the complete Draft.'])) )
+        self._trace(body, 'integration', body['sources'], start, body['status'], digest(body['integration']),
+                    duration_ms=(time.monotonic() - started_monotonic) * 1000)
+        self.store.save_run(request_id, 'progress', self._response(body, http_status))
+        self._image(body, 'initial')
+
     def run(self, *, request_id, user_input, planning_request, trend_query):
+        run_started = time.monotonic()
         # All semantic input failures occur before any producer invocation.
         require(isinstance(request_id, str) and 0 < len(request_id) <= 128, 'REQUEST_ID_INVALID')
         require(isinstance(user_input, dict) and isinstance(planning_request, dict) and isinstance(trend_query, dict), 'INPUT_OBJECT_REQUIRED')
@@ -260,46 +471,40 @@ class Workflow:
             self.store.index_run(request_id, user_input['text'])
             previous = self.store.run(request_id, 'current') or self.store.run(request_id)
             if previous:
+                _log_event(logging.INFO, 'workflow_completed', request_id=request_id,
+                           status=previous['envelope'].get('status'), http_status=previous.get('http_status'),
+                           duration_ms=round((time.monotonic() - run_started) * 1000, 3),
+                           cache_hit=True, stage_count=len(previous['envelope']['result'].get('stages', [])))
                 return previous
-            body = dict(schema_version='integrated-result/1.0', agent_id='vogue-orchestrator', request_id=request_id, status='ok',
+            body = dict(schema_version='integrated-result/2.0', agent_id='vogue-orchestrator', request_id=request_id, status='ok',
                         user_input=copy.deepcopy(user_input), planning_request=copy.deepcopy(planning_request),
                         sources={s: None for s in STAGES[:4]}, stages=[], integration=None,
                         final_image=dict(status='skipped', artifact=None, lineage=None, reason='No eligible review.', provider_calls=0),
                         limitations=['Only the first item and first season are searched; full user text is retained.',
-                                     'Input images are references for Draft and integration; Trend receives a text search query.',
+                                     'P06 handoff/0.3 receives PlanningRequest, Trend result and Stock result only; user image references are not forwarded.',
+                                     'Trend receives a text search query.',
                                      *self.limitations],
                         errors=[], rejected_response_artifacts=[],
                         md_review=dict(status='pending', choices=['adopt','revise','hold'], reserved_decisions=['price','cost','quantity','purchase_order','adoption']))
             http_status, known = 200, {}
-            payload = dict(contract_version='vogue-handoff/0.1', request_id=request_id, input=trend_query)
+            payload = dict(contract_version=HANDOFF_VERSION, request_id=request_id, input=trend_query)
             for stage in STAGES[:4]:
                 start = now()
+                started_monotonic = time.monotonic()
                 try:
-                    if stage == 'stock':
-                        payload = dict(contract_version='vogue-handoff/0.1', request_id=request_id, input=body['sources']['trend']['raw_response']['result'])
-                    elif stage == 'planning_draft':
-                        trend, stock = body['sources']['trend'], body['sources']['stock']
-                        context = dict(planning_request_sha256=digest(planning_request), trend_response_sha256=trend['content_sha256'],
-                                       stock_input_sha256=digest(trend['raw_response']['result']), stock_wire_request_sha256=digest(payload), stock_response_sha256=stock['content_sha256'])
-                        payload = dict(contract_version=VERSION, request_id=request_id, input=dict(mode=self.draft_mode, user_input=user_input,
-                                       planning_request=planning_request, trend_response=trend, stock_response=stock, stock_call_context=context))
+                    payload = self._stage_payload(stage, request_id, planning_request, trend_query, body)
+                    if stage == 'planning_draft':
                         self.contract.schema(payload, 'planning-draft-request.schema.json')
-                        self.contract.semantic(payload, request_id, self.store, known)
                     elif stage == 'sales_market_review':
-                        source = body['sources']['planning_draft']
-                        dr = source['raw_response']['result']['draft']
-                        payload = dict(contract_version=VERSION, request_id=request_id, input=dict(planning_draft=source,
-                                       derived_view=dict(purpose='search_only', adapter_version='p08-search/1', source_response_sha256=source['content_sha256'],
-                                                         source_pointers=['/result/draft/category','/result/draft/season'], product={k: dr[k] for k in ('category','season')})))
                         self.contract.schema(payload, 'sales-market-review-request.schema.json')
-                        self.contract.semantic(payload, request_id, self.store, known)
                     retained = self._call(stage, payload, request_id, known)
                     body['sources'][stage] = retained
                     known[retained['content_sha256']] = retained['raw_response']
                     raw = retained['raw_response']
                     status = raw['status']
                     errors = [dict(code=e.get('code','UPSTREAM_ERROR'), message=e.get('message','Producer error.'), stage=stage, fatal=status == 'error', retryable=bool(e.get('retryable',False))) for e in raw['result'].get('errors', [])]
-                    self._trace(body, stage, payload, start, status, retained['content_sha256'], errors)
+                    self._trace(body, stage, payload, start, status, retained['content_sha256'], errors,
+                                (time.monotonic() - started_monotonic) * 1000)
                     body['limitations'].extend(raw['result'].get('limitations', []))
                     body['errors'].extend(errors)
                     if status == 'error':
@@ -322,32 +527,29 @@ class Workflow:
                         body['rejected_response_artifacts'].append(failure.artifact)
                     elif failure.artifact:
                         body['limitations'].append('Empty upstream bytes retained privately at ' + failure.artifact['uri'])
-                    self._trace(body, stage, payload, start, 'error', errors=[error])
+                    self._trace(body, stage, payload, start, 'error', errors=[error],
+                                duration_ms=(time.monotonic() - started_monotonic) * 1000)
                     body['status'], http_status = 'error', failure.http_status
                     break
                 finally:
                     # Save even if the process exits before the next stage or an image fails.
                     self.store.save_run(request_id, 'progress', self._response(body, http_status))
-            if body['sources']['sales_market_review'] and body['status'] not in {'error','no_results'} and body['sources']['sales_market_review']['raw_response']['status'] in {'ok','partial'}:
-                start = now()
-                draft = body['sources']['planning_draft']['raw_response']['result']['draft']
-                review = body['sources']['sales_market_review']['raw_response']['result']['review']
-                body['integration'] = dict(claims=copy.deepcopy(draft['claims'] + review['findings']),
-                                           limitations=list(dict.fromkeys(body['limitations'] + draft['limitations'] + review['limitations'])))
-                self._trace(body, 'integration', body['sources'], start, body['status'], digest(body['integration']))
-                self.store.save_run(request_id, 'progress', self._response(body, http_status))
-                self._image(body, 'initial')
+            self._integrate(body, request_id, http_status)
             response = self._response(body, http_status)
             self.contract.schema(response['envelope'], 'integrated-result.schema.json')
             self.contract.semantic(response['envelope'], request_id, self.store, known)
             self.store.save_run(request_id, 'initial', response)
             self.store.save_run(request_id, 'current', response)
+            _log_event(logging.INFO, 'workflow_completed', request_id=request_id,
+                       status=response['envelope'].get('status'), http_status=http_status,
+                       duration_ms=round((time.monotonic() - run_started) * 1000, 3),
+                       cache_hit=False, stage_count=len(body['stages']))
             return response
 
     @staticmethod
     def _response(body, http_status):
         return dict(http_status=http_status, envelope=dict(contract_version=VERSION, request_id=body['request_id'],
-                    producer=dict(agent_id='vogue-orchestrator', schema_version='integrated-result/1.0'), status=body['status'], result=copy.deepcopy(body)))
+                    producer=dict(agent_id='vogue-orchestrator', schema_version='integrated-result/2.0'), status=body['status'], result=copy.deepcopy(body)))
 
     def retry_image(self, request_id, retry_key):
         require(isinstance(retry_key, str) and 0 < len(retry_key) <= 128 and retry_key != 'initial', 'RETRY_KEY_REQUIRED')

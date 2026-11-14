@@ -19,7 +19,7 @@ TOKEN = os.environ.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN", "")
 AGENTS = {
     "trend": (os.environ.get("VOGUE_TREND_AGENT_URL", "http://trend:8768"), "/v1/agents/trend-analysis-agent/runs", "/health", False),
     "stock": (os.environ.get("VOGUE_STOCK_AGENT_URL", "http://stock:8002"), "/v1/agents/stock-agent/runs", "/health/live", False),
-    "new-product": (os.environ.get("VOGUE_NEW_PRODUCT_AGENT_URL", "http://new-product:8767"), "/v1/agents/new-product-agent/drafts", "/api/health", True),
+    "new-product": (os.environ.get("VOGUE_NEW_PRODUCT_AGENT_URL", "http://new-product:8767"), "/v1/agents/new-product-agent/runs", "/api/health", True),
     "sales-market": (os.environ.get("VOGUE_SALES_MARKET_AGENT_URL", "http://sales-market:8766"), "/v1/agents/sales-market-agent/reviews", "/api/health", False),
 }
 

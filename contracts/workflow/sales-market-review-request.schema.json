@@ -1,8 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.vogue.invalid/workflow/0.1/sales-market-review-request.schema.json",
-  "title": "P08 → P07 full-Draft direct review",
-  "$comment": "PROPOSED workflow-contract/0.2.0: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.",
+  "$id": "urn:vogue:sales-market-review:0.2:proposal",
+  "title": "Project_07 minimal product review proposal request",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,31 +11,81 @@
   ],
   "properties": {
     "contract_version": {
-      "const": "vogue-workflow/0.1"
+      "const": "vogue-sales-market-review/0.2-proposal"
     },
     "request_id": {
-      "$ref": "common.schema.json#/$defs/id"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
     },
     "input": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "planning_draft",
-        "derived_view"
+        "request_id",
+        "product"
       ],
       "properties": {
-        "planning_draft": {
-          "$ref": "common.schema.json#/$defs/retained_draft"
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
         },
-        "derived_view": {
-          "anyOf": [
-            {
-              "$ref": "common.schema.json#/$defs/derived_view"
-            },
-            {
-              "type": "null"
-            }
+        "product": {
+          "$ref": "#/$defs/product"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "product": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category"
+      ],
+      "properties": {
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": ".*\\S.*"
+        },
+        "product_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": ".*\\S.*"
+        },
+        "gender": {
+          "enum": [
+            "women",
+            "men",
+            "unisex",
+            "unknown",
+            null
           ]
+        },
+        "season": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": ".*\\S.*"
+        },
+        "material": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": ".*\\S.*"
         }
       }
     }

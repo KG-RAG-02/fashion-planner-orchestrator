@@ -21,6 +21,7 @@ const el = {
 
 const state = {
   envelope: null, requestId: null, inFlight: false, poller: null, previewUrl: null,
+  p07CallRequest: null, p07CallRequestArtifactId: null, p07CallRequestState: 'unavailable',
   md: { decisions: [], integratedSha: null, selected: null, busy: false, message: '' },
   system: null, evidenceTab: 'evidence',
 };
@@ -75,6 +76,12 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
   const result = envelope?.result;
   if (!result) return;
   state.envelope = envelope;
+  const p07ArtifactId = result.sources?.sales_market_review?.call_request_artifact?.artifact_id ?? null;
+  if (p07ArtifactId !== state.p07CallRequestArtifactId) {
+    state.p07CallRequestArtifactId = p07ArtifactId;
+    state.p07CallRequest = null;
+    state.p07CallRequestState = p07ArtifactId ? 'loading' : 'unavailable';
+  }
   el.pipeline.hidden = false;
   view.renderRail(el.rail, model.rail(result, { inFlight }));
   el.results.hidden = false;
@@ -82,10 +89,38 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
   view.renderTrends(el.trends, model.trendCards(model.sourceResult(result, 'trend')));
   view.renderStock(el.stock, model.stockSlots(model.sourceResult(result, 'stock')));
   view.renderDraft(el.draft, model.draftView(model.sourceResult(result, 'planning_draft')));
-  view.renderReview(el.review, model.reviewView(model.sourceResult(result, 'sales_market_review')));
+  renderReview();
+  void loadP07CallRequest(result);
   const summary = model.runSummary(envelope);
   view.renderRun(el.runCard, summary, { sheet: model.planningSheetLink(summary, { inFlight }) });
   renderMd();
+}
+
+function renderReview() {
+  const source = state.envelope?.result?.sources?.sales_market_review;
+  view.renderReview(el.review, model.reviewView(
+    source?.raw_response?.result ?? null,
+    state.p07CallRequest,
+    source?.call_request_artifact?.artifact_id ?? null,
+    state.p07CallRequestState,
+    model.sourceResult(state.envelope?.result, 'planning_draft'),
+  ));
+}
+
+async function loadP07CallRequest(result) {
+  const artifactId = result?.sources?.sales_market_review?.call_request_artifact?.artifact_id;
+  if (!artifactId || artifactId !== state.p07CallRequestArtifactId || state.p07CallRequest || state.p07CallRequestState !== 'loading') return;
+  if (!/^[a-f0-9]{64}$/.test(artifactId)) {
+    state.p07CallRequestState = 'error';
+    renderReview();
+    return;
+  }
+  const requestId = result?.request_id;
+  const response = await api.getArtifact(artifactId);
+  if (state.requestId !== requestId || state.p07CallRequestArtifactId !== artifactId) return;
+  state.p07CallRequest = response.ok && response.body && typeof response.body === 'object' && !Array.isArray(response.body) ? response.body : null;
+  state.p07CallRequestState = state.p07CallRequest ? 'loaded' : 'error';
+  renderReview();
 }
 
 function renderMd() {

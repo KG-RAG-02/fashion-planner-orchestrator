@@ -4,7 +4,6 @@ import email.message
 import http.client
 import json
 import os
-from pathlib import Path
 import tempfile
 import threading
 from http.server import ThreadingHTTPServer
@@ -12,7 +11,6 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from vogue_orchestrator import server as server_module
 from vogue_orchestrator.server import OrchestratorHandler, _request_is_trusted_local, runtime_mode, serve
 
 TRUST_KEYS = ('VOGUE_ORCHESTRATOR_RUNTIME', 'VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS', 'VOGUE_ORCHESTRATOR_ALLOWED_HOSTS')
@@ -86,11 +84,6 @@ class LiveServerTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        root = Path(tmp.name)
-        for name, value in (('LATEST_RUN_PATH', root / 'latest-run.json'), ('RUN_HISTORY_DIR', root / 'runs')):
-            patcher = patch.object(server_module, name, value)
-            patcher.start()
-            self.addCleanup(patcher.stop)
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), OrchestratorHandler)
         self.port = self.server.server_port
         thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
@@ -112,34 +105,31 @@ class LiveServerTests(unittest.TestCase):
         finally:
             connection.close()
 
-    def test_host_mode_keeps_legacy_routes_open_and_gates_workflow_routes(self):
+    def test_host_mode_gates_workflow_routes_and_removes_legacy_routes(self):
         with environment():
-            self.assertEqual(self.request('GET', '/api/latest-run', Host='evil.example')[0], 200)
             status, body = self.request('POST', '/api/workflow/run', {}, Origin='http://127.0.0.1:1')
             self.assertEqual((status, body['error']['code']), (403, 'LOCAL_WORKFLOW_ONLY'))
-            self.assertEqual(self.request('POST', '/v1/orchestrations', {'contract_version': 'vogue-workflow/0.1'},
+            self.assertEqual(self.request('POST', '/v1/orchestrations', {'contract_version': 'vogue-workflow/0.2'},
                                           Host='evil.example')[0], 403)
+            self.assertEqual(self.request('POST', '/api/run', {'query': 'x'})[0], 404)
+            self.assertEqual(self.request('GET', '/api/run-history')[0], 404)
+            self.assertEqual(self.request('GET', '/api/connections')[0], 404)
 
-    def test_container_mode_gates_everything_but_health_and_static_files(self):
+    def test_container_mode_gates_api_routes_but_keeps_health_and_static_files(self):
         evil = {'Host': 'evil.example:%d' % self.port}
         with environment(VOGUE_ORCHESTRATOR_RUNTIME='container'):
-            self.assertEqual(self.request('GET', '/api/health', **evil), (200, {'status': 'ok', 'mode': 'local-orchestrator-ui'}))
+            self.assertEqual(self.request('GET', '/api/health', **evil),
+                             (200, {'status': 'ok', 'mode': 'workflow'}))
             self.assertEqual(self.request('GET', '/', **evil)[0], 200)
-            for method, path, body in (('GET', '/api/latest-run', None), ('GET', '/api/run-history', None),
-                                       ('GET', '/api/connections', None), ('DELETE', '/api/run-history', None),
-                                       ('POST', '/api/run', {'query': 'x'}), ('POST', '/v1/orchestrations', {'input': {}}),
+            for method, path, body in (('GET', '/api/connections', None),
+                                       ('POST', '/api/run', {'query': 'x'}),
+                                       ('POST', '/v1/orchestrations', {'input': {}}),
                                        ('POST', '/api/health', {})):
                 with self.subTest(method=method, path=path):
                     self.assertEqual(self.request(method, path, body, **evil), (403, {'error': 'trusted_local_only'}))
-            origin = {'Origin': 'http://127.0.0.1:1'}
-            self.assertEqual(self.request('DELETE', '/api/run-history', **origin)[0], 403)
-            self.assertEqual(self.request('GET', '/api/workflow/runs/x', **evil)[1]['error']['code'], 'LOCAL_WORKFLOW_ONLY')
-            self.assertEqual(self.request('GET', '/api/latest-run')[0], 200)  # trusted: loopback, own Host, no Origin
-            self.assertEqual(self.request('DELETE', '/api/run-history', Origin='http://127.0.0.1:%d' % self.port)[0], 200)
-            for method, path in (('GET', '/api/local-services/status'), ('POST', '/api/local-services/restart')):
-                with self.subTest(path=path):
-                    self.assertEqual(self.request(method, path, {} if method == 'POST' else None),
-                                     (404, {'error': 'not_found'}))
+            self.assertEqual(self.request('GET', '/api/workflow/runs/x', **evil)[1]['error']['code'],
+                             'LOCAL_WORKFLOW_ONLY')
+            self.assertEqual(self.request('GET', '/api/workflow/runs/missing')[0], 404)
 
 
 if __name__ == '__main__':

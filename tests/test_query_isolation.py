@@ -1,4 +1,4 @@
-"""Guards that keep query structuring from colliding with the existing orchestrator. Stdlib only.
+"""Guards that keep query structuring independent from transport and provider code. Stdlib only.
 
 The module must stay standalone (portable to another repository), offline, and the only place
 that uses pydantic. These checks read source files with `ast`; they import nothing.
@@ -9,8 +9,7 @@ import unittest
 
 from _query_support import QUERY_PACKAGE_DIR, SOURCE_DIR
 
-CORE_MODULES = {"core", "connectors", "demo", "server"}
-QUERY_CALLERS = {"server.py"}  # may import the query package (lazily); see docs/query-decisions.md UI-2
+QUERY_CALLERS = {"server.py"}  # query package is loaded lazily by the current UI request path
 FORBIDDEN_IMPORT_ROOTS = {
     "urllib", "http", "socket", "ssl", "requests", "httpx", "aiohttp", "openai", "anthropic", "subprocess",
 }
@@ -30,7 +29,7 @@ class IsolationTests(unittest.TestCase):
     def test_query_package_exists(self):
         self.assertTrue(any(QUERY_PACKAGE_DIR.glob("*.py")))
 
-    def test_query_modules_do_not_import_the_orchestrator_core_or_parent_package(self):
+    def test_query_modules_do_not_import_transport_or_parent_package(self):
         for path in QUERY_PACKAGE_DIR.glob("*.py"):
             for module, level in _imports(path):
                 with self.subTest(file=path.name, module=module, level=level):
@@ -39,7 +38,6 @@ class IsolationTests(unittest.TestCase):
                     if level == 0 and parts[0] == "vogue_orchestrator":
                         # An absolute import may only point back into the query package itself.
                         self.assertEqual(parts[1:2], ["query"], f"must not import {module}")
-                        self.assertNotIn(parts[1], CORE_MODULES)
 
     def test_query_modules_make_no_network_or_llm_calls(self):
         for path in QUERY_PACKAGE_DIR.glob("*.py"):
@@ -48,8 +46,7 @@ class IsolationTests(unittest.TestCase):
                     self.assertNotIn(module.split(".")[0], FORBIDDEN_IMPORT_ROOTS)
 
     def test_existing_modules_do_not_import_the_query_package(self):
-        # Exception (user decision 2026-11-10, UI-2): server.py, the UI entry point, calls the query
-        # module in-process. core, connectors and demo stay independent of it.
+        # server.py is the only runtime module that invokes query structuring.
         for path in SOURCE_DIR.glob("*.py"):
             if path.name in QUERY_CALLERS:
                 continue
@@ -58,7 +55,7 @@ class IsolationTests(unittest.TestCase):
                     parts = module.split(".")
                     self.assertFalse(
                         (level >= 1 and parts[0] == "query") or (level == 0 and parts[:2] == ["vogue_orchestrator", "query"]),
-                        "the orchestrator core must not depend on the query module",
+                        "only the HTTP entry point may depend on query structuring",
                     )
 
     def test_pydantic_is_only_used_inside_the_query_package(self):
@@ -67,14 +64,6 @@ class IsolationTests(unittest.TestCase):
                 with self.subTest(file=path.name, module=module):
                     self.assertNotEqual(module.split(".")[0], "pydantic")
 
-
-    def test_only_the_server_calls_the_query_package_and_core_modules_never_do(self):
-        for name in ("core.py", "connectors.py", "demo.py"):
-            for module, level in _imports(SOURCE_DIR / name):
-                with self.subTest(file=name, module=module):
-                    parts = module.split(".")
-                    self.assertFalse((level >= 1 and parts[0] == "query")
-                                     or (level == 0 and parts[:2] == ["vogue_orchestrator", "query"]))
 
 
 if __name__ == "__main__":

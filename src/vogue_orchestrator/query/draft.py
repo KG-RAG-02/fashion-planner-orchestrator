@@ -10,7 +10,7 @@ the exact substring (`raw`), its `kind`, whether the user wants it or wants it o
 a `suggestion` from the standard list of that kind (or null). The resolver (resolve.py) then looks
 `raw` up in the alias dictionary first and uses the suggestion only when the dictionary does not know
 the expression; it also sets `match`, which the model never writes. Default season, major derived
-from minor, `reason` texts and contract validation are code as well. Plan: docs/structured-query-plan.md
+from minor, `reason` texts and contract validation are code as well. Rules and current behavior: docs/query-structuring.md
 §2.1 (resolver) and §2.2 (this format).
 
 Validation here is about SHAPE only:
@@ -25,7 +25,7 @@ Validation here is about SHAPE only:
   - Before validation, the v2 path (structured.py) runs `repair_draft_labels` (decision OQ-12): a wrong
     `kind` / `unsupported.type` label in one entry is moved to the right list with a warning instead of
     failing the whole draft. The models below stay strict; the repair is a separate, explicit step.
-The archived v1 format (the model picked the final values) lives in legacy_v1.py.
+The initial flat extraction format is no longer supported; current inference uses StructuredQuery drafts.
 """
 
 from __future__ import annotations

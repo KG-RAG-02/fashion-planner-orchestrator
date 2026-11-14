@@ -4,28 +4,47 @@
   "today": "2026-11-09",
   "request_id": "synthetic-query-002",
   "query": "하의 빼고 해줘",
-  "draft": {
-    "season": null,
+  "structured_draft": {
+    "seasons": [],
     "style_names": [],
-    "item_terms": [],
-    "include_categories": [],
-    "exclude_categories": [{"raw": "하의", "major": "하의", "minor": null}],
-    "gender": null,
-    "attributes": [],
+    "product_model_names": [],
+    "items": [],
+    "conditions": [
+      {
+        "raw": "하의",
+        "kind": "category",
+        "polarity": "exclude",
+        "suggestion": "하의",
+        "item": null
+      }
+    ],
     "unsupported": []
   },
-  "structured_draft": {"seasons": [], "style_names": [], "product_model_names": [], "items": [], "conditions": [{"raw": "하의", "kind": "category", "polarity": "exclude", "suggestion": "하의", "item": null}], "unsupported": []},
   "expected_warnings": [],
   "expected_trend_query": {
     "request_id": "synthetic-query-002",
     "original_query": "하의 빼고 해줘",
     "trend_terms": {
-      "season": {"year": 2027, "season": "SS", "raw": null, "origin": "default_next"},
+      "season": {
+        "year": 2027,
+        "season": "SS",
+        "raw": null,
+        "origin": "default_next"
+      },
       "style_names": [],
       "item_terms": []
     },
     "requested": {
-      "categories": {"include": [], "exclude": [{"raw": "하의", "major": "하의", "minor": null}]},
+      "categories": {
+        "include": [],
+        "exclude": [
+          {
+            "raw": "하의",
+            "major": "하의",
+            "minor": null
+          }
+        ]
+      },
       "gender": null,
       "attributes": []
     },

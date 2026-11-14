@@ -49,10 +49,6 @@ export function chip(status) {
   return h('span', { class: `chip tone-${meta.tone}` }, statusIcon(meta.tone), meta.label);
 }
 
-function badge(nature) {
-  return h('span', { class: `badge nature-${nature.tone}` }, nature.label);
-}
-
 function sectionHead(id, title, meta) {
   return h('div', { class: 'section-head' }, h('h2', { id }, title), meta ? h('span', { class: 'section-meta' }, meta) : null);
 }
@@ -171,8 +167,14 @@ function draftVisualsFigure(view) {
 
 export function renderDraft(section, view) {
   if (!view) { section.replaceChildren(sectionHead('draft-title', '기획 초안'), emptyNote('초안이 아직 없습니다.')); return; }
+  const draftVersion = view.contractVersion?.startsWith('planning-draft/')
+    ? view.contractVersion : view.contractVersion ? `planning-draft/${view.contractVersion}` : 'planning-draft/1.0';
+  const detailBlock = (title, items) => items.length
+    ? h('details', { class: 'limits' }, h('summary', {}, `${title} ${items.length}건`),
+        h('ul', {}, items.map((item) => h('li', {}, typeof item === 'string' ? item : JSON.stringify(item)))))
+    : null;
   section.replaceChildren(
-    sectionHead('draft-title', '기획 초안', `planning-draft/1.0${view.category ? ` · ${view.category}` : ''}${view.season ? ` · ${view.season}` : ''}`),
+    sectionHead('draft-title', '기획 초안', `${draftVersion} · ${model.statusMeta(view.status).label}${view.category ? ` · ${view.category}` : ''}${view.season ? ` · ${view.season}` : ''}`),
     h('h3', { class: 'draft-title' }, view.title),
     view.visuals?.length ? draftVisualsFigure(view) : null,
     view.claims.length ? claimList(view.claims) : emptyNote('주장이 없습니다.'),
@@ -180,23 +182,62 @@ export function renderDraft(section, view) {
       h('p', { class: 'eyebrow' }, 'OPEN QUESTIONS · MD'),
       view.openQuestions.length ? h('ul', {}, view.openQuestions.map((q) => h('li', {}, q))) : emptyNote('명시된 확인 사항이 없습니다.'),
       view.mdRequired.length ? h('p', { class: 'small muted' }, `MD 결정 필요: ${view.mdRequired.join(' · ')}`) : null),
+    detailBlock('P06 오류', view.errors),
+    view.sections.length ? h('div', { class: 'review-analyses' }, view.sections.map(({ key, label, value }) => h('details', { class: 'limits review-analysis' },
+      h('summary', {}, label), h('pre', { class: 'review-payload' }, JSON.stringify(value, null, 2))))) : null,
     view.limitations.length ? h('details', { class: 'limits' }, h('summary', {}, `제한 ${view.limitations.length}건`), h('ul', {}, view.limitations.map((l) => h('li', {}, l)))) : null);
 }
 
 export function renderReview(section, view) {
   if (!view) { section.replaceChildren(sectionHead('review-title', '시장 검토'), emptyNote('시장 검토 결과가 없습니다.')); return; }
-  const table = h('table', { class: 'metric-table' },
-    h('thead', {}, h('tr', {}, ['지표', '값', '기간 · 출처', '성격'].map((label) => h('th', { scope: 'col' }, label)))),
-    h('tbody', {}, view.metrics.map((metric) => h('tr', {},
-      h('td', {}, metric.label),
-      h('td', { class: metric.missing ? 'value is-missing' : 'value' }, metric.value, metric.missing ? h('span', { class: 'small muted as-block' }, metric.reason) : null),
-      h('td', { class: 'muted small' }, [metric.period, metric.source].filter(Boolean).join(' · ') || '—'),
-      h('td', {}, badge(metric.nature), metric.asOf ? h('span', { class: 'small muted as-block' }, `as_of ${metric.asOf}`) : null)))));
-  section.replaceChildren(
-    sectionHead('review-title', '시장 검토', `sales-market-review/1.0 · ${view.observation.nature.label}`),
-    view.findings.length ? claimList(view.findings) : emptyNote('검토 소견이 없습니다.'),
-    view.metrics.length ? h('div', { class: 'table-scroll' }, table) : emptyNote('지표가 없습니다.'),
-    view.limitations.length ? h('details', { class: 'limits' }, h('summary', {}, `제한 ${view.limitations.length}건`), h('ul', {}, view.limitations.map((l) => h('li', {}, l)))) : null);
+  if (view.format === 'native') {
+    const dataBlock = (title, items) => items.length
+      ? h('details', { class: 'limits' }, h('summary', {}, `${title} ${items.length}건`),
+          h('ul', {}, items.map((item) => h('li', {}, typeof item === 'string' ? item : JSON.stringify(item)))))
+      : null;
+    const sections = view.sections.map(({ key, label, value }) => h('details', { class: 'limits review-analysis' },
+      h('summary', {}, label, value && typeof value === 'object' && value.status ? ` · ${model.statusMeta(value.status).label}` : ''),
+      h('pre', { class: 'review-payload' }, JSON.stringify(value, null, 2))));
+    let inputBlock;
+    if (view.inputEvidenceState === 'loading') {
+      inputBlock = h('div', { class: 'review-input-card' }, h('p', { class: 'small muted' }, 'P07에 전달한 입력과 필드별 근거를 불러오는 중입니다…'));
+    } else if (view.inputFields.length) {
+      const rows = view.inputFields.map((field) => h('tr', {},
+        h('th', { scope: 'row' }, field.label),
+        h('td', { class: 'review-input-value' }, field.value),
+        h('td', {}, h('span', { class: `tag review-origin origin-${field.kind ?? 'missing'}` }, field.kindLabel),
+          field.sourceRef ? h('code', { class: 'review-source-ref' }, field.sourceRef) : h('span', { class: 'small muted as-block' }, '출처 경로 미전달')),
+        h('td', {}, field.evidenceIds.length
+          ? h('ul', { class: 'review-evidence-ids' }, field.evidenceIds.map((id) => h('li', { class: 'mono small' }, id)))
+          : h('span', { class: 'small muted' }, field.kind === 'user_requested' ? '연결된 연구 Evidence ID 없음' : 'Evidence ID 없음'))));
+      inputBlock = h('details', { class: 'review-input-card', open: true },
+      h('summary', {}, `P07에 전달한 입력 · ${view.inputContractVersion ?? '계약 미확인'}`),
+        h('p', { class: 'small muted review-input-meta' }, `요청 ID ${view.inputRequestId ?? '—'} · 출처 표시는 P06 Draft 기준이며 P07 요청에는 전송되지 않았습니다.`),
+        h('div', { class: 'table-scroll' }, h('table', { class: 'metric-table review-input-table' },
+          h('thead', {}, h('tr', {}, ['항목', '전달값', '출처 종류 · 경로', 'Evidence ID'].map((label) => h('th', { scope: 'col' }, label)))),
+          h('tbody', {}, rows))),
+        view.callRequestArtifactId ? h('a', { class: 'link small', href: artifactUrl(view.callRequestArtifactId), target: '_blank', rel: 'noopener' }, 'P07 요청 원문 JSON 열기') : null);
+    } else if (view.inputEvidenceState === 'missing') {
+      inputBlock = h('div', { class: 'review-input-card' },
+        h('strong', {}, 'P07 요청은 상품값의 출처 메타데이터를 받지 않습니다.'),
+        h('p', { class: 'small muted' }, 'P07 0.2 계약에는 product_evidence 필드가 없습니다. 상품 출처는 P06 Draft의 정보를 표시합니다.'));
+    } else if (view.callRequestArtifactId) {
+      inputBlock = h('div', { class: 'review-input-card' },
+        h('p', { class: 'small muted' }, 'P07 요청 원문을 불러오지 못했습니다.'),
+        h('a', { class: 'link small', href: artifactUrl(view.callRequestArtifactId), target: '_blank', rel: 'noopener' }, 'P07 요청 원문 JSON 열기'));
+    } else {
+      inputBlock = h('div', { class: 'review-input-card' }, emptyNote('P07 호출 요청이 보존되지 않았습니다.'));
+    }
+    section.replaceChildren(
+      sectionHead('review-title', '시장 검토', `${view.contractVersion ?? 'P07 응답'} · ${model.statusMeta(view.status).label}`),
+      inputBlock,
+      view.sections.length ? h('div', { class: 'review-analyses' }, sections) : emptyNote('P07 응답에 분석 항목이 없습니다.'),
+      dataBlock('누락 데이터', view.missingData),
+      dataBlock('오류', view.errors),
+      dataBlock('제한 사항', view.limitations));
+    return;
+  }
+  section.replaceChildren(sectionHead('review-title', '시장 검토'), emptyNote('현재 P07 응답 계약과 일치하는 결과가 없습니다.'));
 }
 
 // --- Aside -----------------------------------------------------------------

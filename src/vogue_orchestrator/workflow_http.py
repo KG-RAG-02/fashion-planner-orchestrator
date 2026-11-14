@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import socket
 import ssl
+import time
 from urllib.parse import parse_qs, urlsplit, unquote
 
 from .connectors import (ConnectorConfigurationError, WORKFLOW_CONNECT_TIMEOUT_SECONDS,
@@ -71,6 +72,7 @@ def post_wire(url, payload, token=None, *, connect_timeout=WORKFLOW_CONNECT_TIME
     cls = http.client.HTTPSConnection if parts.scheme == 'https' else http.client.HTTPConnection
     kwargs = {'context': ssl.create_default_context()} if parts.scheme == 'https' else {}
     conn = cls(parts.hostname, parts.port, timeout=connect_timeout, **kwargs)
+    started = time.monotonic()
     headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
     if token:
         headers['Authorization'] = 'Bearer ' + token
@@ -81,11 +83,12 @@ def post_wire(url, payload, token=None, *, connect_timeout=WORKFLOW_CONNECT_TIME
         conn.request('POST', parts.path, body=canonical(payload), headers=headers)
         response = conn.getresponse()
         raw = response.read(16777217)
-        return WireResponse(raw, response.status, response.getheader('Content-Type','application/json').split(';')[0], len(raw) > 16777216)
+        return WireResponse(raw, response.status, response.getheader('Content-Type','application/json').split(';')[0],
+                            len(raw) > 16777216, (time.monotonic() - started) * 1000)
     except (socket.timeout, TimeoutError):  # before OSError: TimeoutError is an OSError
-        raise StageFailure('UPSTREAM_TIMEOUT', 504) from None
+        raise StageFailure('UPSTREAM_TIMEOUT', 504, elapsed_ms=(time.monotonic() - started) * 1000) from None
     except (OSError, http.client.HTTPException):
-        raise StageFailure('UPSTREAM_UNAVAILABLE', 503) from None
+        raise StageFailure('UPSTREAM_UNAVAILABLE', 503, elapsed_ms=(time.monotonic() - started) * 1000) from None
     finally:
         conn.close()
 
@@ -169,13 +172,13 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
     env = os.environ
     if artifact_reader is _FROM_ENV:
         artifact_reader = peer_artifact_reader(env)
-    dev = env.get('VOGUE_AGENT_HTTP_DEV_MODE', '').lower() in {'1','true','yes'}
     token = setting(env, 'VOGUE_AGENT_SERVICE_BEARER_TOKEN') or None
-    if not dev and not token:
-        raise ConnectorConfigurationError('Service Bearer token is required.')
+    if not token:
+        raise ConnectorConfigurationError('VOGUE_AGENT_SERVICE_BEARER_TOKEN is required by P07 /reviews.')
     specs = [('trend','VOGUE_TREND_AGENT_URL','trend-analysis-agent/runs'),
              ('stock','VOGUE_STOCK_AGENT_URL','stock-agent/runs'),
-             ('draft','VOGUE_NEW_PRODUCT_AGENT_URL','new-product-agent/drafts'),
+             ('draft','VOGUE_NEW_PRODUCT_AGENT_URL','new-product-agent/runs'),
+             ('review_projection','VOGUE_NEW_PRODUCT_AGENT_URL','new-product-agent/sales-market-reviews'),
              ('review','VOGUE_SALES_MARKET_AGENT_URL','sales-market-agent/reviews')]
     connect_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS', WORKFLOW_CONNECT_TIMEOUT_SECONDS)
     read_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS', WORKFLOW_READ_TIMEOUT_SECONDS)

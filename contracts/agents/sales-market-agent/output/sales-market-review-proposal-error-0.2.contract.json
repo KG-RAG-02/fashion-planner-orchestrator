@@ -1,0 +1,72 @@
+{
+  "_provenance": {
+    "agent_id": "sales-market-agent",
+    "contract": "P07 /reviews error response",
+    "direction": "output",
+    "payload_schema_version": "vogue-sales-market-review/0.2-proposal",
+    "method": "copy",
+    "source_repo": "KG-RAG-02/sales-market-agent",
+    "source_branch": "main",
+    "source_commit": "86d833506cc7",
+    "source_schema": "contracts/schemas/proposals/sales-market-review-0.2-error.schema.json",
+    "source_files": [
+      {
+        "path": "src/market_research_agent/http_server.py",
+        "sha256": "6eb16a2727aeb1968ca50b2c9605bb60eaf93cd32b71704b45c586e967acee23"
+      },
+      {
+        "path": "contracts/schemas/proposals/sales-market-review-0.2-error.schema.json",
+        "sha256": "a908b6e2094694902a7d91ff4b1d91db1b1379324d6760312b2ba0ca44873761"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/sales-market-agent/reviews",
+      "contract_version": "vogue-sales-market-review/0.2-proposal",
+      "detected_from": "src/market_research_agent/http_server.py:REVIEW_CONTRACT_VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:vogue:sales-market-review:0.2:error",
+    "title": "Project_07 review proposal error response",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract_version",
+      "request_id",
+      "error"
+    ],
+    "properties": {
+      "contract_version": {
+        "const": "vogue-sales-market-review/0.2-proposal"
+      },
+      "request_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 128
+      },
+      "error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -94,26 +94,6 @@ export function rail(result, { inFlight = false } = {}) {
   });
 }
 
-export function natureMeta(dataNature, synthetic) {
-  if (synthetic === true || dataNature === 'synthetic_fixture') return { label: 'synthetic', tone: 'synthetic' };
-  if (dataNature === 'sample') return { label: 'sample', tone: 'synthetic' };
-  if (dataNature === 'historical_external') return { label: 'historical', tone: 'historical' };
-  if (dataNature === 'current_internal') return { label: 'current', tone: 'ok' };
-  if (dataNature === 'user_provided') return { label: 'user_provided', tone: 'neutral' };
-  return { label: dataNature || 'unknown', tone: 'none' };
-}
-
-export function observationView(observation) {
-  const obs = observation ?? {};
-  return {
-    asOf: obs.as_of ?? null,
-    observedAt: obs.observed_at ?? null,
-    source: obs.source ?? null,
-    nature: natureMeta(obs.data_nature, obs.synthetic),
-    limitations: Array.isArray(obs.limitations) ? obs.limitations : [],
-  };
-}
-
 // --- Trend -----------------------------------------------------------------
 
 export function trendCards(trendResult) {
@@ -197,7 +177,25 @@ export function claimView(claim) {
 export function draftView(draftResult) {
   const draft = draftResult?.draft;
   if (!draft) return null;
+  const sourceFields = [
+    ['product_profile', '제품 프로필', draft.product_profile],
+    ['attributes', '속성 및 제안', draft.attributes],
+    ['field_origins', '필드 출처', draft.field_origins],
+    ['input_conflicts', '입력 충돌', draft.input_conflicts],
+    ['input_statuses', '상류 입력 상태', draft.input_statuses ?? draftResult.input_statuses],
+    ['planning_analysis', '기획 분석', draftResult.planning_analysis],
+    ['observations', '관측값', draftResult.observations ?? draft.observations],
+    ['proposals', '제안', draftResult.proposals ?? draft.proposals],
+    ['questions_for_validation', '검증 질문', draftResult.questions_for_validation ?? draft.questions_for_validation],
+    ['conflicts', '충돌', draftResult.conflicts],
+    ['validation_issues', '검증 이슈', draftResult.validation_issues],
+    ['generation_metadata', '생성 정보', draftResult.generation_metadata],
+    ['compatibility', '입력 호환성 정보', draftResult.compatibility],
+  ].filter(([, , value]) => value !== undefined && value !== null)
+    .map(([key, label, value]) => ({ key, label, value }));
   return {
+    status: draftResult.status ?? null,
+    contractVersion: draftResult.schema_version ?? null,
     title: draft.title ?? '제목 없음',
     category: draft.category ?? null,
     season: draft.season ?? null,
@@ -209,6 +207,8 @@ export function draftView(draftResult) {
     visuals: draftVisuals(draft.visuals),
     imageCalls: Number.isInteger(draftResult.image_generation_calls) ? draftResult.image_generation_calls : null,
     concept: typeof draft.concept?.product_definition?.value === 'string' ? draft.concept.product_definition.value : null,
+    errors: Array.isArray(draftResult.errors) ? draftResult.errors : [],
+    sections: sourceFields,
   };
 }
 
@@ -225,46 +225,88 @@ export function draftVisuals(visuals) {
   });
 }
 
-const METRIC_LABELS = Object.freeze({
-  current_company_sales: '현재 자사 판매',
-});
-
-function formatNumber(value, unit, currency) {
-  const number = Number(value).toLocaleString('ko-KR');
-  const suffix = currency ? ` ${currency}` : unit && unit !== 'pieces' ? ` ${unit}` : unit === 'pieces' ? '개' : '';
-  return `${number}${suffix}`;
-}
-
-export function metricView(metric) {
-  const missing = metric?.value === null || metric?.value === undefined;
-  const obs = observationView(metric?.observation);
-  let value = '미확인';
-  if (!missing) value = typeof metric.value === 'number' ? formatNumber(metric.value, metric.unit, metric.currency) : String(metric.value);
-  const period = metric?.period && typeof metric.period === 'object'
-    ? [metric.period.start, metric.period.end].filter(Boolean).join(' – ')
-    : (metric?.period ?? '');
+export function reviewView(reviewResult, callRequest = null, callRequestArtifactId = null, callRequestState = 'unavailable', p06Result = null) {
+  // P07's current native response is a partial-capable, analysis-oriented object.
+  if (!reviewResult || typeof reviewResult !== 'object') return null;
+  const result = reviewResult.result && typeof reviewResult.result === 'object' ? reviewResult.result : reviewResult;
+  if (!result.schema_version && !result.decision_support && !result.price_analysis && !result.target_audience) return null;
+  const sections = [
+    ['decision_support', '의사결정 지원'],
+    ['price_analysis', '가격 분석'],
+    ['category_price_comparison', '카테고리 가격 비교'],
+    ['fabric_cost_analysis', '원단 원가 분석'],
+    ['material_cost_analysis', '소재 원가 분석'],
+    ['margin_analysis', '마진 분석'],
+    ['margin_estimate', '마진 참고치'],
+    ['margin_price_range_analysis', '마진·가격 범위 분석'],
+    ['customer_segment_analysis', '고객 세그먼트 분석'],
+    ['target_audience_analysis', '대상 고객 분석'],
+    ['target_audience', '대상 고객'],
+    ['draft_context', '검토 대상 상품 정보'],
+    ['evidence', '근거'],
+  ].filter(([key]) => result[key] !== undefined && result[key] !== null)
+    .map(([key, label]) => ({ key, label, value: result[key] }));
+  const product = callRequest?.input?.product && typeof callRequest.input.product === 'object' && !Array.isArray(callRequest.input.product)
+    ? callRequest.input.product : null;
+  const productEvidence = p06ProductProvenance(p06Result, product);
+  const fieldLabels = Object.freeze({
+    category: '카테고리', product_type: '상품 종류', gender: '성별', season: '시즌', material: '소재',
+  });
+  const kindLabels = Object.freeze({
+    user_requested: '사용자 요청', evidence_observation: '근거 관측', proposal: '제안',
+    hypothesis: '가설', to_validate: '검증 필요', unknown: '미확인',
+  });
+  const inputFields = product ? Object.entries(fieldLabels)
+    .filter(([key]) => Object.prototype.hasOwnProperty.call(product, key))
+    .map(([key, label]) => {
+      const evidence = productEvidence[key] && typeof productEvidence[key] === 'object' ? productEvidence[key] : {};
+      return {
+        key, label, value: product[key] === null ? '미지정' : String(product[key]),
+        kind: evidence.kind ?? null,
+        kindLabel: kindLabels[evidence.kind] ?? '미전달',
+        sourceRef: typeof evidence.source_ref === 'string' ? evidence.source_ref : null,
+        evidenceIds: Array.isArray(evidence.evidence_ids) ? evidence.evidence_ids.filter((id) => typeof id === 'string') : [],
+      };
+    }) : [];
   return {
-    label: METRIC_LABELS[metric?.name] ?? metric?.name ?? metric?.metric_id ?? '지표',
-    value,
-    missing,
-    reason: missing ? (metric?.missing_reason ?? '원천 없음') : '',
-    period,
-    nature: obs.nature,
-    asOf: obs.asOf,
-    source: obs.source,
+    format: 'native',
+    contractVersion: reviewResult.contract_version ?? result.schema_version ?? null,
+    status: reviewResult.status ?? result.status ?? null,
+    sections,
+    inputContractVersion: callRequest?.contract_version ?? null,
+    inputRequestId: callRequest?.request_id ?? callRequest?.input?.request_id ?? null,
+    inputFields,
+    inputEvidenceState: callRequest ? (Object.keys(productEvidence).length ? 'loaded' : 'missing') : callRequestState,
+    callRequestArtifactId,
+    errors: Array.isArray(result.errors) ? result.errors : [],
+    missingData: Array.isArray(result.missing_data) ? result.missing_data : [],
+    limitations: unique([...(Array.isArray(result.limitations) ? result.limitations : []), ...(Array.isArray(reviewResult.limitations) ? reviewResult.limitations : [])]),
   };
 }
 
-export function reviewView(reviewResult) {
-  const review = reviewResult?.review;
-  if (!review) return null;
-  return {
-    findings: (review.findings ?? []).map(claimView),
-    metrics: (review.metrics ?? []).map(metricView),
-    limitations: unique([...(review.limitations ?? []), ...(reviewResult.limitations ?? [])]),
-    observation: observationView(review.observation),
-    identity: reviewResult.review_identity ?? null,
-  };
+function p06ProductProvenance(p06Result, product) {
+  const draft = p06Result?.draft;
+  if (!draft || !product) return {};
+  const profile = draft.product_profile && typeof draft.product_profile === 'object' ? draft.product_profile : {};
+  const origins = draft.field_origins && typeof draft.field_origins === 'object' ? draft.field_origins : {};
+  const evidenceIds = new Set(Array.isArray(p06Result.evidence_ids) ? p06Result.evidence_ids.filter((id) => typeof id === 'string') : []);
+  const result = {};
+  for (const key of ['category', 'product_type', 'gender', 'season', 'material']) {
+    if (!Object.hasOwn(product, key)) continue;
+    let value, metadata, sourceRef;
+    const claim = profile[key];
+    if (claim && typeof claim === 'object' && typeof claim.value === 'string' && claim.value.trim()) {
+      value = claim.value.trim(); metadata = claim; sourceRef = `p06.draft.product_profile.${key}`;
+    } else if (typeof draft[key] === 'string' && draft[key].trim()) {
+      value = draft[key].trim(); metadata = {}; sourceRef = `p06.draft.${key}`;
+    }
+    if (value !== product[key]) continue;
+    const ids = Array.isArray(metadata?.evidence_ids) ? [...new Set(metadata.evidence_ids.filter((id) => typeof id === 'string' && evidenceIds.has(id)))] : [];
+    let kind = metadata?.kind ?? (origins[key] === 'user' ? 'user_requested' : 'unknown');
+    if (!['user_requested', 'evidence_observation', 'proposal', 'hypothesis', 'to_validate', 'unknown'].includes(kind)) kind = 'unknown';
+    result[key] = { kind, source_ref: sourceRef, evidence_ids: ids };
+  }
+  return result;
 }
 
 // --- Integrated envelope ---------------------------------------------------

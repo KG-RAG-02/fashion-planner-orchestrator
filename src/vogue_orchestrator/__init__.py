@@ -1,15 +1,5 @@
-"""VOGUE orchestration core."""
+"""VOGUE contract-based sequential workflow."""
 
-from .core import (
-    HandoffEnvelope,
-    Orchestrator,
-    OrchestrationResult,
-    StageName,
-    StageRecord,
-    idempotency_key,
-)
+from .workflow import StageFailure, WireResponse, Workflow
 
-__all__ = [
-    "HandoffEnvelope", "Orchestrator", "OrchestrationResult",
-    "StageName", "StageRecord", "idempotency_key",
-]
+__all__ = ["StageFailure", "WireResponse", "Workflow"]

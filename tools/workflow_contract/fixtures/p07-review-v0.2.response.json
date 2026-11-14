@@ -1,0 +1,46 @@
+{
+  "contract_version": "vogue-sales-market-review/0.2-proposal",
+  "request_id": "synthetic-p07-001",
+  "producer": {
+    "agent_id": "sales-market-agent",
+    "schema_version": "sales-market-review/0.1-internal"
+  },
+  "status": "partial",
+  "result": {
+    "schema_version": "sales-market-review/0.1-internal",
+    "request_id": "synthetic-p07-001",
+    "draft_id": null,
+    "producer_id": "sales-market-agent",
+    "status": "partial",
+    "draft_context": {
+      "category": "Outerwear"
+    },
+    "category_price_comparison": [],
+    "material_cost_analysis": [],
+    "customer_segment_analysis": [],
+    "target_audience_analysis": {},
+    "margin_estimate": {},
+    "evidence": [],
+    "missing_data": [],
+    "errors": [],
+    "limitations": [
+      "합성 데이터"
+    ],
+    "decision_support": {
+      "recommendation": "review_required",
+      "ready_for_human_decision": true,
+      "evidence_areas": {
+        "category_price": false,
+        "material_cost": false,
+        "margin": false,
+        "customer_segments": false
+      },
+      "human_decision_required": true
+    },
+    "price_analysis": {},
+    "fabric_cost_analysis": {},
+    "margin_analysis": {},
+    "margin_price_range_analysis": null,
+    "target_audience": {}
+  }
+}

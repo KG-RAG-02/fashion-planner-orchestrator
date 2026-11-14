@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = Path(__file__).resolve().parent
 SNAPSHOT_PATH = ROOT / "contracts" / "agents" / "trend-analysis-agent" / "vocabulary" / "alias-map.snapshot.json"
 GOLDEN_PATH = ROOT / "contracts" / "agents" / "trend-analysis-agent" / "vocabulary" / "alias-map.golden.json"
-QUERIES_PATH = ROOT / "data" / "user_queries.v1.json"
+QUERIES_PATH = ROOT / "data" / "user_queries.v3.json"
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 import generate_alias_data as gen  # noqa: E402  (stdlib-only sibling script)

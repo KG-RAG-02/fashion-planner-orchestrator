@@ -1,46 +1,27 @@
-# VOGUE workflow integration conventions (2026-11-13)
+# VOGUE workflow integration conventions
 
-Shared rules for the five repositories while they are integrated into one Docker deployment.
-Every implementer follows this document; when code and this document disagree, stop and report.
+Current integration behavior and contract boundaries for the five repositories. Runtime and schema facts are owned by each repository; verify its source fingerprint when a checkout changes. If this guide conflicts with implementation, treat that as a documentation or integration gap and resolve it before claiming compatibility.
 
-## 0. Roles, branches, commits
-
-- Each repo works on its local branch `integration/docker-e2e`. **Local commits only**: never push, merge, rebase, switch, stash, reset or clean. Never edit another repo.
-- Owners in this round:
-
-  | Owner | Writes to | Does not touch |
-  |---|---|---|
-  | S1 | `vogue-orchestrator` runtime: `src/`, `tests/`, `Dockerfile`, `.dockerignore`, `pyproject.toml`, `scripts/local_servers.py` | `web/`, `contracts/`, `deploy/`, `tools/workflow_contract/`, `scripts/freeze_*`, `scripts/export_*` |
-  | S2 | `new-product-agent` | — |
-  | S3 | `sales-market-agent` | — |
-  | S4 | `trend-analysis-agent`, `stock-agent` | — |
-  | Integrator | `vogue-orchestrator/contracts/`, `deploy/`, `web/`, `tools/`, `docs/` | — |
-
-- **Commits:**
-  - One commit per concern. Message: `type(scope): summary`, then a body explaining why.
-  - End every message with the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-  - Run the repo suite (section 10) before each commit.
-  - Never commit `.env*`, secrets, generated data, `*.sqlite3`, `*.duckdb`, `__pycache__`, or iCloud copies (`name 2.ext`).
-
-## 1. Version matrix (fixed — do not change)
+## 1. Current proposed version matrix
 
 | Boundary | Endpoint | Transport (`contract_version`) | Producer schema |
 |---|---|---|---|
 | P08 → Trend | `POST /v1/agents/trend-analysis-agent/runs` | `vogue-handoff/0.1` | Trend `1.1` |
 | P08 → Stock | `POST /v1/agents/stock-agent/runs` (input = Trend `result` body, unchanged) | `vogue-handoff/0.1` | Stock `1.0` |
-| P08 → P06 | `POST /v1/agents/new-product-agent/drafts` | `vogue-workflow/0.1` | `planning-draft/1.0` |
-| P08 → P07 | `POST /v1/agents/sales-market-agent/reviews` | `vogue-workflow/0.1` | `sales-market-review/1.0` |
-| UI → P08 | `POST /api/workflow/run`, `POST /v1/orchestrations` (`contract_version: vogue-workflow/0.1`) | `vogue-workflow/0.1` | `integrated-result/1.0` |
+| P08 → P06 | `POST /v1/agents/new-product-agent/runs` | `vogue-handoff/0.3` | P06 result schema `1.0` |
+| P08 → P06 review bridge | `POST /v1/agents/new-product-agent/sales-market-reviews` | `vogue-sales-market-review/0.1-proposal` | P07 request `vogue-sales-market-review/0.2-proposal` (projection only) |
+| P08 → P07 | `POST /v1/agents/sales-market-agent/reviews` | `vogue-sales-market-review/0.2-proposal` | `sales-market-review/0.1-internal` |
+| UI → P08 | `POST /api/workflow/run`, `POST /v1/orchestrations` (`contract_version: vogue-workflow/0.2`) | `vogue-workflow/0.2` | `integrated-result/2.0` |
 
-- **Contract package:** `workflow-contract/0.2.0`, in `vogue-orchestrator/contracts/workflow/`.
+- **Contract package:** proposed `workflow-contract/0.5.0`, in `vogue-orchestrator/contracts/workflow/`.
+- P06 `/runs` receives exactly `planning_request`, `trend_result`, and `inventory_product_result`. Afterward, P08 sends P06's review bridge the native Draft result and validates the returned P07 projection before calling P07. P07 receives only the allowlisted product projection (`category`, `product_type`, `gender`, `season`, `material`). P08 retains field provenance from P06 independently; user-requested values remain distinct and do not acquire research evidence IDs. P07 does not receive the full Draft or attest to its response hash; P08 records the exact P07 request artifact and documents that lineage limit in the integrated result.
   - The schema bytes are pinned by SHA-256 (`snapshot.json`).
   - Byte-identical copies live in `new-product-agent/contracts/workflow-proposed/` and `sales-market-agent/src/market_research_agent/resources/workflow_contract/`.
   - **Never edit pinned schema bytes or the vendored copies.**
 - **Unsupported versions** are rejected before any model, DB or network work:
   - new `vogue-workflow` endpoints: 422 `UNSUPPORTED_CONTRACT_VERSION`
-  - legacy routes: their existing 400 behaviour
-- **Trend 1.1** may carry `trends[].style.example_images` (added on trend main, `schema_version` still `1.1`). Consumers must accept it. The UI links those images; it never downloads or embeds them.
-- **Trend 1.1** may also carry `trends[].style.search_outlook` (trend working tree 2026-11-13, not committed yet; `schema_version` still `1.1`). It is an object or `null`: a target-season outlook of Naver search interest for the trend's component keywords. Consumers must accept it and must not use it for ranking, status or lineage decisions. It is not a sales forecast. The object never uses key names that consumers treat specially at any depth (`request_id`, `evidence_id(s)`, `focus_evidence_ids`, `input_evidence_ids`, `errors`, `kind`, `status`, `mode`, `limitations`, `data_limitations`, `missing_*`, artifact/provenance names; full list: `RESERVED_NESTED_KEYS` in trend `schemas/trend_analysis_result.py`), and never contains NaN (the trend model rejects non-finite numbers). In the stub profile the value is synthetic (`source: "synthetic_fixture"`).
+  - malformed requests to workflow endpoints: the documented 400 response
+- **Trend 1.1** may carry `trends[].style.example_images` and `trends[].style.search_outlook`. Consumers preserve these fields; the UI links example images without downloading or embedding them. `search_outlook` is a target-season search-interest outlook, not a sales forecast, and is not used for ranking, status or lineage. Stub values are synthetic and remain labelled as such.
 
 ## 2. Containers: hostnames, ports, binds, health
 
@@ -78,6 +59,9 @@ Every implementer follows this document; when code and this document disagree, s
   - `VOGUE_NEW_PRODUCT_AGENT_URL=http://new-product:8767`
   - `VOGUE_SALES_MARKET_AGENT_URL=http://sales-market:8766`
 - **Timeouts:** `VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS` (default 3) and `VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS` (default 75). No automatic retries.
+- **Safe latency telemetry:** P08 emits one JSON log event per Agent call, workflow stage, and completed run. Events include `request_id`, stage/Agent, status, elapsed time, retryable/fatal flags, and (for HTTP calls) upstream transport time versus P08 call overhead. They must never include payloads, raw responses, prompts, credentials, or artifact contents.
+- **Retry and idempotency:** P08 does not automatically repeat Agent calls. A repeated workflow request with the same ID replays the stored outcome; a checkpoint marked started but without a known result fails closed as `STAGE_OUTCOME_UNKNOWN`. `retryable` reports a transient dependency condition; it does not mean reposting the same request will issue another Agent call. Image generation uses its separate idempotent retry key and never reruns upstream Agents.
+- **Partial outcomes:** Producer `partial` and nonfatal source errors are retained verbatim in `sources.*.raw_response`; P08 copies their error code/message/retryable flag into the integrated error list and keeps the overall status `partial`. A producer `error`, invalid contract, authentication failure, or failed integrity check is terminal and stops later Agents. A `no_results` outcome follows the stage-specific workflow rules below; it is never coerced to an empty-success result.
 - **Failure mapping:**
 
   | Failure | Result |
@@ -95,14 +79,14 @@ Every implementer follows this document; when code and this document disagree, s
   - **and** the `Host` header is in `VOGUE_ORCHESTRATOR_ALLOWED_HOSTS` (default `127.0.0.1:<port>`, `localhost:<port>`);
   - **and** `Origin` is absent, or exactly `http://<Host>`, port included.
 - **Container mode** (`VOGUE_ORCHESTRATOR_RUNTIME=container`):
-  - The check applies to every route except `GET /api/health` and static assets, including legacy mutating routes.
+  - The check applies to every route except `GET /api/health` and static assets, including mutating workflow routes.
   - `/api/local-services/*` returns 404.
 - **Host mode** keeps today's loopback-only gating for workflow routes, and the Origin check now includes the port.
 
 ## 6. Error bodies and HTTP codes (new `vogue-workflow` endpoints)
 
 - **Problem body** (`common.schema.json#/$defs/problem`):
-  `{"contract_version":"vogue-workflow/0.1","request_id":<id|null>,"status":"error","error":{"code","message","stage","fatal","retryable"}}`
+  `{"contract_version":"vogue-workflow/0.2","request_id":<id|null>,"status":"error","error":{"code","message","stage","fatal","retryable"}}`
   - `request_id` is null when unknown.
   - Messages never contain secrets, headers or raw upstream bodies.
 - **Codes:**
@@ -151,14 +135,13 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - Bytes live at `<store>/blobs/<sha256>`.
   - Store root is `VOGUE_WORKFLOW_STORE_DIR` (default `<repo>/.local/workflow`; container `/app/.local/workflow`).
 - **P07** mints `artifact://p07/reviews/<sha256>.json` under `VOGUE_P07_REVIEW_ARTIFACT_DIR` (container `/data/reviews`).
-- **P06** (workflow-contract 0.2.0) mints `artifact://p06/images/<sha256>.<ext>` for its Draft visuals under
-  `VOGUE_DRAFT_ARTIFACT_DIR` (container `/app/data/local/p06-artifacts`).
+- **P06** owns its native artifact contract. The current P08 `/runs` input does not request P08 visual references.
 - **Read-only mounts in compose:**
 
   | Reader | Env | Mount |
   |---|---|---|
   | P06 and P07 | `VOGUE_UPSTREAM_ARTIFACT_ROOT=/artifacts` | P08 blobs at `/artifacts/p08/blobs` |
-  | P08 | `VOGUE_PEER_ARTIFACT_ROOT=/peer` | P07 reviews at `/peer/p07/reviews`, P06 visuals at `/peer/p06` |
+  | P08 | `VOGUE_PEER_ARTIFACT_ROOT=/peer` | P07 reviews at `/peer/p07/reviews` |
 
   P08 imports peer artifacts through the store's `import_verified`.
 - **Error codes:**
@@ -187,7 +170,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 
 **Contract gate** (P08, `contracts/workflow/baseline.json`):
 - Run when `state == "frozen"`, `producer_consumer_validated` is true, `snapshot_sha256` matches the current `snapshot.json` bytes, the files map matches, and evidence shows 0 failures.
-- Otherwise, with `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`, run and add the limitation `"workflow-contract/0.2.0 not frozen; development run"`.
+- Otherwise, with `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`, run and add the limitation `"workflow-contract/0.5.0 not frozen; development run"`.
 - Otherwise return 409 `CONTRACT_NOT_FROZEN`.
 - No code may read anything under `../_workflow`.
 

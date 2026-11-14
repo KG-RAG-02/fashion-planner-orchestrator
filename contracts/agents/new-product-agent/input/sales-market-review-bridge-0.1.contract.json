@@ -1,0 +1,92 @@
+{
+  "_provenance": {
+    "agent_id": "new-product-agent",
+    "contract": "P06 /sales-market-reviews bridge request (validates P06 Draft and returns a P07 request)",
+    "direction": "input",
+    "payload_schema_version": "vogue-sales-market-review/0.1-proposal",
+    "method": "authored",
+    "source_repo": "KG-RAG-02/new-product-agent",
+    "source_branch": "main",
+    "source_commit": "f42bda6c9aa7",
+    "source_files": [
+      {
+        "path": "src/vogue_npp/prototype/server.py",
+        "sha256": "f69262bf0271472c1f63ef01feea03bb16913f74a1ef991ee578b5556c68a648"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/new-product-agent/sales-market-reviews",
+      "contract_version": "vogue-sales-market-review/0.1-proposal",
+      "detected_from": "src/vogue_npp/prototype/server.py:P06_REVIEW_BRIDGE_CONTRACT_VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "P06 main에는 독립 JSON Schema가 없어 route validator를 읽고 P08에서 기록했다. source_files의 sha256 변경 시 다시 조사한다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://contracts.vogue.invalid/workflow/2.0/sales-market-review-bridge-request.schema.json",
+    "title": "P08 to P06 post-Draft sales market projection request",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract_version",
+      "request_id",
+      "input"
+    ],
+    "properties": {
+      "contract_version": {
+        "const": "vogue-sales-market-review/0.1-proposal"
+      },
+      "request_id": {
+        "$ref": "common.schema.json#/$defs/id"
+      },
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "request_id",
+          "planning_draft"
+        ],
+        "properties": {
+          "request_id": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "planning_draft": {
+            "type": "object",
+            "required": [
+              "schema_version",
+              "request_id",
+              "draft",
+              "evidence_ids"
+            ],
+            "properties": {
+              "schema_version": {
+                "const": "1.0"
+              },
+              "request_id": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "draft": {
+                "type": "object",
+                "required": [
+                  "product_profile"
+                ],
+                "properties": {
+                  "product_profile": {
+                    "type": "object"
+                  }
+                }
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
