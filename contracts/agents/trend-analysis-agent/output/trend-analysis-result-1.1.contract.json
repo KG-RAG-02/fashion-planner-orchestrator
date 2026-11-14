@@ -6,8 +6,8 @@
     "payload_schema_version": "1.1",
     "method": "pydantic",
     "source_repo": "KG-RAG-02/trend-analysis-agent",
-    "source_branch": "integration/docker-e2e",
-    "source_commit": "c9ae0dd69172",
+    "source_branch": "main",
+    "source_commit": "4a2086ad4244",
     "source_model": "trend_agent.schemas.trend_analysis_result:TrendAnalysisResult",
     "source_files": [
       {

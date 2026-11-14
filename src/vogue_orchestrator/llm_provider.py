@@ -1,6 +1,6 @@
 """Real LLM call for query structuring (opt-in; sends the user's query to an external provider).
 
-This is the `DraftProvider` the query module leaves open (docs/query-structuring.md §10): it takes the
+This module supplies the configured LLM provider used by query structuring: it takes the
 rendered prompt (`PromptBundle`: `.system`, `.user`) and returns the model's text, which the query
 module parses and validates. It lives outside `query/` on purpose: the query package itself stays
 offline (tests/test_query_isolation.py).

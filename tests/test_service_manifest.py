@@ -27,9 +27,6 @@ class ServiceManifestTests(unittest.TestCase):
         with patch.dict(os.environ), patch.object(service_manifest, 'DEFAULT_MANIFEST', self.tmp / 'absent.json'):
             os.environ.pop('VOGUE_SERVICE_MANIFEST', None)
             self.assertEqual(services(require_runtime=False), [])
-            from vogue_orchestrator.server import _local_services_status
-            status = _local_services_status()
-        self.assertEqual((status['manifest_status'], status['total'], status['all_healthy']), ('unconfigured', 0, False))
 
     def test_explicitly_configured_missing_manifest_is_an_error(self):
         with patch.dict(os.environ, {'VOGUE_SERVICE_MANIFEST': str(self.tmp / 'absent.json')}):

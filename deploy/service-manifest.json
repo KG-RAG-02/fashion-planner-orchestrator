@@ -578,7 +578,7 @@
     "read_only_queries": "probe_data.py"
   },
   "resolutions": {
-    "stock": "8002 in manifest+container+consumer URL; legacy8769 monitored as alternate only",
+    "stock": "8002 is the configured manifest, container, and consumer port",
     "p06": "TLS service in Compose; HTTP local dev binds loopback only; never disable verification",
     "sibling_names": [
       "trend-analysis-agent",

@@ -1,8 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.vogue.invalid/workflow/0.1/planning-draft-request.schema.json",
-  "title": "P08 → P06 Draft request (draft_only | draft_with_visuals)",
-  "$comment": "PROPOSED workflow-contract/0.2.0: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.",
+  "$id": "https://contracts.vogue.invalid/workflow/2.0/planning-draft-request.schema.json",
+  "title": "P08 to P06 vogue-handoff/0.3 request",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,7 +11,7 @@
   ],
   "properties": {
     "contract_version": {
-      "const": "vogue-workflow/0.1"
+      "const": "vogue-handoff/0.3"
     },
     "request_id": {
       "$ref": "common.schema.json#/$defs/id"
@@ -21,34 +20,70 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "mode",
-        "user_input",
         "planning_request",
-        "trend_response",
-        "stock_response",
-        "stock_call_context"
+        "trend_result",
+        "inventory_product_result"
       ],
       "properties": {
-        "mode": {
-          "enum": [
-            "draft_only",
-            "draft_with_visuals"
-          ]
-        },
-        "user_input": {
-          "$ref": "common.schema.json#/$defs/user_input"
-        },
         "planning_request": {
-          "$ref": "common.schema.json#/$defs/planning_request"
+          "type": "object",
+          "required": [
+            "schema_version",
+            "request_id"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "1.0"
+            },
+            "request_id": {
+              "$ref": "common.schema.json#/$defs/id"
+            }
+          },
+          "additionalProperties": true
         },
-        "trend_response": {
-          "$ref": "common.schema.json#/$defs/retained_trend"
+        "trend_result": {
+          "type": "object",
+          "required": [
+            "schema_version",
+            "request_id",
+            "status"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "1.1"
+            },
+            "request_id": {
+              "$ref": "common.schema.json#/$defs/id"
+            },
+            "status": {
+              "$ref": "common.schema.json#/$defs/status"
+            }
+          },
+          "additionalProperties": true
         },
-        "stock_response": {
-          "$ref": "common.schema.json#/$defs/retained_stock"
-        },
-        "stock_call_context": {
-          "$ref": "common.schema.json#/$defs/stock_call_context"
+        "inventory_product_result": {
+          "type": "object",
+          "required": [
+            "schema_version",
+            "request_id",
+            "agent_id",
+            "status"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "1.0"
+            },
+            "request_id": {
+              "$ref": "common.schema.json#/$defs/id"
+            },
+            "agent_id": {
+              "const": "stock-agent"
+            },
+            "status": {
+              "$ref": "common.schema.json#/$defs/status"
+            }
+          },
+          "additionalProperties": true
         }
       }
     }

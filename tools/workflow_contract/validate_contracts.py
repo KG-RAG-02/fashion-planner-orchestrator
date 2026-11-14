@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
-from build_contracts import BASE, CONTRACTS, ROOT, write_json, atomic
+from support import BASE, CONTRACTS, ROOT, write_json, atomic
 
 HERE = Path(__file__).resolve().parent
 

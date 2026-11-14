@@ -1,6 +1,6 @@
 # 별칭 사전 스냅샷 (읽기 전용 복사본)
 
-> **`alias-map.snapshot.json`과 `alias-map.golden.json`은 trend-analysis-agent가 소유한 별칭 사전의 복사본과 그 원본 코드의 실행 결과다.** 직접 고치지 않는다. 사전을 바꾸는 것은 trend 저장소에서만, **D-29 규칙**(이미 있는 표준 값의 표기 변형만 `aliases`에 추가, [query-decisions.md §4](../../../../docs/query-decisions.md))과 사용자 승인으로 한다. 바뀐 원본은 아래 "갱신 절차"로 다시 가져온다. 근거 결정: H1(사전을 읽기 전용으로 따름)·H6(YAML → JSON 스냅샷 + 원본 코드 기대값으로 검증).
+> **`alias-map.snapshot.json`과 `alias-map.golden.json`은 trend-analysis-agent가 소유한 별칭 사전의 복사본과 그 원본 코드의 실행 결과다.** 직접 고치지 않는다. 사전을 바꾸는 것은 trend 저장소에서만, **D-29 규칙**(이미 있는 표준 값의 표기 변형만 `aliases`에 추가, [query-structuring.md](../../../../docs/query-structuring.md))과 사용자 승인으로 한다. 바뀐 원본은 아래 "갱신 절차"로 다시 가져온다. 근거 결정: H1(사전을 읽기 전용으로 따름)·H6(YAML → JSON 스냅샷 + 원본 코드 기대값으로 검증).
 
 | 항목 | 값 |
 |---|---|
@@ -23,7 +23,7 @@
 golden 형식: 각 경우는 `[입력, 기대값]`이다. 변환 결과 하나는 `normalized_fields` 순서(`raw, value, approx, route_to, hint, matched_by`)의 행이다.
 
 ## 2. 변환 규칙 (원본과 같음, 정책은 호출하는 쪽)
-`normalize` 순서: 정규화 키(소문자, 공백·`-`·`_` 제거) → 표준 값 → 별칭 → 근사 → 이동(`route`) → 힌트(`hint`) → 값 없음(`null_values`) → 매핑 불가. `lexicon.py`는 결과를 **보고만** 한다. 근사 값에 `match: approx`를 붙여 전달하는 것(H2′, 결정 Q3 = γ)과 힌트를 적용하지 않는 것(H5)은 이 모듈을 쓰는 쪽(값 확정 단계 `resolve.py`, [structured-query-plan.md §2.1](../../../../docs/structured-query-plan.md))이 지킨다.
+`normalize` 순서: 정규화 키(소문자, 공백·`-`·`_` 제거) → 표준 값 → 별칭 → 근사 → 이동(`route`) → 힌트(`hint`) → 값 없음(`null_values`) → 매핑 불가. `lexicon.py`는 결과를 **보고만** 한다. 근사 값에 `match: approx`를 붙여 전달하는 것(H2′, 결정 Q3 = γ)과 힌트를 적용하지 않는 것(H5)은 이 모듈을 쓰는 쪽(값 확정 단계 `resolve.py`, [query-structuring.md](../../../../docs/query-structuring.md))이 지킨다.
 
 ## 3. 갱신 절차
 1. trend 저장소에서 사전이 바뀌고 커밋됐는지 확인한다 (생성은 원본을 읽기만 한다. trend 작업 트리의 브랜치를 바꾸지 않는다).

@@ -5,8 +5,8 @@
     "direction": "input",
     "method": "authored",
     "source_repo": "KG-RAG-02/new-product-agent",
-    "source_branch": "integration/docker-e2e",
-    "source_commit": "879545815040",
+    "source_branch": "main",
+    "source_commit": "cdd11cdb1b24",
     "source_files": [
       {
         "path": "src/vogue_npp/adapters/handoff.py",
@@ -14,7 +14,7 @@
       },
       {
         "path": "src/vogue_npp/prototype/server.py",
-        "sha256": "ed8c5f2a954366ce5db9cc045909f1f29e35efe78e2472cf1653fd6e035b09e8"
+        "sha256": "f69262bf0271472c1f63ef01feea03bb16913f74a1ef991ee578b5556c68a648"
       }
     ],
     "handoff": {

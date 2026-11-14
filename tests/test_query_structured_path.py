@@ -52,7 +52,7 @@ class StructuredPathTests(unittest.TestCase):
     def run_path(self, produced, query, as_written=False, **kwargs):
         if not as_written and isinstance(produced, dict) and "common" in produced and "prompt_version" not in kwargs:
             produced = self.draft_v4.from_draft_v3(produced)
-        return self.structured.structure_query_v2(
+        return self.structured.structure_query(
             query, request_id="r-1", draft_provider=lambda bundle: produced, today=date(2026, 11, 10), **kwargs)
 
     def items_of(self, result):
@@ -386,7 +386,7 @@ class DatasetTests(unittest.TestCase):
         queries = {i["query"] for i in holdout["items"]}
         self.assertEqual(len(queries), 20)
         earlier = set()
-        for name in ("user_queries.v1.json", "user_queries.v2.json", "user_queries.v3.json",
+        for name in ("user_queries.v2.json", "user_queries.v3.json",
                      "user_queries.holdout.v1.json", "user_queries.holdout.v2.json"):
             earlier |= {i["query"] for i in json.loads((ROOT / "data" / name).read_text(encoding="utf-8"))["items"]}
         earlier |= {e["query"] for v in ("v1", "v2", "v3", "v4", "v5", "v6") for e in self.prompt.load_prompt(v).examples}

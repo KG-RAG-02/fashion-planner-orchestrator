@@ -1,83 +1,11 @@
-# data/ — 예상 사용자 질의
+# P08 query-structuring evaluation data
 
-## 파일
-| 파일 | 내용 |
+This directory contains synthetic development and holdout cases for evaluating how P08 converts a user's natural-language product request into a structured query for Trend Agent. The cases and recorded model outputs are evaluation material, not production user data or runtime configuration.
+
+| Path | Purpose |
 |---|---|
-| [`user_queries.v1.json`](user_queries.v1.json) | 예상 사용자 질의 30개(합성)와 각 질의의 기대 draft. 프롬프트 `query-structuring-prompt/v1` 기준 (보관용, 고치지 않음) |
-| [`user_queries.v2.json`](user_queries.v2.json) | **(2026-11-10, 보관)** 30개: v1에서 24개(같은 id) + 새 6개(q031~q036), 평평한 형식(프롬프트 v2·v3). 2026-11-10 측정(`eval_runs/`)의 기록으로 **고치지 않는다**. 만든 스크립트(`build_query_dataset_v2.py`)는 2026-11-11 품목별 형식으로 바뀌면서 `build_query_dataset_v3.py`로 대체·삭제됨 |
-| [`user_queries.v3.json`](user_queries.v3.json) | **(2026-11-11) 현행 dev 30개**: v2와 **같은 질의**(같은 id·같은 문장, 작업 규칙 W-11)에 라벨만 품목별 형식으로(`expected_draft` = 프롬프트 v4 규칙대로 LLM이 내야 할 draft v3, `expected_structured_query` = 그 draft를 코드로 조립한 결과). 여러 품목 2개(q012·q029), 범위 밖 품목만 1개(q015), 품목 없는 질의 2개(q006·q020). **직접 고치지 말고** `scripts/build_query_dataset_v3.py`의 표를 고친 뒤 다시 만든다(`tests/test_query_structured_path.py`가 검사). silver |
-| [`user_queries.holdout.v1.json`](user_queries.holdout.v1.json) | **(2026-11-10) holdout 20개**(h001~h020). 프롬프트를 고치는 동안 보지 않는 확인용 세트: 사용자 지시로 **별도 Claude 에이전트**가 썼고(현실적인 기획자 질의, 허무맹랑한 입력 없음), 메인 세션은 v3를 고정한 뒤에 처음 열었다. 형식은 v2와 같다. (만든 스크립트 `build_query_holdout_v1.py`는 2026-11-11 `build_query_holdout_v2.py`로 대체·삭제, 이 파일은 보관.) 2026-11-10 v3 측정에 한 번 썼으므로 **다음 프롬프트 개선 때는 새 holdout을 만든다**(작업 규칙 W-10). silver |
-| [`user_queries.holdout.v2.json`](user_queries.holdout.v2.json) | **(2026-11-11)** holdout v1과 **같은 질의 20개**, 라벨만 품목별 형식. 이미 한 번 본 세트라 **최종 판단용이 아니라 회귀 확인용**이다. 프롬프트 v4의 최종 판단은 별도 에이전트가 쓰는 **새 holdout**으로 한다(계획 U3.6 할 일 6). `scripts/build_query_holdout_v2.py`가 만든다. silver |
-| [`user_queries.holdout.v3.json`](user_queries.holdout.v3.json) | **(2026-11-11) 새 holdout 20개**(h201~h220). 사용자 승인으로 **별도 Claude 에이전트**가 프롬프트 v4를 읽지 않고 작성(현실적인 기획자 질의, 품목 두 개 6개·시즌 두 개 2개·품목 없음 1개·범위 밖 품목 1개 포함). **메인 세션은 열어 보지 않는다** — 다음 프롬프트의 최종 확인용(W-10), 한 번 쓰면 다시 새로 만든다. 겹침 검사·코드 재현(20/20)은 테스트가 코드로만 한다. `scripts/build_query_holdout_v3.py`가 만든다. silver |
-| [`eval_runs/`](eval_runs/) | 평가 스크립트(`scripts/evaluate_query_structuring.py`) 결과. `2026-11-10_v2_gpt-4o-mini_baseline.json` = 기준 측정(30개 중 완전 일치 18, 형식 오류 4), `..._baseline_replay-code-fix.json` = 같은 LLM 답을 코드 수정 후 재채점(20/30), `2026-11-10_v3_gpt-4o-mini_t0_dev.json`(24/30)·`..._holdout.json`(15/20), `2026-11-11_v4_gpt-4o-mini_t0_dev.json`(품목별 형식 첫 측정, 17/30)·`..._dev_replay-IT9-BR1.json`(같은 답을 IT-9·BR-1 후 재채점, 18/30), `2026-11-11_v5_gpt-4o-mini_t0_dev.json`(평평한 출력 + item, 21/30), `2026-11-11_v6_gpt-4o-mini_t0_dev.json`(남은 실패를 겨냥한 v6, 21/30). 2026-11-11부터 브랜드는 채점하지 않는다(BR-1, 라벨에는 남김). 분석은 [docs/query-structuring.md §14](../docs/query-structuring.md). 2026-11-10의 네 파일은 평평한 형식(프롬프트 v2·v3)이라 품목별 형식의 `--provider replay`로는 다시 채점할 수 없다(기록용). 합성 질의만 들어 있다 |
+| `user_queries.v2.json`, `user_queries.v3.json` | Versioned development/evaluation cases |
+| `user_queries.holdout.v1.json`–`user_queries.holdout.v3.json` | Holdout sets used to check prompt changes |
+| `eval_runs/` | Archived outputs from prior prompt evaluations; not read by the workflow at runtime |
 
-모든 질의는 Claude가 임의로 만든 합성 문장이다. 실제 사용자 로그나 기사 문장은 없다. 프롬프트의 few-shot 예시와 겹치지 않는다 (겹치면 정확도가 부풀려진다. `tests/test_query_data.py`가 검사).
-
-## 형식
-```jsonc
-{
-  "dataset": "user_queries", "version": "v1", "created": "2026-11-09",
-  "prompt_version": "query-structuring-prompt/v1",   // 기대 draft가 따르는 프롬프트 규칙의 버전
-  "reference_today": "2026-11-09",                    // draft → TrendQuery 조립 때 쓰는 기준 날짜
-  "items": [
-    {
-      "id": "q001",
-      "query": "사용자 원문",
-      "tags": ["season_with_year", "..."],            // 아래 태그 표
-      "label_status": "silver",                       // silver: Claude 작성 / gold: 사용자 확인 완료
-      "expected_draft": { /* QueryDraft 형식: LLM이 내야 할 출력 */ },
-      "notes": "판단 근거나 확인이 필요한 점 (있을 때만)"
-    }
-  ]
-}
-```
-기대값을 `TrendQuery`가 아니라 **draft**로 둔 이유는 이 데이터가 LLM 단계를 평가하기 위한 것이기 때문이다. `TrendQuery`는 draft를 `assemble_trend_query(..., today=reference_today)`에 넣으면 결정적으로 나온다.
-
-## v1 라벨과 별칭 사전 정책의 관계 (중요)
-v1의 기대 draft는 별칭 사전 정책(H1)과 γ(Q3, [docs/query-decisions.md](../docs/query-decisions.md))가 정해지기 **전에** 만들었다. γ를 구현할 때(계획 U5) **`user_queries.v2.json`을 새로 만든다** (v1은 보존):
-- 형식: 질의마다 **기대 `StructuredQuery`**(정의서 [contracts/agents/vogue-orchestrator/output/structured-query.md](../contracts/agents/vogue-orchestrator/output/structured-query.md))와, 그 결과를 만드는 기대 LLM 출력(draft v2). 모든 값에 기대 `match`를 적는다.
-- q027 `슬랙스`: 지원 불가 → **팬츠, `match: alias`** (사전에 같은 뜻 별칭이 있음)
-- q011 `오버핏`: 오버사이즈 **`match: llm`** (사전에 없음, LLM 제안). q029 `루즈핏`: 루즈 **`match: llm`** (사전에 "루즈핏"이 없음)
-- q006 "니트 소재": 표현 안 단어 "니트"로 사전 조회 → 니트 `match: exact`
-
-## 라벨 상태와 확인 절차
-- 30개 모두 **silver**다. 사용자가 확인한 항목만 `label_status`를 `gold`로 바꾼다.
-- 특히 확인이 필요한 항목 (`ambiguous` 태그):
-
-| id | 질의 | 확인할 점 |
-|---|---|---|
-| q002 | 올여름 린넨 셔츠 트렌드 알려줘 | 상대 표현 '올여름'. 지금은 year null → 코드가 2027 SS로 정함 (사용자 뜻은 2026 여름일 수 있음, 가정 A-1) |
-| q011 | 유니섹스 오버핏 후드티 그레이로 | **정책으로 결정됨 (γ)**: '오버핏'은 사전에 없으므로 v2에서 LLM 제안 오버사이즈, `match: llm`. 사전에 같은 뜻 표기로 넣을지(넣으면 `alias`)는 사전 추가 후보 표 2에서 사용자 판단 |
-| q021 | 숏패딩 트렌드 정리해줘 | `item_terms`만 둘지, 카테고리 '패딩'도 넣을지 (계약에 정의 없음) |
-| q027 | 청바지 말고 슬랙스 위주로 | **정책으로 결정됨 (H1)**: 사전에 `슬랙스 → 팬츠` 별칭이 있으므로 v2에서 팬츠 |
-
-`notes`가 있는 나머지 항목(q001, q004, q006, q012, q015, q020, q022, q026, q028, q029)은 판단 근거나 계약 수준의 한계를 적은 것이다.
-
-## 태그 (30개 기준 개수)
-| 태그 | 개수 | 뜻 |
-|---|---|---|
-| `include` / `exclude` | 25 / 4 | 포함 / 제외 카테고리 |
-| `minor` / `major_only` / `multi_category` | 24 / 4 / 3 | 하분류 / 상분류만 / 카테고리 2개 이상 |
-| `color` / `material` / `pattern` / `detail` / `fit` | 8 / 7 / 5 / 2 / 3 | 속성 종류 |
-| `gender` | 6 | 성별 표현 |
-| `season_with_year` / `season_without_year` / `relative_season` | 4 / 3 / 1 | 시즌 표현 (시즌이 없는 질의는 태그 없음) |
-| `mixed_notation` | 3 | `2026 FW`, `2027 S/S` 같은 영문 혼합 표기 (QP-9, 검증 안 된 형식) |
-| `style_name` / `item_term` | 2 / 1 | 트렌드명 / 특정 상품 |
-| `unsupported_brand` / `_price` / `_channel` / `_market` / `_age` | 1 / 2 / 1 / 1 / 1 | 지원 불가 조건 |
-| `unsupported_category` / `all_categories_unsupported` | 2 / 1 | 표준 밖 카테고리 / 요청 카테고리 전부가 표준 밖 |
-| `unsupported_attribute` | 2 | 길이·세이프 (요청 속성으로 쓰지 않음) |
-| `abstract` | 4 | 추상 표현 ("깔끔한", "데이트룩" 등) |
-| `no_conditions` | 1 | 추출할 조건이 없음 |
-| `prompt_injection` | 1 | 질의 안의 지시문 |
-| `ambiguous` | 4 | 정답이 확정되지 않아 사용자 확인 필요 |
-
-## 쓰는 법 (LLM 어댑터가 생긴 뒤, QP-8)
-1. 각 `query`를 `structure_query(...)`에 넣고 `result.draft`를 얻는다.
-2. `expected_draft`와 비교한다. 권장 비교 기준:
-   - **값 필드는 정확히 비교**: `season.season`, `season.year`, 카테고리 `major`/`minor`, 성별 `value`, 속성 `type`/`value`, `unsupported.type`.
-   - **`raw`는 느슨하게 비교**: 경계 차이("라벤더" vs "라벤더 컬러")는 오류로 보지 않는다. 질의의 부분 문자열인지만 본다 (`raw_not_in_query` 경고).
-   - 순서는 무시한다.
-3. 결과에 `prompt_version`과 경고 빈도를 함께 기록한다.
-
-## 새 버전 만들기
-프롬프트 규칙이 바뀌어 기대 draft가 달라지면 `user_queries.v2.json`을 새로 만들고 `prompt_version`을 맞춘다. v1은 지우지 않는다.
+The active UI path uses prompt v6 from `prompts/query_structuring/v6/`. Evaluation scripts compare structured fields and warnings against these datasets; changing an evaluation file does not change the runtime prompt or select a workflow mode.

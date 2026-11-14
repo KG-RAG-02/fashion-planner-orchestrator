@@ -6,8 +6,8 @@
     "payload_schema_version": "1.0",
     "method": "copy",
     "source_repo": "KG-RAG-02/stock-agent",
-    "source_branch": "integration/docker-e2e",
-    "source_commit": "5815f28cbb3f",
+    "source_branch": "main",
+    "source_commit": "f483bdf16573",
     "source_schema": "contracts/schemas/stock-agent-request.schema.json",
     "source_files": [
       {

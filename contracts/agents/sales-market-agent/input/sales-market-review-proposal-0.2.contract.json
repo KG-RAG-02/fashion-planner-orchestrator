@@ -1,0 +1,123 @@
+{
+  "_provenance": {
+    "agent_id": "sales-market-agent",
+    "contract": "P07 /reviews proposal request (allowlisted product projection)",
+    "direction": "input",
+    "payload_schema_version": "vogue-sales-market-review/0.2-proposal",
+    "method": "copy",
+    "source_repo": "KG-RAG-02/sales-market-agent",
+    "source_branch": "main",
+    "source_commit": "86d833506cc7",
+    "source_schema": "contracts/schemas/proposals/sales-market-review-0.2-proposal.schema.json",
+    "source_files": [
+      {
+        "path": "src/market_research_agent/http_server.py",
+        "sha256": "6eb16a2727aeb1968ca50b2c9605bb60eaf93cd32b71704b45c586e967acee23"
+      },
+      {
+        "path": "contracts/examples/sales-market-review-0.2-proposal.request.json",
+        "sha256": "6e326c40444049742e7a52b9ef6a849ccd5818d302fa78d6051e4cf8cf11943b"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/sales-market-agent/reviews",
+      "contract_version": "vogue-sales-market-review/0.2-proposal",
+      "detected_from": "src/market_research_agent/http_server.py:REVIEW_CONTRACT_VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:vogue:sales-market-review:0.2:proposal",
+    "title": "Project_07 minimal product review proposal request",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract_version",
+      "request_id",
+      "input"
+    ],
+    "properties": {
+      "contract_version": {
+        "const": "vogue-sales-market-review/0.2-proposal"
+      },
+      "request_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "request_id",
+          "product"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "product": {
+            "$ref": "#/$defs/product"
+          }
+        }
+      }
+    },
+    "$defs": {
+      "product": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": ".*\\S.*"
+          },
+          "product_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": ".*\\S.*"
+          },
+          "gender": {
+            "enum": [
+              "women",
+              "men",
+              "unisex",
+              "unknown",
+              null
+            ]
+          },
+          "season": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": ".*\\S.*"
+          },
+          "material": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": ".*\\S.*"
+          }
+        }
+      }
+    }
+  }
+}

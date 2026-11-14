@@ -44,7 +44,6 @@ class WorkflowRouteTableTests(LiveServerMixin, unittest.TestCase):
                 with self.subTest(method=method, path=path):
                     status, code, response = self.code(method, path, {} if method in {'POST', 'PUT', 'PATCH'} else None)
                     self.assertEqual((status, code, response.getheader('Allow')), (405, 'METHOD_NOT_ALLOWED', allow))
-            self.assertEqual(self.request('PUT', '/api/run', {})[:2], (405, {'error': 'method_not_allowed'}))
 
     def test_start_run_body_validation(self):
         with environment():
@@ -59,7 +58,7 @@ class WorkflowRouteTableTests(LiveServerMixin, unittest.TestCase):
     def test_unsupported_contract_version_is_422_before_any_work(self):
         with environment(), patch.object(workflow_http, 'dispatch', new=self.real_dispatch), \
                 patch.object(workflow_http, 'build_workflow', side_effect=AssertionError('no work')):
-            for version in ('vogue-workflow/0.2', None, 'vogue-handoff/0.1'):
+            for version in ('vogue-workflow/0.1', None, 'vogue-handoff/0.1'):
                 with self.subTest(version=version):
                     status, code, _ = self.code('POST', '/api/workflow/run', {'contract_version': version, 'request_id': 'r-1'})
                     self.assertEqual((status, code), (422, 'UNSUPPORTED_CONTRACT_VERSION'))

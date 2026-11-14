@@ -1,14 +1,6 @@
-"""기획서 PNG: the evidence-linked planning board rendered from a stored integrated result.
+"""Deterministic Planning Sheet PNG rendered from the integrated workflow result.
 
-Format: new-product-agent ``docs/design/evidence-linked-planning-board.md`` and its model in
-``workflows/planning_board.py`` (``PlanningBoard``/``BoardSection``/``BoardClaim``): a review-only
-header, the ISSUE → INSIGHT → PROPOSAL strip, eight section cards (state label, producer, claim kind,
-Evidence IDs, notes), the product visual and an evidence summary. The board's purpose — a review
-artifact that keeps producer observations, interpretation, proposals and validation questions apart —
-is also the 상품기획서 of ``docs/design/trend-batch-kg-rag-product-planning.md`` (근거와 불확실성을
-포함한 상품기획서 및 검토용 시안).
-
-Presentation only. The input is the ``integrated-result/1.0`` envelope exactly as P08 stored it. No
+Presentation only. The input is the ``integrated-result/2.0`` envelope exactly as P08 stored it. No
 agent is called, no producer value is recomputed or rewritten, a missing value stays missing
 (미제공 / 미확인, never 0), and long lists are cut with an explicit "+N" count instead of silently.
 """
@@ -27,10 +19,65 @@ import sqlite3
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Literal, Mapping, Sequence
 from urllib.parse import urlsplit
 
-from .workflows.planning_board import BoardClaim, BoardSection, PlanningBoard, _claim, _state
+
+BoardState = Literal['available', 'partial', 'no_results', 'not_provided', 'unverified', 'blocked', 'failed']
+
+
+@dataclass(frozen=True)
+class BoardClaim:
+    text: str
+    kind: str
+    evidence_ids: tuple[str, ...] = ()
+    source: str | None = None
+    source_ref: str | None = None
+    status: str = 'unverified'
+
+
+@dataclass(frozen=True)
+class BoardSection:
+    section_id: str
+    title: str
+    producer: str
+    input_status: str
+    schema_version: str | None
+    state: BoardState
+    claims: tuple[BoardClaim, ...] = ()
+    notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlanningBoard:
+    title: str
+    season: str
+    category: str
+    review_label: str
+    process: tuple[str, str, str]
+    sections: tuple[BoardSection, ...]
+    evidence_ids: tuple[str, ...]
+    limitations: tuple[str, ...]
+    synthetic_context: bool = False
+
+
+def _state(status: str, *, has_claims: bool = False, has_unverified: bool = False) -> BoardState:
+    if status == 'not_provided':
+        return 'not_provided'
+    if status == 'no_results':
+        return 'no_results'
+    if status == 'error':
+        return 'failed'
+    if status == 'partial' or has_unverified:
+        return 'partial'
+    return 'available' if has_claims else 'unverified'
+
+
+def _claim(text: object, kind: str, ids=(), *, source=None, source_ref=None) -> BoardClaim:
+    evidence_ids = tuple(dict.fromkeys(str(item) for item in ids if isinstance(item, str) and item.strip()))
+    return BoardClaim(str(text), kind, evidence_ids, str(source) if source else None,
+                      str(source_ref) if source_ref else None,
+                      'available' if evidence_ids else 'unverified')
 
 SHEET_FORMAT = 'evidence-linked-planning-board/png-1'
 REVIEW_LABEL = 'MD 검토용 초안 · 자동 승인 아님'
@@ -342,6 +389,10 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
                                 status, _mapping(raw.get('result')) if raw else None)
     agent = _mapping(raw.get('producer')).get('agent_id') or body.get('agent_id') or 'sales-market-agent'
     review = _mapping(body.get('review'))
+    # P07's current 0.2 proposal response is its domain review directly, not the
+    # earlier P08 full-Draft wrapper with review.findings/metrics.
+    if not review and body.get('schema_version') == 'sales-market-review/0.1-internal':
+        review = body
     evidence = {item['evidence_id']: item for item in (_mapping(entry) for entry in _list(review.get('evidence')))
                 if isinstance(item.get('evidence_id'), str)}
     claims = []
@@ -351,6 +402,30 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
         if isinstance(finding.get('text'), str) and finding['text'].strip():
             claims.append(_claim(finding['text'].strip(), kinds.get(finding.get('kind'), 'producer_finding'),
                                  _evidence_ids(finding.get('evidence_refs')), source=agent, source_ref=f'review.findings[{index}]'))
+    if body.get('schema_version') == 'sales-market-review/0.1-internal':
+        for key, label in (('price_analysis', '판매가 참고'), ('fabric_cost_analysis', '소재 원가 참고'),
+                           ('margin_analysis', '마진 참고'), ('target_audience', '타깃 고객 참고')):
+            item = _mapping(body.get(key))
+            details = []
+            for field in ('status', 'proposed_price', 'unit_cost', 'margin_rate_percent', 'recommendation'):
+                value = item.get(field)
+                if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+                    details.append(f'{field}={value}')
+            if details:
+                claims.append(_claim(f'{label}: ' + ', '.join(details), 'to_validate', (), source=agent,
+                                     source_ref=key))
+        for missing in _list(body.get('missing_data')):
+            missing = _mapping(missing)
+            label = missing.get('field') or missing.get('name') or missing.get('reason')
+            if isinstance(label, str) and label.strip():
+                reason = missing.get('reason')
+                message = missing.get('message')
+                detail = message.strip() if isinstance(message, str) and message.strip() else (
+                    reason.strip() if isinstance(reason, str) and reason.strip() else None
+                )
+                text = '미확인: ' + label.strip() + (f' — {detail}' if detail else '')
+                claims.append(_claim(text, 'to_validate', (), source=agent,
+                                     source_ref='missing_data'))
     groups: dict[str, list[Mapping[str, Any]]] = {}
     for metric in _list(review.get('metrics')):
         metric = _mapping(metric)
@@ -409,6 +484,13 @@ def _insight(result: Mapping[str, Any]) -> BoardSection:
                source=agent, source_ref=f'draft.claims[{index}]')
         for index, claim in enumerate(_mapping(item) for item in _list(draft.get('claims')))
         if isinstance(claim.get('text'), str) and claim['text'].strip())
+    if body.get('schema_version') == '1.0' and not claims:
+        for key in ('opportunity', 'product_definition'):
+            item = _mapping(draft.get(key))
+            value = item.get('value')
+            if isinstance(value, str) and value.strip():
+                claims += (_claim(value.strip(), 'proposal', _strings(item.get('evidence_ids')),
+                                  source=agent, source_ref=f'draft.{key}'),)
     schema = _mapping(raw.get('producer')).get('schema_version')
     return BoardSection('insight', '기획 결론 / Insight → Proposal', agent, status, schema if isinstance(schema, str) else None,
                         _state(status, has_claims=bool(claims), has_unverified=any(not c.evidence_ids for c in claims)),
@@ -556,7 +638,7 @@ def _source_natures(result: Mapping[str, Any]) -> tuple[tuple[str, ...], bool]:
 
 
 def build_sheet(envelope: Mapping[str, Any], *, decisions: Sequence[Mapping[str, Any]] = ()) -> PlanningSheet:
-    """Map a stored integrated-result/1.0 envelope onto the planning-board model (presentation only)."""
+    """Map a stored integrated-result/2.0 envelope onto the planning-board model (presentation only)."""
     envelope = _mapping(envelope)
     result = _mapping(envelope.get('result'))
     if not result:
