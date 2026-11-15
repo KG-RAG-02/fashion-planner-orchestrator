@@ -113,15 +113,20 @@ def swot_input(envelope: Mapping[str, Any]) -> dict[str, Any]:
     _, body, _ = _draft_parts(result)
     draft = _mapping(body.get('draft'))
     concept = _concept_view(result)
+    # Runs recorded before planning_analysis repeat the user's request among the Draft claims; it is not sent.
+    request_texts = {text.strip() for text in (_mapping(result.get('user_input')).get('text'),
+                                               _mapping(result.get('planning_request')).get('query'))
+                     if isinstance(text, str) and text.strip()}
+    own = lambda texts: [item for item in texts if item.strip() not in request_texts]  # noqa: E731
     summary['product'] = {
         'title': _clip(draft.get('title'), 120),
         'definition': _clip(concept.line.text if concept.line else None),
         'opportunity': _clip(concept.opportunity),
         'profile': [{'name': row.label, 'value': _clip(row.value, 80), 'kind': row.kind} for row in concept.profile][:10],
-        'differentiation': [_clip(item) for item in concept.differentiation][:4],
-        'relation_to_own_products': [_clip(item) for item in concept.own_products][:3],
-        'planning_points': [_clip(item) for item in concept.points][:4],
-        'open_questions': [_clip(item) for item in concept.questions][:4],
+        'differentiation': [_clip(item) for item in own(concept.differentiation)][:4],
+        'relation_to_own_products': [_clip(item) for item in own(concept.own_products)][:3],
+        'planning_points': [_clip(item) for item in own(concept.points)][:4],
+        'open_questions': [_clip(item) for item in own(concept.questions)][:4],
     }
     raw = _raw(result, 'sales_market_review')
     market = _mapping(raw.get('result')) if raw else {}

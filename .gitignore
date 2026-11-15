@@ -18,3 +18,8 @@ artifacts/
 
 # Finder metadata.
 .DS_Store
+
+# Python packaging output
+*.egg-info/
+build/
+dist/

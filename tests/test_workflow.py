@@ -723,6 +723,19 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
         body = result['envelope']['result']
         self.assertEqual((result['envelope']['status'], body['final_image']['status']), ('ok', 'generated'))
 
+    def test_a_crash_while_waiting_for_swot_does_not_block_the_retried_sheet(self):
+        class Crash(BaseException):  # stands in for the process dying mid-call
+            pass
+
+        def dying(rid, envelope):
+            raise Crash()
+
+        with self.assertRaises(Crash):
+            self.run_flow(swot=dying)
+        result = self.run_flow()  # the retry composes the sheet; no 'started' marker was left behind
+        image = result['envelope']['result']['final_image']
+        self.assertEqual((image['status'], image['reason']), ('generated', None))
+
     def test_p06_visuals_without_a_reader_stop_with_artifact_reader_required(self):
         result = self.run_flow(reader=False)
         self.assertEqual((result['http_status'], result['envelope']['result']['errors'][-1]['code']), (503, 'ARTIFACT_READER_REQUIRED'))

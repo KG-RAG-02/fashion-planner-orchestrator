@@ -5,12 +5,12 @@
     "direction": "input",
     "method": "authored",
     "source_repo": "KG-RAG-02/vogue-orchestrator",
-    "source_branch": "feat/merge-newP-salesM",
+    "source_branch": "ui-edit",
     "source_commit": "b259b97d7523",
     "source_files": [
       {
         "path": "src/vogue_orchestrator/workflow_http.py",
-        "sha256": "c5105233e44e10dd34dcad8904e2d13889abbe5d8888b451b873e8b1a6d68b67"
+        "sha256": "996f601ba44c89e73fdb0d99b16c621912866bae3feb1100fb43d764a38af190"
       },
       {
         "path": "src/vogue_orchestrator/workflow_store.py",
@@ -18,7 +18,7 @@
       },
       {
         "path": "src/vogue_orchestrator/workflow_contract.py",
-        "sha256": "7dc109f7a29dcff36a51263b2b34592831d16990ce1e2fbe9fe4f5c797b2188d"
+        "sha256": "9c64a4ac659033022b68bd3a6e6d5055b0e4dcaf413e0849463c668864e97153"
       }
     ],
     "handoff": {

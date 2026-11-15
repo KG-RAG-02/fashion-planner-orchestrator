@@ -561,7 +561,7 @@ def _get_planning_sheet(handler, value):
             problem(handler, 404, 'RUN_NOT_FOUND', request_id=rid)
         return
     try:
-        png = planning_sheet_png(final['envelope'], load_artifact=private.verify, decisions=private.md_decisions(rid),
+        png = planning_sheet_png(final['envelope'], load_artifact=private.verify,
                                  trend_photos=load_trend_photos(private, rid), swot=load_swot(private, rid))
     except PlanningSheetError as exc:
         problem(handler, exc.http_status, exc.code, request_id=rid)

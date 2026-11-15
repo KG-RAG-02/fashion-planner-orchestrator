@@ -53,17 +53,15 @@ class PromptTemplate:
 
 
 def vocabulary_section(draft_format: str = "draft_v4") -> str:
-    """Render standard values for the selected structured-query draft format."""
+    """The [표준 ...] block. Every kept draft format (draft_v2 to draft_v4) gets the StructuredQuery attribute
+    kinds, the length kinds included; `draft_format` is accepted so each version renders through the same call."""
     lines = ["[표준 카테고리]", "상분류(major): " + ", ".join(vocab.CATEGORY_MAJOR), "하분류(minor), 상분류별:"]
     for major in vocab.CATEGORY_MAJOR:
         minors = [m for m in vocab.CATEGORY_MINOR if vocab.CATEGORY_MINOR_TO_MAJOR[m] == major]
         if minors:
             lines.append(f"- {major}: " + ", ".join(minors))
     lines += ["", "[표준 속성 값]"]
-    if draft_format == "draft_v2":
-        attribute_types, attribute_values = vocab.ATTRIBUTE_TYPES, vocab.ATTRIBUTE_VALUES
-    else:
-        attribute_types, attribute_values = cvocab.ATTRIBUTE_TYPES, cvocab.ATTRIBUTE_VALUES
+    attribute_types, attribute_values = cvocab.ATTRIBUTE_TYPES, cvocab.ATTRIBUTE_VALUES
     for attribute_type in attribute_types:
         lines.append(f"- {attribute_type}: " + ", ".join(attribute_values[attribute_type]))
     lines += ["", "[표준 성별 값]", ", ".join(vocab.GENDERS)]

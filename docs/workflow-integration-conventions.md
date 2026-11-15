@@ -20,7 +20,7 @@ Current integration behavior and contract boundaries for the five repositories. 
 - **Unsupported versions** are rejected before any model, DB or network work:
   - new `vogue-workflow` endpoints: 422 `UNSUPPORTED_CONTRACT_VERSION`
   - malformed requests to workflow endpoints: the documented 400 response
-- **Trend 1.1** may carry `trends[].style.example_images` and `trends[].style.search_outlook`. Consumers preserve these fields; the UI links example images without downloading or embedding them. `search_outlook` is a target-season search-interest outlook, not a sales forecast, and is not used for ranking, status or lineage. Stub values are synthetic and remain labelled as such.
+- **Trend 1.1** may carry `trends[].style.example_images` and `trends[].style.search_outlook`. Consumers preserve these fields; the UI links example images, and the planning poster (stage 06) downloads up to three of them from allowlisted hosts and embeds them (see Trend photos for the Planning Sheet below). `search_outlook` is a target-season search-interest outlook, not a sales forecast, and is not used for ranking, status or lineage. Stub values are synthetic and remain labelled as such.
 
 ## 2. Containers: hostnames, ports, binds, health
 
@@ -59,8 +59,8 @@ Current integration behavior and contract boundaries for the five repositories. 
   - `VOGUE_SALES_MARKET_AGENT_URL=http://sales-market:8766`
 - **Trend photos for the Planning Sheet:** with the `planning_sheet` provider, stage 06 downloads up to three example photos of the first Trend style (`style.example_images`, then its items' `image_urls`).
   - HTTPS with CA verification only, to hosts in `VOGUE_TREND_PHOTO_HOSTS` (default `vogue.co.kr` and its subdomains); at most two redirects, each on the allowlist.
-  - At most 5 MiB per photo, PNG/JPEG/WebP only, with the same decode checks as uploaded images; 10-second timeout; no retries.
-  - A rejected or unreachable photo is skipped and never fails the run. The photos are kept in the P08 store under `trend-photos:<request_id>`; the integrated envelope does not change.
+  - At most 5 MiB and 6 megapixels per photo (the pixel count is read from the header before decoding), PNG/JPEG/WebP only, with the same decode checks as uploaded images; 10-second timeout; no retries.
+  - A rejected, unreachable or malformed-URL photo is skipped and never fails the run. The photos and the SWOT draft are gathered before stage 06 records that it started, so a crash while waiting for them does not stop a retry from composing the sheet. The photos are kept in the P08 store under `trend-photos:<request_id>`; the integrated envelope does not change.
   - `GET /api/workflow/runs/{id}/planning-sheet.png` renders from the stored photos and makes no network call. `VOGUE_TREND_PHOTOS_ENABLED=0` turns the download off.
 - **SWOT and promotion draft for the Planning Sheet:** with the `planning_sheet` provider and `LLM_MODEL`/`LLM_API_KEY` configured, stage 06 makes one call to the query-structuring LLM provider (`swot.py`, prompt `prompts/swot/v3`).
   - The request holds a compact summary of the stored run: the first Trend style, the stock product matched to it with stock-agent's indicators (sell-through, stock value, recent trend, score and their data nature), new-product-agent's concept and specification, sales-market-agent's price, fabric cost, margin, target, channel/content hypotheses and merchandising actions, and the run limitations. It does not hold the user's raw request text or any image.
@@ -166,7 +166,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | Service | Env | Meaning |
 |---|---|---|
 | P08 | `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture` | Offline query structuring (existing) |
-| P08 | `VOGUE_WORKFLOW_IMAGE_PROVIDER=fixture\|openai` (default `openai`) | `fixture` renders a deterministic local PNG. Images still need `VOGUE_WORKFLOW_IMAGES_ENABLED=1` |
+| P08 | `VOGUE_WORKFLOW_IMAGE_PROVIDER=planning_sheet\|fixture` (default `planning_sheet`) | `planning_sheet` composes the planning poster from the run; `fixture` renders a deterministic local PNG. Any other value is refused with 409 `IMAGE_PROVIDER_INVALID`. Images still need `VOGUE_WORKFLOW_IMAGES_ENABLED=1` |
 | P08 | `VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=0\|1` (default 0) | Gates `POST /v1/orchestrations/image-retries` |
 | P08 | `VOGUE_WORKFLOW_ALLOW_PROPOSED=1` | Run with a `proposed` contract baseline; adds a limitation to the result |
 | P08 | `VOGUE_WORKFLOW_CONTRACT_BASELINE=<path>` | Overrides `contracts/workflow/baseline.json` |

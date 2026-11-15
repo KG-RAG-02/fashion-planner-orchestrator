@@ -108,6 +108,25 @@ class FetchTests(unittest.TestCase):
             fetch_photo('https://vogue.co.kr/a.png', HOSTS, get=broken)
         self.assertEqual(caught.exception.code, 'PHOTO_UNAVAILABLE')
 
+    def test_a_malformed_url_is_a_rejection(self):
+        for url in ('https://[img.vogue.co.kr/a.jpg', 'https://vogue.co.kr:port/a.jpg'):
+            with self.assertRaises(PhotoRejected) as caught:
+                fetch_photo(url, HOSTS, get=FakeGet({}))
+            self.assertEqual(caught.exception.code, 'PHOTO_URL_INVALID')
+        get = FakeGet({'https://vogue.co.kr/a.png': (302, {'location': 'https://[broken/'}, b'')})
+        with self.assertRaises(PhotoRejected) as caught:
+            fetch_photo('https://vogue.co.kr/a.png', HOSTS, get=get)
+        self.assertEqual(caught.exception.code, 'PHOTO_URL_INVALID')
+
+    def test_a_photo_over_the_pixel_cap_is_rejected(self):
+        from PIL import Image
+        out = io.BytesIO()
+        Image.new('RGB', (3001, 2000), (20, 20, 20)).save(out, format='JPEG')  # small file, too many pixels
+        get = FakeGet({'https://vogue.co.kr/big.jpg': (200, {'content-type': 'image/jpeg'}, out.getvalue())})
+        with self.assertRaises(PhotoRejected) as caught:
+            fetch_photo('https://vogue.co.kr/big.jpg', HOSTS, get=get)
+        self.assertEqual(caught.exception.code, 'PHOTO_TOO_LARGE')
+
 
 class StoreTests(unittest.TestCase):
     def setUp(self):
@@ -138,6 +157,19 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(again, first)
         self.assertEqual(load_trend_photos(self.store, 'run-1'), first)
         self.assertEqual(load_trend_photos(self.store, 'run-2'), [])
+
+    def test_an_unexpected_failure_drops_only_that_photo(self):
+        urls = [f'https://img.vogue.co.kr/{n}.png' for n in range(3)]
+
+        def fetch(url, hosts):
+            if url.endswith('0.png'):
+                raise ValueError('unexpected')
+            return png(), 'image/png'
+
+        kept = TrendPhotos(self.store, {}, fetch=fetch)('run-4', envelope_with_photos(urls))
+        self.assertEqual([url for _, url in kept], urls[1:])
+        self.assertEqual(self.store.checkpoint(checkpoint_key('run-4'))[1]['skipped'],
+                         [{'url': urls[0], 'reason': 'PHOTO_UNAVAILABLE'}])
 
     def test_a_run_without_photo_urls_records_nothing_to_show(self):
         photos = TrendPhotos(self.store, {}, fetch=lambda url, hosts: self.fail('nothing to fetch'))

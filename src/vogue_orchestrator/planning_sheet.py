@@ -20,17 +20,15 @@ import binascii
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import sqlite3
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Literal, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 from urllib.parse import urlsplit
-
-
-BoardState = Literal['available', 'partial', 'no_results', 'not_provided', 'unverified', 'blocked', 'failed']
 
 
 @dataclass(frozen=True)
@@ -38,19 +36,13 @@ class BoardClaim:
     text: str
     kind: str
     evidence_ids: tuple[str, ...] = ()
-    source: str | None = None
-    source_ref: str | None = None
-    status: str = 'unverified'
 
 
 @dataclass(frozen=True)
 class BoardSection:
+    """One producer's part of the run as the poster reads it: its displayable claims and its notes
+    (limitations, or why there is nothing to show)."""
     section_id: str
-    title: str
-    producer: str
-    input_status: str
-    schema_version: str | None
-    state: BoardState
     claims: tuple[BoardClaim, ...] = ()
     notes: tuple[str, ...] = ()
 
@@ -61,34 +53,16 @@ class PlanningBoard:
     season: str
     category: str
     review_label: str
-    process: tuple[str, str, str]
     sections: tuple[BoardSection, ...]
-    evidence_ids: tuple[str, ...]
-    limitations: tuple[str, ...]
     synthetic_context: bool = False
 
 
-def _state(status: str, *, has_claims: bool = False, has_unverified: bool = False) -> BoardState:
-    if status == 'not_provided':
-        return 'not_provided'
-    if status == 'no_results':
-        return 'no_results'
-    if status == 'error':
-        return 'failed'
-    if status == 'partial' or has_unverified:
-        return 'partial'
-    return 'available' if has_claims else 'unverified'
-
-
-def _claim(text: object, kind: str, ids=(), *, source=None, source_ref=None) -> BoardClaim:
+def _claim(text: object, kind: str, ids=()) -> BoardClaim:
     evidence_ids = tuple(dict.fromkeys(str(item) for item in ids if isinstance(item, str) and item.strip()))
-    return BoardClaim(str(text), kind, evidence_ids, str(source) if source else None,
-                      str(source_ref) if source_ref else None,
-                      'available' if evidence_ids else 'unverified')
+    return BoardClaim(str(text), kind, evidence_ids)
 
 SHEET_FORMAT = 'evidence-linked-planning-board/png-1'
 REVIEW_LABEL = 'MD 검토용 초안 · 자동 승인 아님'
-PROCESS = ('ISSUE', 'INSIGHT', 'PROPOSAL')
 FOOTER_NOTE = '검토용 초안 · 근거 미연결 값은 확정 사실이 아닙니다 · 승인·발주·생산 가능성 확정이 아닙니다.'
 # P08 writes this limitation itself when the deterministic fixture image provider is used.
 FIXTURE_IMAGE_MARKER = 'VOGUE_WORKFLOW_IMAGE_PROVIDER=fixture'
@@ -98,19 +72,9 @@ DRAFT_FIXTURE_MARKER = 'VOGUE_DRAFT_IMAGE_PROVIDER=fixture'
 DRAFT_VISUALS = (('product', '신상품 · Product'), ('outfit', '착장 · Outfit'))
 MAX_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024
 
-STAGES = (('trend', '01', 'Trend'), ('stock', '02', 'Stock'), ('planning_draft', '03', 'Draft'),
-          ('sales_market_review', '04', 'Review'), ('integration', '05', 'Integrate'), ('final_image', '06', 'Sheet'))
-STATE_LABELS = {'available': '근거 확인', 'partial': '일부 근거/입력 확인 필요', 'no_results': '조회 결과 없음',
-                'not_provided': '입력 미제공', 'unverified': '근거 미확인', 'blocked': '상세 해석 보류',
-                'failed': '처리 실패'}
 KIND_LABELS = {'observation': '관찰', 'evidence_observation': '관찰', 'interpretation': '해석', 'proposal': '제안',
                'user_requested': '요청', 'to_validate': '확인 필요', 'producer_finding': '에이전트 결과'}
-CONTEXT_LABELS = {'season': '시즌', 'category': '카테고리', 'target_customer': '대상 고객', 'gender': '성별',
-                  'colors': '색상', 'color': '색상', 'materials': '소재', 'price_band': '가격대'}
 DECISION_LABELS = {'price': '가격', 'cost': '원가', 'quantity': '수량', 'purchase_order': '발주', 'adoption': '최종 채택'}
-MD_DECISION_LABELS = {'adopt': '채택 · adopt', 'revise': '수정 · revise', 'hold': '보류 · hold'}
-RUN_STATUS_LABELS = {'ok': '완료 · ok', 'partial': '부분 · partial', 'no_results': '결과 없음 · no_results',
-                     'error': '오류 · error', 'generated': '생성됨', 'failed': '실패', 'skipped': '생략'}
 METRIC_LABELS = {'current_company_sales': '현재 자사 판매'}
 
 
@@ -181,116 +145,31 @@ def _evidence_ids(refs: Any) -> tuple[str, ...]:
     return _unique(_mapping(ref).get('evidence_id') for ref in _list(refs))
 
 
-def _missing_section(result, stage_key, section_id, title, producer, status, body=None) -> BoardSection:
-    """A section without displayable content keeps the producer's status (error → failed, no_results → no_results)."""
+def _missing_section(result, stage_key, section_id, status, body=None) -> BoardSection:
+    """A section without displayable content says why: the stage error, no_results, or not run."""
     errors = [error for error in _list(result.get('errors')) if _mapping(error).get('stage') == stage_key]
     limitations = _strings(_mapping(body).get('limitations'))
     if status == 'error' or errors:
         notes = tuple(f"{error.get('code', 'ERROR')}: {error.get('message', '')}".strip(': ') for error in errors)
-        return BoardSection(section_id, title, producer, status, None, 'failed', (), notes + limitations or ('단계 오류',))
+        return BoardSection(section_id, (), notes + limitations or ('단계 오류',))
     if status == 'no_results':
-        return BoardSection(section_id, title, producer, status, None, 'no_results', (),
-                            limitations or ('생산자가 결과 없음(no_results)을 반환했습니다.',))
-    return BoardSection(section_id, title, producer, status, None, 'not_provided', (),
-                        limitations or ('이 단계의 결과가 없습니다(실행되지 않았거나 이전 단계에서 중단).',))
-
-
-def _concept(result: Mapping[str, Any]) -> BoardSection:
-    request = _mapping(result.get('planning_request'))
-    user_input = _mapping(result.get('user_input'))
-    context = _mapping(request.get('context'))
-    claims = []
-    text = user_input.get('text') or request.get('query')
-    if isinstance(text, str) and text.strip():
-        claims.append(_claim(text.strip(), 'user_requested', source='user_input', source_ref='user_input.text'))
-    ordered = [key for key in ('season', 'category', 'target_customer') if key in context]
-    for key in [*ordered, *(key for key in context if key not in ordered)]:
-        value = context[key]
-        shown = _scalar_text(value)
-        if shown:
-            claims.append(_claim(f'{CONTEXT_LABELS.get(key, key)}: {shown}', 'user_requested',
-                                 source='planning_request', source_ref=f'planning_request.context.{key}'))
-    images = _list(user_input.get('images'))
-    if images:
-        claims.append(_claim(f'레퍼런스 이미지 {len(images)}건 (Draft·통합 참고용)', 'user_requested',
-                             source='user_input', source_ref='user_input.images'))
-    notes = tuple(f'{label} 미지정' for key, label in (('season', '시즌'), ('category', '카테고리')) if not context.get(key))
-    status = 'ok' if request else 'not_provided'
-    return BoardSection('concept', '기획 의도 / Concept', 'vogue-orchestrator', status,
-                        request.get('schema_version') if isinstance(request.get('schema_version'), str) else None,
-                        _state(status, has_claims=bool(claims)), tuple(claims), notes)
+        return BoardSection(section_id, (), limitations or ('생산자가 결과 없음(no_results)을 반환했습니다.',))
+    return BoardSection(section_id, (), limitations or ('이 단계의 결과가 없습니다(실행되지 않았거나 이전 단계에서 중단).',))
 
 
 def _trend(result: Mapping[str, Any]) -> BoardSection:
+    """The Trend notes the poster shows when there is no Trend style to draw."""
     raw = _raw(result, 'trend')
-    status = _status(result, 'trend', raw)
     body = _mapping(raw.get('result')) if raw else {}
     if not body:
-        return _missing_section(result, 'trend', 'trend', '트렌드 분석 / Trend', 'trend-analysis-agent', status,
-                                _mapping(raw.get('result')) if raw else None)
-    agent = _mapping(raw.get('producer')).get('agent_id') or body.get('agent_id') or 'trend-analysis-agent'
-    names, definitions, descriptions, items = [], [], [], []
-    for index, trend in enumerate(_list(body.get('trends'))):
-        style = _mapping(_mapping(trend).get('style'))
-        trend_items = [_mapping(item) for item in _list(_mapping(trend).get('items'))]
-        described = [_mapping(entry) for entry in _list(style.get('description'))]
-        ids = (*_strings(style.get('focus_evidence_ids')),
-               *(i for entry in described for i in _strings(entry.get('evidence_ids'))),
-               *(i for item in trend_items for i in _strings(item.get('evidence_ids'))))
-        seasons = ' · '.join(text for text in (_season_text(s) for s in _list(style.get('seasons'))) if text)
-        name = style.get('name') if isinstance(style.get('name'), str) and style.get('name') else '이름 미제공'
-        names.append(_claim(f'트렌드: {name}' + (f' ({seasons})' if seasons else ''), 'observation' if ids else 'to_validate',
-                            ids, source=agent, source_ref=f'trends[{index}].style'))
-        if isinstance(style.get('definition'), str) and style['definition'].strip():
-            definitions.append(_claim(f"{name} 정의: {style['definition'].strip()}", 'to_validate', (),
-                                      source=agent, source_ref=f'trends[{index}].style.definition'))
-        for position, entry in enumerate(described):
-            if isinstance(entry.get('text'), str) and entry['text'].strip():
-                entry_ids = _strings(entry.get('evidence_ids'))
-                descriptions.append(_claim(entry['text'].strip(), 'observation' if entry_ids else 'to_validate', entry_ids,
-                                           source=agent, source_ref=f'trends[{index}].style.description[{position}]'))
-        for position, item in enumerate(trend_items):
-            if not isinstance(item.get('name'), str) or not item['name'].strip():
-                continue
-            details = [f'{label} {_scalar_text(item.get(key))}' for key, label in
-                       (('category_minor', '분류'), ('colors', '색'), ('materials', '소재'), ('fit', '핏'), ('patterns', '패턴'))
-                       if _scalar_text(item.get(key))]
-            item_ids = _strings(item.get('evidence_ids'))
-            items.append(_claim(' · '.join([f"아이템: {item['name'].strip()}", *details]),
-                                'observation' if item_ids else 'to_validate', item_ids,
-                                source=agent, source_ref=f'trends[{index}].items[{position}]'))
-    claims = (*names, *definitions, *descriptions, *items)
-    schema = _mapping(raw.get('producer')).get('schema_version')
-    return BoardSection('trend', '트렌드 분석 / Trend', agent, status, schema if isinstance(schema, str) else None,
-                        _state(status, has_claims=bool(claims), has_unverified=any(not c.evidence_ids for c in claims)),
-                        claims, _strings(body.get('limitations')))
+        return _missing_section(result, 'trend', 'trend', _status(result, 'trend', raw), body)
+    return BoardSection('trend', (), _strings(body.get('limitations')))
 
 
 def _unit_text(unit: Any) -> str:
     if unit == 'pieces':
         return '개'
     return f' {unit}' if isinstance(unit, str) and unit else ''
-
-
-def _product_text(product: Mapping[str, Any]) -> str:
-    attributes = _mapping(product.get('attributes'))
-    inventory = _mapping(product.get('inventory'))
-    head = ' '.join(text for text in (_scalar_text(product.get('style_id')), _scalar_text(product.get('category'))) if text)
-    parts = [head or '상품 식별자 미제공']
-    for key, label in (('color', '색'), ('material', '소재'), ('fit', '핏')):
-        if _scalar_text(attributes.get(key)):
-            parts.append(f'{label} {_scalar_text(attributes.get(key))}')
-    quantity = inventory.get('quantity')
-    if isinstance(quantity, int) and not isinstance(quantity, bool):
-        stock = f'재고 {quantity:,}{_unit_text(inventory.get("unit"))}'
-        extra = [f'기준 {inventory["as_of"]}' if isinstance(inventory.get('as_of'), str) else '',
-                 f'정의 {inventory["definition"]}' if isinstance(inventory.get('definition'), str) else '',
-                 inventory['data_nature'] if isinstance(inventory.get('data_nature'), str) else '']
-        extra = [text for text in extra if text]
-        parts.append(stock + (f" ({', '.join(extra)})" if extra else ''))
-    else:
-        parts.append('재고 수량 미확인')
-    return ' · '.join(parts)
 
 
 IMAGE_MEDIA = {'image/png', 'image/jpeg', 'image/webp', 'image/gif'}
@@ -303,43 +182,17 @@ def _product_image(product: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _inventory(result: Mapping[str, Any]) -> tuple[BoardSection, tuple[str, ...]]:
+def _inventory(result: Mapping[str, Any]) -> BoardSection:
+    """The stock notes the poster shows when no product is matched to the Trend style."""
     raw = _raw(result, 'stock')
-    status = _status(result, 'stock', raw)
     body = _mapping(raw.get('result')) if raw else {}
     if not body:
-        return _missing_section(result, 'stock', 'inventory', '재고 분석 / Inventory', 'stock-agent', status,
-                                _mapping(raw.get('result')) if raw else None), ()
-    agent = _mapping(raw.get('producer')).get('agent_id') or body.get('agent_id') or 'stock-agent'
-    products = _list(body.get('products'))
-    claims, thumbnails, notes = [], [], []
-    for index, slot in enumerate(_list(body.get('trend_results'))):
-        slot = _mapping(slot)
-        ids = _strings(slot.get('evidence_ids'))
-        style_name = _mapping(slot.get('style')).get('name') or f'트렌드 {index + 1}'
-        if isinstance(slot.get('summary'), str) and slot['summary'].strip():
-            claims.append(_claim(f"{style_name}: {slot['summary'].strip()}", 'producer_finding' if ids else 'to_validate', ids,
-                                 source=agent, source_ref=f'trend_results[{index}].summary'))
-        product_index = slot.get('product_index')
-        product = products[product_index] if isinstance(product_index, int) and 0 <= product_index < len(products) else None
-        if isinstance(product, Mapping):
-            claims.append(_claim(_product_text(product), 'observation' if ids else 'to_validate', ids,
-                                 source=agent, source_ref=f'products[{product_index}]'))
-            image = _product_image(product)
-            if image:
-                thumbnails.append(image)
-        else:
-            claims.append(_claim(f'{style_name}: 매칭 상품 없음 ({slot.get("status") or "상태 미제공"})', 'to_validate', (),
-                                 source=agent, source_ref=f'trend_results[{index}]'))
-        notes.extend(_strings(slot.get('limitations')))
+        return _missing_section(result, 'stock', 'inventory', _status(result, 'stock', raw), body)
+    notes = [note for slot in _list(body.get('trend_results')) for note in _strings(_mapping(slot).get('limitations'))]
     basis = _mapping(body.get('season_basis')).get('basis')
     if isinstance(basis, str) and basis.strip():
         notes.insert(0, f'시즌 기준: {basis.strip()}')
-    schema = _mapping(raw.get('producer')).get('schema_version')
-    section = BoardSection('inventory', '재고 분석 / Inventory', agent, status, schema if isinstance(schema, str) else None,
-                           _state(status, has_claims=bool(claims), has_unverified=any(not c.evidence_ids for c in claims)),
-                           tuple(claims), _unique(notes))
-    return section, tuple(thumbnails)
+    return BoardSection('inventory', (), _unique(notes))
 
 
 def _period_bounds(period: Any) -> tuple[str, str] | None:
@@ -349,28 +202,6 @@ def _period_bounds(period: Any) -> tuple[str, str] | None:
     if isinstance(period, Mapping) and isinstance(period.get('start'), str):
         return period['start'], period.get('end') if isinstance(period.get('end'), str) else period['start']
     return None
-
-
-def _period_text(period: Any) -> str:
-    bounds = _period_bounds(period)
-    if not bounds:
-        return '기간 미제공'
-    return bounds[0] if bounds[0] == bounds[1] else f'{bounds[0]}–{bounds[1]}'
-
-
-def _value_text(metric: Mapping[str, Any]) -> str:
-    value = metric.get('value')
-    if isinstance(value, bool):
-        return str(value)
-    if isinstance(value, int):
-        number = f'{value:,}'
-    elif isinstance(value, float):
-        number = f'{value:,.6g}' if abs(value) < 1e6 else f'{value:,.0f}'
-    else:
-        number = str(value)
-    if isinstance(metric.get('currency'), str) and metric['currency']:
-        return f"{number} {metric['currency']}"
-    return number + _unit_text(metric.get('unit'))
 
 
 def _nature(observation: Any) -> str:
@@ -390,11 +221,9 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
     status = _status(result, 'sales_market_review', raw)
     body = _mapping(raw.get('result')) if raw else {}
     if not body:
-        return _missing_section(result, 'sales_market_review', 'sales_market', '판매·시장 / Sales & Market', 'sales-market-agent',
-                                status, _mapping(raw.get('result')) if raw else None)
-    agent = _mapping(raw.get('producer')).get('agent_id') or body.get('agent_id') or 'sales-market-agent'
+        return _missing_section(result, 'sales_market_review', 'sales_market', status, body)
     review = _mapping(body.get('review'))
-    # P07's current 0.2 proposal response is its domain review directly, not the
+    # P07's current 0.3 proposal response is its domain review directly, not the
     # earlier P08 full-Draft wrapper with review.findings/metrics.
     if not review and body.get('schema_version') == 'sales-market-review/0.1-internal':
         review = body
@@ -402,23 +231,13 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
                 if isinstance(item.get('evidence_id'), str)}
     claims = []
     kinds = {'fact': 'observation', 'interpretation': 'interpretation', 'proposal': 'proposal'}
-    for index, finding in enumerate(_list(review.get('findings'))):
+    for finding in _list(review.get('findings')):
         finding = _mapping(finding)
         if isinstance(finding.get('text'), str) and finding['text'].strip():
             claims.append(_claim(finding['text'].strip(), kinds.get(finding.get('kind'), 'producer_finding'),
-                                 _evidence_ids(finding.get('evidence_refs')), source=agent, source_ref=f'review.findings[{index}]'))
+                                 _evidence_ids(finding.get('evidence_refs'))))
+    # Price, fabric cost, margin and target are drawn from their own fields (_price_rows, _target_view).
     if body.get('schema_version') == 'sales-market-review/0.1-internal':
-        for key, label in (('price_analysis', '판매가 참고'), ('fabric_cost_analysis', '소재 원가 참고'),
-                           ('margin_analysis', '마진 참고'), ('target_audience', '타깃 고객 참고')):
-            item = _mapping(body.get(key))
-            details = []
-            for field in ('status', 'proposed_price', 'unit_cost', 'margin_rate_percent', 'recommendation'):
-                value = item.get(field)
-                if isinstance(value, (str, int, float)) and not isinstance(value, bool):
-                    details.append(f'{field}={value}')
-            if details:
-                claims.append(_claim(f'{label}: ' + ', '.join(details), 'to_validate', (), source=agent,
-                                     source_ref=key))
         for missing in _list(body.get('missing_data')):
             missing = _mapping(missing)
             label = missing.get('field') or missing.get('name') or missing.get('reason')
@@ -429,8 +248,7 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
                     reason.strip() if isinstance(reason, str) and reason.strip() else None
                 )
                 text = '미확인: ' + label.strip() + (f' — {detail}' if detail else '')
-                claims.append(_claim(text, 'to_validate', (), source=agent,
-                                     source_ref='missing_data'))
+                claims.append(_claim(text, 'to_validate', ()))
     groups: dict[str, list[Mapping[str, Any]]] = {}
     for metric in _list(review.get('metrics')):
         metric = _mapping(metric)
@@ -448,7 +266,7 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
             natures = sorted({_nature(metric.get('observation')) for metric in present})
             ids = _unique(i for metric in present for i in _evidence_ids(metric.get('evidence_refs')))
             claims.append(_claim(f"{label}: 값 {len(present):,}건 · 기간 {span} · 단위 {', '.join(units)} · {'/'.join(natures)}",
-                                 'producer_finding' if ids else 'to_validate', ids, source=agent, source_ref=f'review.metrics[{name}]'))
+                                 'producer_finding' if ids else 'to_validate', ids))
             # Row values differ by dimensions that live only in the evidence (e.g. channel, article taxonomy),
             # so the sheet quotes the producer's metric definition instead of listing bare values side by side.
             cited = [evidence.get(i) for i in ids if isinstance(evidence.get(i), Mapping)]
@@ -458,16 +276,12 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
             for definition in definitions[:2]:
                 definition_ids = _unique(item.get('evidence_id') for item in cited if item.get('metric_definition') == definition)
                 claims.append(_claim(f"{label} 정의" + (f" (원본 채널 ID {', '.join(channels)}별 행)" if channels else '') + f': {definition}',
-                                     'producer_finding', definition_ids[:3], source=agent, source_ref='review.evidence[].metric_definition'))
+                                     'producer_finding', definition_ids[:3]))
         for metric in missing:
             reason = metric.get('missing_reason') if isinstance(metric.get('missing_reason'), str) else '원천 없음'
-            claims.append(_claim(f'{label}: 미확인 — {reason}', 'to_validate', _evidence_ids(metric.get('evidence_refs')),
-                                 source=agent, source_ref=f'review.metrics[{name}]'))
-    schema = _mapping(raw.get('producer')).get('schema_version')
-    return BoardSection('sales_market', '판매·시장 / Sales & Market', agent, status,
-                        schema if isinstance(schema, str) else None,
-                        _state(status, has_claims=bool(claims), has_unverified=any(not c.evidence_ids for c in claims)),
-                        tuple(claims), _unique((*_strings(review.get('limitations')), *_strings(body.get('limitations')))))
+            claims.append(_claim(f'{label}: 미확인 — {reason}', 'to_validate', _evidence_ids(metric.get('evidence_refs'))))
+    return BoardSection('sales_market', tuple(claims),
+                        _unique((*_strings(review.get('limitations')), *_strings(body.get('limitations')))))
 
 
 def _draft_parts(result: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, Mapping[str, Any], str]:
@@ -477,62 +291,26 @@ def _draft_parts(result: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, M
 
 
 def _insight(result: Mapping[str, Any]) -> BoardSection:
-    raw, body, status = _draft_parts(result)
+    _, body, status = _draft_parts(result)
     draft = _mapping(body.get('draft'))
     if not draft:
-        return _missing_section(result, 'planning_draft', 'insight', '기획 결론 / Insight → Proposal', 'new-product-agent', status,
-                                body)
-    agent = _mapping(raw.get('producer')).get('agent_id') or body.get('agent_id') or 'new-product-agent'
+        return _missing_section(result, 'planning_draft', 'insight', status, body)
     kinds = {'fact': 'observation', 'interpretation': 'interpretation', 'proposal': 'proposal'}
     claims = tuple(
-        _claim(claim['text'].strip(), kinds.get(claim.get('kind'), 'to_validate'), _evidence_ids(claim.get('evidence_refs')),
-               source=agent, source_ref=f'draft.claims[{index}]')
-        for index, claim in enumerate(_mapping(item) for item in _list(draft.get('claims')))
+        _claim(claim['text'].strip(), kinds.get(claim.get('kind'), 'to_validate'), _evidence_ids(claim.get('evidence_refs')))
+        for claim in (_mapping(item) for item in _list(draft.get('claims')))
         if isinstance(claim.get('text'), str) and claim['text'].strip())
     if body.get('schema_version') == '1.0' and not claims:
         for key in ('opportunity', 'product_definition'):
             item = _mapping(draft.get(key))
             value = item.get('value')
             if isinstance(value, str) and value.strip():
-                claims += (_claim(value.strip(), 'proposal', _strings(item.get('evidence_ids')),
-                                  source=agent, source_ref=f'draft.{key}'),)
-    schema = _mapping(raw.get('producer')).get('schema_version')
-    return BoardSection('insight', '기획 결론 / Insight → Proposal', agent, status, schema if isinstance(schema, str) else None,
-                        _state(status, has_claims=bool(claims), has_unverified=any(not c.evidence_ids for c in claims)),
-                        claims, _strings(draft.get('open_questions')))
-
-
-def _specifications(result: Mapping[str, Any]) -> BoardSection:
-    raw, body, _ = _draft_parts(result)
-    draft = _mapping(body.get('draft'))
-    agent = _mapping(raw.get('producer')).get('agent_id') if raw else None
-    # 0.2.0: P06's concept (draft.concept) carries the design spec; earlier Drafts have no spec field.
-    concept = _mapping(draft.get('concept'))
-    base = 'draft.concept.attributes' if concept else 'draft.attributes'
-    attributes = [_mapping(item) for item in _list(concept.get('attributes') if concept else draft.get('attributes'))]
-    claims = []
-    for key, label in (('product_definition', '상품 정의'), ('target_customer', '대상 고객')):
-        item = _mapping(concept.get(key))
-        if isinstance(item.get('value'), str) and item['value'].strip():
-            claims.append(_claim(f"{label}: {item['value'].strip()}", item.get('kind') if item.get('kind') in KIND_LABELS else 'proposal',
-                                 _strings(item.get('evidence_ids')), source=agent, source_ref=f'draft.concept.{key}'))
-    claims += [
-        _claim(f"{item['name']}={_scalar_text(item.get('value'))}", item.get('kind') if item.get('kind') in KIND_LABELS else 'proposal',
-               _strings(item.get('evidence_ids')) or _evidence_ids(item.get('evidence_refs')),
-               source=agent, source_ref=f'{base}[{index}]')
-        for index, item in enumerate(attributes) if isinstance(item.get('name'), str) and _scalar_text(item.get('value'))]
-    claims = tuple(claims)
-    if claims:
-        return BoardSection('specifications', '분석 기반 상품 사양', agent or 'new-product-agent', 'ok', None,
-                            _state('ok', has_claims=True, has_unverified=any(not c.evidence_ids for c in claims)), claims,
-                            ('Evidence 없는 속성은 제안 또는 검증 필요로 표시',))
-    note = ('기획 초안(planning-draft/1.0)에 상품 사양 필드가 없습니다.' if draft
-            else '기획 초안이 없어 상품 사양을 표시할 수 없습니다.')
-    return BoardSection('specifications', '분석 기반 상품 사양', agent or 'new-product-agent', 'not_provided', None,
-                        'not_provided', (), (note,))
+                claims += (_claim(value.strip(), 'proposal', _strings(item.get('evidence_ids'))),)
+    return BoardSection('insight', claims, _strings(draft.get('open_questions')))
 
 
 def _host(url: Any) -> str:
+    """The host of an http(s) URL, for the photo source line; '' for anything else."""
     try:
         parts = urlsplit(url) if isinstance(url, str) else None
     except ValueError:
@@ -540,39 +318,12 @@ def _host(url: Any) -> str:
     return parts.hostname or '' if parts and parts.scheme in ('http', 'https') else ''
 
 
-def _references(result: Mapping[str, Any]) -> BoardSection:
-    raw = _raw(result, 'trend')
-    body = _mapping(raw.get('result')) if raw else {}
-    documents: dict[tuple[str, str], list[str]] = {}
-    labels: dict[tuple[str, str], str] = {}
-    for evidence in (_mapping(item) for item in _list(body.get('evidence'))):
-        title = evidence.get('title') if isinstance(evidence.get('title'), str) else ''
-        url = evidence.get('url') if isinstance(evidence.get('url'), str) else ''
-        if not title and not url:
-            continue
-        key = (title, url)
-        documents.setdefault(key, [])
-        if isinstance(evidence.get('evidence_id'), str):
-            documents[key].append(evidence['evidence_id'])
-        published = evidence.get('published_at') if isinstance(evidence.get('published_at'), str) else ''
-        labels[key] = ' · '.join(text for text in (title or '제목 미제공', published, _host(url)) if text)
-    claims = tuple(_claim(labels[key], 'observation' if ids else 'to_validate', ids, source='trend-analysis-agent',
-                          source_ref='result.evidence') for key, ids in documents.items())
-    notes = ('Trend 응답이 인용한 원문 문서입니다. 별도 참고자료 검색은 실행하지 않았습니다.',)
-    if not claims:
-        return BoardSection('references', '참고자료', 'trend-analysis-agent', 'no_results', None, 'no_results', (),
-                            ('인용 문서 없음',) + notes)
-    return BoardSection('references', '참고자료', 'trend-analysis-agent', 'ok', None, 'available', claims, notes)
-
-
 def _finance(result: Mapping[str, Any]) -> BoardSection:
     _, body, _ = _draft_parts(result)
     reserved = _strings(_mapping(body.get('draft')).get('md_decision_required')) or \
         _strings(_mapping(result.get('md_review')).get('reserved_decisions'))
-    claims = tuple(_claim(f'{DECISION_LABELS.get(key, key)}: MD 판단 필요', 'to_validate', (), source='md_review',
-                          source_ref='draft.md_decision_required') for key in reserved)
-    return BoardSection('finance', '원가·판매 추정', 'new-product-agent', 'not_provided', None, 'not_provided', claims,
-                        ('원가 입력 또는 승인된 산식 미제공',))
+    claims = tuple(_claim(f'{DECISION_LABELS.get(key, key)}: MD 판단 필요', 'to_validate', ()) for key in reserved)
+    return BoardSection('finance', claims, ('원가 입력 또는 승인된 산식 미제공',))
 
 
 # --- sheet model ---------------------------------------------------------------------------------
@@ -583,43 +334,27 @@ class DraftVisual:
     key: str
     label: str
     status: str | None
-    reason: str | None
     artifact: Mapping[str, Any] | None
     model: str | None
-    prompt_version: str | None
 
 
 @dataclass(frozen=True)
 class SheetVisual:
     status: str | None
-    reason: str | None
-    provider_calls: int | None
     artifact: Mapping[str, Any] | None
-    fixture: bool
-    message: str | None
     # 0.2.0: the P06 visuals shown in the visual panel; empty for earlier runs (then the final image is shown).
     draft_visuals: tuple[DraftVisual, ...] = ()
     draft_fixture: bool = False
-    image_generation_calls: int | None = None
 
 
 @dataclass(frozen=True)
 class PlanningSheet:
     board: PlanningBoard
     request_id: str
-    run_status: str | None
     contract_version: str | None
     schema_version: str | None
-    stages: tuple[tuple[str, str, str, str | None], ...]  # (key, number, label, status)
     visual: SheetVisual
-    thumbnails: tuple[str, ...]
-    md_status: str | None
-    md_choices: tuple[str, ...]
-    md_decisions: tuple[Mapping[str, Any], ...]
-    natures: tuple[str, ...]
     started_at: str | None
-    completed_at: str | None
-    brief: tuple[tuple[str, str], ...] = ()
     # The one-product proposal poster reads these views: one Trend style, the stock product matched to it,
     # and new-product-agent's concept for the new product.
     trend: 'TrendFocus | None' = None
@@ -631,7 +366,6 @@ class PlanningSheet:
     price_rows: tuple[tuple[str, str], ...] = ()
     target: 'TargetView | None' = None
     concept: 'ConceptView | None' = None
-    engine: str | None = None
 
 
 @dataclass(frozen=True)
@@ -644,7 +378,6 @@ class TrendFocus:
     colors: tuple[str, ...]
     materials: tuple[str, ...]
     features: tuple[str, ...]  # item names, fit, shape, patterns, details
-    others: int  # further styles in the result that the poster leaves out
 
 
 @dataclass(frozen=True)
@@ -708,13 +441,11 @@ def _trend_focus(result: Mapping[str, Any]) -> TrendFocus | None:
     features = _unique([*(item['name'].strip() for item in items if isinstance(item.get('name'), str) and item['name'].strip()),
                         *(text for item in items for key in ('fit', 'shape', 'patterns', 'details') for text in _texts(item.get(key)))])
     definition = style.get('definition')
-    raw = _raw(result, 'trend')
     return TrendFocus(
         name=style['name'].strip() if isinstance(style.get('name'), str) and style['name'].strip() else '트렌드 이름 미제공',
         seasons=' · '.join(text for text in (_season_text(s) for s in _list(style.get('seasons'))) if text),
         definition=definition.strip() if isinstance(definition, str) and definition.strip() else None,
-        paragraphs=paragraphs, colors=colors, materials=materials, features=features,
-        others=max(0, len(_list(_mapping(raw.get('result')).get('trends'))) - 1) if raw else 0)
+        paragraphs=paragraphs, colors=colors, materials=materials, features=features)
 
 
 def focus_stock(result: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]] | None:
@@ -772,7 +503,6 @@ class ConceptView:
     own_products: tuple[str, ...]
     points: tuple[str, ...]
     questions: tuple[str, ...]
-    engine: str | None
 
 
 def _claim_value(value: Any) -> str | None:
@@ -798,17 +528,14 @@ def _drop_source_tags(text: str | None) -> str | None:
 def _concept_view(result: Mapping[str, Any]) -> ConceptView:
     """Reads the current new-product-agent Draft (top-level product_definition, product_profile, opportunity, ...)
     and, for runs recorded before that shape, the earlier draft.concept / draft.claims."""
-    raw, body, _ = _draft_parts(result)
+    _, body, _ = _draft_parts(result)
     draft = _mapping(body.get('draft'))
     concept = _mapping(draft.get('concept'))
-    agent = _mapping(raw.get('producer')).get('agent_id') if raw else None
     line = None
-    for source_ref, definition in (('draft.product_definition', draft.get('product_definition')),
-                                   ('draft.concept.product_definition', concept.get('product_definition'))):
+    for definition in (draft.get('product_definition'), concept.get('product_definition')):
         text = _claim_value(definition)
         if text:
-            line = _claim(_drop_source_tags(text), _claim_kind(definition), _strings(_mapping(definition).get('evidence_ids')),
-                          source=agent, source_ref=source_ref)
+            line = _claim(_drop_source_tags(text), _claim_kind(definition), _strings(_mapping(definition).get('evidence_ids')))
             break
     profile = _mapping(draft.get('product_profile'))
     rows = []
@@ -839,10 +566,9 @@ def _concept_view(result: Mapping[str, Any]) -> ConceptView:
         points = _unique(texts(('proposal', 'interpretation'))) or _unique(texts(('fact',)))
     questions = _unique((*_strings(draft.get('open_questions')), *_strings(draft.get('questions_for_validation')),
                          *_strings(concept.get('questions_for_validation'))))
-    engine = concept.get('engine') if isinstance(concept.get('engine'), str) and concept['engine'].strip() else None
     clean = lambda texts: tuple(_drop_source_tags(text) for text in texts)  # noqa: E731
     return ConceptView(line, _drop_source_tags(opportunity), clean(findings), tuple(rows), clean(differentiation),
-                       clean(own_products), clean(points), questions, engine)
+                       clean(own_products), clean(points), questions)
 
 
 def _price_rows(result: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
@@ -907,127 +633,60 @@ def _target_view(result: Mapping[str, Any]) -> TargetView | None:
                       missing=limitations[0] if limitations and not (age or hypothesis) else None)
 
 
-def _source_natures(result: Mapping[str, Any]) -> tuple[tuple[str, ...], bool]:
-    labels, synthetic = [], False
-    for key, label in (('trend', 'Trend'), ('stock', 'Stock'), ('planning_draft', 'Draft'),
-                       ('sales_market_review', 'Review')):
+def _synthetic(result: Mapping[str, Any]) -> bool:
+    """Whether any source reports synthetic or sample data (the header badge)."""
+    for key in ('trend', 'stock', 'planning_draft', 'sales_market_review'):
         source = _mapping(_mapping(result.get('sources')).get(key))
-        if not source:
-            continue
         observation = _mapping(source.get('observation'))
-        nature = _nature(observation)
-        values = {nature}
+        natures = {_nature(observation)}
         if key == 'sales_market_review':
             review = _mapping(_mapping(_mapping(source.get('raw_response')).get('result')).get('review'))
-            values |= {_nature(_mapping(metric).get('observation')) for metric in _list(review.get('metrics'))}
-        values.discard('unknown') if len(values) > 1 else None
-        synthetic |= bool(values & {'synthetic', 'sample'}) or observation.get('synthetic') is True
-        as_of = observation.get('as_of')
-        labels.append(f"{label} · {'/'.join(sorted(values))}" + (f' · 기준 {as_of}' if isinstance(as_of, str) else ''))
-    return tuple(labels), synthetic
+            natures |= {_nature(_mapping(metric).get('observation')) for metric in _list(review.get('metrics'))}
+        if natures & {'synthetic', 'sample'} or observation.get('synthetic') is True:
+            return True
+    return False
 
 
-def build_sheet(envelope: Mapping[str, Any], *, decisions: Sequence[Mapping[str, Any]] = ()) -> PlanningSheet:
-    """Map a stored integrated-result/2.0 envelope onto the planning-board model (presentation only)."""
+def build_sheet(envelope: Mapping[str, Any]) -> PlanningSheet:
+    """Map a stored integrated-result envelope onto the poster model (presentation only)."""
     envelope = _mapping(envelope)
     result = _mapping(envelope.get('result'))
     if not result:
         raise PlanningSheetError('PLANNING_SHEET_INPUT_INVALID', 422)
-    inventory, thumbnails = _inventory(result)
-    sections = (_concept(result), _trend(result), inventory, _sales(result),
-                _insight(result), _specifications(result), _references(result), _finance(result))
+    sections = (_trend(result), _inventory(result), _sales(result), _insight(result), _finance(result))
     _, draft_body, _ = _draft_parts(result)
     draft = _mapping(draft_body.get('draft'))
     context = _mapping(_mapping(result.get('planning_request')).get('context'))
     season = _scalar_text(draft.get('season')) or _scalar_text(context.get('season')) or '시즌 미정'
     category = _scalar_text(draft.get('category')) or _scalar_text(context.get('category')) or '카테고리 미정'
     title = draft.get('title') if isinstance(draft.get('title'), str) and draft['title'].strip() else f'{season} {category} 신상품 기획안'
-    limitations = _unique(_strings(result.get('limitations')))
-    natures, synthetic = _source_natures(result)
+    fixture = any(FIXTURE_IMAGE_MARKER in text for text in _strings(result.get('limitations')))
     image = _mapping(result.get('final_image'))
-    fixture = any(FIXTURE_IMAGE_MARKER in text for text in limitations)
-    image_errors = [_mapping(error) for error in _list(result.get('errors')) if _mapping(error).get('stage') == 'final_image']
     visuals = _mapping(draft.get('visuals'))
+    text_of = lambda value: value if isinstance(value, str) else None  # noqa: E731
     draft_visuals = tuple(
-        DraftVisual(key=key, label=label,
-                    status=_mapping(visuals.get(key)).get('status') if isinstance(_mapping(visuals.get(key)).get('status'), str) else None,
-                    reason=_mapping(visuals.get(key)).get('reason') if isinstance(_mapping(visuals.get(key)).get('reason'), str) else None,
+        DraftVisual(key=key, label=label, status=text_of(_mapping(visuals.get(key)).get('status')),
                     artifact=_mapping(visuals.get(key)).get('artifact') if isinstance(_mapping(visuals.get(key)).get('artifact'), Mapping) else None,
-                    model=_mapping(visuals.get(key)).get('model') if isinstance(_mapping(visuals.get(key)).get('model'), str) else None,
-                    prompt_version=_mapping(visuals.get(key)).get('prompt_version')
-                    if isinstance(_mapping(visuals.get(key)).get('prompt_version'), str) else None)
+                    model=text_of(_mapping(visuals.get(key)).get('model')))
         for key, label in DRAFT_VISUALS) if visuals else ()
-    calls = draft_body.get('image_generation_calls')
     visual = SheetVisual(
-        status=image.get('status') if isinstance(image.get('status'), str) else None,
-        reason=image.get('reason') if isinstance(image.get('reason'), str) else None,
-        provider_calls=image.get('provider_calls') if isinstance(image.get('provider_calls'), int) else None,
+        status=text_of(image.get('status')),
         artifact=image.get('artifact') if isinstance(image.get('artifact'), Mapping) else None,
-        fixture=fixture,
-        message=image_errors[0].get('message') if image_errors and isinstance(image_errors[0].get('message'), str) else None,
         draft_visuals=draft_visuals,
-        draft_fixture=any(DRAFT_FIXTURE_MARKER in text for text in _strings(draft.get('limitations'))),
-        image_generation_calls=calls if isinstance(calls, int) and not isinstance(calls, bool) else None)
-    stage_map = _stage_map(result)
-    stages = []
-    for key, number, label in STAGES:
-        status = stage_map.get(key, {}).get('status')
-        if key == 'final_image' and visual.status:
-            status = visual.status
-        stages.append((key, number, label, status if isinstance(status, str) else None))
+        draft_fixture=any(DRAFT_FIXTURE_MARKER in text for text in _strings(draft.get('limitations'))))
     traced = [stage for stage in _list(result.get('stages')) if isinstance(stage, Mapping)]
     started = min((s['started_at'] for s in traced if isinstance(s.get('started_at'), str)), default=None)
-    completed = max((s['completed_at'] for s in traced if isinstance(s.get('completed_at'), str)), default=None)
-    md_review = _mapping(result.get('md_review'))
-    evidence_ids = _unique(i for section in sections for claim in section.claims for i in claim.evidence_ids)
-    board = PlanningBoard(title=title.strip(), season=season, category=category, review_label=REVIEW_LABEL, process=PROCESS,
-                          sections=sections, evidence_ids=evidence_ids, limitations=limitations,
-                          synthetic_context=synthetic or fixture)
+    board = PlanningBoard(title=title.strip(), season=season, category=category, review_label=REVIEW_LABEL,
+                          sections=sections, synthetic_context=_synthetic(result) or fixture)
     request_id = result.get('request_id') or envelope.get('request_id')
-    brief = _brief_rows(draft_body, draft, md_review, limitations, visual, category, season)
     concept = _concept_view(result)
     return PlanningSheet(
         trend=_trend_focus(result), stock=_stock_focus(result), concept_line=concept.line, spec_rows=concept.profile,
-        insight_points=concept.points, review_items=concept.questions, price_rows=_price_rows(result), engine=concept.engine,
-        concept=concept,
-        target=_target_view(result),
+        insight_points=concept.points, review_items=concept.questions, price_rows=_price_rows(result),
+        concept=concept, target=_target_view(result),
         board=board, request_id=request_id if isinstance(request_id, str) else '—',
-        run_status=(result.get('status') or envelope.get('status')) if isinstance(result.get('status') or envelope.get('status'), str) else None,
-        contract_version=envelope.get('contract_version') if isinstance(envelope.get('contract_version'), str) else None,
-        schema_version=result.get('schema_version') if isinstance(result.get('schema_version'), str) else None,
-        stages=tuple(stages), visual=visual, thumbnails=thumbnails,
-        md_status=md_review.get('status') if isinstance(md_review.get('status'), str) else None,
-        md_choices=_strings(md_review.get('choices')), md_decisions=tuple(_mapping(item) for item in decisions),
-        natures=natures, started_at=started, completed_at=completed, brief=brief)
-
-
-def _brief_rows(body, draft, md_review, limitations, visual, category, season) -> tuple[tuple[str, str], ...]:
-    """CandidateBrief fields of the 상품기획서 (trend-batch-kg-rag-product-planning.md) and where the sheet shows them.
-    A field the Draft does not carry is reported as 미제공, never filled in."""
-    identity = _mapping(body.get('draft_identity'))
-    draft_id = identity.get('draft_id') if isinstance(identity.get('draft_id'), str) else None
-    revision = identity.get('revision')
-    reserved = _strings(draft.get('md_decision_required')) or _strings(md_review.get('reserved_decisions'))
-    questions = _strings(draft.get('open_questions'))
-    assumptions = _strings(draft.get('assumptions'))
-    score = draft.get('score')
-    image = RUN_STATUS_LABELS.get(visual.status or '', visual.status or '상태 미제공')
-    visual_row = ('시안', ' · '.join(text for text in (image, visual.reason or '') if text))
-    if visual.draft_visuals:  # 0.2.0: the visuals are P06's; stage 06 is this sheet itself
-        visual_row = ('시안 (P06)', ' · '.join(
-            f"{item.label.split(' · ')[0]} {RUN_STATUS_LABELS.get(item.status or '', item.status or '미제공')}"
-            + (f' ({item.reason})' if item.status != 'generated' and item.reason else '') for item in visual.draft_visuals))
-    return (
-        ('후보 ID', (draft_id + (f' · rev {revision}' if isinstance(revision, int) else '')) if draft_id else '미제공'),
-        ('후보 유형', _scalar_text(draft.get('candidate_type')) or '미제공 (초안에 없음)'),
-        ('대상', f'{category} · {season}'),
-        ('점수', _scalar_text(score) if _scalar_text(score) else '미제공 (초안에 점수 없음, 임의 산출 안 함)'),
-        ('가정', f'{len(assumptions)}건' if assumptions else '미제공'),
-        ('미확정', f"MD 판단 {len(reserved)}건: {', '.join(DECISION_LABELS.get(key, key) for key in reserved)}" if reserved else '없음'),
-        ('리스크·한계', f'{len(limitations):,}건 → 하단 Limitations'),
-        ('검증 질문', f'{len(questions)}건 → Insight 카드 ※' if questions else '없음'),
-        visual_row,
-    )
+        contract_version=text_of(envelope.get('contract_version')), schema_version=text_of(result.get('schema_version')),
+        visual=visual, started_at=started)
 
 
 # --- fonts ---------------------------------------------------------------------------------------
@@ -1177,14 +836,23 @@ class _Canvas:
                 draw.text((s(x), s(y)), text, font=self.fonts.get(role, max(6, round(size * SCALE))), fill=color)
             elif op[0] == 'image':
                 _, x, y, w, h, data, mode = op
+                box = (s(w), s(h))
                 try:
                     with self.Image.open(io.BytesIO(data)) as source:
-                        source.load()
-                        picture = source.convert('RGBA')
+                        # Shrink to the slot before converting, so a large photo never sits in memory at full size as RGBA.
+                        width, height = source.size
+                        scale = (max if mode == 'cover' else min)(box[0] / width, box[1] / height)
+                        if scale < 1:
+                            target = (max(1, math.ceil(width * scale)), max(1, math.ceil(height * scale)))
+                            source.draft('RGB', target)  # JPEG decodes at a reduced scale; other formats ignore this
+                            source.load()
+                            picture = source.resize(target, self.Image.LANCZOS).convert('RGBA')
+                        else:
+                            source.load()
+                            picture = source.convert('RGBA')
                 except Exception:  # undecodable bytes: draw the failure, never crash the sheet
                     draw.text((s(x) + 8, s(y) + 8), '이미지 읽기 실패', font=self.fonts.get('regular', s(12)), fill=C['red'])
                     continue
-                box = (s(w), s(h))
                 fitted = ImageOps.fit(picture, box) if mode == 'cover' else ImageOps.contain(picture, box)
                 left = s(x) + (box[0] - fitted.width) // 2
                 top = s(y) + (box[1] - fitted.height) // 2
@@ -1734,8 +1402,7 @@ def _marketing(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet,
     sales = sections['sales_market']
     y = _target(c, x, y, w, sheet.target)
     y = _heading(c, x, y, w, '판매·시장 분석')
-    shown_elsewhere = {'price_analysis', 'fabric_cost_analysis', 'margin_analysis', 'target_audience'}
-    findings = [claim.text for claim in sales.claims if claim.source_ref not in shown_elsewhere]
+    findings = [claim.text for claim in sales.claims]
     if findings:
         y = _bullets(c, x, y, w, findings, limit=5)
         for note in sales.notes[:2]:
@@ -1829,12 +1496,12 @@ def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_
 
 
 def planning_sheet_png(envelope: Mapping[str, Any], *, load_artifact: Callable[[Mapping[str, Any]], bytes] | None = None,
-                       decisions: Sequence[Mapping[str, Any]] = (), fonts: Fonts | None = None,
+                       fonts: Fonts | None = None,
                        trend_photos: Sequence[tuple[bytes, str]] = (), swot: Mapping[str, Any] | None = None) -> bytes:
     """PNG bytes for a run. ``load_artifact`` returns verified bytes for an image reference: the P06 visuals
     (workflow-contract 0.2.0) or, for earlier runs, the final image. ``trend_photos`` are the Trend article photos
     stage 06 stored for this run, as (bytes, source URL); ``swot`` is the SWOT draft it kept (swot.py), or None."""
-    sheet = build_sheet(envelope, decisions=decisions)
+    sheet = build_sheet(envelope)
     image_bytes, unreadable = None, False
     if sheet.visual.draft_visuals:
         # 0.2.0: embed P06's verified visuals; the final image of such a run is this sheet and is never embedded.
@@ -1877,10 +1544,6 @@ def _read_only_store(store_dir: Path, request_id: str):
     connection = sqlite3.connect(f'file:{database}?mode=ro&immutable=1', uri=True)
     try:
         rows = dict(connection.execute('SELECT attempt, value FROM runs WHERE rid=?', (request_id,)).fetchall())
-        decisions = connection.execute(
-            'SELECT sequence, integrated_response_sha256, decision, note, decided_at FROM md_decisions WHERE rid=? ORDER BY sequence',
-            (request_id,)).fetchall() if connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='md_decisions'").fetchone() else []
     finally:
         connection.close()
     value = rows.get('current') or rows.get('initial')
@@ -1897,9 +1560,7 @@ def _read_only_store(store_dir: Path, request_id: str):
             raise ValueError('artifact bytes do not match the reference')
         return data
 
-    history = [dict(request_id=request_id, sequence=s, integrated_response_sha256=h, decision=d, note=n, decided_at=t)
-               for s, h, d, n, t in decisions]
-    return envelope, load, history
+    return envelope, load
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1916,10 +1577,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         envelope = envelope.get('envelope', envelope)
         image = args.image.read_bytes() if args.image else None
         load = (lambda artifact: image) if image else None  # noqa: E731
-        decisions: list = []
     else:
-        envelope, load, decisions = _read_only_store(args.store_dir, args.request_id)
-    png = planning_sheet_png(envelope, load_artifact=load, decisions=decisions)
+        envelope, load = _read_only_store(args.store_dir, args.request_id)
+    png = planning_sheet_png(envelope, load_artifact=load)
     if args.output == '-':
         sys.stdout.buffer.write(png)
     else:

@@ -6,13 +6,15 @@ them like any other image, and keeps them in the run's store; the planning-sheet
 those stored bytes without network access.
 
 Rules: HTTPS only, hosts on an allowlist (``VOGUE_TREND_PHOTO_HOSTS``, default ``vogue.co.kr`` and its
-subdomains), at most two redirects that must stay on the allowlist, a size cap, and the same decode checks as
-uploaded images. A photo that fails is skipped; it never fails the run. Nothing about the photos is added to
+subdomains), at most two redirects that must stay on the allowlist, a byte cap, a pixel cap, and the same decode
+checks as uploaded images. A photo that fails, including one with a malformed URL, is skipped; it never fails
+the run. Nothing about the photos is added to
 the integrated envelope (its contract is unchanged); the store records them under ``trend-photos:<request_id>``.
 """
 from __future__ import annotations
 
 import http.client
+import io
 import os
 import ssl
 from typing import Any, Callable, Mapping, Sequence
@@ -25,6 +27,7 @@ DEFAULT_HOSTS = ('vogue.co.kr',)
 MAX_PHOTOS = 3
 CANDIDATES = 6
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
+MAX_PHOTO_PIXELS = 6_000_000  # e.g. 2000 x 3000 (Vogue article photos are about 1.3 MP); keeps decoding inside the container memory limit
 TIMEOUT_SECONDS = 10.0
 MAX_REDIRECTS = 2
 MEDIA_TYPES = {'image/png', 'image/jpeg', 'image/webp'}
@@ -76,10 +79,14 @@ def fetch_photo(url: str, hosts: Sequence[str], *, timeout: float = TIMEOUT_SECO
                 get: Callable[[str, float], tuple[int, Mapping[str, str], bytes]] = _https_get) -> tuple[bytes, str]:
     """Bytes and media type of one allowlisted HTTPS image, or PhotoRejected."""
     for _ in range(MAX_REDIRECTS + 1):
-        parts = urlsplit(url)
+        try:
+            parts = urlsplit(url)
+            hostname, _ = parts.hostname, parts.port  # .port raises on a malformed port
+        except ValueError:
+            raise PhotoRejected('PHOTO_URL_INVALID') from None
         if parts.scheme != 'https':
             raise PhotoRejected('PHOTO_SCHEME_NOT_HTTPS')
-        if not host_allowed(parts.hostname, hosts):
+        if not host_allowed(hostname, hosts):
             raise PhotoRejected('PHOTO_HOST_NOT_ALLOWED')
         try:
             status, headers, body = get(url, timeout)
@@ -88,7 +95,10 @@ def fetch_photo(url: str, hosts: Sequence[str], *, timeout: float = TIMEOUT_SECO
         except Exception:
             raise PhotoRejected('PHOTO_UNAVAILABLE') from None
         if status in (301, 302, 303, 307, 308) and headers.get('location'):
-            url = urljoin(url, headers['location'])
+            try:
+                url = urljoin(url, headers['location'])
+            except ValueError:
+                raise PhotoRejected('PHOTO_URL_INVALID') from None
             continue
         if status != 200:
             raise PhotoRejected('PHOTO_HTTP_STATUS')
@@ -98,11 +108,23 @@ def fetch_photo(url: str, hosts: Sequence[str], *, timeout: float = TIMEOUT_SECO
         if len(body) > MAX_PHOTO_BYTES:
             raise PhotoRejected('PHOTO_TOO_LARGE')
         try:
+            pixels = _pixels(body)
+        except Exception:
+            raise PhotoRejected('PHOTO_DECODE_INVALID') from None
+        if pixels > MAX_PHOTO_PIXELS:  # checked from the header, before anything is decoded
+            raise PhotoRejected('PHOTO_TOO_LARGE')
+        try:
             checked_image(body, media)
         except ValueError:
             raise PhotoRejected('PHOTO_DECODE_INVALID') from None
         return body, media
     raise PhotoRejected('PHOTO_TOO_MANY_REDIRECTS')
+
+
+def _pixels(data: bytes) -> int:
+    from PIL import Image
+    with Image.open(io.BytesIO(data)) as image:  # reads the header only
+        return image.width * image.height
 
 
 def checkpoint_key(request_id: str) -> str:
@@ -131,6 +153,9 @@ class TrendPhotos:
                 data, media = self.fetch(url, self.hosts)
             except PhotoRejected as exc:
                 skipped.append(dict(url=url, reason=exc.code))
+                continue
+            except Exception:  # an unexpected failure drops this photo only
+                skipped.append(dict(url=url, reason='PHOTO_UNAVAILABLE'))
                 continue
             kept.append(dict(url=url, artifact=self.store.put(data, media, owner=request_id)))
             photos.append((data, url))

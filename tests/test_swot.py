@@ -50,6 +50,15 @@ class InputTests(unittest.TestCase):
         self.assertEqual(summary['market']['merchandising_actions'], ['합성 운영 제안'])
         self.assertNotIn('RAW USER REQUEST', json.dumps(summary, ensure_ascii=False))
 
+    def test_a_draft_claim_repeating_the_request_is_not_sent(self):
+        value = envelope()  # runs recorded before planning_analysis carry the request among the Draft claims
+        body = value['result']['sources']['planning_draft']['raw_response']['result']
+        body.pop('planning_analysis', None)
+        body['draft']['claims'] = [{'kind': 'proposal', 'text': 'RAW USER REQUEST'}, {'kind': 'proposal', 'text': '합성 기획 제안'}]
+        summary = swot_input(value)
+        self.assertEqual(summary['product']['planning_points'], ['합성 기획 제안'])
+        self.assertNotIn('RAW USER REQUEST', json.dumps(summary, ensure_ascii=False))
+
     def test_the_prompt_file_exists_and_names_the_output_keys(self):
         prompt = system_prompt()
         for key in ('strengths', 'weaknesses', 'opportunities', 'threats', 'promotions', 'title', 'differentiation', 'basis'):

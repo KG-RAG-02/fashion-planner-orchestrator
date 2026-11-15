@@ -126,7 +126,12 @@ class LiveServerTests(unittest.TestCase):
                                        ('POST', '/v1/orchestrations', {'input': {}}),
                                        ('POST', '/api/health', {})):
                 with self.subTest(method=method, path=path):
-                    self.assertEqual(self.request(method, path, body, **evil), (403, {'error': 'trusted_local_only'}))
+                    status, value = self.request(method, path, body, **evil)
+                    self.assertEqual(status, 403)
+                    if path == '/v1/orchestrations':  # workflow routes answer with the workflow problem body
+                        self.assertEqual(value['error']['code'], 'LOCAL_WORKFLOW_ONLY')
+                    else:
+                        self.assertEqual(value, {'error': 'trusted_local_only'})
             self.assertEqual(self.request('GET', '/api/workflow/runs/x', **evil)[1]['error']['code'],
                              'LOCAL_WORKFLOW_ONLY')
             self.assertEqual(self.request('GET', '/api/workflow/runs/missing')[0], 404)

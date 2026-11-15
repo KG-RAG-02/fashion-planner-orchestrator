@@ -303,19 +303,27 @@ class Workflow:
             # Crash after provider invocation must not silently issue a second charge.
             body['final_image'] = dict(status='failed', artifact=None, lineage=lineage, reason='IMAGE_OUTCOME_UNKNOWN', provider_calls=1)
         else:
+            # Stage 06 (workflow-contract 0.2.0): the planning sheet (기획안 사진) composed from this run. The
+            # provider sees the run as it stands (stages 1-5, this stage pending as generated) and reads the P06
+            # visuals through the store; P08 calls no image model. The trend photos and the SWOT draft need the
+            # network or an LLM, so they are gathered before the 'started' marker: a crash while waiting for them
+            # leaves no marker, and a retry composes the sheet instead of reporting IMAGE_OUTCOME_UNKNOWN.
+            pending = dict(status='generated', artifact=None, lineage=lineage, reason=None, provider_calls=1)
+            try:
+                provisional, prepare_error = self._response(dict(body, final_image=pending), 200)['envelope'], None
+            except Exception as exc:
+                provisional, prepare_error = None, exc
+            photos = self._trend_photos(rid, provisional) if provisional is not None else []
+            swot = self._swot(rid, provisional) if provisional is not None else None
             request_artifact = self.store.put(canonical(image_request))
             self.store.checkpoint_write(key + ':request', 'done', dict(stage='final_image', request_artifact=request_artifact))
             self.store.checkpoint_write(key, 'started')
             provider_meta = {}
             try:
-                # Stage 06 (workflow-contract 0.2.0): the planning sheet (기획안 사진) composed from this run. The
-                # provider sees the run as it stands (stages 1-5, this stage pending as generated) and reads the P06
-                # visuals through the store; P08 calls no image model.
-                pending = dict(status='generated', artifact=None, lineage=lineage, reason=None, provider_calls=1)
-                provisional = self._response(dict(body, final_image=pending), 200)['envelope']
+                if prepare_error is not None:
+                    raise prepare_error
                 result = self.image(dict(image_request, envelope=provisional, load_artifact=self.store.verify,
-                                         trend_photos=self._trend_photos(rid, provisional),
-                                         swot=self._swot(rid, provisional)))
+                                         trend_photos=photos, swot=swot))
                 data, mime = result[0], result[1]
                 provider_meta.update(getattr(result, 'meta', None) or {})
                 checked_image(data, mime)

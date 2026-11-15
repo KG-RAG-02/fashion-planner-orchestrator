@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 from pathlib import Path
 from .workflow_store import digest, strict_json
@@ -35,15 +34,15 @@ def require(condition, code):
 
 def p07_review_input(draft, request_id):
     """The P07 0.3 review input: the allowlisted product fields and, for each, its provenance from P06's profile."""
-    product, evidence = p07_product_projection(draft, with_evidence=True)
+    product, evidence = p07_product_projection(draft)
     return {'request_id': request_id, 'product': product, 'product_evidence': evidence}
 
 
-def p07_product_projection(draft, *, with_evidence=False):
-    """The allowlisted product fields P07 receives, read from P06's validated draft.product_profile.
+def p07_product_projection(draft):
+    """The allowlisted product fields P07 receives, read from P06's validated draft.product_profile, and each
+    field's provenance (kind, source_ref, evidence_ids).
 
-    Only values P06 marked user_requested or evidence_observation are sent. With ``with_evidence`` the
-    per-field provenance (kind, source_ref, evidence_ids) is returned as well."""
+    Only values P06 marked user_requested or evidence_observation are sent."""
     require(isinstance(draft, dict), 'P06_DRAFT_REQUIRED')
     draft_body = draft.get('draft') if isinstance(draft.get('draft'), dict) else None
     require(draft_body is not None, 'P06_DRAFT_REQUIRED')
@@ -81,7 +80,7 @@ def p07_product_projection(draft, *, with_evidence=False):
             product[key] = value
         else:
             evidence.pop(key, None)
-    return (product, evidence) if with_evidence else product
+    return product, evidence
 
 
 def walk(value):
