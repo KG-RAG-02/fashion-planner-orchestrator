@@ -72,7 +72,7 @@
     }
   },
   "p07_response": {
-    "contract_version": "vogue-sales-market-review/0.2-proposal",
+    "contract_version": "vogue-sales-market-review/0.3-proposal",
     "request_id": "fixture:workflow:001",
     "producer": {
       "agent_id": "sales-market-agent",

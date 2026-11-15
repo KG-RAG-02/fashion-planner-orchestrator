@@ -13,6 +13,8 @@ from urllib.parse import parse_qs, urlsplit, unquote
 
 from .connectors import (ConnectorConfigurationError, WORKFLOW_CONNECT_TIMEOUT_SECONDS,
                          WORKFLOW_READ_TIMEOUT_SECONDS, _service_url, timeout_seconds)
+from .swot import SwotWriter, enabled as swot_enabled, load_swot
+from .trend_photos import TrendPhotos, enabled as trend_photos_enabled, load_trend_photos
 from .workflow import PEER_NAMESPACES, Workflow, WireResponse, StageFailure
 from .workflow_contract import (WorkflowContract, VERSION, DRAFT_MODES, require, contract_gate_status,
                                 development_limitation, truthy)
@@ -156,11 +158,13 @@ def planning_sheet_image(payload):
     """Stage 06 provider: the planning sheet PNG of this run (planning_sheet.py), deterministic and local.
 
     ``payload['envelope']`` is the run as it stands when stage 06 starts; ``payload['load_artifact']`` returns
-    verified bytes for the P06 visuals already imported into the store. No network, no model.
+    verified bytes for the P06 visuals already imported into the store; ``payload['trend_photos']`` are the Trend
+    article photos stage 06 stored for this run (trend_photos.py). No model is called.
     """
     require(images_enabled(), 'IMAGE_PROVIDER_DISABLED')
     from .planning_sheet import planning_sheet_png
-    return planning_sheet_png(payload['envelope'], load_artifact=payload.get('load_artifact')), 'image/png'
+    return planning_sheet_png(payload['envelope'], load_artifact=payload.get('load_artifact'),
+                              trend_photos=payload.get('trend_photos') or (), swot=payload.get('swot')), 'image/png'
 
 
 _FROM_ENV = object()
@@ -178,7 +182,6 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
     specs = [('trend','VOGUE_TREND_AGENT_URL','trend-analysis-agent/runs'),
              ('stock','VOGUE_STOCK_AGENT_URL','stock-agent/runs'),
              ('draft','VOGUE_NEW_PRODUCT_AGENT_URL','new-product-agent/runs'),
-             ('review_projection','VOGUE_NEW_PRODUCT_AGENT_URL','new-product-agent/sales-market-reviews'),
              ('review','VOGUE_SALES_MARKET_AGENT_URL','sales-market-agent/reviews')]
     connect_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS', WORKFLOW_CONNECT_TIMEOUT_SECONDS)
     read_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS', WORKFLOW_READ_TIMEOUT_SECONDS)
@@ -199,7 +202,8 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
         url = _service_url(env, variable, '/v1/agents/' + route)
         adapters[key] = lambda payload, u=url, t=stage_timeouts.get(key, read_timeout): post_wire(
             u, payload, token, connect_timeout=connect_timeout, read_timeout=t)
-    image = None
+    image, trend_photos, swot = None, None, None
+    private = store()
     if images_enabled(env):
         provider = image_provider_name(env)
         if provider is None:
@@ -211,8 +215,22 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
         else:
             image = planning_sheet_image
             limitations = [*limitations, PLANNING_SHEET_LIMITATION]
-    return Workflow(**adapters, image=image, store=store(), contract=contract, artifact_reader=artifact_reader,
-                    limitations=limitations, draft_mode=mode)
+            if trend_photos_enabled(env):
+                trend_photos = TrendPhotos(private, env)
+            swot = swot_writer(private, env)
+    return Workflow(**adapters, image=image, store=private, contract=contract, artifact_reader=artifact_reader,
+                    limitations=limitations, draft_mode=mode, trend_photos=trend_photos, swot=swot)
+
+
+def swot_writer(private, env=None):
+    """The stage-06 SWOT hook on the query-structuring LLM settings, or None when it is off or not configured."""
+    if not swot_enabled(env):
+        return None
+    from .llm_provider import LLMConfigurationError, build_text_call
+    try:
+        return SwotWriter(private, build_text_call())
+    except LLMConfigurationError:
+        return None
 
 
 def problem(handler, status, code, message=None, *, request_id=None, stage='input', headers=None):
@@ -527,7 +545,8 @@ def _get_planning_sheet(handler, value):
     """GET /api/workflow/runs/{id}/planning-sheet.png: the 기획서 PNG of a finished run.
 
     Presentation only (planning_sheet.py): renders the stored integrated envelope, the verified final
-    image bytes and the MD decision history; it calls no agent and changes no stored value."""
+    image bytes, the Trend photos and SWOT draft stage 06 stored and the MD decision history; it calls no agent
+    or model, fetches nothing and changes no stored value."""
     from .planning_sheet import PlanningSheetError, planning_sheet_png
     rid = value
     if not ID_PATTERN.fullmatch(rid):
@@ -542,7 +561,8 @@ def _get_planning_sheet(handler, value):
             problem(handler, 404, 'RUN_NOT_FOUND', request_id=rid)
         return
     try:
-        png = planning_sheet_png(final['envelope'], load_artifact=private.verify, decisions=private.md_decisions(rid))
+        png = planning_sheet_png(final['envelope'], load_artifact=private.verify, decisions=private.md_decisions(rid),
+                                 trend_photos=load_trend_photos(private, rid), swot=load_swot(private, rid))
     except PlanningSheetError as exc:
         problem(handler, exc.http_status, exc.code, request_id=rid)
         return

@@ -1239,7 +1239,7 @@
       "properties": {
         "raw_response": {
           "type": "object",
-          "description": "Unmodified response from the P07 vogue-sales-market-review/0.2-proposal endpoint."
+          "description": "Unmodified response from the P07 vogue-sales-market-review/0.3-proposal endpoint."
         },
         "call_request_sha256": {
           "$ref": "common.schema.json#/$defs/sha256"

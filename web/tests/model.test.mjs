@@ -93,7 +93,7 @@ test('the integrated-review-no-results fixture keeps the image skipped and the d
 
 test('P07 native partial response retains sections and diagnostics', () => {
   const response = {
-    contract_version: 'vogue-sales-market-review/0.2-proposal',
+    contract_version: 'vogue-sales-market-review/0.3-proposal',
     status: 'partial',
     result: {
       schema_version: 'sales-market-review/0.1-internal',
@@ -113,7 +113,7 @@ test('P07 native partial response retains sections and diagnostics', () => {
   };
   const view = m.reviewView(response);
   assert.equal(view.format, 'native');
-  assert.equal(view.contractVersion, 'vogue-sales-market-review/0.2-proposal');
+  assert.equal(view.contractVersion, 'vogue-sales-market-review/0.3-proposal');
   assert.equal(view.status, 'partial');
   assert.ok(view.sections.some(({ key, value }) => key === 'price_analysis' && value.status === 'no_results'));
   for (const key of ['material_cost_analysis', 'margin_price_range_analysis', 'draft_context']) {
@@ -129,10 +129,10 @@ test('P07 native partial response retains sections and diagnostics', () => {
 });
 
 test('P07 input view shows P06 provenance without claiming it was sent to P07', () => {
-  const response = { contract_version: 'vogue-sales-market-review/0.2-proposal', status: 'partial', result: {
+  const response = { contract_version: 'vogue-sales-market-review/0.3-proposal', status: 'partial', result: {
     schema_version: 'sales-market-review/0.1-internal', status: 'partial', errors: [], missing_data: [], limitations: [],
   } };
-  const request = { contract_version: 'vogue-sales-market-review/0.2-proposal', request_id: 'req-1', input: {
+  const request = { contract_version: 'vogue-sales-market-review/0.3-proposal', request_id: 'req-1', input: {
     request_id: 'req-1', product: { category: '니트웨어', season: '2027SS' },
   } };
   const p06 = { evidence_ids: ['trend:e1'], draft: { category: '니트웨어', product_profile: {

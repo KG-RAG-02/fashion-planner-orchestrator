@@ -194,6 +194,20 @@ _CALLS: dict[str, Callable[[Any, LLMSettings, str, str], str]] = {"anthropic": _
                                                                   "openai": _call_openai}
 
 
+def build_text_call(settings: LLMSettings | None = None, *, client: Any = None) -> Callable[[str, str], str]:
+    """Return ``call(system, user) -> text`` on the configured model (the same settings as query structuring).
+    Used by the planning-sheet SWOT (swot.py). Configuration problems raise here, before any request is sent."""
+    settings = settings or load_settings()
+    client = client if client is not None else _CLIENTS[settings.provider](settings)
+    call = _CALLS[settings.provider]
+
+    def text_call(system: str, user: str) -> str:
+        return call(client, settings, system, user)
+
+    text_call.model = settings.model  # type: ignore[attr-defined]
+    return text_call
+
+
 def build_draft_provider(settings: LLMSettings | None = None, *, client: Any = None) -> Callable[[Any], str]:
     """Return a `DraftProvider` for `structure_query`. `client` lets tests inject a fake SDK client.
 

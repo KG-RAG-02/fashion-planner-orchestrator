@@ -19,9 +19,8 @@ UI ─POST /api/workflow/run─► orchestrator(P08)
   1. trend        POST /v1/agents/trend-analysis-agent/runs     vogue-handoff/0.1  → Trend 1.1
   2. stock        POST /v1/agents/stock-agent/runs              vogue-handoff/0.1  (input = Trend result 원문) → Stock 1.0
   3. new-product  POST /v1/agents/new-product-agent/runs        vogue-handoff/0.3 → P06 result 1.0
-  3a. review bridge POST /v1/agents/new-product-agent/sales-market-reviews vogue-sales-market-review/0.1-proposal → P07 request 0.2
-  4. sales-market POST /v1/agents/sales-market-agent/reviews    vogue-sales-market-review/0.2-proposal → sales-market-review/0.1-internal
-                  (P08이 Draft의 허용 product 필드만 추려 전달; P07은 Draft hash를 응답하지 않음)
+  4. sales-market POST /v1/agents/sales-market-agent/reviews    vogue-sales-market-review/0.3-proposal → sales-market-review/0.1-internal
+                  (P08이 Draft의 허용 product 필드와 필드별 출처를 추려 전달; P07은 Draft hash를 응답하지 않음)
   5. integration  (P08 내부)  6. final_image (P08이 기획안 사진을 합성, 이미지 모델 호출 없음)
   → integrated-result/2.0 → UI · MD 채택/수정/보류
 ```
@@ -163,8 +162,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 
 | 메서드 · 경로 | 입력 | 출력 |
 |---|---|---|
-| `POST /v1/agents/new-product-agent/sales-market-reviews` | P06-owned `vogue-sales-market-review/0.1-proposal`: matching request ID and P06 Draft result schema 1.0 → `agents/new-product-agent/input/sales-market-review-bridge-0.1.contract.json` | P07 `.2-proposal` request body; this route validates/projects but does not call P07 |
-| `POST /v1/agents/sales-market-agent/reviews` | `vogue-sales-market-review/0.2-proposal`: required category and optional product_type/gender/season/material; no provenance field → `agents/sales-market-agent/input/sales-market-review-proposal-0.2.contract.json` | Native `sales-market-review/0.1-internal`; no Draft ID/hash attestation → `agents/sales-market-agent/output/sales-market-review-proposal-response-0.1.contract.json` |
+| `POST /v1/agents/sales-market-agent/reviews` | `vogue-sales-market-review/0.3-proposal`: required category and optional product_type/gender/season/material, with `product_evidence` (kind, source_ref, evidence_ids) for every sent field → `agents/sales-market-agent/input/sales-market-review-proposal-0.3.contract.json` | Native `sales-market-review/0.1-internal`; no Draft ID/hash attestation → `agents/sales-market-agent/output/sales-market-review-proposal-response-0.1.contract.json` |
 
 - **상태**: review 결과의 `ok`·`partial`·`no_results`·`error`는 producer status로 HTTP 200 응답에 담깁니다. 데이터 공백은 limitations와 `missing_reason`에 남깁니다.
 - **metric**: `current_company_sales`는 항상 `null`이고 `missing_reason`이 붙습니다.
@@ -194,7 +192,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | `GET /api/workflow/runs?limit=N` · `GET /api/workflow/runs/{rid}` | 실행 목록(최신순)과 보존된 integrated envelope |
 | `GET`/`POST /api/workflow/runs/{rid}/md-decision` | append-only MD 결정 → `agents/vogue-orchestrator/input/md-decision-request-2.0.contract.json`. GET은 `integrated_response_sha256`과 결정 이력을 반환 |
 | `GET /api/workflow/artifacts/{sha256}` | 저장된 private artifact(기획안 사진, 가져온 P06 시안 이미지 등) |
-| `GET /api/workflow/runs/{rid}/planning-sheet.png` | 끝난 실행의 기획서 PNG(3200 px 폭, `image/png`, attachment). 저장된 integrated envelope, 검증된 P06 시안 이미지(0.2.0 이전 실행은 최종 이미지), MD 결정 이력을 근거 연결 기획 보드 양식(`new-product-agent/docs/design/evidence-linked-planning-board.md`)으로 그림. 표시 전용이며 agent를 부르지 않고 저장값을 바꾸지 않음. 진행 중 409 `RUN_NOT_FINISHED`, 없음 404, 한글 글꼴 없음 503 `PLANNING_SHEET_FONT_MISSING` |
+| `GET /api/workflow/runs/{rid}/planning-sheet.png` | 끝난 실행의 기획서 PNG(3200 px 폭, `image/png`, attachment). 저장된 integrated envelope, 검증된 P06 시안 이미지(0.2.0 이전 실행은 최종 이미지), 6단계가 저장한 Trend 기사 사진·SWOT 초안으로 신제품 1개 기획안 포스터를 그림: 헤더(기획안 제목·시즌·카테고리·생성일), Analysis(첫 번째 Trend 스타일의 설명·색상 견본·소재 무늬 칩·기사 사진, 그 트렌드에 매칭된 재고 상품의 이미지·색상·소재·핏·수량·매칭 이유, LLM SWOT 초안), Design(new-product-agent 상품 정의·기획 기회·LOOK 시안·상품 프로필(`product_profile`)·차별화 포인트·자사 상품과의 관계·기획 포인트(`planning_analysis`)), Marketing(타깃 연령대·타깃 가설, 판매·시장 분석, 가격(sales-market-agent 제안가·원단가·마진율), LLM 프로모션 아이디어, MD 검토 포인트). 실행 기록에 없는 값은 그리지 않음. 표시 전용이며 agent를 부르지 않고 저장값을 바꾸지 않음. 진행 중 409 `RUN_NOT_FINISHED`, 없음 404, 한글 글꼴 없음 503 `PLANNING_SHEET_FONT_MISSING` |
 | `POST /v1/orchestrations/image-retries` | 6단계(기획안 사진 합성)만 다시 실행. 무료이며 P06 이미지는 다시 만들지 않음. `VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=1`일 때만 동작, 기본은 409 |
 | `GET /api/system/status` · `GET /api/health` | agent liveness 집계, 계약 gate 상태, 이미지·구조화 설정 / liveness |
 
@@ -227,6 +225,8 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 - **기획안 사진 (6단계, `VOGUE_WORKFLOW_IMAGE_PROVIDER=planning_sheet`)** (2026-11-13 결정)
   - P08의 이미지 코드는 기획안 사진만 만듭니다. 이미지 모델을 부르지 않습니다. 트렌드 반영 신상품 이미지와 착장 이미지는 P06이 만듭니다.
   - 리뷰가 끝난 실행 기록(1–5단계)과 가져온 P06 시안 이미지로 `planning_sheet.py`가 PNG를 그립니다.
+  - 첫 번째 Trend 스타일의 기사 사진을 최대 3장 내려받아 저장소(`trend-photos:<request_id>`)에 두고 포스터에 넣습니다(`trend_photos.py`). HTTPS, 허용 호스트(`VOGUE_TREND_PHOTO_HOSTS`, 기본 `vogue.co.kr`)만 받고, 실패한 사진은 건너뛰며 실행을 실패시키지 않습니다. integrated envelope는 바뀌지 않습니다.
+  - 같은 단계에서 질의 구조화와 같은 LLM 설정(`LLM_MODEL`, `LLM_API_KEY`)으로 SWOT 초안, 프로모션 아이디어(0~3개), 차별화 포인트(0~3개)를 1번에 요청해 저장소(`swot:<request_id>`)에 두고, SWOT은 포스터 Analysis 열 맨 아래, 프로모션은 Marketing 열 가격 전략 다음에 넣습니다(`swot.py`, `prompts/swot/v3`). 차별화 포인트는 new-product-agent의 `draft.differentiation`이 비어 있을 때만 Design 열에 "vogue-orchestrator LLM 가설"로 표시합니다. 입력은 실행 기록 요약(트렌드·재고와 stock-agent 재고 지표·new-product-agent 컨셉·sales-market-agent 가격·타깃·채널/콘텐츠 가설·상품 운영 제안)이며, 항목마다 근거 종류를 붙이고 형식이 맞지 않으면 버립니다. 실패해도 실행은 실패하지 않습니다.
   - lineage·hash 규약은 0.1.1과 같습니다.
   - 이전의 OpenAI 최종 이미지 경로(`image_request.py`, prompt `reviewed_image`)는 제거했습니다. `openai` 값은 409 `IMAGE_PROVIDER_INVALID`로 거부합니다.
 - **계약 gate**: `contracts/workflow/baseline.json`이 frozen이어야 실행합니다. 아니면 409 `CONTRACT_NOT_FROZEN`입니다. stub은 `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`로 development 모드로 돌며, 이때 결과에 limitation이 붙습니다.
@@ -250,7 +250,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | P08 → Trend | `vogue-handoff/0.1` | Trend `1.1` | 기존 계약 유지 |
 | P08 → Stock | `vogue-handoff/0.1` | Stock `1.0` | 기존 계약 유지 |
 | P08 → P06 | `vogue-handoff/0.3` | P06 result `1.0` | proposed workflow-contract 0.5.0 |
-| P08 → P06 review bridge → P07 | `vogue-sales-market-review/0.1-proposal` → `vogue-sales-market-review/0.2-proposal` | P07 `sales-market-review/0.1-internal` | proposed workflow-contract 0.5.0 |
+| P08 → P07 | `vogue-sales-market-review/0.3-proposal` | P07 `sales-market-review/0.1-internal` | proposed workflow-contract 0.5.0 |
 | UI → P08 | `vogue-workflow/0.2` | `integrated-result/2.0` | proposed workflow-contract 0.5.0 |
 
 이 표에 없는 버전은 모델 호출이나 DB 조회 전에 거부합니다. 새 경로는 422, 기존 경로는 400을 돌려줍니다.

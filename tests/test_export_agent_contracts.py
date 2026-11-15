@@ -70,6 +70,22 @@ class ReadConstantTests(unittest.TestCase):
     def test_missing_file(self):
         self.assertIsNone(eac.read_constant(ROOT / 'no-such-module.py', 'VERSION'))
 
+    def test_a_literal_version_check_is_read_with_the_route_pattern(self):
+        pattern = eac.ENVELOPES['new-product-agent'].pattern
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'server.py'
+            cases = {
+                'if payload.get("contract_version") != "vogue-handoff/0.3":\n    raise ValueError\n': 'vogue-handoff/0.3',
+                "if payload.get('contract_version') != 'vogue-handoff/0.4':\n": 'vogue-handoff/0.4',
+                'CONTRACT = "vogue-handoff/0.3"\n': None,  # no check of that shape
+                'payload.get("contract_version") != "a/1"\npayload.get("contract_version") != "b/2"\n': None,  # ambiguous
+            }
+            for text, expected in cases.items():
+                with self.subTest(text=text):
+                    path.write_text(text, encoding='utf-8')
+                    self.assertEqual(eac.read_pattern(path, pattern), expected)
+        self.assertIsNone(eac.read_pattern(ROOT / 'no-such-module.py', pattern))
+
     def test_agent_route_with_a_single_quoted_constant(self):
         envelope = eac.Envelope('/v1/agents/sales-market-agent/reviews', 'src/reviews.py', 'VERSION',
                                 'src/vogue_orchestrator/workflow_contract.py:VERSION')
@@ -100,13 +116,10 @@ class OrchestratorValueTests(unittest.TestCase):
             with self.subTest(agent_id=agent_id):
                 expected = ('src/vogue_orchestrator/workflow_contract.py:P07_REVIEW_VERSION'
                             if agent_id == 'sales-market-agent' else
-                            'src/vogue_orchestrator/workflow_contract.py:P06_REVIEW_BRIDGE_VERSION'
-                            if agent_id == 'new-product-agent-review-bridge' else
                             'src/vogue_orchestrator/workflow_contract.py:VERSION')
                 self.assertEqual(eac.expected_from(agent_id, envelope), expected)
                 self.assertEqual(eac.orchestrator_contract_version(agent_id, envelope),
-                                 'vogue-sales-market-review/0.2-proposal' if agent_id == 'sales-market-agent' else
-                                 'vogue-sales-market-review/0.1-proposal' if agent_id == 'new-product-agent-review-bridge' else VERSION)
+                                 'vogue-sales-market-review/0.3-proposal' if agent_id == 'sales-market-agent' else VERSION)
         self.assertEqual(eac.envelope_version(eac.SELF, eac.RUN_ENVELOPE)['contract_version'], VERSION)
 
 
@@ -226,8 +239,7 @@ class RegistryFileTests(unittest.TestCase):
                     if item['path'] in pins:
                         self.assertEqual(item['sha256'], pins[item['path']], item['path'])
                 expected = ('vogue-workflow/0.2' if entry.agent_id == 'vogue-orchestrator' else
-                            'vogue-sales-market-review/0.1-proposal' if entry.target == 'sales-market-review-bridge-0.1.contract.json' else
-                            'vogue-sales-market-review/0.2-proposal')
+                            'vogue-sales-market-review/0.3-proposal')
                 self.assertEqual(value['_provenance']['handoff']['contract_version'], expected)
 
 

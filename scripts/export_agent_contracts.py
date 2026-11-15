@@ -56,7 +56,6 @@ REPOS = {
     "stock-agent": ("VOGUE_STOCK_ROOT", "stock-agent"),
     "sales-market-agent": ("VOGUE_SALES_MARKET_ROOT", "sales-market-agent"),
     "new-product-agent": ("VOGUE_NEW_PRODUCT_ROOT", "new-product-agent"),
-    "new-product-agent-review-bridge": ("VOGUE_NEW_PRODUCT_ROOT", "new-product-agent"),
 }
 
 
@@ -68,6 +67,9 @@ class Envelope:
     # "<file in this repository>:<CONSTANT>" holding the value the orchestrator uses on this route.
     # None keeps the /runs default: the workflow's handoff transport version.
     expected_from: str | None = None
+    # For a route whose source checks a string literal instead of a module constant: a regular expression
+    # whose first group is the accepted contract_version; `constant` then only names the check in reports.
+    pattern: str | None = None
 
 
 @dataclass(frozen=True)
@@ -88,8 +90,11 @@ ENVELOPES = {
     "trend-analysis-agent": Envelope("/v1/agents/trend-analysis-agent/runs", "src/trend_agent/api/server.py",
                                      "CONTRACT_VERSION"),
     "stock-agent": Envelope("/v1/agents/stock-agent/runs", "stock_agent/api.py", "HANDOFF_CONTRACT_VERSION"),
-    "new-product-agent": Envelope("/v1/agents/new-product-agent/runs", "src/vogue_npp/adapters/handoff.py",
-                                  "CONTRACT_VERSION", "src/vogue_orchestrator/workflow_contract.py:P06_HANDOFF_VERSION"),
+    # P06 compares the envelope's contract_version with a literal inside _build_handoff_run.
+    "new-product-agent": Envelope("/v1/agents/new-product-agent/runs", "src/vogue_npp/prototype/server.py",
+                                  "_build_handoff_run contract_version check",
+                                  "src/vogue_orchestrator/workflow_contract.py:P06_HANDOFF_VERSION",
+                                  pattern=r"""payload\.get\(["']contract_version["']\)\s*!=\s*["']([^"'\n]+)["']"""),
 }
 
 # P07 proposal review route. Its contract version is independent from the P08 public workflow version.
@@ -97,9 +102,6 @@ WORKFLOW_CONTRACT_PY = "src/vogue_orchestrator/workflow_contract.py"
 WORKFLOW_ENVELOPES = {
     "sales-market-agent": Envelope("/v1/agents/sales-market-agent/reviews", "src/market_research_agent/http_server.py",
                                    "REVIEW_CONTRACT_VERSION", f"{WORKFLOW_CONTRACT_PY}:P07_REVIEW_VERSION"),
-    "new-product-agent-review-bridge": Envelope("/v1/agents/new-product-agent/sales-market-reviews",
-                                   "src/vogue_npp/prototype/server.py", "P06_REVIEW_BRIDGE_CONTRACT_VERSION",
-                                   f"{WORKFLOW_CONTRACT_PY}:P06_REVIEW_BRIDGE_VERSION"),
 }
 # Routes this repository serves. Read from this checkout; there is no other side to compare with.
 RUN_ENVELOPE = Envelope("/api/workflow/run, /v1/orchestrations", WORKFLOW_CONTRACT_PY, "VERSION",
@@ -138,28 +140,25 @@ ENTRIES = (
     Entry("stock-agent", "output", "stock-agent-result-1.0.contract.json", "stock-agent result", "1.0", "copy",
           ("contracts/schemas/stock-agent-result.schema.json",),
           "contracts/schemas/stock-agent-result.schema.json"),
-    Entry("sales-market-agent", "input", "sales-market-review-proposal-0.2.contract.json",
-          "P07 /reviews proposal request (allowlisted product projection)", "vogue-sales-market-review/0.2-proposal", "copy",
-          ("src/market_research_agent/http_server.py", "contracts/examples/sales-market-review-0.2-proposal.request.json"),
-          "contracts/schemas/proposals/sales-market-review-0.2-proposal.schema.json",
+    Entry("sales-market-agent", "input", "sales-market-review-proposal-0.3.contract.json",
+          "P07 /reviews proposal request (allowlisted product projection with per-field provenance)",
+          "vogue-sales-market-review/0.3-proposal", "copy",
+          ("src/market_research_agent/http_server.py", "contracts/examples/sales-market-review-0.3-proposal.request.json"),
+          "contracts/schemas/proposals/sales-market-review-0.3-proposal.schema.json",
           envelope=WORKFLOW_ENVELOPES["sales-market-agent"]),
     Entry("sales-market-agent", "output", "sales-market-review-proposal-response-0.1.contract.json",
           "P07 /reviews native review response", "sales-market-review/0.1-internal", "copy",
-          ("src/market_research_agent/http_server.py", "contracts/schemas/proposals/sales-market-review-0.2-proposal-response.schema.json"),
-          "contracts/schemas/proposals/sales-market-review-0.2-proposal-response.schema.json",
+          ("src/market_research_agent/http_server.py", "contracts/schemas/proposals/sales-market-review-0.3-proposal-response.schema.json"),
+          "contracts/schemas/proposals/sales-market-review-0.3-proposal-response.schema.json",
           envelope=WORKFLOW_ENVELOPES["sales-market-agent"]),
-    Entry("sales-market-agent", "output", "sales-market-review-proposal-error-0.2.contract.json",
-          "P07 /reviews error response", "vogue-sales-market-review/0.2-proposal", "copy",
-          ("src/market_research_agent/http_server.py", "contracts/schemas/proposals/sales-market-review-0.2-error.schema.json"),
-          "contracts/schemas/proposals/sales-market-review-0.2-error.schema.json",
+    Entry("sales-market-agent", "output", "sales-market-review-proposal-error-0.3.contract.json",
+          "P07 /reviews error response", "vogue-sales-market-review/0.3-proposal", "copy",
+          ("src/market_research_agent/http_server.py", "contracts/schemas/proposals/sales-market-review-0.3-error.schema.json"),
+          "contracts/schemas/proposals/sales-market-review-0.3-error.schema.json",
           envelope=WORKFLOW_ENVELOPES["sales-market-agent"]),
     Entry("new-product-agent", "input", "planning-draft-input-0.3.contract.json",
           "new-product-agent /runs input (three producer payloads)", None, "authored",
           ("src/vogue_npp/adapters/handoff.py", "src/vogue_npp/prototype/server.py")),
-    Entry("new-product-agent", "input", "sales-market-review-bridge-0.1.contract.json",
-          "P06 /sales-market-reviews bridge request (validates P06 Draft and returns a P07 request)",
-          "vogue-sales-market-review/0.1-proposal", "authored",
-          ("src/vogue_npp/prototype/server.py",), envelope=WORKFLOW_ENVELOPES["new-product-agent-review-bridge"]),
     workflow_entry(SELF, "output", "integrated-result", "vogue-orchestrator workflow run response (integrated result)",
                    "integrated-result/2.0", "contracts/workflow", RUN_ENVELOPE),
     Entry(SELF, "input", "md-decision-request-2.0.contract.json",
@@ -229,10 +228,18 @@ def read_constant(path: Path, name: str) -> str | None:
     return match.group(1) if match.group(1) is not None else match.group(2)
 
 
+def read_pattern(path: Path, pattern: str) -> str | None:
+    """First group of the first match of `pattern` in `path`, or None if absent; more than one distinct match is None."""
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    values = {match.group(1) for match in re.finditer(pattern, text)}
+    return values.pop() if len(values) == 1 else None
+
+
 def envelope_version(agent_id: str, envelope: Envelope | None = None) -> dict[str, Any]:
     """The contract_version an agent route accepts, read from the agent source (default: its /runs)."""
     envelope = envelope or ENVELOPES[agent_id]
-    value = read_constant(repo_root(agent_id) / envelope.source_file, envelope.constant)
+    source = repo_root(agent_id) / envelope.source_file
+    value = read_pattern(source, envelope.pattern) if envelope.pattern else read_constant(source, envelope.constant)
     return {"route": envelope.route, "contract_version": value,
             "detected_from": f"{envelope.source_file}:{envelope.constant}"}
 

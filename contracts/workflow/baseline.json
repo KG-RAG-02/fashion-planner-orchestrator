@@ -4,23 +4,22 @@
   "transport_version": "vogue-workflow/0.2",
   "state": "proposed",
   "producer_consumer_validated": false,
-  "snapshot_sha256": "148506326ee0cd9dd07bf9eb0dd48d416b3cadecae4be59913c379359f5882b9",
+  "snapshot_sha256": "72f0e796e8603532be53e4df9722dd2f2a516b337226925ab1eb369b33c7675c",
   "files": {
-    "common.schema.json": "1130f43bff4f9bf34340482e137f67d89b95d9da43fb2dda911fc755fd5ce433",
+    "common.schema.json": "76f30ce0969edcdde6ddc736ea01788fc249d3016f8392eaa408f7230e6c0f28",
     "integrated-result.schema.json": "ae869fb216f57ebbd508f4807ae0fb7882b0d110446a5b5a082564d92260efb9",
     "planning-draft-request.schema.json": "aed84aad7a512b2b3adc9a15a4eebee29928601ac05689b7e70679a7f415b0e5",
     "planning-draft-response.schema.json": "401a2bed4f7813639ee3f145303bcc805f35d9e13436ee7e1457a630d175d073",
-    "sales-market-review-bridge-request.schema.json": "164190a6a85ac6c3e71f693b8ca0296b7318fbb92fc16c9160ab9d6efe20e0dc",
-    "sales-market-review-error.schema.json": "f769172cda1b54a7033dcffcf19b2a4ae01f904591b4aed2e6c47bf059f8f981",
-    "sales-market-review-request.schema.json": "2704502d213a57107b66e1126a30908b3f7f9fe623bc80086584249497838ac6",
-    "sales-market-review-response.schema.json": "5193e28c43a4a5822ce90bf6e84e84c74c10326733c1e6ef3dc00ebf5e484621",
-    "source-consumer-matrix.json": "fad7d1875320fd74079f852e3247c79a8d45a07c717fe7510a39870e2056f287",
+    "sales-market-review-error.schema.json": "b9f2315469a4edd19370f5b5009aa298454213b57158965f6d8a73f4ce22a156",
+    "sales-market-review-request.schema.json": "438865278f11f37cb89c2500d9f9edf8b99a9cdee3917e094a00b1d27a93aaf1",
+    "sales-market-review-response.schema.json": "7256537b970283a32e408da0c439c24b33a20dda22a81e53558876b9696b5273",
+    "source-consumer-matrix.json": "b33269233114a01e63a294066785465dd9476725c387d7d61377f2fef825052d",
     "upstream/stock-result-1.0.schema.json": "f2b6984bb37cca4333559e4e05b88312ecf511f578803adee51885c344e6ce00",
     "upstream/trend-result-1.1.schema.json": "7618fb459eb68f56bb12d2c5b171ff0a1fcd066a9ae987c2b4f9a3095d74dbef"
   },
   "evidence": {},
   "sources": {},
-  "recorded_at": "2026-11-14T11:54:35+00:00",
+  "recorded_at": "2026-11-15T06:39:23+00:00",
   "notes": [
     "Proposed baseline: no producer/consumer validation claimed. Run --freeze to record evidence."
   ]

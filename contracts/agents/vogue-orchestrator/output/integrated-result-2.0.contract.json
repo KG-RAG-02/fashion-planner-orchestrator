@@ -6,8 +6,8 @@
     "payload_schema_version": "integrated-result/2.0",
     "method": "copy",
     "source_repo": "KG-RAG-02/vogue-orchestrator",
-    "source_branch": "feat/merge-newP-salesM",
-    "source_commit": "b259b97d7523+uncommitted",
+    "source_branch": "ui-edit",
+    "source_commit": "1484224b3e49+uncommitted",
     "source_schema": "contracts/workflow/integrated-result.schema.json",
     "source_files": [
       {
@@ -16,7 +16,7 @@
       },
       {
         "path": "contracts/workflow/common.schema.json",
-        "sha256": "d4161c0d843ae63c85ea5681afdbbbb00d1fcb63654327c8bb5e2d85a4e5874a"
+        "sha256": "76f30ce0969edcdde6ddc736ea01788fc249d3016f8392eaa408f7230e6c0f28"
       },
       {
         "path": "contracts/workflow/upstream/trend-result-1.1.schema.json",
