@@ -252,6 +252,10 @@ def _configuration_problem(handler, exc, request_id=None):
 ID_PATTERN = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}')  # common.schema.json#/$defs/id
 
 
+# TrendQuery requested.gender.value (vocabulary GENDERS) -> the P06/P07 product-profile gender values.
+REQUESTED_GENDER = {'여': 'women', '남': 'men', '공용': 'unisex'}
+
+
 def dispatch(handler, value):
     from .server import structure_query_for_ui
     rid = None
@@ -286,6 +290,12 @@ def dispatch(handler, value):
                 category = categories[0].get('minor') or categories[0].get('major')
                 if category: context['category'] = category
             if context: planning['context'] = context
+            # The user's gender reached Trend and Stock only. P06 reads it from requested_attributes
+            # (name 'gender', value women/men/unisex, source 'user' -> user_requested), and P08 then
+            # forwards that user_requested profile value to P07 (p07_product_projection).
+            gender = REQUESTED_GENDER.get((trend.get('requested', {}).get('gender') or {}).get('value'))
+            if gender:
+                planning['requested_attributes'] = [dict(name='gender', value=gender, source='user')]
         response = workflow.run(request_id=rid, user_input=user, planning_request=planning, trend_query=trend)
         handler._json(response['http_status'], response['envelope'])
     except ConnectorConfigurationError as exc:
