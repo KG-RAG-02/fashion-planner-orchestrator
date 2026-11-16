@@ -754,7 +754,8 @@ C = {
 COLUMN_TONES = ('col_analysis', 'col_design', 'col_marketing')
 HEADER_H = 120   # banner height in design units
 BANNER_SLOGAN = 'Reframe the Everyday'  # fixed banner centre line on every poster
-BANNER_SUBTITLE = 'MERCHANDISING PROPOSAL'
+BANNER_SUBTITLE = '일상을 새로운 시선으로 MERCHANDISING PROPOSAL'
+COL3_SCALE = 1.2
 SWOT_CELLS = (('strengths', 'S · 강점', 'swot_s'), ('weaknesses', 'W · 약점', 'swot_w'),
               ('opportunities', 'O · 기회', 'swot_o'), ('threats', 'T · 위협', 'swot_t'))
 
@@ -1010,11 +1011,12 @@ COLUMNS = tuple((MARGIN + index * (COLUMN_W + GUTTER), COLUMN_W) for index in ra
 COLUMN_TITLES = ('Analysis', 'Design', 'Marketing')
 
 
-def _heading(c: _Canvas, x: float, y: float, w: float, title: str) -> float:
-    c.text(x, y, title, 'bold', 15, 'ink')
-    start = x + c.width(title, 'bold', 15) + 12
-    c.rect(start, y + 11, x + w - start, 1.2, 'ink2')
-    return y + 30
+def _heading(c: _Canvas, x: float, y: float, w: float, title: str, *, scale: float = 1.0) -> float:
+    s = 15 * scale
+    c.text(x, y, title, 'bold', s, 'ink')
+    start = x + c.width(title, 'bold', s) + 12
+    c.rect(start, y + 11 * scale, x + w - start, 1.2, 'ink2')
+    return y + 30 * scale
 
 
 def _paragraph(c: _Canvas, x: float, y: float, w: float, text: str, *, size: float = 11.5, lines: int = 6,
@@ -1026,22 +1028,27 @@ def _paragraph(c: _Canvas, x: float, y: float, w: float, text: str, *, size: flo
 
 
 def _bullets(c: _Canvas, x: float, y: float, w: float, items: Sequence[str], *, limit: int, lines: int = 3,
-             mark: str = 'dot') -> float:
+             mark: str = 'dot', scale: float = 1.0) -> float:
+    indent = 20 * scale
     for item in items[:limit]:
         if mark == 'warn':
-            c.rect(x, y + 2, 14, 14, 'amber_lt', 7)
-            c.text(x + 7 - c.width('!', 'bold', 8.5) / 2, y + 3, '!', 'bold', 8.5, 'amber')
+            r = 14 * scale
+            fs = 8.5 * scale
+            c.rect(x, y + 2, r, r, 'amber_lt', r / 2)
+            c.text(x + r / 2 - c.width('!', 'bold', fs) / 2, y + 3, '!', 'bold', fs, 'amber')
         else:
-            c.rect(x + 3, y + 7, 5, 5, 'ink', 3)
-        y = _paragraph(c, x + 20, y, w - 20, item, size=11, lines=lines) + 6
+            ds = 5 * scale
+            c.rect(x + 3 * scale, y + 7 * scale, ds, ds, 'ink', 3 * scale)
+        y = _paragraph(c, x + indent, y, w - indent, item, size=11 * scale, lines=lines) + 6 * scale
     if len(items) > limit:
-        c.text(x + 20, y, f'외 {len(items) - limit:,}건 — 전체는 실행 기록(JSON)에 있습니다', 'regular', 9.5, 'ink3')
-        y += 18
+        fs = 9.5 * scale
+        c.text(x + indent, y, f'외 {len(items) - limit:,}건 — 전체는 실행 기록(JSON)에 있습니다', 'regular', fs, 'ink3')
+        y += 18 * scale
     return y
 
 
-def _label(c: _Canvas, x: float, y: float, text: str) -> None:
-    c.text(x, y, text, 'display_bold', 9.5, 'ink3')
+def _label(c: _Canvas, x: float, y: float, text: str, *, scale: float = 1.0) -> None:
+    c.text(x, y, text, 'display_bold', 9.5 * scale, 'ink3')
 
 
 def _swatches(c: _Canvas, x: float, y: float, w: float, names: Sequence[str]) -> float:
@@ -1079,17 +1086,21 @@ def _textures(c: _Canvas, x: float, y: float, w: float, names: Sequence[str]) ->
     return y + row_h
 
 
-def _pills(c: _Canvas, x: float, y: float, w: float, items: Sequence[str], limit: int = 10) -> float:
+def _pills(c: _Canvas, x: float, y: float, w: float, items: Sequence[str], limit: int = 10, *,
+           scale: float = 1.0) -> float:
     px = x
+    s = 10 * scale
+    pad = 10 * scale
     for text in items[:limit]:
-        text = c.wrap(text, 'regular', 10, w - 20, 1)[0]
-        width = c.width(text, 'regular', 10) + 20
+        text = c.wrap(text, 'regular', s, w - 2 * pad, 1)[0]
+        width = c.width(text, 'regular', s) + 2 * pad
+        h = 20 * scale
         if px + width > x + w and px > x:
-            px, y = x, y + 26
-        c.rect(px, y, width, 20, 'accent_lt', 10)
-        c.text(px + 10, y + 3, text, 'regular', 10, 'accent')
+            px, y = x, y + 26 * scale
+        c.rect(px, y, width, h, 'accent_lt', h / 2)
+        c.text(px + pad, y + 3 * scale, text, 'regular', s, 'accent')
         px += width + 6
-    return y + 28
+    return y + 28 * scale
 
 
 def _photo(c: _Canvas, x: float, y: float, w: float, h: float, data: bytes | None, mode: str = 'cover',
@@ -1342,100 +1353,116 @@ def _design(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet, imag
 
 # --- Marketing ---------------------------------------------------------------------------------------
 
-def _promotions(c: _Canvas, x: float, y: float, w: float, swot: Mapping[str, Any] | None) -> float:
+def _promotions(c: _Canvas, x: float, y: float, w: float, swot: Mapping[str, Any] | None, *,
+                scale: float = 1.0) -> float:
     """Promotion ideas from the stage-06 LLM draft (swot.py): numbered title and one line each."""
-    y = _heading(c, x, y, w, '프로모션 아이디어')
+    y = _heading(c, x, y, w, '프로모션 아이디어', scale=scale)
     if not _mapping(swot).get('swot'):
-        return _paragraph(c, x, y, w, '프로모션 초안 없음 (LLM 미설정 또는 생성 실패)', size=10.5, lines=1, color='ink3') + 4
+        return _paragraph(c, x, y, w, '프로모션 초안 없음 (LLM 미설정 또는 생성 실패)', size=10.5 * scale, lines=1, color='ink3') + 4
     ideas = [_mapping(item) for item in _list(_mapping(swot.get('swot')).get('promotions'))]
     if not ideas:
-        return _paragraph(c, x, y, w, '근거가 부족해 제안된 프로모션 없음', size=10.5, lines=1, color='ink3') + 4
+        return _paragraph(c, x, y, w, '근거가 부족해 제안된 프로모션 없음', size=10.5 * scale, lines=1, color='ink3') + 4
+    badge = 18 * scale
+    indent = 28 * scale
     for index, idea in enumerate(ideas[:3]):
-        c.rect(x, y + 1, 18, 18, 'accent', 9)
+        c.rect(x, y + 1, badge, badge, 'accent', badge / 2)
         number = str(index + 1)
-        c.text(x + 9 - c.width(number, 'display_bold', 9.5) / 2, y + 3, number, 'display_bold', 9.5, 'paper')
-        c.text(x + 28, y, c.wrap(idea.get('title') or '', 'bold', 12, w - 28, 1)[0], 'bold', 12, 'ink')
-        y = _paragraph(c, x + 28, y + 21, w - 28, idea.get('text') or '', size=10.5, lines=3) + 8
-    return _paragraph(c, x, y, w, 'LLM 가설 · MD 검토 필요', size=9.5, lines=1, color='ink3')
+        ns = 9.5 * scale
+        c.text(x + badge / 2 - c.width(number, 'display_bold', ns) / 2, y + 3, number, 'display_bold', ns, 'paper')
+        ts = 12 * scale
+        c.text(x + indent, y, c.wrap(idea.get('title') or '', 'bold', ts, w - indent, 1)[0], 'bold', ts, 'ink')
+        y = _paragraph(c, x + indent, y + 21 * scale, w - indent, idea.get('text') or '', size=10.5 * scale, lines=3) + 8 * scale
+    return _paragraph(c, x, y, w, 'LLM 가설 · MD 검토 필요', size=9.5 * scale, lines=1, color='ink3')
 
 
-def _target(c: _Canvas, x: float, y: float, w: float, target: TargetView | None) -> float:
-    y = _heading(c, x, y, w, '타깃')
+def _target(c: _Canvas, x: float, y: float, w: float, target: TargetView | None, *,
+            scale: float = 1.0) -> float:
+    y = _heading(c, x, y, w, '타깃', scale=scale)
     if target is None or not (target.age or target.primary or target.summary):
         message = target.missing if target and target.missing else '타깃 분석 결과 없음'
-        return _paragraph(c, x, y, w, message, size=11, lines=2, color='ink3') + 14
+        return _paragraph(c, x, y, w, message, size=11 * scale, lines=2, color='ink3') + 14
     if target.age:
-        _label(c, x, y, 'AGE · 연령대')
-        c.text(x, y + 16, c.wrap(target.age, 'bold', 18, w, 1)[0], 'bold', 18, 'ink')
-        y += 44
+        _label(c, x, y, 'AGE · 연령대', scale=scale)
+        age_s = 18 * scale
+        c.text(x, y + 16 * scale, c.wrap(target.age, 'bold', age_s, w, 1)[0], 'bold', age_s, 'ink')
+        y += 44 * scale
         note = ' · '.join(text for text in (target.age_note, 'H&M 과거 구매 고객 기준 (연구용)') if text)
-        y = _paragraph(c, x, y, w, note, size=9.5, lines=2, color='ink3') + 8
+        y = _paragraph(c, x, y, w, note, size=9.5 * scale, lines=2, color='ink3') + 8
     if target.primary or target.summary:
-        lines = c.wrap(target.summary or '', 'regular', 11, w - 28, 6) if target.summary else []
-        primary = c.wrap(target.primary or '', 'bold', 12.5, w - 28, 2) if target.primary else []
-        box_h = 34 + len(primary) * 19 + len(lines) * 17 + (8 if lines and primary else 0)
+        sum_s = 11 * scale
+        pri_s = 12.5 * scale
+        sum_lead = 17 * scale
+        pri_lead = 19 * scale
+        pad = 14 * scale
+        lines = c.wrap(target.summary or '', 'regular', sum_s, w - 2 * pad, 6) if target.summary else []
+        primary = c.wrap(target.primary or '', 'bold', pri_s, w - 2 * pad, 2) if target.primary else []
+        box_h = 34 * scale + len(primary) * pri_lead + len(lines) * sum_lead + (8 * scale if lines and primary else 0)
         c.rect(x, y, w, box_h, 'card_grey')
-        _label(c, x + 14, y + 10, 'TARGET HYPOTHESIS · 가설')
-        ty = y + 28
+        _label(c, x + pad, y + 10 * scale, 'TARGET HYPOTHESIS · 가설', scale=scale)
+        ty = y + 28 * scale
         for line in primary:
-            c.text(x + 14, ty, line, 'bold', 12.5, 'ink')
-            ty += 19
+            c.text(x + pad, ty, line, 'bold', pri_s, 'ink')
+            ty += pri_lead
         if lines and primary:
-            ty += 8
+            ty += 8 * scale
         for line in lines:
-            c.text(x + 14, ty, line, 'regular', 11, 'ink2')
-            ty += 17
+            c.text(x + pad, ty, line, 'regular', sum_s, 'ink2')
+            ty += sum_lead
         y += box_h + 10
         if target.secondary:
-            _label(c, x, y, 'SECONDARY')
-            y = _pills(c, x, y + 18, w, target.secondary, limit=2)
+            _label(c, x, y, 'SECONDARY', scale=scale)
+            y = _pills(c, x, y + 18 * scale, w, target.secondary, limit=2, scale=scale)
         if target.occasions:
-            _label(c, x, y, 'OCCASION · 착용 상황')
-            y = _pills(c, x, y + 18, w, target.occasions, limit=4)
-        y = _paragraph(c, x, y, w, 'sales-market-agent LLM 가설 · 검증 필요', size=9.5, lines=1, color='ink3')
+            _label(c, x, y, 'OCCASION · 착용 상황', scale=scale)
+            y = _pills(c, x, y + 18 * scale, w, target.occasions, limit=4, scale=scale)
+        y = _paragraph(c, x, y, w, 'sales-market-agent LLM 가설 · 검증 필요', size=9.5 * scale, lines=1, color='ink3')
     return y + 14
 
 
 def _marketing(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet,
                swot: Mapping[str, Any] | None = None) -> float:
+    sc = COL3_SCALE
     sections = {section.section_id: section for section in sheet.board.sections}
     sales = sections['sales_market']
-    y = _target(c, x, y, w, sheet.target)
-    y = _heading(c, x, y, w, '판매·시장 분석')
+    y = _target(c, x, y, w, sheet.target, scale=sc)
+    y = _heading(c, x, y, w, '판매·시장 분석', scale=sc)
     findings = [claim.text for claim in sales.claims]
     if findings:
-        y = _bullets(c, x, y, w, findings, limit=5)
+        y = _bullets(c, x, y, w, findings, limit=5, scale=sc)
         for note in sales.notes[:2]:
-            y = _paragraph(c, x, y, w, '※ ' + note, size=9.5, lines=2, color='ink3') + 2
+            y = _paragraph(c, x, y, w, '※ ' + note, size=9.5 * sc, lines=2, color='ink3') + 2
     else:
-        y = _paragraph(c, x, y, w, sales.notes[0] if sales.notes else '판매·시장 분석 결과 없음', size=11, lines=3, color='ink3')
+        y = _paragraph(c, x, y, w, sales.notes[0] if sales.notes else '판매·시장 분석 결과 없음', size=11 * sc, lines=3, color='ink3')
     y += 12
-    y = _heading(c, x, y, w, '가격 전략')
+    y = _heading(c, x, y, w, '가격 전략', scale=sc)
     price = dict(sheet.price_rows).get('제안 판매가')
-    c.rect(x, y, w, 70, 'yellow_lt', 4, 'yellow')
-    _label(c, x + 14, y + 10, 'PRICE')
-    c.text(x + 14, y + 26, price or '미제공', 'bold', 20, 'ink' if price else 'ink3')
+    box_h = 70 * sc
+    c.rect(x, y, w, box_h, 'yellow_lt', 4, 'yellow')
+    _label(c, x + 14, y + 10 * sc, 'PRICE', scale=sc)
+    c.text(x + 14, y + 26 * sc, price or '미제공', 'bold', 20 * sc, 'ink' if price else 'ink3')
     sub = 'sales-market-agent 제안값 · MD 확인 필요' if price else '판매가 근거 없음 · MD 판단 필요'
-    c.text(x + w - 14 - c.width(sub, 'regular', 9.5), y + 34, sub, 'regular', 9.5, 'ink3')
-    y += 82
+    sub_s = 9.5 * sc
+    c.text(x + w - 14 - c.width(sub, 'regular', sub_s), y + 34 * sc, sub, 'regular', sub_s, 'ink3')
+    y += box_h + 12
     for label, value in [row for row in sheet.price_rows if row[0] != '제안 판매가']:
-        c.text(x, y + 2, label, 'regular', 11, 'ink2')
-        c.text(x + w - c.width(value, 'display_bold', 12.5), y, value, 'display_bold', 12.5, 'ink')
-        y += 24
+        ls, vs = 11 * sc, 12.5 * sc
+        c.text(x, y + 2, label, 'regular', ls, 'ink2')
+        c.text(x + w - c.width(value, 'display_bold', vs), y, value, 'display_bold', vs, 'ink')
+        y += 24 * sc
         c.rect(x, y - 4, w, 1, 'rule')
     decisions = [claim.text.partition(':')[0] for claim in sections['finance'].claims]
     if decisions:
-        _label(c, x, y + 4, 'MD DECISION')
-        y = _pills(c, x, y + 22, w, decisions)
-        c.text(x, y - 2, '위 항목은 MD가 결정합니다 (자동 산출하지 않음)', 'regular', 9.5, 'ink3')
+        _label(c, x, y + 4, 'MD DECISION', scale=sc)
+        y = _pills(c, x, y + 22 * sc, w, decisions, scale=sc)
+        c.text(x, y - 2, '위 항목은 MD가 결정합니다 (자동 산출하지 않음)', 'regular', 9.5 * sc, 'ink3')
         y += 20
-    y = _promotions(c, x, y + 12, w, swot)
+    y = _promotions(c, x, y + 12, w, swot, scale=sc)
     y += 12
-    y = _heading(c, x, y, w, 'MD 검토 포인트')
+    y = _heading(c, x, y, w, 'MD 검토 포인트', scale=sc)
     if sheet.review_items:
-        y = _bullets(c, x, y, w, sheet.review_items, limit=6, lines=3, mark='warn')
+        y = _bullets(c, x, y, w, sheet.review_items, limit=6, lines=3, mark='warn', scale=sc)
     else:
-        y = _paragraph(c, x, y, w, '추가 확인 질문 없음', size=11, lines=1, color='ink3')
+        y = _paragraph(c, x, y, w, '추가 확인 질문 없음', size=11 * sc, lines=1, color='ink3')
     return y
 
 
@@ -1446,8 +1473,13 @@ def _header(c: _Canvas, sheet: PlanningSheet) -> float:
     k = HEADER_H / 130  # the banner layout below is drawn on a 130-unit grid and scaled to HEADER_H
     c.rect(0, 0, W, HEADER_H, 'header')
     c.text(MARGIN + 5, 40.5 * k, 'VOGUE', 'display_bold', 34 * k, 'ink')  # vertically centred in the banner
-    c.text((W - c.width(BANNER_SLOGAN, 'display_heavy', 50 * k)) / 2, 14 * k, BANNER_SLOGAN, 'display_heavy', 50 * k, 'ink')
-    c.text((W - c.width(BANNER_SUBTITLE, 'display', 13 * k)) / 2, 88 * k, BANNER_SUBTITLE, 'display', 13 * k, 'ink2')
+    slogan_s = 50 * k
+    sub_s = 15.6 * k
+    gap = 20 * k
+    block_h = slogan_s + gap + sub_s
+    top_y = (HEADER_H - block_h) / 2
+    c.text((W - c.width(BANNER_SLOGAN, 'display_heavy', slogan_s)) / 2, top_y, BANNER_SLOGAN, 'display_heavy', slogan_s, 'ink')
+    c.text((W - c.width(BANNER_SUBTITLE, 'display', sub_s)) / 2, top_y + slogan_s + gap, BANNER_SUBTITLE, 'display', sub_s, 'ink2')
     created = sheet.started_at[:10] if isinstance(sheet.started_at, str) and len(sheet.started_at) >= 10 else '—'
     right = W - MARGIN - 6
     for index, (text, role, size, colour) in enumerate(((f'{board.season} · {board.category}', 'bold', 20.4 * k, 'ink'),
