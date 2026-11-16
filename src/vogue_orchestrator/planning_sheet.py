@@ -412,11 +412,58 @@ def _texts(value: Any) -> tuple[str, ...]:
     return tuple(text for text in (_scalar_text(item) for item in values) if text)
 
 
+DRAFT_CLAIM_KEYS = ('opportunity', 'product_definition', 'product_profile', 'attributes', 'concept')
+
+
+def draft_trend_citations(result: Mapping[str, Any]) -> dict[str, int]:
+    """Article id -> how often new-product-agent's Draft claims cite it (evidence ids 'trend:<article>:...').
+
+    Only the claims that define the proposed product count (DRAFT_CLAIM_KEYS), not the Draft's full evidence list.
+    """
+    raw = _raw(result, 'planning_draft')
+    draft = _mapping(_mapping(raw.get('result')).get('draft')) if raw else {}
+    counts: dict[str, int] = {}
+
+    def visit(value: Any) -> None:
+        if isinstance(value, Mapping):
+            for key, child in value.items():
+                if key == 'evidence_ids':
+                    for evidence_id in _list(child):
+                        parts = evidence_id.split(':') if isinstance(evidence_id, str) else []
+                        if len(parts) > 2 and parts[0] == 'trend' and parts[1]:
+                            counts[parts[1]] = counts.get(parts[1], 0) + 1
+                else:
+                    visit(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                visit(child)
+
+    for key in DRAFT_CLAIM_KEYS:
+        visit(draft.get(key))
+    return counts
+
+
 def focus_trend(result: Mapping[str, Any]) -> Mapping[str, Any]:
-    """The first style of the Trend result: the one the one-product proposal is about."""
+    """The Trend style the one-product proposal is about.
+
+    The Trend result has no defined order (trend-analysis-agent R-4), so the focus is the style whose article
+    new-product-agent's Draft cites most; the first style when the Draft cites none (or on a tie).
+    """
     raw = _raw(result, 'trend')
-    trends = _list(_mapping(raw.get('result')).get('trends')) if raw else []
-    return _mapping(trends[0]) if trends else {}
+    trends = [_mapping(trend) for trend in _list(_mapping(raw.get('result')).get('trends'))] if raw else []
+    if not trends:
+        return {}
+    citations = draft_trend_citations(result)
+
+    def article(trend: Mapping[str, Any]) -> str | None:
+        style = _mapping(trend.get('style'))
+        if style.get('article_id') is not None:
+            return str(style['article_id'])
+        style_id = style.get('id')
+        return style_id.split('-')[0] if isinstance(style_id, str) and style_id else None
+
+    best = max(range(len(trends)), key=lambda index: (citations.get(article(trends[index]) or '', 0), -index))
+    return trends[best]
 
 
 def trend_image_urls(result: Mapping[str, Any], limit: int = 3) -> tuple[str, ...]:
