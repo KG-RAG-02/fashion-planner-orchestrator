@@ -20,7 +20,9 @@ services:
   new-product:
     environment:
       VOGUE_DRAFT_IMAGE_PROVIDER: openai
-      OPENAI_API_KEY: ${VOGUE_OPENAI_API_KEY:?VOGUE_OPENAI_API_KEY missing in the env file}
+      # P06 main (src/vogue_npp/settings.py) reads only LLM_API_KEY, for its two images and,
+      # since 57877db, for its LLM concept text (default model gpt-6-luna).
+      LLM_API_KEY: ${VOGUE_OPENAI_API_KEY:?VOGUE_OPENAI_API_KEY missing in the env file}
       # Blank means P06's default image model (gpt-image-2.5-sunburst).
       VOGUE_DRAFT_IMAGE_MODEL: ${VOGUE_IMAGE_MODEL:-}
     networks: [backend, egress]

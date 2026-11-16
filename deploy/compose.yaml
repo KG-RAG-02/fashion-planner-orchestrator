@@ -60,7 +60,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
-        mkdir -p /v/p08/workflow/blobs /v/p07/reviews /v/p07/hm-cache /v/p06/p06-artifacts/images &&
+        mkdir -p /v/p08/workflow/blobs /v/p07/reviews /v/p07/hm-cache /v/p07/duckdb-tmp /v/p06/p06-artifacts/images &&
         chown -R 10001:10001 /v/p08 /v/p07 /v/p06 &&
         chmod 0750 /v/p08 /v/p07 /v/p06 && echo volume-init-ok
     volumes:
@@ -128,6 +128,13 @@ services:
         volume: { subpath: workflow/blobs }
     networks: [backend]
     mem_limit: 512m
+    # The P06 image has no HEALTHCHECK; in private mode /api/health also needs the bearer token.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os,sys,urllib.request as u; r=u.Request('http://127.0.0.1:8767/api/health', headers={'Authorization': 'Bearer ' + os.environ['VOGUE_AGENT_SERVICE_BEARER_TOKEN']}); sys.exit(0 if u.build_opener(u.ProxyHandler({})).open(r, timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     depends_on:
       volume-init: { condition: service_completed_successfully }
 
@@ -150,6 +157,12 @@ services:
         target: /artifacts/p08/blobs
         read_only: true
         volume: { subpath: workflow/blobs }
+      # DuckDB spills to "<cwd>/.tmp" (= /app/.tmp) when an R2 aggregate exceeds its memory limit; the
+      # read-only root filesystem refuses that directory (IOException), so give it a writable disk path.
+      - type: volume
+        source: p07_state
+        target: /app/.tmp
+        volume: { subpath: duckdb-tmp }
     networks: [backend]
     mem_limit: 1536m
     healthcheck:
