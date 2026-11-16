@@ -5,18 +5,17 @@
 ```text
 Browser → P08 UI/API
              └─ P08 순차 호출: Trend → Stock → P06 /runs
-                                → P06 /sales-market-reviews bridge
                                 → P07 /reviews
                                 → 통합 → Planning Sheet
 ```
 
-Agent 간 요청은 P08이 순차 전달합니다. P06 bridge는 P07을 직접 호출하지 않습니다. 외부에 포트를 공개하는 서비스는 P08 UI뿐이며 Agent는 내부 backend 네트워크에서 통신합니다. 상품 이미지와 착장 이미지는 P06이 만들고, P08은 결과를 사용해 Planning Sheet PNG를 합성합니다.
+Agent 간 요청은 P08이 순차 전달합니다. P07 요청은 P08이 P06 Draft에서 직접 만듭니다. 외부에 포트를 공개하는 서비스는 P08 UI뿐이며 Agent는 내부 backend 네트워크에서 통신합니다. 상품 이미지와 착장 이미지는 P06이 만들고, P08은 결과를 사용해 Planning Sheet PNG를 합성합니다.
 
 ## 현재 연결 상태
 
 P08 Compose는 P07에 `GET /api/health` healthcheck를 설정하고 orchestrator가 P07 `service_healthy` 상태를 기다리게 합니다. 그러나 확인한 P07 `main`의 Dockerfile 기본 명령은 `python -m market_research_agent.runtime`이며 이 모듈은 HTTP 서버를 시작하지 않고 대기합니다. P07 HTTP handler도 loopback 이외의 bind를 거부합니다. 따라서 P07 담당자가 Docker 서비스 진입점과 내부 bind를 지원하기 전에는 전체 Compose workflow가 준비되지 않습니다.
 
-P07 담당자 변경을 받은 뒤 서비스 진입점, `0.0.0.0:8766` bind, bearer 인증, healthcheck를 확인하고 아래 명령을 사용하세요. P07 API 계약은 `POST /v1/agents/sales-market-agent/reviews`이며 요청은 `vogue-sales-market-review/0.2-proposal`입니다.
+P07 담당자 변경을 받은 뒤 서비스 진입점, `0.0.0.0:8766` bind, bearer 인증, healthcheck를 확인하고 아래 명령을 사용하세요. P07 API 계약은 `POST /v1/agents/sales-market-agent/reviews`이며 요청은 `vogue-sales-market-review/0.3-proposal`입니다.
 
 ## 프로필
 

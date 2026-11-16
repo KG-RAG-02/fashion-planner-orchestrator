@@ -113,7 +113,7 @@ export function trendCards(trendResult) {
       seasons: (style.seasons ?? []).map(seasonLabel).filter(Boolean).join(' · '),
       items: unique(items.map((item) => item.name)),
       quotes,
-      // Vogue example images are links only (G-10): never downloaded or embedded.
+      // The UI shows Vogue example images as links; only the planning poster (stage 06) downloads and embeds them.
       exampleLinks: (style.example_images ?? []).slice(0, 5)
         .map((image) => ({ url: safeUrl(image.url), basis: image.basis ?? '' }))
         .filter((image) => image.url),
@@ -248,7 +248,11 @@ export function reviewView(reviewResult, callRequest = null, callRequestArtifact
     .map(([key, label]) => ({ key, label, value: result[key] }));
   const product = callRequest?.input?.product && typeof callRequest.input.product === 'object' && !Array.isArray(callRequest.input.product)
     ? callRequest.input.product : null;
-  const productEvidence = p06ProductProvenance(p06Result, product);
+  // Under 0.3 P08 sends each field's provenance with the request (input.product_evidence); a run whose
+  // request carries none shows the provenance read from the P06 Draft instead.
+  const sentEvidence = callRequest?.input?.product_evidence && typeof callRequest.input.product_evidence === 'object'
+    && !Array.isArray(callRequest.input.product_evidence) ? callRequest.input.product_evidence : null;
+  const productEvidence = sentEvidence ?? p06ProductProvenance(p06Result, product);
   const fieldLabels = Object.freeze({
     category: '카테고리', product_type: '상품 종류', gender: '성별', season: '시즌', material: '소재',
   });
@@ -277,6 +281,7 @@ export function reviewView(reviewResult, callRequest = null, callRequestArtifact
     inputRequestId: callRequest?.request_id ?? callRequest?.input?.request_id ?? null,
     inputFields,
     inputEvidenceState: callRequest ? (Object.keys(productEvidence).length ? 'loaded' : 'missing') : callRequestState,
+    inputEvidenceSent: Boolean(sentEvidence),
     callRequestArtifactId,
     errors: Array.isArray(result.errors) ? result.errors : [],
     missingData: Array.isArray(result.missing_data) ? result.missing_data : [],

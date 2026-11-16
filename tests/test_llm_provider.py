@@ -106,6 +106,13 @@ class CallTests(unittest.TestCase):
                 llm.build_draft_provider(settings(provider), client=client)(BUNDLE)
                 self.assertNotIn("temperature", client.calls[-1])
 
+    def test_text_call_uses_the_same_settings_and_names_its_model(self):
+        client = FakeOpenAI()
+        call = llm.build_text_call(settings("openai"), client=client)
+        self.assertEqual(call("SYS", "USR"), '{"a": 1}')
+        self.assertEqual(call.model, "m")
+        self.assertEqual(client.calls[0]["messages"], [{"role": "system", "content": "SYS"}, {"role": "user", "content": "USR"}])
+
     def test_anthropic_call_sends_system_and_user_and_returns_the_text_blocks(self):
         client = FakeAnthropic()
         text = llm.build_draft_provider(settings("anthropic"), client=client)(BUNDLE)

@@ -16,7 +16,7 @@ FIXTURES = Path(__file__).parent / 'fixtures/workflow'
 
 def native_p07_review(request_id, product, status='ok'):
     return {
-        'contract_version': 'vogue-sales-market-review/0.2-proposal',
+        'contract_version': 'vogue-sales-market-review/0.3-proposal',
         'request_id': request_id,
         'producer': {'agent_id': 'sales-market-agent', 'schema_version': 'sales-market-review/0.1-internal'},
         'status': status,
@@ -137,32 +137,25 @@ class WorkflowTests(unittest.TestCase):
             calls['p07'] = copy.deepcopy(payload)
             product = payload['input']['product']
             return WireResponse(json.dumps(native_p07_review(self.rid, product)).encode())
-        def p06_review_bridge(payload):
-            calls['p06_review_bridge'] = copy.deepcopy(payload)
-            product = calls['p06_product']
-            response = {'contract_version':'vogue-sales-market-review/0.2-proposal','request_id':self.rid,
-                        'input':{'request_id':self.rid,'product':product}}
-            return WireResponse(json.dumps(response).encode())
         self.workflow.adapters['planning_draft'] = p06
         self.workflow.adapters['sales_market_review'] = p07
-        self.workflow.review_projection = p06_review_bridge
         self.workflow.image = None
         result = self.run_flow()['envelope']
         self.assertEqual(result['contract_version'], 'vogue-workflow/0.2')
         self.assertEqual(calls['p06']['contract_version'], 'vogue-handoff/0.3')
         self.assertEqual(set(calls['p06']['input']), {'planning_request','trend_result','inventory_product_result'})
-        self.assertEqual(calls['p06_review_bridge']['contract_version'], 'vogue-sales-market-review/0.1-proposal')
-        self.assertEqual(set(calls['p06_review_bridge']['input']), {'request_id','planning_draft'})
-        self.assertEqual(calls['p06_review_bridge']['input']['planning_draft'], result['result']['sources']['planning_draft']['raw_response']['result'])
-        self.assertEqual(calls.get('p07', {}).get('contract_version'), 'vogue-sales-market-review/0.2-proposal', result)
-        self.assertEqual(set(calls['p07']['input']), {'request_id', 'product'})
+        self.assertEqual(calls.get('p07', {}).get('contract_version'), 'vogue-sales-market-review/0.3-proposal', result)
+        self.assertEqual(set(calls['p07']['input']), {'request_id', 'product', 'product_evidence'})
         self.assertEqual(calls['p07']['input']['product'], {'category':'Outerwear','product_type':'Jacket','gender':'women','season':'winter','material':'wool'})
+        self.assertEqual(calls['p07']['input']['product_evidence'], {
+            key: {'kind': 'user_requested', 'source_ref': f'p06.draft.product_profile.{key}', 'evidence_ids': []}
+            for key in ('category', 'product_type', 'gender', 'season', 'material')})
         self.assertEqual(result['result']['sources']['planning_draft']['raw_response']['result']['schema_version'], '1.0')
         self.assertEqual(result['result']['sources']['sales_market_review']['raw_response']['result']['schema_version'], 'sales-market-review/0.1-internal')
         self.assertTrue(any('does not echo an immutable' in item for item in result['result']['integration']['limitations']))
 
     def test_p07_http_error_code_is_preserved_as_a_fatal_stage_error(self):
-        error = {'contract_version': 'vogue-sales-market-review/0.2-proposal', 'request_id': self.rid,
+        error = {'contract_version': 'vogue-sales-market-review/0.3-proposal', 'request_id': self.rid,
                  'error': {'code': 'INVALID_INPUT', 'message': 'Unsupported product field.'}}
         self.workflow.adapters['sales_market_review'] = lambda _payload: WireResponse(
             json.dumps(error).encode(), status=422)
@@ -171,28 +164,32 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result['result']['errors'][-1]['code'], 'INVALID_INPUT')
         self.assertTrue(result['result']['errors'][-1]['fatal'])
 
-    def test_p06_review_bridge_projection_must_match_the_retained_draft(self):
+    def test_p07_receives_only_sent_fields_with_their_p06_provenance(self):
         calls = []
-        product = {'category':'Outerwear'}
         profile = {'category':{'value':'Outerwear','kind':'user_requested','evidence_ids':[]},
-                   **{key:{'value':None,'kind':'unknown','evidence_ids':[]} for key in ('product_type','gender','season','material')}}
-        draft_result = {'schema_version':'1.0','request_id':self.rid,'status':'partial','evidence_ids':[],
+                   'material':{'value':'wool blend','kind':'evidence_observation','evidence_ids':['trend:e1','trend:e1']},
+                   'season':{'value':'winter','kind':'proposal','evidence_ids':[]},
+                   **{key:{'value':None,'kind':'unknown','evidence_ids':[]} for key in ('product_type','gender')}}
+        draft_result = {'schema_version':'1.0','request_id':self.rid,'status':'partial','evidence_ids':['trend:e1'],
                         'draft':{'category':'Outerwear','product_profile':profile},'input_evidence':{},'limitations':[],'errors':[]}
         self.workflow.adapters['planning_draft'] = lambda _payload: WireResponse(json.dumps({
             'contract_version':'vogue-handoff/0.3','request_id':self.rid,
             'producer':{'agent_id':'new-product-agent','schema_version':'1.0'},'status':'partial','result':draft_result}).encode())
-        def bridge(_payload):
-            return WireResponse(json.dumps({'contract_version':'vogue-sales-market-review/0.2-proposal',
-                'request_id':self.rid,'input':{'request_id':self.rid,'product':{'category':'tampered'}}}).encode())
-        def p07(_payload):
-            calls.append('p07')
-            return WireResponse(json.dumps(native_p07_review(self.rid, {'category':'tampered'})).encode())
-        self.workflow.review_projection = bridge
+        def p07(payload):
+            calls.append(copy.deepcopy(payload))
+            return WireResponse(json.dumps(native_p07_review(self.rid, payload['input']['product'])).encode())
         self.workflow.adapters['sales_market_review'] = p07
+        self.workflow.image = None
         result = self.run_flow()['envelope']
-        self.assertEqual(result['status'], 'error')
-        self.assertEqual(result['result']['errors'][-1]['code'], 'CONTRACT_VIOLATION')
-        self.assertEqual(calls, [])
+        self.assertNotEqual(result['status'], 'error', result['result']['errors'])
+        self.assertEqual(calls[0]['input'], {
+            'request_id': self.rid,
+            'product': {'category': 'Outerwear', 'material': 'wool blend'},  # a proposal-kind season is not sent
+            'product_evidence': {
+                'category': {'kind': 'user_requested', 'source_ref': 'p06.draft.product_profile.category', 'evidence_ids': []},
+                'material': {'kind': 'evidence_observation', 'source_ref': 'p06.draft.product_profile.material',
+                             'evidence_ids': ['trend:e1']}}})
+        self.contract.semantic(result, self.rid, self.store)
 
     def test_user_category_season_and_partial_peer_results_are_preserved(self):
         scenario = json.loads((FIXTURES/'p06-p07-partial-handoff.json').read_bytes())
@@ -642,13 +639,13 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
     def reader(self, node):
         return self.blobs[node['sha256']]
 
-    def run_flow(self, reader=True):
+    def run_flow(self, reader=True, trend_photos=None, image=None, swot=None):
         from unittest.mock import patch
         from vogue_orchestrator.workflow_http import planning_sheet_image
         workflow = Workflow(trend=lambda p: self.call('trend', p), stock=lambda p: self.call('stock', p),
                             draft=lambda p: self.call('planning_draft', p), review=lambda p: self.call('sales_market_review', p),
-                            image=planning_sheet_image, store=self.store, contract=self.contract,
-                            artifact_reader=self.reader if reader else None)
+                            image=image or planning_sheet_image, store=self.store, contract=self.contract,
+                            artifact_reader=self.reader if reader else None, trend_photos=trend_photos, swot=swot)
         request = self.sample['input']
         with patch.dict(os.environ, {'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}):
             return workflow.run(request_id=self.rid, user_input=request['user_input'], planning_request=request['planning_request'],
@@ -681,6 +678,63 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
         body = result['envelope']['result']
         self.assertEqual((result['envelope']['status'], body['final_image']['status']), ('partial', 'generated'))
         self.assertEqual(body['stages'][2]['status'], 'partial')
+
+    def test_stage_06_hands_the_stored_trend_photos_to_the_sheet(self):
+        from vogue_orchestrator.workflow_http import planning_sheet_image
+        seen, hook_calls = [], []
+
+        def photos(rid, envelope):
+            hook_calls.append((rid, envelope['result']['request_id']))
+            return [(b'photo-bytes', 'https://img.vogue.co.kr/a.jpg')]
+
+        def image(payload):
+            seen.append(payload['trend_photos'])
+            return planning_sheet_image(dict(payload, trend_photos=()))
+
+        result = self.run_flow(trend_photos=photos, image=image)
+        self.assertEqual(result['envelope']['status'], 'ok', result['envelope']['result']['errors'])
+        self.assertEqual(hook_calls, [(self.rid, self.rid)])
+        self.assertEqual(seen, [[(b'photo-bytes', 'https://img.vogue.co.kr/a.jpg')]])
+
+    def test_stage_06_hands_the_swot_draft_to_the_sheet(self):
+        from vogue_orchestrator.workflow_http import planning_sheet_image
+        seen = []
+
+        def image(payload):
+            seen.append(payload['swot'])
+            return planning_sheet_image(dict(payload, swot=None))
+
+        record = {'swot': {'strengths': [], 'weaknesses': [], 'opportunities': [], 'threats': []}}
+        result = self.run_flow(image=image, swot=lambda rid, envelope: record)
+        self.assertEqual((result['envelope']['status'], seen), ('ok', [record]))
+
+    def test_a_failing_swot_hook_leaves_the_sheet_without_swot(self):
+        def broken(rid, envelope):
+            raise RuntimeError('model down')
+
+        result = self.run_flow(swot=broken)
+        self.assertEqual((result['envelope']['status'], result['envelope']['result']['final_image']['status']), ('ok', 'generated'))
+
+    def test_a_failing_photo_hook_leaves_the_sheet_without_photos(self):
+        def photos(rid, envelope):
+            raise OSError('network down')
+
+        result = self.run_flow(trend_photos=photos)
+        body = result['envelope']['result']
+        self.assertEqual((result['envelope']['status'], body['final_image']['status']), ('ok', 'generated'))
+
+    def test_a_crash_while_waiting_for_swot_does_not_block_the_retried_sheet(self):
+        class Crash(BaseException):  # stands in for the process dying mid-call
+            pass
+
+        def dying(rid, envelope):
+            raise Crash()
+
+        with self.assertRaises(Crash):
+            self.run_flow(swot=dying)
+        result = self.run_flow()  # the retry composes the sheet; no 'started' marker was left behind
+        image = result['envelope']['result']['final_image']
+        self.assertEqual((image['status'], image['reason']), ('generated', None))
 
     def test_p06_visuals_without_a_reader_stop_with_artifact_reader_required(self):
         result = self.run_flow(reader=False)

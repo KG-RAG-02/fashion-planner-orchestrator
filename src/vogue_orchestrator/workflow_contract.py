@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 from pathlib import Path
 from .workflow_store import digest, strict_json
@@ -14,8 +13,7 @@ DEFAULT_CONTRACT_PACKAGE = 'workflow-contract/0.5.0'
 VERSION = 'vogue-workflow/0.2'
 HANDOFF_VERSION = 'vogue-handoff/0.1'
 P06_HANDOFF_VERSION = 'vogue-handoff/0.3'
-P06_REVIEW_BRIDGE_VERSION = 'vogue-sales-market-review/0.1-proposal'
-P07_REVIEW_VERSION = 'vogue-sales-market-review/0.2-proposal'
+P07_REVIEW_VERSION = 'vogue-sales-market-review/0.3-proposal'
 STAGES = ('trend', 'stock', 'planning_draft', 'sales_market_review', 'integration', 'final_image')
 # planning-draft-request input.mode (0.2.0): draft_with_visuals asks P06 for the product and worn (outfit) images.
 DRAFT_MODES = ('draft_only', 'draft_with_visuals')
@@ -34,8 +32,17 @@ def require(condition, code):
         raise ContractViolation(code)
 
 
+def p07_review_input(draft, request_id):
+    """The P07 0.3 review input: the allowlisted product fields and, for each, its provenance from P06's profile."""
+    product, evidence = p07_product_projection(draft)
+    return {'request_id': request_id, 'product': product, 'product_evidence': evidence}
+
+
 def p07_product_projection(draft):
-    """Mirror P06 main's validated product projection before accepting its P07 request."""
+    """The allowlisted product fields P07 receives, read from P06's validated draft.product_profile, and each
+    field's provenance (kind, source_ref, evidence_ids).
+
+    Only values P06 marked user_requested or evidence_observation are sent."""
     require(isinstance(draft, dict), 'P06_DRAFT_REQUIRED')
     draft_body = draft.get('draft') if isinstance(draft.get('draft'), dict) else None
     require(draft_body is not None, 'P06_DRAFT_REQUIRED')
@@ -58,8 +65,11 @@ def p07_product_projection(draft):
         if value is None or kind not in {'user_requested', 'evidence_observation'}:
             return None
         require(isinstance(value, str) and bool(value.strip()), 'P06_PRODUCT_CLAIM_INVALID')
+        evidence[field] = {'kind': kind, 'source_ref': f'p06.draft.product_profile.{field}',
+                           'evidence_ids': list(dict.fromkeys(evidence_ids))}
         return value.strip()
 
+    evidence = {}
     product = {'category': profile_value('category')}
     require(product['category'] and product['category'] == draft_body.get('category'), 'P06_PRODUCT_CATEGORY_REQUIRED')
     for key in ('product_type', 'gender', 'season', 'material'):
@@ -68,7 +78,9 @@ def p07_product_projection(draft):
             require(value in {'women', 'men', 'unisex', 'unknown'}, 'P06_PRODUCT_GENDER_INVALID')
         if value:
             product[key] = value
-    return product
+        else:
+            evidence.pop(key, None)
+    return product, evidence
 
 
 def walk(value):
@@ -394,8 +406,7 @@ class WorkflowContract:
                 call = strict_json(store.verify(review['call_request_artifact']))
                 require(call.get('contract_version') == P07_REVIEW_VERSION and call.get('request_id') == body['request_id'], 'P07_CALL_ENVELOPE_INVALID')
                 draft_value = draft['raw_response']['result']
-                expected_product = p07_product_projection(draft_value)
-                require(call.get('input') == {'request_id':body['request_id'],'product':expected_product}, 'P07_PRODUCT_PROJECTION_MISMATCH')
+                require(call.get('input') == p07_review_input(draft_value, body['request_id']), 'P07_PRODUCT_PROJECTION_MISMATCH')
         if sources['trend'] and sources['trend']['raw_response']['status'] == 'no_results':
             require(body['status'] == 'no_results', 'TREND_NO_RESULTS_HIDDEN')
         if draft and draft['raw_response']['status'] == 'no_results':

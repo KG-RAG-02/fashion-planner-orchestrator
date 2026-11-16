@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import ipaddress
 import math
-import os
 import re
 from typing import Mapping
 from urllib.parse import urlsplit

@@ -39,7 +39,8 @@ class BlankSettingTests(unittest.TestCase):
         base = dict(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1', VOGUE_WORKFLOW_STORE_DIR=store_dir,
                     VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS='', VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS='  ',
                     VOGUE_PEER_ARTIFACT_ROOT=' ', VOGUE_WORKFLOW_IMAGE_PROVIDER=' ', VOGUE_WORKFLOW_IMAGES_ENABLED='1',
-                    OPENAI_API_KEY='  ', VOGUE_AGENT_SERVICE_BEARER_TOKEN=' ', **AGENTS)
+                    OPENAI_API_KEY='  ', LLM_MODEL=' ', LLM_API_KEY=' ', VOGUE_TREND_PHOTO_HOSTS=' ',
+                    VOGUE_AGENT_SERVICE_BEARER_TOKEN='test-token', **AGENTS)
         with environment(**base), patch.object(workflow_http, 'post_wire', return_value='sent') as wire:
             workflow = workflow_http.build_workflow()
             workflow.adapters['trend']({})
@@ -47,8 +48,10 @@ class BlankSettingTests(unittest.TestCase):
             workflow.adapters['stock']({})
         self.assertIsNone(workflow.artifact_reader)
         self.assertIs(workflow.image, workflow_http.planning_sheet_image)  # the default stage 06 provider
+        self.assertEqual(workflow.trend_photos.hosts, ('vogue.co.kr',))  # blank hosts mean the default allowlist
+        self.assertIsNone(workflow.swot)  # blank LLM settings mean no SWOT draft
         self.assertEqual(workflow.draft_mode, 'draft_with_visuals')
-        self.assertEqual(wire.call_args_list[0].args, ('http://127.0.0.1:9/v1/agents/trend-analysis-agent/runs', {}, None))
+        self.assertEqual(wire.call_args_list[0].args, ('http://127.0.0.1:9/v1/agents/trend-analysis-agent/runs', {}, 'test-token'))
         self.assertEqual(wire.call_args_list[0].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))
         # P06 makes its two images inside the Draft call: that read waits up to 600 s.
         self.assertEqual(wire.call_args_list[1].kwargs, dict(connect_timeout=3.0, read_timeout=600.0))
@@ -58,9 +61,8 @@ class BlankSettingTests(unittest.TestCase):
                 patch.object(workflow_http, 'post_wire', return_value='sent') as wire:
             workflow_http.build_workflow().adapters['stock']({})
         self.assertEqual(wire.call_args.kwargs, dict(connect_timeout=3.0, read_timeout=120.0))
-        https = {k: 'https://agents.example.invalid' for k in AGENTS}
-        with environment(**dict(base, VOGUE_AGENT_HTTP_DEV_MODE='', **https)), \
-                self.assertRaisesRegex(ConnectorConfigurationError, 'Bearer token is required'):
+        with environment(**dict(base, VOGUE_AGENT_SERVICE_BEARER_TOKEN=' ')), \
+                self.assertRaisesRegex(ConnectorConfigurationError, 'VOGUE_AGENT_SERVICE_BEARER_TOKEN is required'):
             workflow_http.build_workflow()  # a blank token is no token
 
     def test_blank_store_and_peer_roots_mean_default_and_unset(self):

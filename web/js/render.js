@@ -212,15 +212,15 @@ export function renderReview(section, view) {
           : h('span', { class: 'small muted' }, field.kind === 'user_requested' ? '연결된 연구 Evidence ID 없음' : 'Evidence ID 없음'))));
       inputBlock = h('details', { class: 'review-input-card', open: true },
       h('summary', {}, `P07에 전달한 입력 · ${view.inputContractVersion ?? '계약 미확인'}`),
-        h('p', { class: 'small muted review-input-meta' }, `요청 ID ${view.inputRequestId ?? '—'} · 출처 표시는 P06 Draft 기준이며 P07 요청에는 전송되지 않았습니다.`),
+        h('p', { class: 'small muted review-input-meta' }, `요청 ID ${view.inputRequestId ?? '—'} · ${view.inputEvidenceSent ? '출처 표시는 P07 요청에 함께 보낸 product_evidence입니다.' : '이 실행의 P07 요청에는 product_evidence가 없어 출처는 P06 Draft 기준으로 표시합니다.'}`),
         h('div', { class: 'table-scroll' }, h('table', { class: 'metric-table review-input-table' },
           h('thead', {}, h('tr', {}, ['항목', '전달값', '출처 종류 · 경로', 'Evidence ID'].map((label) => h('th', { scope: 'col' }, label)))),
           h('tbody', {}, rows))),
         view.callRequestArtifactId ? h('a', { class: 'link small', href: artifactUrl(view.callRequestArtifactId), target: '_blank', rel: 'noopener' }, 'P07 요청 원문 JSON 열기') : null);
     } else if (view.inputEvidenceState === 'missing') {
       inputBlock = h('div', { class: 'review-input-card' },
-        h('strong', {}, 'P07 요청은 상품값의 출처 메타데이터를 받지 않습니다.'),
-        h('p', { class: 'small muted' }, 'P07 0.2 계약에는 product_evidence 필드가 없습니다. 상품 출처는 P06 Draft의 정보를 표시합니다.'));
+        h('strong', {}, '상품값의 출처 정보가 없습니다.'),
+        h('p', { class: 'small muted' }, '이 실행의 P07 요청에 product_evidence가 없고, P06 Draft에서도 전달값과 일치하는 출처를 찾지 못했습니다.'));
     } else if (view.callRequestArtifactId) {
       inputBlock = h('div', { class: 'review-input-card' },
         h('p', { class: 'small muted' }, 'P07 요청 원문을 불러오지 못했습니다.'),

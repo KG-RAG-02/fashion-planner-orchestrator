@@ -8,8 +8,8 @@ import http.client
 import json
 import logging
 import time
-from .workflow_contract import (VERSION, HANDOFF_VERSION, P06_HANDOFF_VERSION, P06_REVIEW_BRIDGE_VERSION, P07_REVIEW_VERSION,
-                                STAGES, DRAFT_MODES, p07_product_projection, require, walk)
+from .workflow_contract import (VERSION, HANDOFF_VERSION, P06_HANDOFF_VERSION, P07_REVIEW_VERSION,
+                                STAGES, DRAFT_MODES, p07_review_input, require, walk)
 from .workflow_store import ArtifactError, RESOLVER_CODES, canonical, digest, strict_json, checked_image
 
 # Namespaces whose artifacts P08 imports through a reader (conventions section 8): peer review artifacts.
@@ -75,14 +75,17 @@ def stage_failure(exc, artifact=None):
 class Workflow:
     """Injected producers return actual WireResponse bytes. No implicit fallbacks."""
     def __init__(self, *, trend, stock, draft, review, image, store, contract, artifact_reader=None, limitations=(),
-                 draft_mode='draft_with_visuals', review_projection=None):
+                 draft_mode='draft_with_visuals', trend_photos=None, swot=None):
         require(draft_mode in DRAFT_MODES, 'DRAFT_MODE_INVALID')
         self.adapters = dict(trend=trend, stock=stock, planning_draft=draft, sales_market_review=review)
         # P06 handoff/0.3 currently returns the native draft without P08 image references.
         self.draft_mode = draft_mode
         self.image, self.store, self.contract = image, store, contract
         self.artifact_reader = artifact_reader
-        self.review_projection = review_projection
+        # Stage 06 hook (trend_photos.TrendPhotos): the Trend article photos shown on the planning sheet.
+        self.trend_photos = trend_photos
+        # Stage 06 hook (swot.SwotWriter): the LLM SWOT draft shown on the planning sheet.
+        self.swot = swot
         # Run-level limitations decided by the caller (e.g. a development run on a proposed contract).
         self.limitations = tuple(limitations)
 
@@ -108,66 +111,6 @@ class Workflow:
     def _key(self, rid, stage, payload, attempt='initial'):
         return digest(dict(request_id=rid, stage=stage, input_sha256=digest(payload), contract_version=VERSION,
                            contract_sha256=self.contract.profile_sha256, attempt=attempt))
-
-    def _project_review_with_p06(self, request, expected):
-        started = time.monotonic()
-        wire_elapsed_ms, artifact, attempted = None, None, False
-        try:
-            require(len(canonical(request)) <= 1_000_000, 'P06_REVIEW_BRIDGE_REQUEST_TOO_LARGE')
-            attempted = True
-            wire = self.review_projection(copy.deepcopy(request))
-            require(isinstance(wire, WireResponse), 'WIRE_BYTES_REQUIRED')
-            wire_elapsed_ms = wire.elapsed_ms
-            if wire.media_type != 'application/json':
-                artifact = self.store.put(wire.body, wire.media_type)
-                raise StageFailure('UPSTREAM_CONTENT_TYPE_INVALID', 502, artifact)
-            if wire.truncated or len(wire.body) > 16777216:
-                artifact = self.store.put(wire.body, wire.media_type)
-                raise StageFailure('UPSTREAM_BODY_TOO_LARGE', 502, artifact)
-            if not 200 <= wire.status < 300:
-                artifact = self.store.put(wire.body, wire.media_type)
-                code = 'UPSTREAM_HTTP_ERROR'
-                try:
-                    error = strict_json(wire.body).get('error', {})
-                    if isinstance(error, dict) and isinstance(error.get('code'), str) and error['code'].strip():
-                        code = error['code']
-                except (AttributeError, TypeError, ValueError):
-                    pass
-                if wire.status in {401, 403}:
-                    code, status = 'UPSTREAM_AUTH', wire.status
-                elif wire.status in UPSTREAM_STATUS_CODES:
-                    code, status = UPSTREAM_STATUS_CODES[wire.status], wire.status
-                else:
-                    status = 502
-                raise StageFailure(code, status, artifact)
-            try:
-                projected = strict_json(wire.body)
-                self.contract.schema(projected, 'sales-market-review-request.schema.json')
-                require(projected == expected, 'P06_REVIEW_BRIDGE_PROJECTION_MISMATCH')
-            except Exception:
-                artifact = self.store.put(wire.body, wire.media_type)
-                raise StageFailure('CONTRACT_VIOLATION', 502, artifact) from None
-            elapsed = (time.monotonic() - started) * 1000
-            _log_event(logging.INFO, 'workflow_agent_call', request_id=request['request_id'],
-                       stage='sales_market_projection', agent_id='new-product-agent', status='ok',
-                       duration_ms=round(elapsed, 3),
-                       upstream_http_ms=round(wire_elapsed_ms, 3) if wire_elapsed_ms is not None else None,
-                       p08_call_overhead_ms=round(max(0.0, elapsed - wire_elapsed_ms), 3)
-                       if wire_elapsed_ms is not None else None,
-                       retryable=False, fatal=False, cache_hit=False, outbound_attempted=True)
-            return projected
-        except Exception as exc:
-            failure = stage_failure(exc, artifact)
-            elapsed = (time.monotonic() - started) * 1000
-            _log_event(logging.WARNING, 'workflow_agent_call', request_id=request['request_id'],
-                       stage='sales_market_projection', agent_id='new-product-agent', status='error',
-                       duration_ms=round(elapsed, 3),
-                       upstream_http_ms=round(wire_elapsed_ms, 3) if wire_elapsed_ms is not None else None,
-                       p08_call_overhead_ms=round(max(0.0, elapsed - wire_elapsed_ms), 3)
-                       if wire_elapsed_ms is not None else None,
-                       retryable=failure.http_status in {503, 504}, fatal=True, error_code=failure.code,
-                       cache_hit=False, outbound_attempted=attempted)
-            raise failure from None
 
     def _call(self, stage, payload, rid, known):
         key = self._key(rid, stage, payload)
@@ -360,17 +303,27 @@ class Workflow:
             # Crash after provider invocation must not silently issue a second charge.
             body['final_image'] = dict(status='failed', artifact=None, lineage=lineage, reason='IMAGE_OUTCOME_UNKNOWN', provider_calls=1)
         else:
+            # Stage 06 (workflow-contract 0.2.0): the planning sheet (기획안 사진) composed from this run. The
+            # provider sees the run as it stands (stages 1-5, this stage pending as generated) and reads the P06
+            # visuals through the store; P08 calls no image model. The trend photos and the SWOT draft need the
+            # network or an LLM, so they are gathered before the 'started' marker: a crash while waiting for them
+            # leaves no marker, and a retry composes the sheet instead of reporting IMAGE_OUTCOME_UNKNOWN.
+            pending = dict(status='generated', artifact=None, lineage=lineage, reason=None, provider_calls=1)
+            try:
+                provisional, prepare_error = self._response(dict(body, final_image=pending), 200)['envelope'], None
+            except Exception as exc:
+                provisional, prepare_error = None, exc
+            photos = self._trend_photos(rid, provisional) if provisional is not None else []
+            swot = self._swot(rid, provisional) if provisional is not None else None
             request_artifact = self.store.put(canonical(image_request))
             self.store.checkpoint_write(key + ':request', 'done', dict(stage='final_image', request_artifact=request_artifact))
             self.store.checkpoint_write(key, 'started')
             provider_meta = {}
             try:
-                # Stage 06 (workflow-contract 0.2.0): the planning sheet (기획안 사진) composed from this run. The
-                # provider sees the run as it stands (stages 1-5, this stage pending as generated) and reads the P06
-                # visuals through the store; P08 calls no image model.
-                pending = dict(status='generated', artifact=None, lineage=lineage, reason=None, provider_calls=1)
-                provisional = self._response(dict(body, final_image=pending), 200)['envelope']
-                result = self.image(dict(image_request, envelope=provisional, load_artifact=self.store.verify))
+                if prepare_error is not None:
+                    raise prepare_error
+                result = self.image(dict(image_request, envelope=provisional, load_artifact=self.store.verify,
+                                         trend_photos=photos, swot=swot))
                 data, mime = result[0], result[1]
                 provider_meta.update(getattr(result, 'meta', None) or {})
                 checked_image(data, mime)
@@ -397,6 +350,26 @@ class Workflow:
         if errors:
             body['status'] = 'partial'
 
+    def _trend_photos(self, rid, envelope):
+        """Photos for the planning sheet; a failure here only leaves the photo slot empty."""
+        if self.trend_photos is None:
+            return []
+        try:
+            return list(self.trend_photos(rid, envelope))
+        except Exception as exc:
+            _log_event(logging.WARNING, 'trend_photos_failed', request_id=rid, error=type(exc).__name__)
+            return []
+
+    def _swot(self, rid, envelope):
+        """SWOT draft for the planning sheet; a failure here only leaves the SWOT slot empty."""
+        if self.swot is None:
+            return None
+        try:
+            return self.swot(rid, envelope)
+        except Exception as exc:
+            _log_event(logging.WARNING, 'swot_failed', request_id=rid, error=type(exc).__name__)
+            return None
+
     def _stage_payload(self, stage, request_id, planning_request, trend_query, body):
         """Build one producer request from already validated upstream results."""
         if stage == 'trend':
@@ -411,16 +384,10 @@ class Workflow:
                 trend_result=trend['raw_response']['result'],
                 inventory_product_result=stock['raw_response']['result']))
         if stage == 'sales_market_review':
+            # P07 0.3: P08 sends the allowlisted product fields of P06's Draft with their per-field provenance.
             planning_draft = body['sources']['planning_draft']['raw_response']['result']
-            product = p07_product_projection(planning_draft)
-            expected = dict(contract_version=P07_REVIEW_VERSION, request_id=request_id,
-                            input=dict(request_id=request_id, product=product))
-            if self.review_projection is None:
-                return expected
-            bridge_request = dict(contract_version=P06_REVIEW_BRIDGE_VERSION, request_id=request_id,
-                                  input=dict(request_id=request_id, planning_draft=planning_draft))
-            self.contract.schema(bridge_request, 'sales-market-review-bridge-request.schema.json')
-            return self._project_review_with_p06(bridge_request, expected)
+            return dict(contract_version=P07_REVIEW_VERSION, request_id=request_id,
+                        input=p07_review_input(planning_draft, request_id))
         raise StageFailure('WORKFLOW_STAGE_UNKNOWN', 409)
 
     def _integrate(self, body, request_id, http_status):
@@ -444,8 +411,8 @@ class Workflow:
             claims.append(dict(kind='interpretation', text='P06 Draft and P07 product review were retained for this request.', evidence_refs=[]))
         body['integration'] = dict(claims=claims,
             limitations=list(dict.fromkeys(body['limitations'] + draft.get('limitations', []) + review.get('limitations', []) + [
-                'P07 received only the allowlisted product fields under vogue-sales-market-review/0.2-proposal; per-field provenance remained in P08/P06 and was not sent to P07.',
-                'P07 0.2-proposal does not echo an immutable P06 Draft ID or response hash, so P08 cannot claim that P07 attested to the complete Draft.'])) )
+                'P07 received only the allowlisted product fields and their per-field provenance under vogue-sales-market-review/0.3-proposal, not the complete Draft.',
+                'P07 0.3-proposal does not echo an immutable P06 Draft ID or response hash, so P08 cannot claim that P07 attested to the complete Draft.'])) )
         self._trace(body, 'integration', body['sources'], start, body['status'], digest(body['integration']),
                     duration_ms=(time.monotonic() - started_monotonic) * 1000)
         self.store.save_run(request_id, 'progress', self._response(body, http_status))

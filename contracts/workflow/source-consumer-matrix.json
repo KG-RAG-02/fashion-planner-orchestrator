@@ -31,11 +31,11 @@
       "working_tree": "clean; P08 reads local main contract only"
     },
     "P07": {
-      "branch": "feat/integrate-e2e",
-      "head": "126e93c",
-      "main": "86d8335",
-      "origin_main": "86d8335",
-      "working_tree": "dirty; P08 reads main contract only"
+      "branch": "main",
+      "head": "2738e9f",
+      "main": "2738e9f",
+      "origin_main": "2738e9f",
+      "working_tree": "clean; P08 reads main contract only"
     }
   },
   "flow": [
@@ -67,18 +67,10 @@
     },
     {
       "from": "P08",
-      "to": "P06",
-      "endpoint": "/v1/agents/new-product-agent/sales-market-reviews",
-      "contract": "vogue-sales-market-review/0.1-proposal",
-      "input": "request_id and validated planning_draft result schema 1.0",
-      "output": "P07 vogue-sales-market-review/0.2-proposal request; projection only, no market review"
-    },
-    {
-      "from": "P08",
       "to": "P07",
       "endpoint": "/v1/agents/sales-market-agent/reviews",
-      "contract": "vogue-sales-market-review/0.2-proposal",
-      "input": "request_id and product (category required; product_type, gender, season, material optional); no provenance field",
+      "contract": "vogue-sales-market-review/0.3-proposal",
+      "input": "request_id, product (category required; product_type, gender, season, material optional) and product_evidence: per sent field kind, source_ref (p06.draft.product_profile.<field>) and evidence_ids",
       "result_schema": "sales-market-review/0.1-internal"
     },
     {
@@ -92,8 +84,8 @@
   "lineage": {
     "request_id": "P08 preserves one request_id across all stages",
     "p06_request": "Exact request is stored as a P08 JSON artifact and hash checked against the retained call record.",
-    "p07_request": "P08 calls the P06 review bridge after Draft, validates its P07 0.2 request against the P06 Draft projection, then stores and sends that exact object to P07. Field provenance remains available through the retained P06 response and is not sent on the P07 wire contract.",
-    "p07_attestation": "P07 0.2 response does not echo a Draft ID or response hash; P08 records this limitation and does not claim full-Draft attestation."
+    "p07_request": "P08 builds the P07 0.3 request from the retained P06 Draft product_profile (user_requested and evidence_observation values with their provenance), stores that exact object as a JSON artifact and sends it to P07.",
+    "p07_attestation": "P07 0.3 response does not echo a Draft ID or response hash; P08 records this limitation and does not claim full-Draft attestation."
   },
   "artifacts": {
     "p08_raw_responses": "Retained unchanged as P08 content-addressed JSON artifacts.",
@@ -106,7 +98,7 @@
     "Run local Compose boundary checks after confirming the service build contexts select the recorded P06/P07 checkouts.",
     "Record independent validation evidence before changing baseline state from proposed to frozen."
   ],
-  "version_policy": "Keep raw producer payloads and schema versions unchanged. P08 uses the P06-owned bridge for Draft validation/projection, then sends only fields accepted by P07.",
+  "version_policy": "Keep raw producer payloads and schema versions unchanged. P08 derives the P07 request from the validated P06 Draft and sends only fields accepted by P07, each with its P06 provenance.",
   "execution_mode": "sequential P08 orchestration; P06 never calls P07",
   "semantic_version": "workflow-contract/0.5.0"
 }

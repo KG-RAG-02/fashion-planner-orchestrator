@@ -10,9 +10,9 @@ def cases():
     out=[]
     def add(name, d): out.append((name,d))
     d=read_json(HERE/'fixtures/p06-handoff-v0.3.request.json'); d['contract_version']='vogue-handoff/0.2'; add('p06-wrong-contract-version',d)
-    d=read_json(HERE/'fixtures/p07-review-v0.2.request.json'); d['input']['product']['planning_draft']={'draft':'must not be sent'}; add('p07-full-draft-rejected',d)
+    d=read_json(HERE/'fixtures/p07-review-v0.3.request.json'); d['input']['product']['planning_draft']={'draft':'must not be sent'}; add('p07-full-draft-rejected',d)
     d=read_json(HERE/'fixtures/p06-handoff-v0.3.response.json'); d['result']['request_id']='different-request'; add('p06-response-request-id-mismatch',d)
-    d=read_json(HERE/'fixtures/p07-review-v0.2.response.json'); d['producer']['schema_version']='sales-market-review/1.0'; add('p07-producer-version-mismatch',d)
+    d=read_json(HERE/'fixtures/p07-review-v0.3.response.json'); d['producer']['schema_version']='sales-market-review/1.0'; add('p07-producer-version-mismatch',d)
     return out
 
 def collect():

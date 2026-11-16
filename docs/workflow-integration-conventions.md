@@ -9,19 +9,18 @@ Current integration behavior and contract boundaries for the five repositories. 
 | P08 → Trend | `POST /v1/agents/trend-analysis-agent/runs` | `vogue-handoff/0.1` | Trend `1.1` |
 | P08 → Stock | `POST /v1/agents/stock-agent/runs` (input = Trend `result` body, unchanged) | `vogue-handoff/0.1` | Stock `1.0` |
 | P08 → P06 | `POST /v1/agents/new-product-agent/runs` | `vogue-handoff/0.3` | P06 result schema `1.0` |
-| P08 → P06 review bridge | `POST /v1/agents/new-product-agent/sales-market-reviews` | `vogue-sales-market-review/0.1-proposal` | P07 request `vogue-sales-market-review/0.2-proposal` (projection only) |
-| P08 → P07 | `POST /v1/agents/sales-market-agent/reviews` | `vogue-sales-market-review/0.2-proposal` | `sales-market-review/0.1-internal` |
+| P08 → P07 | `POST /v1/agents/sales-market-agent/reviews` | `vogue-sales-market-review/0.3-proposal` | `sales-market-review/0.1-internal` |
 | UI → P08 | `POST /api/workflow/run`, `POST /v1/orchestrations` (`contract_version: vogue-workflow/0.2`) | `vogue-workflow/0.2` | `integrated-result/2.0` |
 
 - **Contract package:** proposed `workflow-contract/0.5.0`, in `vogue-orchestrator/contracts/workflow/`.
-- P06 `/runs` receives exactly `planning_request`, `trend_result`, and `inventory_product_result`. Afterward, P08 sends P06's review bridge the native Draft result and validates the returned P07 projection before calling P07. P07 receives only the allowlisted product projection (`category`, `product_type`, `gender`, `season`, `material`). P08 retains field provenance from P06 independently; user-requested values remain distinct and do not acquire research evidence IDs. P07 does not receive the full Draft or attest to its response hash; P08 records the exact P07 request artifact and documents that lineage limit in the integrated result.
+- P06 `/runs` receives exactly `planning_request`, `trend_result`, and `inventory_product_result`. Afterward, P08 builds the P07 request from the Draft's `product_profile`: only values P06 marked `user_requested` or `evidence_observation` are sent (`category`, `product_type`, `gender`, `season`, `material`), each with its provenance in `product_evidence` (`kind`, `source_ref` = `p06.draft.product_profile.<field>`, `evidence_ids`). User-requested values remain distinct and do not acquire research evidence IDs. P07 does not receive the full Draft or attest to its response hash; P08 records the exact P07 request artifact and documents that lineage limit in the integrated result.
   - The schema bytes are pinned by SHA-256 (`snapshot.json`).
   - Byte-identical copies live in `new-product-agent/contracts/workflow-proposed/` and `sales-market-agent/src/market_research_agent/resources/workflow_contract/`.
   - **Never edit pinned schema bytes or the vendored copies.**
 - **Unsupported versions** are rejected before any model, DB or network work:
   - new `vogue-workflow` endpoints: 422 `UNSUPPORTED_CONTRACT_VERSION`
   - malformed requests to workflow endpoints: the documented 400 response
-- **Trend 1.1** may carry `trends[].style.example_images` and `trends[].style.search_outlook`. Consumers preserve these fields; the UI links example images without downloading or embedding them. `search_outlook` is a target-season search-interest outlook, not a sales forecast, and is not used for ranking, status or lineage. Stub values are synthetic and remain labelled as such.
+- **Trend 1.1** may carry `trends[].style.example_images` and `trends[].style.search_outlook`. Consumers preserve these fields; the UI links example images, and the planning poster (stage 06) downloads up to three of them from allowlisted hosts and embeds them (see Trend photos for the Planning Sheet below). `search_outlook` is a target-season search-interest outlook, not a sales forecast, and is not used for ranking, status or lineage. Stub values are synthetic and remain labelled as such.
 
 ## 2. Containers: hostnames, ports, binds, health
 
@@ -58,6 +57,15 @@ Current integration behavior and contract boundaries for the five repositories. 
   - `VOGUE_STOCK_AGENT_URL=http://stock:8002`
   - `VOGUE_NEW_PRODUCT_AGENT_URL=http://new-product:8767`
   - `VOGUE_SALES_MARKET_AGENT_URL=http://sales-market:8766`
+- **Trend photos for the Planning Sheet:** with the `planning_sheet` provider, stage 06 downloads up to three example photos of the first Trend style (`style.example_images`, then its items' `image_urls`).
+  - HTTPS with CA verification only, to hosts in `VOGUE_TREND_PHOTO_HOSTS` (default `vogue.co.kr` and its subdomains); at most two redirects, each on the allowlist.
+  - At most 5 MiB and 6 megapixels per photo (the pixel count is read from the header before decoding), PNG/JPEG/WebP only, with the same decode checks as uploaded images; 10-second timeout; no retries.
+  - A rejected, unreachable or malformed-URL photo is skipped and never fails the run. The photos and the SWOT draft are gathered before stage 06 records that it started, so a crash while waiting for them does not stop a retry from composing the sheet. The photos are kept in the P08 store under `trend-photos:<request_id>`; the integrated envelope does not change.
+  - `GET /api/workflow/runs/{id}/planning-sheet.png` renders from the stored photos and makes no network call. `VOGUE_TREND_PHOTOS_ENABLED=0` turns the download off.
+- **SWOT and promotion draft for the Planning Sheet:** with the `planning_sheet` provider and `LLM_MODEL`/`LLM_API_KEY` configured, stage 06 makes one call to the query-structuring LLM provider (`swot.py`, prompt `prompts/swot/v3`).
+  - The request holds a compact summary of the stored run: the first Trend style, the stock product matched to it with stock-agent's indicators (sell-through, stock value, recent trend, score and their data nature), new-product-agent's concept and specification, sales-market-agent's price, fabric cost, margin, target, channel/content hypotheses and merchandising actions, and the run limitations. It does not hold the user's raw request text or any image.
+  - The answer must be 0–4 items per SWOT quadrant, 0–3 promotion ideas (title and one line) and 0–3 differentiation points (new product vs the matched stock product and the trend), each with its basis (`trend`, `stock`, `product`, `market`); anything else is discarded. The prompt forbids invented numbers (discount rates, budgets, targets) and price decisions. The valid draft is kept under `swot:<request_id>` and the poster labels it as an LLM hypothesis for MD review. The differentiation points appear only while new-product-agent's `draft.differentiation` is empty.
+  - A failed or invalid answer leaves the SWOT slot empty and never fails the run; a stage-06 retry asks again only when no valid draft was kept. `GET /api/workflow/runs/{id}/planning-sheet.png` renders the stored draft without calling the model. `VOGUE_SWOT_ENABLED=0` turns the call off.
 - **Timeouts:** `VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS` (default 3) and `VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS` (default 75). No automatic retries.
 - **Safe latency telemetry:** P08 emits one JSON log event per Agent call, workflow stage, and completed run. Events include `request_id`, stage/Agent, status, elapsed time, retryable/fatal flags, and (for HTTP calls) upstream transport time versus P08 call overhead. They must never include payloads, raw responses, prompts, credentials, or artifact contents.
 - **Retry and idempotency:** P08 does not automatically repeat Agent calls. A repeated workflow request with the same ID replays the stored outcome; a checkpoint marked started but without a known result fails closed as `STAGE_OUTCOME_UNKNOWN`. `retryable` reports a transient dependency condition; it does not mean reposting the same request will issue another Agent call. Image generation uses its separate idempotent retry key and never reruns upstream Agents.
@@ -158,7 +166,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | Service | Env | Meaning |
 |---|---|---|
 | P08 | `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture` | Offline query structuring (existing) |
-| P08 | `VOGUE_WORKFLOW_IMAGE_PROVIDER=fixture\|openai` (default `openai`) | `fixture` renders a deterministic local PNG. Images still need `VOGUE_WORKFLOW_IMAGES_ENABLED=1` |
+| P08 | `VOGUE_WORKFLOW_IMAGE_PROVIDER=planning_sheet\|fixture` (default `planning_sheet`) | `planning_sheet` composes the planning poster from the run; `fixture` renders a deterministic local PNG. Any other value is refused with 409 `IMAGE_PROVIDER_INVALID`. Images still need `VOGUE_WORKFLOW_IMAGES_ENABLED=1` |
 | P08 | `VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=0\|1` (default 0) | Gates `POST /v1/orchestrations/image-retries` |
 | P08 | `VOGUE_WORKFLOW_ALLOW_PROPOSED=1` | Run with a `proposed` contract baseline; adds a limitation to the result |
 | P08 | `VOGUE_WORKFLOW_CONTRACT_BASELINE=<path>` | Overrides `contracts/workflow/baseline.json` |

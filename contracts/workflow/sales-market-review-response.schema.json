@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:vogue:sales-market-review:0.2:proposal-response",
-  "title": "Project_07 minimal product review proposal response",
+  "$id": "urn:vogue:sales-market-review:0.3:proposal-response",
+  "title": "Project_07 product review response for provenance-aware proposal requests",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -13,7 +13,7 @@
   ],
   "properties": {
     "contract_version": {
-      "const": "vogue-sales-market-review/0.2-proposal"
+      "const": "vogue-sales-market-review/0.3-proposal"
     },
     "request_id": {
       "type": "string",

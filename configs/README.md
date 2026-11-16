@@ -34,5 +34,8 @@ The sequential API reads these environment variables:
 | `VOGUE_PEER_ARTIFACT_ROOT` | Read-only root for verified P06/P07 artifacts |
 | `VOGUE_WORKFLOW_IMAGES_ENABLED` | Enables local Planning Sheet composition |
 | `VOGUE_WORKFLOW_IMAGE_PROVIDER` | `planning_sheet` or deterministic `fixture`; neither calls an image model from P08 |
+| `VOGUE_TREND_PHOTOS_ENABLED` | `0` turns off the Trend article photos on the Planning Sheet; any other value or blank keeps them on |
+| `VOGUE_SWOT_ENABLED` | `0` turns off the LLM SWOT and promotion draft on the Planning Sheet; otherwise it is written when `LLM_MODEL` and `LLM_API_KEY` are configured (the same settings as query structuring) |
+| `VOGUE_TREND_PHOTO_HOSTS` | Comma list of hosts the Planning Sheet may download Trend photos from (each also admits its subdomains); blank means `vogue.co.kr` |
 
 See [`../docs/workflow-integration-conventions.md`](../docs/workflow-integration-conventions.md) and [`../deploy/README.md`](../deploy/README.md) for security and deployment requirements.
