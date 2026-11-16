@@ -3,7 +3,6 @@
 Every version folder carries meta.json {"format", "status"}. Checks common to all versions (files,
 placeholders, rendered file up to date, every standard value present, examples rendered) run on every
 folder; example checks are split by draft format:
-  draft_v1 (archived)  examples validate with legacy_v1.QueryDraft and assemble without warnings
   draft_v2 (archived)  examples validate with draft.QueryDraft, every raw is a substring of the query,
                        suggestions follow the prompt rules (in the standard list, G-2 for categories)
   draft_v3 (archived)  the same checks on the per-item draft (draft_v3.QueryDraftV3, decisions IT-1..IT-7),
@@ -46,11 +45,10 @@ class PromptMetaTests(unittest.TestCase):
             with self.subTest(version=name):
                 meta = read_meta(name)
                 self.assertEqual(set(meta), {"format", "status"})
-                self.assertIn(meta["format"], {"draft_v1", "draft_v2", "draft_v3", "draft_v4"})
+                self.assertIn(meta["format"], {"draft_v2", "draft_v3", "draft_v4"})
                 self.assertIn(meta["status"], {"current", "archived"})
 
     def test_known_versions_have_the_expected_markers(self):
-        self.assertEqual(read_meta("v1"), {"format": "draft_v1", "status": "archived"})
         self.assertEqual(read_meta("v2"), {"format": "draft_v2", "status": "archived"})  # since v3 (2026-11-10)
         self.assertEqual(read_meta("v3"), {"format": "draft_v2", "status": "archived"})  # since v4 (2026-11-11)
         self.assertEqual(read_meta("v4"), {"format": "draft_v3", "status": "archived"})  # since v5 (2026-11-11)
@@ -68,21 +66,18 @@ class PromptTests(unittest.TestCase):
         cls.prompt = importlib.import_module("vogue_orchestrator.query.prompt")
         cls.vocab = importlib.import_module("vogue_orchestrator.query.vocabulary")
         cls.cvocab = importlib.import_module("vogue_orchestrator.query.contract_vocabulary")
-        cls.legacy_v1 = importlib.import_module("vogue_orchestrator.query.legacy_v1")
         cls.draft_v2 = importlib.import_module("vogue_orchestrator.query.draft")
         cls.draft_v3 = importlib.import_module("vogue_orchestrator.query.draft_v3")
         cls.draft_v4 = importlib.import_module("vogue_orchestrator.query.draft_v4")
-        cls.assemble = importlib.import_module("vogue_orchestrator.query.assemble")
         cls.config = importlib.import_module("vogue_orchestrator.query.config")
 
     # --- all versions -------------------------------------------------------------------------------
 
     def test_active_version_comes_from_the_config(self):
-        # The running path still uses v1 (draft_v1). Plan U4 switches config and this expectation to v2.
         self.assertEqual(self.prompt.PROMPT_VERSION, f"query-structuring-prompt/{self.config.CONFIG.prompt_version}")
-        self.assertEqual(self.prompt.PROMPT_VERSION, "query-structuring-prompt/v1")
-        self.assertEqual(self.prompt.PROMPT_FORMAT, "draft_v1")
-        self.assertIn("v1", version_names())
+        self.assertEqual(self.prompt.PROMPT_VERSION, "query-structuring-prompt/v6")
+        self.assertEqual(self.prompt.PROMPT_FORMAT, "draft_v4")
+        self.assertNotIn("v1", version_names())
 
     def test_every_version_folder_has_the_files_and_renders_without_placeholders(self):
         for name in version_names():
@@ -104,8 +99,7 @@ class PromptTests(unittest.TestCase):
 
     def test_format_constants_match_the_draft_modules(self):
         self.assertEqual(self.prompt.DRAFT_FORMATS,
-                         (self.legacy_v1.DRAFT_FORMAT, self.draft_v2.DRAFT_FORMAT, self.draft_v3.DRAFT_FORMAT,
-                          self.draft_v4.DRAFT_FORMAT))
+                         (self.draft_v2.DRAFT_FORMAT, self.draft_v3.DRAFT_FORMAT, self.draft_v4.DRAFT_FORMAT))
 
     def test_rendered_file_is_exactly_the_text_sent_to_the_model(self):
         # Fails when a template changed but scripts/render_query_prompt.py was not run.
@@ -187,34 +181,6 @@ class PromptTests(unittest.TestCase):
                         meta.write_text(text, encoding="utf-8")
                     with self.assertRaises(self.config.QueryConfigError):
                         self.prompt._read_meta(folder)
-
-    # --- draft_v1 (archived) ------------------------------------------------------------------------
-
-    def test_draft_v1_examples_are_valid_legacy_drafts_and_assemble_cleanly(self):
-        names = versions_of_format("draft_v1")
-        self.assertIn("v1", names)
-        for name in names:
-            for example in self.prompt.load_prompt(name).examples:
-                with self.subTest(version=name, example=example["title"]):
-                    draft = self.legacy_v1.QueryDraft.model_validate(example["draft"])
-                    result = self.assemble.assemble_trend_query(
-                        draft, request_id="rid", original_query=example["query"], today=TODAY,
-                    )
-                    # The only correction an example may need is the documented year-less season case.
-                    season = example["draft"]["season"]
-                    allowed = {"season_year_inferred"} if season and season["year"] is None else set()
-                    self.assertLessEqual(set(result.warnings), allowed)
-
-    def test_draft_v1_examples_cover_the_contract_cases(self):
-        for name in versions_of_format("draft_v1"):
-            with self.subTest(version=name):
-                drafts = [e["draft"] for e in self.prompt.load_prompt(name).examples]
-                self.assertTrue(any(d["season"] and d["season"]["year"] for d in drafts))      # season with year
-                self.assertTrue(any(d["season"] and d["season"]["year"] is None for d in drafts))  # without year
-                self.assertTrue(any(d["exclude_categories"] for d in drafts))                     # exclusion
-                self.assertTrue(any(u["type"] == "brand" for d in drafts for u in d["unsupported"]))
-                self.assertTrue(any(u["type"] == "category" for d in drafts for u in d["unsupported"]))
-                self.assertTrue(any(a["value"] is None for d in drafts for a in d["attributes"]))  # outside the list
 
     # --- draft_v2 (archived since v4) ---------------------------------------------------------------
 

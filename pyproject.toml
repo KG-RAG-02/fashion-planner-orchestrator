@@ -1,7 +1,7 @@
 [project]
 name = "vogue-orchestrator"
 version = "0.1.0"
-description = "Proposal-stage orchestration core for the VOGUE planning pipeline"
+description = "Contract-based workflow orchestrator for the VOGUE planning pipeline"
 requires-python = ">=3.11"
 
 # The orchestration core stays stdlib-only. Only the query-structuring module

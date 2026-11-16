@@ -39,13 +39,8 @@ def real_tempdir(test):
 
 class LiveServerMixin:
     def start_server(self):
-        from vogue_orchestrator import server as server_module
         from vogue_orchestrator.server import OrchestratorHandler
         self.state = real_tempdir(self)
-        for name, value in (('LATEST_RUN_PATH', self.state / 'latest-run.json'), ('RUN_HISTORY_DIR', self.state / 'runs')):
-            patcher = patch.object(server_module, name, value)
-            patcher.start()
-            self.addCleanup(patcher.stop)
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), OrchestratorHandler)
         self.port = self.server.server_port
         thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)

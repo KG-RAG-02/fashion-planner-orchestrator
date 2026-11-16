@@ -1,0 +1,151 @@
+{
+  "query": "27년도 봄 여성 니트 제안해줘",
+  "planning_context": {
+    "category": "니트웨어",
+    "season": "2027SS"
+  },
+  "p06_response": {
+    "contract_version": "vogue-handoff/0.3",
+    "request_id": "fixture:workflow:001",
+    "producer": {
+      "agent_id": "new-product-agent",
+      "schema_version": "1.0"
+    },
+    "status": "partial",
+    "result": {
+      "schema_version": "1.0",
+      "request_id": "fixture:workflow:001",
+      "status": "partial",
+      "draft": {
+        "title": "니트웨어 검토 초안",
+        "category": "니트웨어",
+        "season": "2027SS",
+        "material": "니트",
+        "product_profile": {
+          "category": {
+            "value": "니트웨어",
+            "kind": "user_requested",
+            "evidence_ids": []
+          },
+          "product_type": {
+            "value": null,
+            "kind": "unknown",
+            "evidence_ids": []
+          },
+          "gender": {
+            "value": null,
+            "kind": "unknown",
+            "evidence_ids": []
+          },
+          "season": {
+            "value": "2027SS",
+            "kind": "user_requested",
+            "evidence_ids": []
+          },
+          "material": {
+            "value": "니트",
+            "kind": "proposal",
+            "evidence_ids": []
+          }
+        },
+        "field_origins": {
+          "category": "user",
+          "season": "user"
+        },
+        "attributes": [
+          {
+            "name": "material",
+            "value": "울 혼방",
+            "kind": "to_validate",
+            "evidence_ids": []
+          }
+        ]
+      },
+      "input_evidence": {},
+      "limitations": [
+        "P06 합성 부분 결과"
+      ],
+      "errors": [],
+      "conflicts": [],
+      "validation_issues": [],
+      "evidence_ids": []
+    }
+  },
+  "p07_response": {
+    "contract_version": "vogue-sales-market-review/0.3-proposal",
+    "request_id": "fixture:workflow:001",
+    "producer": {
+      "agent_id": "sales-market-agent",
+      "schema_version": "sales-market-review/0.1-internal"
+    },
+    "status": "partial",
+    "result": {
+      "schema_version": "sales-market-review/0.1-internal",
+      "request_id": "fixture:workflow:001",
+      "draft_id": null,
+      "producer_id": "sales-market-agent",
+      "status": "partial",
+      "draft_context": {
+        "category": "니트웨어",
+        "season": "2027SS"
+      },
+      "category_price_comparison": [],
+      "material_cost_analysis": [],
+      "customer_segment_analysis": [],
+      "target_audience_analysis": {},
+      "margin_estimate": {},
+      "evidence": [],
+      "missing_data": [
+        {
+          "field": "historical_hm_transaction_prices",
+          "reason": "source_not_configured_or_disabled"
+        },
+        {
+          "field": "fabric_costs",
+          "reason": "no_match"
+        },
+        {
+          "field": "customer_segments",
+          "reason": "source_error"
+        }
+      ],
+      "errors": [
+        {
+          "code": "CUSTOMER_AGE_RESEARCH_FAILED",
+          "message": "Synthetic R2 read failure."
+        }
+      ],
+      "limitations": [
+        "P07 합성 부분 결과"
+      ],
+      "decision_support": {
+        "recommendation": "review_required",
+        "ready_for_human_decision": true,
+        "evidence_areas": {
+          "category_price": false,
+          "material_cost": false,
+          "margin": false,
+          "customer_segments": false
+        },
+        "human_decision_required": true
+      },
+      "price_analysis": {
+        "status": "no_results",
+        "proposed_price": null
+      },
+      "fabric_cost_analysis": {
+        "status": "no_results",
+        "matched_material": null
+      },
+      "margin_analysis": {},
+      "margin_price_range_analysis": {
+        "status": "benchmark_only"
+      },
+      "target_audience": {
+        "status": "ok",
+        "age_cohort": null,
+        "type": "hypothesis"
+      }
+    }
+  }
+}

@@ -51,18 +51,6 @@ test('rail marks never-run stages skipped after a terminal stop, keeping produce
   assert.deepEqual(steps.map((s) => s.status), ['ok', 'error', 'skipped', 'skipped', 'skipped', 'skipped']);
 });
 
-test('metricView keeps null distinct from an observed zero', () => {
-  const missing = m.metricView({ name: 'current_company_sales', value: null, missing_reason: '원천 없음', unit: 'pieces', observation: { data_nature: 'synthetic_fixture', synthetic: true } });
-  assert.equal(missing.value, '미확인');
-  assert.equal(missing.missing, true);
-  assert.equal(missing.label, '현재 자사 판매');
-  assert.equal(missing.nature.label, 'synthetic');
-  const zero = m.metricView({ name: 'observed', value: 0, unit: 'pieces', observation: { data_nature: 'historical_external', synthetic: false } });
-  assert.equal(zero.value, '0개');
-  assert.equal(zero.missing, false);
-  assert.equal(zero.nature.label, 'historical');
-});
-
 test('stockSlots keeps null slots as no-match and only renders allow-listed base64 images', () => {
   const slots = m.stockSlots({
     products: [{ category: '스커트', season: '2027SS', attributes: { color: '블랙', material: ['가죽'], fit: '레귤러' }, inventory: { quantity: 0, unit: 'pieces', as_of: '2020-09-22', data_nature: 'sample' }, image: { media_type: 'image/png', encoding: 'base64', data: 'AAAA', size_bytes: 3, source: 'r2' }, sku_ids: ['1'] }, null,
@@ -96,27 +84,105 @@ test('problemMessage maps known codes and falls back to the producer message', (
   assert.equal(m.problemMessage(null), '요청을 완료하지 못했습니다.');
 });
 
-test('the integrated-ok contract fixture renders through every view without loss', () => {
-  const envelope = fixture('integrated-ok');
-  const result = envelope.result;
-  const draft = m.draftView(m.sourceResult(result, 'planning_draft'));
-  const review = m.reviewView(m.sourceResult(result, 'sales_market_review'));
-  assert.ok(draft.title);
-  assert.equal(draft.claims.length, result.sources.planning_draft.raw_response.result.draft.claims.length);
-  assert.equal(review.metrics.length, result.sources.sales_market_review.raw_response.result.review.metrics.length);
-  assert.ok(review.metrics.some((metric) => metric.missing && metric.value === '미확인'));
-  const summary = m.runSummary(envelope);
-  assert.equal(summary.status, result.status);
-  assert.equal(summary.image.status, 'generated');
-  assert.deepEqual(m.rail(result).map((s) => s.status), result.stages.map((s) => (s.stage === 'final_image' ? result.final_image.status : s.status)));
-  assert.equal(m.lineageRows(result).length, result.stages.length);
-});
-
 test('the integrated-review-no-results fixture keeps the image skipped and the draft visible', () => {
   const result = fixture('integrated-review-no-results').result;
   assert.equal(m.runSummary({ result }).image.status, 'skipped');
   assert.ok(m.draftView(m.sourceResult(result, 'planning_draft')));
   assert.equal(m.rail(result).at(-1).status, 'skipped');
+});
+
+test('P07 native partial response retains sections and diagnostics', () => {
+  const response = {
+    contract_version: 'vogue-sales-market-review/0.3-proposal',
+    status: 'partial',
+    result: {
+      schema_version: 'sales-market-review/0.1-internal',
+      status: 'partial',
+      decision_support: { recommendation: 'review_required', ready_for_human_decision: true },
+      price_analysis: { status: 'no_results', proposed_price: null, reason: '매칭 가격 자료 없음' },
+      fabric_cost_analysis: { status: 'no_results', reason: '원단 비용 자료 없음' },
+      material_cost_analysis: [{ status: 'no_results', material: '니트' }],
+      margin_estimate: { status: 'benchmark_only', margin_percent: 56.88 },
+      margin_price_range_analysis: { status: 'benchmark_only', ranges: [] },
+      draft_context: { category: '니트웨어', material: '니트', season: '2027SS' },
+      target_audience: { status: 'ok', age_cohort: null, proposal: '가설' },
+      errors: [{ code: 'CUSTOMER_AGE_RESEARCH_FAILED' }],
+      missing_data: ['고객 세그먼트 원천 오류'],
+      limitations: ['제품별 원가 자료 없음'],
+    },
+  };
+  const view = m.reviewView(response);
+  assert.equal(view.format, 'native');
+  assert.equal(view.contractVersion, 'vogue-sales-market-review/0.3-proposal');
+  assert.equal(view.status, 'partial');
+  assert.ok(view.sections.some(({ key, value }) => key === 'price_analysis' && value.status === 'no_results'));
+  for (const key of ['material_cost_analysis', 'margin_price_range_analysis', 'draft_context']) {
+    assert.ok(view.sections.some((section) => section.key === key), `${key} reaches the review view`);
+  }
+  assert.equal(view.errors[0].code, 'CUSTOMER_AGE_RESEARCH_FAILED');
+  assert.deepEqual(view.missingData, ['고객 세그먼트 원천 오류']);
+  assert.deepEqual(view.limitations, ['제품별 원가 자료 없음']);
+  const payloadView = m.reviewView(response.result);
+  assert.equal(payloadView.format, 'native');
+  assert.equal(payloadView.status, 'partial');
+  assert.ok(payloadView.sections.some(({ key }) => key === 'price_analysis'));
+});
+
+test('P07 input view shows the provenance sent with the 0.3 request', () => {
+  const response = { contract_version: 'vogue-sales-market-review/0.3-proposal', status: 'partial', result: {
+    schema_version: 'sales-market-review/0.1-internal', status: 'partial', errors: [], missing_data: [], limitations: [],
+  } };
+  const request = { contract_version: 'vogue-sales-market-review/0.3-proposal', request_id: 'req-1', input: {
+    request_id: 'req-1', product: { category: '니트웨어', season: '2027SS' },
+    product_evidence: {
+      category: { kind: 'user_requested', source_ref: 'p06.draft.product_profile.category', evidence_ids: [] },
+      season: { kind: 'evidence_observation', source_ref: 'p06.draft.product_profile.season', evidence_ids: ['trend:e1'] },
+    },
+  } };
+  const p06 = { evidence_ids: [], draft: { product_profile: {} } };  // the sent provenance wins over the Draft
+  const view = m.reviewView(response, request, 'a'.repeat(64), 'loaded', p06);
+  assert.equal(view.inputEvidenceSent, true);
+  assert.equal(view.inputEvidenceState, 'loaded');
+  assert.equal(view.inputFields[0].kind, 'user_requested');
+  assert.equal(view.inputFields[1].kind, 'evidence_observation');
+  assert.equal(view.inputFields[1].sourceRef, 'p06.draft.product_profile.season');
+  assert.deepEqual(view.inputFields[1].evidenceIds, ['trend:e1']);
+});
+
+test('P07 input view falls back to P06 provenance when the request carries none', () => {
+  const response = { contract_version: 'vogue-sales-market-review/0.3-proposal', status: 'partial', result: {
+    schema_version: 'sales-market-review/0.1-internal', status: 'partial', errors: [], missing_data: [], limitations: [],
+  } };
+  const request = { contract_version: 'vogue-sales-market-review/0.2-proposal', request_id: 'req-1', input: {
+    request_id: 'req-1', product: { category: '니트웨어', season: '2027SS' },
+  } };
+  const p06 = { evidence_ids: ['trend:e1'], draft: { category: '니트웨어', product_profile: {
+    category: { value: '니트웨어', kind: 'user_requested', evidence_ids: [] },
+    season: { value: '2027SS', kind: 'evidence_observation', evidence_ids: ['trend:e1'] },
+  } } };
+  const view = m.reviewView(response, request, 'a'.repeat(64), 'loaded', p06);
+  assert.equal(view.inputEvidenceSent, false);
+  assert.equal(view.inputFields[0].kind, 'user_requested');
+  assert.equal(view.inputFields[1].kind, 'evidence_observation');
+  assert.deepEqual(view.inputFields[1].evidenceIds, ['trend:e1']);
+});
+
+test('P06 status and provenance diagnostics survive the Draft view mapping', () => {
+  const view = m.draftView({
+    schema_version: '1.0', status: 'partial',
+    draft: {
+      title: '니트웨어 검토 초안', category: '니트웨어', season: '2027SS',
+      field_origins: { category: 'unknown', season: 'unknown' },
+      attributes: [{ name: 'material', value: '울 혼방', kind: 'to_validate', evidence_ids: [] }],
+    },
+    input_statuses: { planning_request: 'ok', trend_result: 'ok', inventory_product_result: 'ok' },
+    validation_issues: [], errors: [],
+  });
+  assert.equal(view.status, 'partial');
+  assert.equal(view.contractVersion, '1.0');
+  assert.ok(view.sections.some(({ key, value }) => key === 'field_origins' && value.season === 'unknown'));
+  assert.ok(view.sections.some(({ key, value }) => key === 'input_statuses' && value.planning_request === 'ok'));
+  assert.ok(view.sections.some(({ key }) => key === 'attributes'));
 });
 
 test('planningSheetLink is offered only for a finished run with a safe request id', () => {

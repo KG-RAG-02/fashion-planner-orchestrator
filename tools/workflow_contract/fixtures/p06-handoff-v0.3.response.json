@@ -1,0 +1,22 @@
+{
+  "contract_version": "vogue-handoff/0.3",
+  "request_id": "synthetic-p06-001",
+  "producer": {
+    "agent_id": "new-product-agent",
+    "schema_version": "1.0"
+  },
+  "status": "partial",
+  "result": {
+    "schema_version": "1.0",
+    "request_id": "synthetic-p06-001",
+    "status": "partial",
+    "draft": {
+      "title": "합성 초안"
+    },
+    "input_evidence": {},
+    "limitations": [
+      "합성 데이터"
+    ],
+    "errors": []
+  }
+}

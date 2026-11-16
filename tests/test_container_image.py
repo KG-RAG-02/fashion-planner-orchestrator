@@ -73,11 +73,12 @@ class ContainerImageTests(unittest.TestCase):
 
     def test_private_and_repository_only_material_stays_out(self):
         for path in ('.git/HEAD', '.env', '.envrc', '.env.local', 'configs/.env', '.local/latest-run.json',
-                     '.local/workflow/blobs/x', 'tests/test_workflow.py', 'tools/workflow_contract/build_contracts.py',
-                     'deploy/service-manifest.json', 'docs/workflow-integration-conventions.md', 'data/user_queries.v1.json',
-                     'examples/synthetic_demo.py', 'scripts/local_servers.py', 'compose.yaml', 'README.md',
+                     '.local/workflow/blobs/x', 'tests/test_workflow.py', 'tools/workflow_contract/support.py',
+                     'deploy/service-manifest.json', 'docs/workflow-integration-conventions.md', 'data/user_queries.v3.json',
+                     'scripts/local_servers.py', 'compose.yaml', 'README.md',
                      'src/vogue_orchestrator/server 2.py', 'web/app 2.js', 'contracts/workflow/baseline 3.json',
-                     'prompts/manifest 2', 'src/vogue_orchestrator/__pycache__/server.cpython-312.pyc'):
+                     'prompts/query_structuring/v6/meta 2.json',
+                     'src/vogue_orchestrator/__pycache__/server.cpython-312.pyc'):
             with self.subTest(path=path):
                 self.assertTrue(excluded(self.rules, path))
 

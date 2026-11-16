@@ -15,7 +15,7 @@ CONFIG_FILE = ROOT / "configs" / "query_structuring.json"
 class QueryConfigTests(unittest.TestCase):
     def test_repository_config_loads_with_expected_values(self):
         config = query_config.load_config(CONFIG_FILE)
-        self.assertEqual((config.prompt_name, config.prompt_version), ("query_structuring", "v1"))
+        self.assertEqual((config.prompt_name, config.prompt_version), ("query_structuring", "v6"))
         self.assertEqual(config.max_query_chars, 1000)
         self.assertEqual((config.draft_year_min, config.draft_year_max), (2000, 2100))
         self.assertEqual(set(config.unsupported_reasons), {"brand", "category", "attribute", "abstract"})

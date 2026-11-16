@@ -4,32 +4,61 @@
   "today": "2026-11-09",
   "request_id": "synthetic-query-003",
   "query": "H&M 블라우스 찾아줘",
-  "draft": {
-    "season": null,
+  "structured_draft": {
+    "seasons": [],
     "style_names": [],
-    "item_terms": [],
-    "include_categories": [{"raw": "블라우스", "major": "상의", "minor": "블라우스"}],
-    "exclude_categories": [],
-    "gender": null,
-    "attributes": [],
-    "unsupported": [{"type": "brand", "raw": "H&M"}]
+    "product_model_names": [],
+    "items": [
+      {
+        "raw": "블라우스",
+        "suggestion": "블라우스"
+      }
+    ],
+    "conditions": [],
+    "unsupported": [
+      {
+        "type": "brand",
+        "raw": "H&M",
+        "polarity": "include",
+        "item": "블라우스"
+      }
+    ]
   },
-  "structured_draft": {"seasons": [], "style_names": [], "product_model_names": [], "items": [{"raw": "블라우스", "suggestion": "블라우스"}], "conditions": [], "unsupported": [{"type": "brand", "raw": "H&M", "polarity": "include", "item": "블라우스"}]},
   "expected_warnings": [],
   "expected_trend_query": {
     "request_id": "synthetic-query-003",
     "original_query": "H&M 블라우스 찾아줘",
     "trend_terms": {
-      "season": {"year": 2027, "season": "SS", "raw": null, "origin": "default_next"},
+      "season": {
+        "year": 2027,
+        "season": "SS",
+        "raw": null,
+        "origin": "default_next"
+      },
       "style_names": [],
       "item_terms": []
     },
     "requested": {
-      "categories": {"include": [{"raw": "블라우스", "major": "상의", "minor": "블라우스"}], "exclude": []},
+      "categories": {
+        "include": [
+          {
+            "raw": "블라우스",
+            "major": "상의",
+            "minor": "블라우스"
+          }
+        ],
+        "exclude": []
+      },
       "gender": null,
       "attributes": []
     },
-    "unsupported": [{"type": "brand", "raw": "H&M", "reason": "Product 데이터는 Musinsa뿐"}],
+    "unsupported": [
+      {
+        "type": "brand",
+        "raw": "H&M",
+        "reason": "Product 데이터는 Musinsa뿐"
+      }
+    ],
     "missing_fields": []
   }
 }

@@ -52,14 +52,14 @@ class StructuredPathTests(unittest.TestCase):
     def run_path(self, produced, query, as_written=False, **kwargs):
         if not as_written and isinstance(produced, dict) and "common" in produced and "prompt_version" not in kwargs:
             produced = self.draft_v4.from_draft_v3(produced)
-        return self.structured.structure_query_v2(
+        return self.structured.structure_query(
             query, request_id="r-1", draft_provider=lambda bundle: produced, today=date(2026, 11, 10), **kwargs)
 
     def items_of(self, result):
         return result.structured_query.model_dump(mode="json")["items"]
 
-    def test_running_path_is_still_v1(self):
-        self.assertEqual(self.config.CONFIG.prompt_version, "v1")
+    def test_running_path_uses_the_configured_v6(self):
+        self.assertEqual(self.config.CONFIG.prompt_version, "v6")
 
     def test_conditions_stay_with_their_item_and_common_ones_are_copied(self):
         # IT-1, IT-2, IT-3: "니트" belongs to the vest only; the gender exclusion is copied into both items
@@ -364,7 +364,7 @@ class DatasetTests(unittest.TestCase):
         dev = [i["query"] for i in self.data["items"]]
         held = [i["query"] for i in self.holdout["items"]]
         self.assertEqual((len(dev), len(set(dev)), len(held), len(set(held))), (30, 30, 20, 20))
-        examples = {e["query"] for v in ("v1", "v2", "v3", "v4", "v5", "v6") for e in self.prompt.load_prompt(v).examples}
+        examples = {e["query"] for v in ("v2", "v3", "v4", "v5", "v6") for e in self.prompt.load_prompt(v).examples}
         self.assertEqual(set(dev) & examples, set())  # overlap would inflate accuracy
         self.assertEqual(set(held) & (set(dev) | examples), set())
 
@@ -386,10 +386,10 @@ class DatasetTests(unittest.TestCase):
         queries = {i["query"] for i in holdout["items"]}
         self.assertEqual(len(queries), 20)
         earlier = set()
-        for name in ("user_queries.v1.json", "user_queries.v2.json", "user_queries.v3.json",
+        for name in ("user_queries.v2.json", "user_queries.v3.json",
                      "user_queries.holdout.v1.json", "user_queries.holdout.v2.json"):
             earlier |= {i["query"] for i in json.loads((ROOT / "data" / name).read_text(encoding="utf-8"))["items"]}
-        earlier |= {e["query"] for v in ("v1", "v2", "v3", "v4", "v5", "v6") for e in self.prompt.load_prompt(v).examples}
+        earlier |= {e["query"] for v in ("v2", "v3", "v4", "v5", "v6") for e in self.prompt.load_prompt(v).examples}
         self.assertEqual(len(queries & earlier), 0)
         for version in ("v6", "v4"):
             report = self.evaluator.run(holdout, "fixture", None, version)

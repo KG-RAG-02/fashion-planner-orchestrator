@@ -1,0 +1,226 @@
+{
+  "_provenance": {
+    "agent_id": "sales-market-agent",
+    "contract": "P07 /reviews native review response",
+    "direction": "output",
+    "payload_schema_version": "sales-market-review/0.1-internal",
+    "method": "copy",
+    "source_repo": "KG-RAG-02/sales-market-agent",
+    "source_branch": "main",
+    "source_commit": "2738e9f9c0b8",
+    "source_schema": "contracts/schemas/proposals/sales-market-review-0.3-proposal-response.schema.json",
+    "source_files": [
+      {
+        "path": "src/market_research_agent/http_server.py",
+        "sha256": "b79891a3d251f1b3a0296756572177fab05aa87b2a4ee194dbb0a8c4de016e99"
+      },
+      {
+        "path": "contracts/schemas/proposals/sales-market-review-0.3-proposal-response.schema.json",
+        "sha256": "7256537b970283a32e408da0c439c24b33a20dda22a81e53558876b9696b5273"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/sales-market-agent/reviews",
+      "contract_version": "vogue-sales-market-review/0.3-proposal",
+      "detected_from": "src/market_research_agent/http_server.py:REVIEW_CONTRACT_VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:vogue:sales-market-review:0.3:proposal-response",
+    "title": "Project_07 product review response for provenance-aware proposal requests",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract_version",
+      "request_id",
+      "producer",
+      "status",
+      "result"
+    ],
+    "properties": {
+      "contract_version": {
+        "const": "vogue-sales-market-review/0.3-proposal"
+      },
+      "request_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "producer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent_id",
+          "schema_version"
+        ],
+        "properties": {
+          "agent_id": {
+            "const": "sales-market-agent"
+          },
+          "schema_version": {
+            "const": "sales-market-review/0.1-internal"
+          }
+        }
+      },
+      "status": {
+        "enum": [
+          "ok",
+          "partial",
+          "no_results",
+          "error"
+        ]
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "request_id",
+          "draft_id",
+          "producer_id",
+          "status",
+          "draft_context",
+          "category_price_comparison",
+          "material_cost_analysis",
+          "customer_segment_analysis",
+          "target_audience_analysis",
+          "margin_estimate",
+          "evidence",
+          "missing_data",
+          "errors",
+          "limitations",
+          "decision_support",
+          "price_analysis",
+          "fabric_cost_analysis",
+          "margin_analysis",
+          "margin_price_range_analysis",
+          "target_audience"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": "sales-market-review/0.1-internal"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "producer_id": {
+            "const": "sales-market-agent"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_results",
+              "error"
+            ]
+          },
+          "draft_context": {
+            "type": "object"
+          },
+          "category_price_comparison": {
+            "type": "array"
+          },
+          "material_cost_analysis": {
+            "type": "array"
+          },
+          "customer_segment_analysis": {
+            "type": "array"
+          },
+          "target_audience_analysis": {
+            "type": "object"
+          },
+          "margin_estimate": {
+            "type": "object"
+          },
+          "evidence": {
+            "type": "array"
+          },
+          "missing_data": {
+            "type": "array"
+          },
+          "errors": {
+            "type": "array"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "decision_support": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recommendation",
+              "ready_for_human_decision",
+              "evidence_areas",
+              "human_decision_required"
+            ],
+            "properties": {
+              "recommendation": {
+                "const": "review_required"
+              },
+              "ready_for_human_decision": {
+                "type": "boolean"
+              },
+              "evidence_areas": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "category_price",
+                  "material_cost",
+                  "margin",
+                  "customer_segments"
+                ],
+                "properties": {
+                  "category_price": {
+                    "type": "boolean"
+                  },
+                  "material_cost": {
+                    "type": "boolean"
+                  },
+                  "margin": {
+                    "type": "boolean"
+                  },
+                  "customer_segments": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "human_decision_required": {
+                "const": true
+              }
+            }
+          },
+          "price_analysis": {
+            "type": "object"
+          },
+          "fabric_cost_analysis": {
+            "type": "object"
+          },
+          "margin_analysis": {
+            "type": "object"
+          },
+          "margin_price_range_analysis": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "target_audience": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

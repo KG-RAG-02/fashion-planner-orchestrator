@@ -36,7 +36,8 @@ class FixtureImageProviderTests(unittest.TestCase):
             workflow_http.fixture_image({'lineage': LINEAGE})
 
     def test_build_workflow_selects_the_provider(self):
-        base = dict(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1', **AGENTS)
+        base = dict(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1',
+                    VOGUE_AGENT_SERVICE_BEARER_TOKEN='synthetic-test-token', **AGENTS)
         store_dir = str(real_tempdir(self) / 'store')
         cases = [({}, None, False), ({'VOGUE_WORKFLOW_IMAGE_PROVIDER': 'fixture'}, None, False),
                  ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1', 'VOGUE_WORKFLOW_IMAGE_PROVIDER': 'fixture'}, 'fixture_image', True),
@@ -56,9 +57,10 @@ class FixtureImageProviderTests(unittest.TestCase):
         for provider in ('dall-e', 'openai'):
             with self.subTest(provider=provider):
                 handler = Mock()
-                request = dict(contract_version='vogue-workflow/0.1', request_id='r-1', input=dict(user_input=dict(text='t', images=[])))
+                request = dict(contract_version='vogue-workflow/0.2', request_id='r-1', input=dict(user_input=dict(text='t', images=[])))
                 with environment(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1', VOGUE_WORKFLOW_IMAGES_ENABLED='1',
-                                 VOGUE_WORKFLOW_IMAGE_PROVIDER=provider, VOGUE_WORKFLOW_STORE_DIR=str(real_tempdir(self)), **AGENTS):
+                                 VOGUE_WORKFLOW_IMAGE_PROVIDER=provider, VOGUE_WORKFLOW_STORE_DIR=str(real_tempdir(self)),
+                                 VOGUE_AGENT_SERVICE_BEARER_TOKEN='synthetic-test-token', **AGENTS):
                     workflow_http.dispatch(handler, request)
                 status, body = handler._json.call_args.args
                 self.assertEqual((status, body['error']['code']), (409, 'IMAGE_PROVIDER_INVALID'))

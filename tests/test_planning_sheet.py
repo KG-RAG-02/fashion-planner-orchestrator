@@ -1,8 +1,7 @@
-"""기획서 PNG (planning_sheet.py): the evidence-linked planning board drawn from a stored integrated envelope.
+"""기획서 PNG (planning_sheet.py): the one-product proposal poster drawn from a stored integrated envelope.
 
-Presentation only: these tests pin that the sheet keeps the board's section order, shows producer
-statuses and values unchanged, never invents Evidence IDs or zeros, and that the HTTP route reads the
-store without changing it. PNG tests need a Korean font (fonts-nanum in the image, Apple SD Gothic Neo
+Presentation only: these tests pin that the poster shows producer values unchanged, never invents Evidence
+IDs or zeros, says why a section is empty, and that the HTTP route reads the store without changing it. PNG tests need a Korean font (fonts-nanum in the image, Apple SD Gothic Neo
 on macOS); without one they are skipped with that reason.
 """
 import copy
@@ -20,7 +19,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / 'tools' / 'workflow_contract' /
 INTEGRATED = ('integrated-ok', 'integrated-image-failed', 'integrated-review-no-results', 'integrated-review-error',
               'integrated-stock-partial', 'integrated-trend-no-results', 'integrated-draft-no-results', 'integrated-auth-error',
               'integrated-visuals-ok')
-SECTION_ORDER = ('concept', 'trend', 'inventory', 'sales_market', 'insight', 'specifications', 'references', 'finance')
+SECTION_ORDER = ('trend', 'inventory', 'sales_market', 'insight', 'finance')
 PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
 
 
@@ -62,7 +61,6 @@ class BoardMappingTests(unittest.TestCase):
             with self.subTest(fixture=name):
                 sheet = build_sheet(fixture(name))
                 self.assertEqual(tuple(s.section_id for s in sheet.board.sections), SECTION_ORDER)
-                self.assertEqual(sheet.board.process, ('ISSUE', 'INSIGHT', 'PROPOSAL'))
                 self.assertEqual(sheet.board.review_label, 'MD 검토용 초안 · 자동 승인 아님')
 
     def test_evidence_ids_are_never_invented(self):
@@ -74,21 +72,15 @@ class BoardMappingTests(unittest.TestCase):
                 for section in sheet.board.sections:
                     for claim in section.claims:
                         self.assertLessEqual(set(claim.evidence_ids), known, (section.section_id, claim.text))
-                self.assertLessEqual(set(sheet.board.evidence_ids), known)
+                if sheet.concept_line:
+                    self.assertLessEqual(set(sheet.concept_line.evidence_ids), known)
 
-    def test_producer_statuses_are_shown_unchanged(self):
-        for name, section_id in (('integrated-stock-partial', 'inventory'), ('integrated-review-no-results', 'sales_market'),
-                                 ('integrated-trend-no-results', 'trend'), ('integrated-draft-no-results', 'insight')):
+    def test_an_empty_section_says_why(self):
+        for name, section_id in (('integrated-review-no-results', 'sales_market'), ('integrated-trend-no-results', 'trend'),
+                                 ('integrated-draft-no-results', 'insight')):
             with self.subTest(fixture=name):
-                envelope = fixture(name)
-                stage_key = {'inventory': 'stock', 'sales_market': 'sales_market_review', 'trend': 'trend',
-                             'insight': 'planning_draft'}[section_id]
-                stage = next((s for s in envelope['result']['stages'] if s['stage'] == stage_key), None)
-                section = {s.section_id: s for s in build_sheet(envelope).board.sections}[section_id]
-                expected = stage['status'] if stage else 'not_provided'
-                self.assertEqual(section.input_status, expected)
-                if expected == 'no_results':
-                    self.assertEqual(section.state, 'no_results')
+                section = {s.section_id: s for s in build_sheet(fixture(name)).board.sections}[section_id]
+                self.assertTrue(section.notes, 'a no_results section carries the producer note or the reason it is empty')
 
     def test_a_missing_metric_stays_missing_and_is_never_zero(self):
         envelope = copy.deepcopy(fixture('integrated-ok'))
@@ -110,28 +102,89 @@ class BoardMappingTests(unittest.TestCase):
         result['errors'] = [{'stage': 'sales_market_review', 'code': 'UPSTREAM_TIMEOUT', 'message': 'timed out',
                              'fatal': True, 'retryable': True}]
         section = {s.section_id: s for s in build_sheet(envelope).board.sections}['sales_market']
-        self.assertEqual((section.state, section.claims), ('failed', ()))
+        self.assertEqual(section.claims, ())
         self.assertIn('UPSTREAM_TIMEOUT: timed out', section.notes)
 
     def test_p06_concept_and_visuals_are_mapped_from_the_draft(self):
-        # workflow-contract 0.2.0: draft.concept fills the spec section; draft.visuals are the panel; 06 is the sheet.
+        # workflow-contract 0.2.0: draft.concept gives the product definition; draft.visuals are the LOOK images.
         sheet = build_sheet(fixture('integrated-visuals-ok'))
-        spec = next(section for section in sheet.board.sections if section.section_id == 'specifications')
-        texts = [claim.text for claim in spec.claims]
-        self.assertEqual(texts[0], '상품 정의: 합성 셔츠 콘셉트 (fixture)')
-        self.assertIn('color=화이트', texts)
+        self.assertEqual(sheet.concept_line.text, '합성 셔츠 콘셉트 (fixture)')
         self.assertEqual([(v.key, v.status, v.model) for v in sheet.visual.draft_visuals],
                          [('product', 'generated', 'fixture'), ('outfit', 'generated', 'fixture')])
-        self.assertEqual(sheet.visual.image_generation_calls, 2)
-        self.assertEqual(sheet.stages[-1][:3], ('final_image', '06', 'Sheet'))
-        self.assertEqual(dict(sheet.brief)['시안 (P06)'], '신상품 생성됨 · 착장 생성됨')
         self.assertEqual(build_sheet(fixture('integrated-ok')).visual.draft_visuals, ())  # earlier runs: final image panel
 
-    def test_brief_rows_report_missing_fields_as_missing(self):
-        brief = dict(build_sheet(fixture('integrated-ok')).brief)
-        self.assertTrue(brief['점수'].startswith('미제공'))
-        self.assertTrue(brief['후보 유형'].startswith('미제공'))
-        self.assertEqual(set(brief), {'후보 ID', '후보 유형', '대상', '점수', '가정', '미확정', '리스크·한계', '검증 질문', '시안'})
+    def test_p07_price_cost_margin_and_target_are_read_as_reported(self):
+        envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
+        p07 = json.loads((FIXTURES / 'p07-review-v0.3.response.json').read_text(encoding='utf-8'))
+        body = p07['result']
+        body['price_analysis'].update(proposed_price=59000, currency='KRW', unit='KRW')
+        body['fabric_cost_analysis'].update(unit_cost=12450.0, unit='KRW/m', currency='KRW')
+        body['margin_analysis'].update(margin_rate_percent=56.88)
+        body['target_audience'] = {
+            'status': 'ok', 'limitations': [], 'evidence_ids': [],
+            'age_cohort': {'age_band': '20_39', 'definition': '20–39 (20s and 30s)',
+                           'share_of_customers_with_known_age': 0.597291, 'suppressed': False},
+            'proposal': {'proposal': '합성 타깃 가설 문장', 'primary_segment': '합성 주 타깃',
+                         'secondary_segments': ['보조 타깃'], 'product_fit': {'wearing_occasions': ['출퇴근', '주말']}}}
+        envelope['result']['sources']['sales_market_review']['raw_response'] = p07
+        sheet = build_sheet(envelope)
+        self.assertEqual(sheet.price_rows, (('제안 판매가', '59,000원'), ('소재 원가', '12,450원/m'), ('마진율', '56.88%')))
+        target = sheet.target
+        self.assertEqual((target.age, target.age_note), ('20–39 (20s and 30s)', '연령 확인 고객의 59.7%'))
+        self.assertEqual((target.primary, target.summary, target.secondary, target.occasions),
+                         ('합성 주 타깃', '합성 타깃 가설 문장', ('보조 타깃',), ('출퇴근', '주말')))
+
+    def test_a_missing_target_stays_missing(self):
+        envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
+        envelope['result']['sources']['sales_market_review']['raw_response'] = json.loads(
+            (FIXTURES / 'p07-review-v0.3.response.json').read_text(encoding='utf-8'))
+        sheet = build_sheet(envelope)
+        self.assertIsNone(sheet.target)  # the synthetic P07 response carries no target analysis
+        self.assertEqual(sheet.price_rows, ())
+
+    def test_the_current_new_product_draft_fills_the_design_column(self):
+        envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
+        body = envelope['result']['sources']['planning_draft']['raw_response']['result']
+        draft = body['draft']
+        draft.pop('concept', None)
+        draft.pop('claims', None)
+        claim = lambda value, kind='proposal', ids=(): {'value': value, 'kind': kind, 'evidence_ids': list(ids)}
+        draft.update(
+            product_definition=claim('합성 가디건 콘셉트'), opportunity=claim('합성 기획 기회'),
+            opportunity_findings=[{'statement': claim('합성 근거 문장', 'evidence_observation', ['trend:fixture:article:0:bd1ee873'])}],
+            product_profile={'category': claim('가디건', 'user_requested'), 'season': claim('2026FW', 'user_requested'),
+                             'product_type': claim(None, 'unknown'), 'gender': claim('women', 'user_requested'),
+                             'silhouette': claim('오버사이즈', 'evidence_observation'), 'color': claim('브라운', 'to_validate'),
+                             'material': claim(None, 'unknown'),
+                             'details': [{'name': 'detail', 'value': '자수', 'kind': 'evidence_observation', 'evidence_ids': []}]},
+            attributes=[{'name': 'material', 'value': '재고 소재', 'kind': 'to_validate', 'evidence_ids': []}],
+            differentiation=[claim('합성 차별점')], relation_to_own_products=[claim('합성 재고 관계', 'evidence_observation')],
+            questions_for_validation=['합성 확인 질문'])
+        body['planning_analysis'] = {'proposals': [claim('합성 가디건 콘셉트'), claim('합성 기획 제안')],
+                                     'interpretations': [claim('합성 기획 기회'), claim(None, 'unknown')]}
+        sheet = build_sheet(envelope)
+        self.assertEqual(sheet.concept_line.text, '합성 가디건 콘셉트')
+        self.assertEqual([(row.label, row.value, row.kind) for row in sheet.spec_rows],
+                         [('카테고리', '가디건', 'user_requested'), ('시즌', '2026FW', 'user_requested'), ('성별', '여성', 'user_requested'),
+                          ('실루엣', '오버사이즈', 'evidence_observation'), ('컬러', '브라운', 'to_validate'),
+                          ('디테일', '자수', 'evidence_observation')])
+        self.assertNotIn('재고 소재', [row.value for row in sheet.spec_rows])  # draft.attributes is not the product spec
+        concept = sheet.concept
+        self.assertEqual((concept.opportunity, concept.findings), ('합성 기획 기회', ('합성 근거 문장',)))
+        self.assertEqual((concept.differentiation, concept.own_products), (('합성 차별점',), ('합성 재고 관계',)))
+        self.assertEqual(sheet.insight_points, ('합성 기획 제안',))  # definition and opportunity are not repeated
+        self.assertIn('합성 확인 질문', sheet.review_items)
+
+    def test_source_ids_in_parentheses_are_dropped_from_concept_sentences(self):
+        envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
+        draft = envelope['result']['sources']['planning_draft']['raw_response']['result']['draft']
+        draft.pop('concept', None)
+        claim = lambda value: {'value': value, 'kind': 'proposal', 'evidence_ids': []}  # noqa: E731
+        draft.update(product_definition=claim('트렌드 방향: 화이트 (trend_analysis_result), 레드 (trend_analysis_result).'),
+                     opportunity=claim('합성 기회 (sample) 문장 (stock_analysis_result)'))
+        sheet = build_sheet(envelope)
+        self.assertEqual(sheet.concept_line.text, '트렌드 방향: 화이트, 레드.')
+        self.assertEqual(sheet.concept.opportunity, '합성 기회 (sample) 문장')  # a plain word in parentheses stays
 
     def test_invalid_input_is_refused(self):
         with self.assertRaises(PlanningSheetError) as caught:
@@ -149,7 +202,7 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
         from PIL import Image
         with Image.open(io.BytesIO(first)) as image:
             self.assertEqual(image.width, 3200)
-            self.assertGreater(image.height, 2000)
+            self.assertGreater(image.height, 1500)
             self.assertEqual(image.info['vogue:request_id'], envelope['result']['request_id'])
             self.assertEqual(image.info['vogue:format'], 'evidence-linked-planning-board/png-1')
 
@@ -166,7 +219,7 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
         self.assertEqual(calls, [envelope['result']['final_image']['artifact']])
         from PIL import Image
         with Image.open(io.BytesIO(png)) as image:
-            red, green, blue = image.convert('RGB').getpixel((2624, 960))  # centre of the visual box
+            red, green, blue = image.convert('RGB').getpixel((1600, 1002))  # centre of the image in the Design column
         self.assertGreater(red, 180)
         self.assertLess(green, 80)
 
@@ -186,7 +239,7 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
         from PIL import Image
         with Image.open(io.BytesIO(png)) as image:
             rgb = image.convert('RGB')
-            left, right = rgb.getpixel((2378, 982)), rgb.getpixel((2870, 982))  # centres of the two panels
+            left, right = rgb.getpixel((1346, 978)), rgb.getpixel((1852, 978))  # centres of LOOK 01 and LOOK 02
         self.assertTrue(left[0] > 180 and left[2] < 80, left)
         self.assertTrue(right[2] > 180 and right[0] < 80, right)
 
@@ -206,9 +259,30 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
         from PIL import Image
         with Image.open(io.BytesIO(planning_sheet_png(envelope, load_artifact=load, fonts=fonts))) as image:
             rgb = image.convert('RGB')
-            top, bottom = rgb.getpixel((2624, 796)), rgb.getpixel((2624, 1488))  # centres of the two stacked panels
+            top, bottom = rgb.getpixel((1600, 944)), rgb.getpixel((1600, 1684))  # centres of the two stacked LOOK panels
         self.assertTrue(top[0] > 180 and top[2] < 80, top)
         self.assertTrue(bottom[2] > 180 and bottom[0] < 80, bottom)
+
+    def test_trend_photos_are_drawn_in_the_analysis_column(self):
+        fonts = self.fonts()
+        envelope = fixture('integrated-visuals-ok')
+        green = (20, 170, 40)
+
+        def photo(colour):
+            from PIL import Image
+            out = io.BytesIO()
+            Image.new('RGB', (30, 40), colour).save(out, format='PNG')
+            return out.getvalue()
+
+        photos = [(photo(green), 'https://img.vogue.co.kr/a.jpg'), (photo(green), 'https://img.vogue.co.kr/b.jpg')]
+        png = planning_sheet_png(envelope, load_artifact=lambda artifact: photo((200, 200, 200)), fonts=fonts,
+                                 trend_photos=photos)
+        from PIL import Image
+        with Image.open(io.BytesIO(png)) as image:
+            rgb = image.convert('RGB')
+            left, right = rgb.getpixel((300, 1070)), rgb.getpixel((800, 1070))  # the two photos under the trend
+        self.assertEqual((left, right), (green, green))
+        self.assertNotEqual(png, planning_sheet_png(envelope, load_artifact=lambda artifact: photo((200, 200, 200)), fonts=fonts))
 
     def test_a_failed_image_is_never_loaded(self):
         fonts = self.fonts()

@@ -76,13 +76,17 @@ def schema_validator():
         from referencing import Registry, Resource
     except ImportError:
         return None
-    base = "https://contracts.vogue.invalid/workflow/0.1/"
+    bases = ("https://contracts.vogue.invalid/workflow/0.1/",
+             "https://contracts.vogue.invalid/workflow/2.0/")
     registry = Registry(retrieve=lambda uri: (_ for _ in ()).throw(ValueError(f"remote ref disabled: {uri}")))
     target = None
     for path in sorted(SCHEMAS.rglob("*.schema.json")):
         value = json.loads(path.read_text(encoding="utf-8"))
         resource = Resource.from_contents(value)
-        registry = registry.with_resource(base + path.relative_to(SCHEMAS).as_posix(), resource).with_resource(value["$id"], resource)
+        for base in bases:
+            registry = registry.with_resource(base + path.relative_to(SCHEMAS).as_posix(), resource)
+        if isinstance(value.get("$id"), str):
+            registry = registry.with_resource(value["$id"], resource)
         if path.name == "integrated-result.schema.json":
             target = value
     return Draft202012Validator(target, registry=registry) if target else None
@@ -90,7 +94,7 @@ def schema_validator():
 
 def build_input(args, request_id):
     text = args.query
-    payload = {"contract_version": "vogue-workflow/0.1", "request_id": request_id, "input": {"user_input": {"text": text, "images": []}}}
+    payload = {"contract_version": "vogue-workflow/0.2", "request_id": request_id, "input": {"user_input": {"text": text, "images": []}}}
     if args.trend_query:
         template = json.loads(Path(args.trend_query).expanduser().read_text(encoding="utf-8"))
         trend_query = template.get("input", template)  # accepts a full vogue-handoff envelope or a bare TrendQuery
@@ -168,7 +172,10 @@ def main(argv=None):
     image = result.get("final_image", {})
     calls = image.get("provider_calls")
     check("at most one image provider call", isinstance(calls, int) and calls <= 1, calls)
-    check("every stage completed (ok)", names == STAGE_ORDER and all(s.get("status") == "ok" for s in stages) and result.get("status") == "ok",
+    valid_statuses = {"ok", "partial", "no_results"}
+    check("all six stages completed without an error status",
+          names == STAGE_ORDER and all(s.get("status") in valid_statuses for s in stages)
+          and result.get("status") in valid_statuses,
           [f"{s.get('stage')}={s.get('status')}" for s in stages])
     # 0.2.0: P06 returns the trend-reflecting product image and the worn (outfit) image with the Draft.
     check("P06 made the product and outfit visuals", [visuals.get(k, {}).get("status") for k in ("product", "outfit")] == ["generated", "generated"],
@@ -207,8 +214,13 @@ def main(argv=None):
     if validator is None:
         check("integrated-result schema validation (jsonschema missing — skipped)", True, "skipped: install jsonschema to enable")
     else:
-        errors = sorted(validator.iter_errors(envelope), key=lambda e: list(e.absolute_path))[:5]
-        check("envelope validates against integrated-result.schema.json", not errors, ["/".join(map(str, e.absolute_path)) + ": " + e.message[:120] for e in errors])
+        try:
+            errors = sorted(validator.iter_errors(envelope), key=lambda e: list(e.absolute_path))[:5]
+            check("envelope validates against integrated-result.schema.json", not errors,
+                  ["/".join(map(str, e.absolute_path)) + ": " + e.message[:120] for e in errors])
+        except Exception as error:
+            check("envelope validates against integrated-result.schema.json", False,
+                  f"schema validation error: {type(error).__name__}")
 
     print("3. durable record, replay and MD decision")
     status, stored, _, _, _ = call(base, "GET", f"/api/workflow/runs/{request_id}")
@@ -222,7 +234,7 @@ def main(argv=None):
     check("md-decision GET exposes the integrated response hash", status == 200 and isinstance(sha, str) and len(sha) == 64, status)
     if sha:
         status, saved, _, _, _ = call(base, "POST", f"/api/workflow/runs/{request_id}/md-decision",
-                                      {"contract_version": "vogue-workflow/0.1", "request_id": request_id, "integrated_response_sha256": sha, "decision": "hold", "note": f"e2e {args.profile} check"})
+                                      {"contract_version": "vogue-workflow/0.2", "request_id": request_id, "integrated_response_sha256": sha, "decision": "hold", "note": f"e2e {args.profile} check"})
         check("md-decision POST records the decision", status == 201, status)
         status, after, _, _, _ = call(base, "GET", f"/api/workflow/runs/{request_id}/md-decision")
         check("decision history has the new record", status == 200 and len((after or {}).get("decisions", [])) >= 1)

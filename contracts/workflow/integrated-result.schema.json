@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.vogue.invalid/workflow/0.1/integrated-result.schema.json",
+  "$id": "https://contracts.vogue.invalid/workflow/2.0/integrated-result.schema.json",
   "title": "P08 integrated result; MD decision pending",
-  "$comment": "PROPOSED workflow-contract/0.2.0: structural validation plus versioned semantic rules are required; see decisions/contract-baseline.json. Not service compatibility.",
+  "$comment": "PROPOSED workflow-contract/0.5.0; P06/P07 native peer payloads are retained without claiming full-Draft review lineage.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,7 +14,7 @@
   ],
   "properties": {
     "contract_version": {
-      "const": "vogue-workflow/0.1"
+      "const": "vogue-workflow/0.2"
     },
     "request_id": {
       "$ref": "common.schema.json#/$defs/id"
@@ -31,7 +31,7 @@
           "const": "vogue-orchestrator"
         },
         "schema_version": {
-          "const": "integrated-result/1.0"
+          "const": "integrated-result/2.0"
         }
       }
     },
@@ -59,7 +59,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "integrated-result/1.0"
+          "const": "integrated-result/2.0"
         },
         "agent_id": {
           "const": "vogue-orchestrator"

@@ -265,6 +265,22 @@ a.btn-dark:hover, a.btn-dark:focus-visible { color: #FFFFFF; background: #3A3834
 .open-questions ul { margin: 6px 0 0; padding-left: 18px; }
 .limits summary { cursor: pointer; font-size: 13px; color: var(--sub); min-height: 32px; }
 .limits ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.review-analyses { display: grid; gap: 8px; }
+.review-input-card { margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--raised); }
+.review-input-card > summary { cursor: pointer; font-size: 14px; font-weight: 500; }
+.review-input-meta { margin: 8px 0; overflow-wrap: anywhere; }
+.review-input-table { min-width: 680px; }
+.review-input-table th, .review-input-table td { padding: 10px 12px; }
+.review-input-table td { overflow-wrap: anywhere; }
+.review-input-value { font-weight: 500; }
+.review-origin { display: inline-flex; margin: 0 0 4px; }
+.review-origin.origin-user_requested { background: #e7efe9; color: #315844; }
+.review-origin.origin-evidence_observation { background: #e8edf3; color: #3e5873; }
+.review-origin.origin-hypothesis, .review-origin.origin-to_validate { background: #f5eddd; color: #755b2d; }
+.review-origin.origin-unknown, .review-origin.origin-missing { background: #f0e7e5; color: #79534d; }
+.review-source-ref { display: block; max-width: 260px; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 11px; }
+.review-evidence-ids { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.review-payload { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; margin: 8px 0 0; padding: 12px; background: var(--raised); border-radius: var(--radius-sm); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 .table-scroll { overflow-x: auto; }
 .metric-table { width: 100%; min-width: 520px; border-collapse: collapse; font-size: 14px; }

@@ -1,16 +1,15 @@
-"""기획서 PNG: the evidence-linked planning board rendered from a stored integrated result.
+"""Deterministic Planning Sheet PNG rendered from the integrated workflow result.
 
-Format: new-product-agent ``docs/design/evidence-linked-planning-board.md`` and its model in
-``workflows/planning_board.py`` (``PlanningBoard``/``BoardSection``/``BoardClaim``): a review-only
-header, the ISSUE → INSIGHT → PROPOSAL strip, eight section cards (state label, producer, claim kind,
-Evidence IDs, notes), the product visual and an evidence summary. The board's purpose — a review
-artifact that keeps producer observations, interpretation, proposals and validation questions apart —
-is also the 상품기획서 of ``docs/design/trend-batch-kg-rag-product-planning.md`` (근거와 불확실성을
-포함한 상품기획서 및 검토용 시안).
-
-Presentation only. The input is the ``integrated-result/1.0`` envelope exactly as P08 stored it. No
+Presentation only. The input is the ``integrated-result/2.0`` envelope exactly as P08 stored it. No
 agent is called, no producer value is recomputed or rewritten, a missing value stays missing
 (미제공 / 미확인, never 0), and long lists are cut with an explicit "+N" count instead of silently.
+
+Layout: a one-product proposal poster. A header (title, season, category, run date) over three columns —
+Analysis (the first Trend style: description, colour swatches, material texture chips, article photos; the stock
+product matched to it: image, colour, material, fit, quantity, match reason; the LLM SWOT draft), Design
+(new-product-agent's product definition, LOOK visuals, specification, planning points) and Marketing (target,
+sales & market, price, LLM promotion ideas, MD review points). Agent
+metadata (Evidence IDs, stage statuses, run trace) stays in the stored run and the UI, not on the poster.
 """
 
 from __future__ import annotations
@@ -21,6 +20,7 @@ import binascii
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import sqlite3
@@ -30,11 +30,39 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 from urllib.parse import urlsplit
 
-from .workflows.planning_board import BoardClaim, BoardSection, PlanningBoard, _claim, _state
+
+@dataclass(frozen=True)
+class BoardClaim:
+    text: str
+    kind: str
+    evidence_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class BoardSection:
+    """One producer's part of the run as the poster reads it: its displayable claims and its notes
+    (limitations, or why there is nothing to show)."""
+    section_id: str
+    claims: tuple[BoardClaim, ...] = ()
+    notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlanningBoard:
+    title: str
+    season: str
+    category: str
+    review_label: str
+    sections: tuple[BoardSection, ...]
+    synthetic_context: bool = False
+
+
+def _claim(text: object, kind: str, ids=()) -> BoardClaim:
+    evidence_ids = tuple(dict.fromkeys(str(item) for item in ids if isinstance(item, str) and item.strip()))
+    return BoardClaim(str(text), kind, evidence_ids)
 
 SHEET_FORMAT = 'evidence-linked-planning-board/png-1'
 REVIEW_LABEL = 'MD 검토용 초안 · 자동 승인 아님'
-PROCESS = ('ISSUE', 'INSIGHT', 'PROPOSAL')
 FOOTER_NOTE = '검토용 초안 · 근거 미연결 값은 확정 사실이 아닙니다 · 승인·발주·생산 가능성 확정이 아닙니다.'
 # P08 writes this limitation itself when the deterministic fixture image provider is used.
 FIXTURE_IMAGE_MARKER = 'VOGUE_WORKFLOW_IMAGE_PROVIDER=fixture'
@@ -44,22 +72,10 @@ DRAFT_FIXTURE_MARKER = 'VOGUE_DRAFT_IMAGE_PROVIDER=fixture'
 DRAFT_VISUALS = (('product', '신상품 · Product'), ('outfit', '착장 · Outfit'))
 MAX_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024
 
-STAGES = (('trend', '01', 'Trend'), ('stock', '02', 'Stock'), ('planning_draft', '03', 'Draft'),
-          ('sales_market_review', '04', 'Review'), ('integration', '05', 'Integrate'), ('final_image', '06', 'Sheet'))
-STATE_LABELS = {'available': '근거 확인', 'partial': '일부 근거/입력 확인 필요', 'no_results': '조회 결과 없음',
-                'not_provided': '입력 미제공', 'unverified': '근거 미확인', 'blocked': '상세 해석 보류',
-                'failed': '처리 실패'}
 KIND_LABELS = {'observation': '관찰', 'evidence_observation': '관찰', 'interpretation': '해석', 'proposal': '제안',
                'user_requested': '요청', 'to_validate': '확인 필요', 'producer_finding': '에이전트 결과'}
-CONTEXT_LABELS = {'season': '시즌', 'category': '카테고리', 'target_customer': '대상 고객', 'gender': '성별',
-                  'colors': '색상', 'color': '색상', 'materials': '소재', 'price_band': '가격대'}
 DECISION_LABELS = {'price': '가격', 'cost': '원가', 'quantity': '수량', 'purchase_order': '발주', 'adoption': '최종 채택'}
-MD_DECISION_LABELS = {'adopt': '채택 · adopt', 'revise': '수정 · revise', 'hold': '보류 · hold'}
-RUN_STATUS_LABELS = {'ok': '완료 · ok', 'partial': '부분 · partial', 'no_results': '결과 없음 · no_results',
-                     'error': '오류 · error', 'generated': '생성됨', 'failed': '실패', 'skipped': '생략'}
 METRIC_LABELS = {'current_company_sales': '현재 자사 판매'}
-SECTION_LIMITS = {'concept': 5, 'trend': 8, 'inventory': 5, 'sales_market': 6,
-                  'insight': 8, 'specifications': 4, 'references': 5, 'finance': 5}
 
 
 class PlanningSheetError(Exception):
@@ -129,116 +145,31 @@ def _evidence_ids(refs: Any) -> tuple[str, ...]:
     return _unique(_mapping(ref).get('evidence_id') for ref in _list(refs))
 
 
-def _missing_section(result, stage_key, section_id, title, producer, status, body=None) -> BoardSection:
-    """A section without displayable content keeps the producer's status (error → failed, no_results → no_results)."""
+def _missing_section(result, stage_key, section_id, status, body=None) -> BoardSection:
+    """A section without displayable content says why: the stage error, no_results, or not run."""
     errors = [error for error in _list(result.get('errors')) if _mapping(error).get('stage') == stage_key]
     limitations = _strings(_mapping(body).get('limitations'))
     if status == 'error' or errors:
         notes = tuple(f"{error.get('code', 'ERROR')}: {error.get('message', '')}".strip(': ') for error in errors)
-        return BoardSection(section_id, title, producer, status, None, 'failed', (), notes + limitations or ('단계 오류',))
+        return BoardSection(section_id, (), notes + limitations or ('단계 오류',))
     if status == 'no_results':
-        return BoardSection(section_id, title, producer, status, None, 'no_results', (),
-                            limitations or ('생산자가 결과 없음(no_results)을 반환했습니다.',))
-    return BoardSection(section_id, title, producer, status, None, 'not_provided', (),
-                        limitations or ('이 단계의 결과가 없습니다(실행되지 않았거나 이전 단계에서 중단).',))
-
-
-def _concept(result: Mapping[str, Any]) -> BoardSection:
-    request = _mapping(result.get('planning_request'))
-    user_input = _mapping(result.get('user_input'))
-    context = _mapping(request.get('context'))
-    claims = []
-    text = user_input.get('text') or request.get('query')
-    if isinstance(text, str) and text.strip():
-        claims.append(_claim(text.strip(), 'user_requested', source='user_input', source_ref='user_input.text'))
-    ordered = [key for key in ('season', 'category', 'target_customer') if key in context]
-    for key in [*ordered, *(key for key in context if key not in ordered)]:
-        value = context[key]
-        shown = _scalar_text(value)
-        if shown:
-            claims.append(_claim(f'{CONTEXT_LABELS.get(key, key)}: {shown}', 'user_requested',
-                                 source='planning_request', source_ref=f'planning_request.context.{key}'))
-    images = _list(user_input.get('images'))
-    if images:
-        claims.append(_claim(f'레퍼런스 이미지 {len(images)}건 (Draft·통합 참고용)', 'user_requested',
-                             source='user_input', source_ref='user_input.images'))
-    notes = tuple(f'{label} 미지정' for key, label in (('season', '시즌'), ('category', '카테고리')) if not context.get(key))
-    status = 'ok' if request else 'not_provided'
-    return BoardSection('concept', '기획 의도 / Concept', 'vogue-orchestrator', status,
-                        request.get('schema_version') if isinstance(request.get('schema_version'), str) else None,
-                        _state(status, has_claims=bool(claims)), tuple(claims), notes)
+        return BoardSection(section_id, (), limitations or ('생산자가 결과 없음(no_results)을 반환했습니다.',))
+    return BoardSection(section_id, (), limitations or ('이 단계의 결과가 없습니다(실행되지 않았거나 이전 단계에서 중단).',))
 
 
 def _trend(result: Mapping[str, Any]) -> BoardSection:
+    """The Trend notes the poster shows when there is no Trend style to draw."""
     raw = _raw(result, 'trend')
-    status = _status(result, 'trend', raw)
     body = _mapping(raw.get('result')) if raw else {}
     if not body:
-        return _missing_section(result, 'trend', 'trend', '트렌드 분석 / Trend', 'trend-analysis-agent', status,
-                                _mapping(raw.get('result')) if raw else None)
-    agent = _mapping(raw.get('producer')).get('agent_id') or body.get('agent_id') or 'trend-analysis-agent'
-    names, definitions, descriptions, items = [], [], [], []
-    for index, trend in enumerate(_list(body.get('trends'))):
-        style = _mapping(_mapping(trend).get('style'))
-        trend_items = [_mapping(item) for item in _list(_mapping(trend).get('items'))]
-        described = [_mapping(entry) for entry in _list(style.get('description'))]
-        ids = (*_strings(style.get('focus_evidence_ids')),
-               *(i for entry in described for i in _strings(entry.get('evidence_ids'))),
-               *(i for item in trend_items for i in _strings(item.get('evidence_ids'))))
-        seasons = ' · '.join(text for text in (_season_text(s) for s in _list(style.get('seasons'))) if text)
-        name = style.get('name') if isinstance(style.get('name'), str) and style.get('name') else '이름 미제공'
-        names.append(_claim(f'트렌드: {name}' + (f' ({seasons})' if seasons else ''), 'observation' if ids else 'to_validate',
-                            ids, source=agent, source_ref=f'trends[{index}].style'))
-        if isinstance(style.get('definition'), str) and style['definition'].strip():
-            definitions.append(_claim(f"{name} 정의: {style['definition'].strip()}", 'to_validate', (),
-                                      source=agent, source_ref=f'trends[{index}].style.definition'))
-        for position, entry in enumerate(described):
-            if isinstance(entry.get('text'), str) and entry['text'].strip():
-                entry_ids = _strings(entry.get('evidence_ids'))
-                descriptions.append(_claim(entry['text'].strip(), 'observation' if entry_ids else 'to_validate', entry_ids,
-                                           source=agent, source_ref=f'trends[{index}].style.description[{position}]'))
-        for position, item in enumerate(trend_items):
-            if not isinstance(item.get('name'), str) or not item['name'].strip():
-                continue
-            details = [f'{label} {_scalar_text(item.get(key))}' for key, label in
-                       (('category_minor', '분류'), ('colors', '색'), ('materials', '소재'), ('fit', '핏'), ('patterns', '패턴'))
-                       if _scalar_text(item.get(key))]
-            item_ids = _strings(item.get('evidence_ids'))
-            items.append(_claim(' · '.join([f"아이템: {item['name'].strip()}", *details]),
-                                'observation' if item_ids else 'to_validate', item_ids,
-                                source=agent, source_ref=f'trends[{index}].items[{position}]'))
-    claims = (*names, *definitions, *descriptions, *items)
-    schema = _mapping(raw.get('producer')).get('schema_version')
-    return BoardSection('trend', '트렌드 분석 / Trend', agent, status, schema if isinstance(schema, str) else None,
-                        _state(status, has_claims=bool(claims), has_unverified=any(not c.evidence_ids for c in claims)),
-                        claims, _strings(body.get('limitations')))
+        return _missing_section(result, 'trend', 'trend', _status(result, 'trend', raw), body)
+    return BoardSection('trend', (), _strings(body.get('limitations')))
 
 
 def _unit_text(unit: Any) -> str:
     if unit == 'pieces':
         return '개'
     return f' {unit}' if isinstance(unit, str) and unit else ''
-
-
-def _product_text(product: Mapping[str, Any]) -> str:
-    attributes = _mapping(product.get('attributes'))
-    inventory = _mapping(product.get('inventory'))
-    head = ' '.join(text for text in (_scalar_text(product.get('style_id')), _scalar_text(product.get('category'))) if text)
-    parts = [head or '상품 식별자 미제공']
-    for key, label in (('color', '색'), ('material', '소재'), ('fit', '핏')):
-        if _scalar_text(attributes.get(key)):
-            parts.append(f'{label} {_scalar_text(attributes.get(key))}')
-    quantity = inventory.get('quantity')
-    if isinstance(quantity, int) and not isinstance(quantity, bool):
-        stock = f'재고 {quantity:,}{_unit_text(inventory.get("unit"))}'
-        extra = [f'기준 {inventory["as_of"]}' if isinstance(inventory.get('as_of'), str) else '',
-                 f'정의 {inventory["definition"]}' if isinstance(inventory.get('definition'), str) else '',
-                 inventory['data_nature'] if isinstance(inventory.get('data_nature'), str) else '']
-        extra = [text for text in extra if text]
-        parts.append(stock + (f" ({', '.join(extra)})" if extra else ''))
-    else:
-        parts.append('재고 수량 미확인')
-    return ' · '.join(parts)
 
 
 IMAGE_MEDIA = {'image/png', 'image/jpeg', 'image/webp', 'image/gif'}
@@ -251,43 +182,17 @@ def _product_image(product: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _inventory(result: Mapping[str, Any]) -> tuple[BoardSection, tuple[str, ...]]:
+def _inventory(result: Mapping[str, Any]) -> BoardSection:
+    """The stock notes the poster shows when no product is matched to the Trend style."""
     raw = _raw(result, 'stock')
-    status = _status(result, 'stock', raw)
     body = _mapping(raw.get('result')) if raw else {}
     if not body:
-        return _missing_section(result, 'stock', 'inventory', '재고 분석 / Inventory', 'stock-agent', status,
-                                _mapping(raw.get('result')) if raw else None), ()
-    agent = _mapping(raw.get('producer')).get('agent_id') or body.get('agent_id') or 'stock-agent'
-    products = _list(body.get('products'))
-    claims, thumbnails, notes = [], [], []
-    for index, slot in enumerate(_list(body.get('trend_results'))):
-        slot = _mapping(slot)
-        ids = _strings(slot.get('evidence_ids'))
-        style_name = _mapping(slot.get('style')).get('name') or f'트렌드 {index + 1}'
-        if isinstance(slot.get('summary'), str) and slot['summary'].strip():
-            claims.append(_claim(f"{style_name}: {slot['summary'].strip()}", 'producer_finding' if ids else 'to_validate', ids,
-                                 source=agent, source_ref=f'trend_results[{index}].summary'))
-        product_index = slot.get('product_index')
-        product = products[product_index] if isinstance(product_index, int) and 0 <= product_index < len(products) else None
-        if isinstance(product, Mapping):
-            claims.append(_claim(_product_text(product), 'observation' if ids else 'to_validate', ids,
-                                 source=agent, source_ref=f'products[{product_index}]'))
-            image = _product_image(product)
-            if image:
-                thumbnails.append(image)
-        else:
-            claims.append(_claim(f'{style_name}: 매칭 상품 없음 ({slot.get("status") or "상태 미제공"})', 'to_validate', (),
-                                 source=agent, source_ref=f'trend_results[{index}]'))
-        notes.extend(_strings(slot.get('limitations')))
+        return _missing_section(result, 'stock', 'inventory', _status(result, 'stock', raw), body)
+    notes = [note for slot in _list(body.get('trend_results')) for note in _strings(_mapping(slot).get('limitations'))]
     basis = _mapping(body.get('season_basis')).get('basis')
     if isinstance(basis, str) and basis.strip():
         notes.insert(0, f'시즌 기준: {basis.strip()}')
-    schema = _mapping(raw.get('producer')).get('schema_version')
-    section = BoardSection('inventory', '재고 분석 / Inventory', agent, status, schema if isinstance(schema, str) else None,
-                           _state(status, has_claims=bool(claims), has_unverified=any(not c.evidence_ids for c in claims)),
-                           tuple(claims), _unique(notes))
-    return section, tuple(thumbnails)
+    return BoardSection('inventory', (), _unique(notes))
 
 
 def _period_bounds(period: Any) -> tuple[str, str] | None:
@@ -297,28 +202,6 @@ def _period_bounds(period: Any) -> tuple[str, str] | None:
     if isinstance(period, Mapping) and isinstance(period.get('start'), str):
         return period['start'], period.get('end') if isinstance(period.get('end'), str) else period['start']
     return None
-
-
-def _period_text(period: Any) -> str:
-    bounds = _period_bounds(period)
-    if not bounds:
-        return '기간 미제공'
-    return bounds[0] if bounds[0] == bounds[1] else f'{bounds[0]}–{bounds[1]}'
-
-
-def _value_text(metric: Mapping[str, Any]) -> str:
-    value = metric.get('value')
-    if isinstance(value, bool):
-        return str(value)
-    if isinstance(value, int):
-        number = f'{value:,}'
-    elif isinstance(value, float):
-        number = f'{value:,.6g}' if abs(value) < 1e6 else f'{value:,.0f}'
-    else:
-        number = str(value)
-    if isinstance(metric.get('currency'), str) and metric['currency']:
-        return f"{number} {metric['currency']}"
-    return number + _unit_text(metric.get('unit'))
 
 
 def _nature(observation: Any) -> str:
@@ -338,19 +221,34 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
     status = _status(result, 'sales_market_review', raw)
     body = _mapping(raw.get('result')) if raw else {}
     if not body:
-        return _missing_section(result, 'sales_market_review', 'sales_market', '판매·시장 / Sales & Market', 'sales-market-agent',
-                                status, _mapping(raw.get('result')) if raw else None)
-    agent = _mapping(raw.get('producer')).get('agent_id') or body.get('agent_id') or 'sales-market-agent'
+        return _missing_section(result, 'sales_market_review', 'sales_market', status, body)
     review = _mapping(body.get('review'))
+    # P07's current 0.3 proposal response is its domain review directly, not the
+    # earlier P08 full-Draft wrapper with review.findings/metrics.
+    if not review and body.get('schema_version') == 'sales-market-review/0.1-internal':
+        review = body
     evidence = {item['evidence_id']: item for item in (_mapping(entry) for entry in _list(review.get('evidence')))
                 if isinstance(item.get('evidence_id'), str)}
     claims = []
     kinds = {'fact': 'observation', 'interpretation': 'interpretation', 'proposal': 'proposal'}
-    for index, finding in enumerate(_list(review.get('findings'))):
+    for finding in _list(review.get('findings')):
         finding = _mapping(finding)
         if isinstance(finding.get('text'), str) and finding['text'].strip():
             claims.append(_claim(finding['text'].strip(), kinds.get(finding.get('kind'), 'producer_finding'),
-                                 _evidence_ids(finding.get('evidence_refs')), source=agent, source_ref=f'review.findings[{index}]'))
+                                 _evidence_ids(finding.get('evidence_refs'))))
+    # Price, fabric cost, margin and target are drawn from their own fields (_price_rows, _target_view).
+    if body.get('schema_version') == 'sales-market-review/0.1-internal':
+        for missing in _list(body.get('missing_data')):
+            missing = _mapping(missing)
+            label = missing.get('field') or missing.get('name') or missing.get('reason')
+            if isinstance(label, str) and label.strip():
+                reason = missing.get('reason')
+                message = missing.get('message')
+                detail = message.strip() if isinstance(message, str) and message.strip() else (
+                    reason.strip() if isinstance(reason, str) and reason.strip() else None
+                )
+                text = '미확인: ' + label.strip() + (f' — {detail}' if detail else '')
+                claims.append(_claim(text, 'to_validate', ()))
     groups: dict[str, list[Mapping[str, Any]]] = {}
     for metric in _list(review.get('metrics')):
         metric = _mapping(metric)
@@ -368,7 +266,7 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
             natures = sorted({_nature(metric.get('observation')) for metric in present})
             ids = _unique(i for metric in present for i in _evidence_ids(metric.get('evidence_refs')))
             claims.append(_claim(f"{label}: 값 {len(present):,}건 · 기간 {span} · 단위 {', '.join(units)} · {'/'.join(natures)}",
-                                 'producer_finding' if ids else 'to_validate', ids, source=agent, source_ref=f'review.metrics[{name}]'))
+                                 'producer_finding' if ids else 'to_validate', ids))
             # Row values differ by dimensions that live only in the evidence (e.g. channel, article taxonomy),
             # so the sheet quotes the producer's metric definition instead of listing bare values side by side.
             cited = [evidence.get(i) for i in ids if isinstance(evidence.get(i), Mapping)]
@@ -378,16 +276,12 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
             for definition in definitions[:2]:
                 definition_ids = _unique(item.get('evidence_id') for item in cited if item.get('metric_definition') == definition)
                 claims.append(_claim(f"{label} 정의" + (f" (원본 채널 ID {', '.join(channels)}별 행)" if channels else '') + f': {definition}',
-                                     'producer_finding', definition_ids[:3], source=agent, source_ref='review.evidence[].metric_definition'))
+                                     'producer_finding', definition_ids[:3]))
         for metric in missing:
             reason = metric.get('missing_reason') if isinstance(metric.get('missing_reason'), str) else '원천 없음'
-            claims.append(_claim(f'{label}: 미확인 — {reason}', 'to_validate', _evidence_ids(metric.get('evidence_refs')),
-                                 source=agent, source_ref=f'review.metrics[{name}]'))
-    schema = _mapping(raw.get('producer')).get('schema_version')
-    return BoardSection('sales_market', '판매·시장 / Sales & Market', agent, status,
-                        schema if isinstance(schema, str) else None,
-                        _state(status, has_claims=bool(claims), has_unverified=any(not c.evidence_ids for c in claims)),
-                        tuple(claims), _unique((*_strings(review.get('limitations')), *_strings(body.get('limitations')))))
+            claims.append(_claim(f'{label}: 미확인 — {reason}', 'to_validate', _evidence_ids(metric.get('evidence_refs'))))
+    return BoardSection('sales_market', tuple(claims),
+                        _unique((*_strings(review.get('limitations')), *_strings(body.get('limitations')))))
 
 
 def _draft_parts(result: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, Mapping[str, Any], str]:
@@ -397,55 +291,26 @@ def _draft_parts(result: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, M
 
 
 def _insight(result: Mapping[str, Any]) -> BoardSection:
-    raw, body, status = _draft_parts(result)
+    _, body, status = _draft_parts(result)
     draft = _mapping(body.get('draft'))
     if not draft:
-        return _missing_section(result, 'planning_draft', 'insight', '기획 결론 / Insight → Proposal', 'new-product-agent', status,
-                                body)
-    agent = _mapping(raw.get('producer')).get('agent_id') or body.get('agent_id') or 'new-product-agent'
+        return _missing_section(result, 'planning_draft', 'insight', status, body)
     kinds = {'fact': 'observation', 'interpretation': 'interpretation', 'proposal': 'proposal'}
     claims = tuple(
-        _claim(claim['text'].strip(), kinds.get(claim.get('kind'), 'to_validate'), _evidence_ids(claim.get('evidence_refs')),
-               source=agent, source_ref=f'draft.claims[{index}]')
-        for index, claim in enumerate(_mapping(item) for item in _list(draft.get('claims')))
+        _claim(claim['text'].strip(), kinds.get(claim.get('kind'), 'to_validate'), _evidence_ids(claim.get('evidence_refs')))
+        for claim in (_mapping(item) for item in _list(draft.get('claims')))
         if isinstance(claim.get('text'), str) and claim['text'].strip())
-    schema = _mapping(raw.get('producer')).get('schema_version')
-    return BoardSection('insight', '기획 결론 / Insight → Proposal', agent, status, schema if isinstance(schema, str) else None,
-                        _state(status, has_claims=bool(claims), has_unverified=any(not c.evidence_ids for c in claims)),
-                        claims, _strings(draft.get('open_questions')))
-
-
-def _specifications(result: Mapping[str, Any]) -> BoardSection:
-    raw, body, _ = _draft_parts(result)
-    draft = _mapping(body.get('draft'))
-    agent = _mapping(raw.get('producer')).get('agent_id') if raw else None
-    # 0.2.0: P06's concept (draft.concept) carries the design spec; earlier Drafts have no spec field.
-    concept = _mapping(draft.get('concept'))
-    base = 'draft.concept.attributes' if concept else 'draft.attributes'
-    attributes = [_mapping(item) for item in _list(concept.get('attributes') if concept else draft.get('attributes'))]
-    claims = []
-    for key, label in (('product_definition', '상품 정의'), ('target_customer', '대상 고객')):
-        item = _mapping(concept.get(key))
-        if isinstance(item.get('value'), str) and item['value'].strip():
-            claims.append(_claim(f"{label}: {item['value'].strip()}", item.get('kind') if item.get('kind') in KIND_LABELS else 'proposal',
-                                 _strings(item.get('evidence_ids')), source=agent, source_ref=f'draft.concept.{key}'))
-    claims += [
-        _claim(f"{item['name']}={_scalar_text(item.get('value'))}", item.get('kind') if item.get('kind') in KIND_LABELS else 'proposal',
-               _strings(item.get('evidence_ids')) or _evidence_ids(item.get('evidence_refs')),
-               source=agent, source_ref=f'{base}[{index}]')
-        for index, item in enumerate(attributes) if isinstance(item.get('name'), str) and _scalar_text(item.get('value'))]
-    claims = tuple(claims)
-    if claims:
-        return BoardSection('specifications', '분석 기반 상품 사양', agent or 'new-product-agent', 'ok', None,
-                            _state('ok', has_claims=True, has_unverified=any(not c.evidence_ids for c in claims)), claims,
-                            ('Evidence 없는 속성은 제안 또는 검증 필요로 표시',))
-    note = ('기획 초안(planning-draft/1.0)에 상품 사양 필드가 없습니다.' if draft
-            else '기획 초안이 없어 상품 사양을 표시할 수 없습니다.')
-    return BoardSection('specifications', '분석 기반 상품 사양', agent or 'new-product-agent', 'not_provided', None,
-                        'not_provided', (), (note,))
+    if body.get('schema_version') == '1.0' and not claims:
+        for key in ('opportunity', 'product_definition'):
+            item = _mapping(draft.get(key))
+            value = item.get('value')
+            if isinstance(value, str) and value.strip():
+                claims += (_claim(value.strip(), 'proposal', _strings(item.get('evidence_ids'))),)
+    return BoardSection('insight', claims, _strings(draft.get('open_questions')))
 
 
 def _host(url: Any) -> str:
+    """The host of an http(s) URL, for the photo source line; '' for anything else."""
     try:
         parts = urlsplit(url) if isinstance(url, str) else None
     except ValueError:
@@ -453,39 +318,12 @@ def _host(url: Any) -> str:
     return parts.hostname or '' if parts and parts.scheme in ('http', 'https') else ''
 
 
-def _references(result: Mapping[str, Any]) -> BoardSection:
-    raw = _raw(result, 'trend')
-    body = _mapping(raw.get('result')) if raw else {}
-    documents: dict[tuple[str, str], list[str]] = {}
-    labels: dict[tuple[str, str], str] = {}
-    for evidence in (_mapping(item) for item in _list(body.get('evidence'))):
-        title = evidence.get('title') if isinstance(evidence.get('title'), str) else ''
-        url = evidence.get('url') if isinstance(evidence.get('url'), str) else ''
-        if not title and not url:
-            continue
-        key = (title, url)
-        documents.setdefault(key, [])
-        if isinstance(evidence.get('evidence_id'), str):
-            documents[key].append(evidence['evidence_id'])
-        published = evidence.get('published_at') if isinstance(evidence.get('published_at'), str) else ''
-        labels[key] = ' · '.join(text for text in (title or '제목 미제공', published, _host(url)) if text)
-    claims = tuple(_claim(labels[key], 'observation' if ids else 'to_validate', ids, source='trend-analysis-agent',
-                          source_ref='result.evidence') for key, ids in documents.items())
-    notes = ('Trend 응답이 인용한 원문 문서입니다. 별도 참고자료 검색은 실행하지 않았습니다.',)
-    if not claims:
-        return BoardSection('references', '참고자료', 'trend-analysis-agent', 'no_results', None, 'no_results', (),
-                            ('인용 문서 없음',) + notes)
-    return BoardSection('references', '참고자료', 'trend-analysis-agent', 'ok', None, 'available', claims, notes)
-
-
 def _finance(result: Mapping[str, Any]) -> BoardSection:
     _, body, _ = _draft_parts(result)
     reserved = _strings(_mapping(body.get('draft')).get('md_decision_required')) or \
         _strings(_mapping(result.get('md_review')).get('reserved_decisions'))
-    claims = tuple(_claim(f'{DECISION_LABELS.get(key, key)}: MD 판단 필요', 'to_validate', (), source='md_review',
-                          source_ref='draft.md_decision_required') for key in reserved)
-    return BoardSection('finance', '원가·판매 추정', 'new-product-agent', 'not_provided', None, 'not_provided', claims,
-                        ('원가 입력 또는 승인된 산식 미제공',))
+    claims = tuple(_claim(f'{DECISION_LABELS.get(key, key)}: MD 판단 필요', 'to_validate', ()) for key in reserved)
+    return BoardSection('finance', claims, ('원가 입력 또는 승인된 산식 미제공',))
 
 
 # --- sheet model ---------------------------------------------------------------------------------
@@ -496,161 +334,359 @@ class DraftVisual:
     key: str
     label: str
     status: str | None
-    reason: str | None
     artifact: Mapping[str, Any] | None
     model: str | None
-    prompt_version: str | None
 
 
 @dataclass(frozen=True)
 class SheetVisual:
     status: str | None
-    reason: str | None
-    provider_calls: int | None
     artifact: Mapping[str, Any] | None
-    fixture: bool
-    message: str | None
     # 0.2.0: the P06 visuals shown in the visual panel; empty for earlier runs (then the final image is shown).
     draft_visuals: tuple[DraftVisual, ...] = ()
     draft_fixture: bool = False
-    image_generation_calls: int | None = None
 
 
 @dataclass(frozen=True)
 class PlanningSheet:
     board: PlanningBoard
     request_id: str
-    run_status: str | None
     contract_version: str | None
     schema_version: str | None
-    stages: tuple[tuple[str, str, str, str | None], ...]  # (key, number, label, status)
     visual: SheetVisual
-    thumbnails: tuple[str, ...]
-    md_status: str | None
-    md_choices: tuple[str, ...]
-    md_decisions: tuple[Mapping[str, Any], ...]
-    natures: tuple[str, ...]
     started_at: str | None
-    completed_at: str | None
-    brief: tuple[tuple[str, str], ...] = ()
+    # The one-product proposal poster reads these views: one Trend style, the stock product matched to it,
+    # and new-product-agent's concept for the new product.
+    trend: 'TrendFocus | None' = None
+    stock: 'StockFocus | None' = None
+    concept_line: BoardClaim | None = None
+    spec_rows: tuple['SpecRow', ...] = ()
+    insight_points: tuple[str, ...] = ()
+    review_items: tuple[str, ...] = ()
+    price_rows: tuple[tuple[str, str], ...] = ()
+    target: 'TargetView | None' = None
+    concept: 'ConceptView | None' = None
 
 
-def _source_natures(result: Mapping[str, Any]) -> tuple[tuple[str, ...], bool]:
-    labels, synthetic = [], False
-    for key, label in (('trend', 'Trend'), ('stock', 'Stock'), ('planning_draft', 'Draft'),
-                       ('sales_market_review', 'Review')):
-        source = _mapping(_mapping(result.get('sources')).get(key))
-        if not source:
+@dataclass(frozen=True)
+class TrendFocus:
+    """The Trend style the poster is about (the first style of the Trend result)."""
+    name: str
+    seasons: str
+    definition: str | None
+    paragraphs: tuple[str, ...]
+    colors: tuple[str, ...]
+    materials: tuple[str, ...]
+    features: tuple[str, ...]  # item names, fit, shape, patterns, details
+
+
+@dataclass(frozen=True)
+class StockFocus:
+    """The inventory product matched to the poster's Trend style."""
+    style_id: str
+    category: str
+    colors: tuple[str, ...]
+    materials: tuple[str, ...]
+    fit: str
+    quantity: str
+    basis: str  # as-of date, inventory definition, data nature
+    image: str | None
+    reason: str
+
+
+@dataclass(frozen=True)
+class SpecRow:
+    label: str
+    value: str
+    kind: str
+    evidence_ids: tuple[str, ...]
+
+
+ATTRIBUTE_LABELS = {'color': '컬러', 'colors': '컬러', 'material': '소재', 'materials': '소재', 'fit': '핏', 'detail': '디테일',
+                    'details': '디테일', 'pattern': '패턴', 'patterns': '패턴', 'neckline': '넥라인', 'length': '기장',
+                    'shape': '실루엣', 'target_customer': '대상 고객'}
+
+
+def _texts(value: Any) -> tuple[str, ...]:
+    values = value if isinstance(value, (list, tuple)) else [value]
+    return tuple(text for text in (_scalar_text(item) for item in values) if text)
+
+
+def focus_trend(result: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The first style of the Trend result: the one the one-product proposal is about."""
+    raw = _raw(result, 'trend')
+    trends = _list(_mapping(raw.get('result')).get('trends')) if raw else []
+    return _mapping(trends[0]) if trends else {}
+
+
+def trend_image_urls(result: Mapping[str, Any], limit: int = 3) -> tuple[str, ...]:
+    """Example photo URLs of the focus style: style.example_images first, then its items' image_urls."""
+    trend = focus_trend(result)
+    style = _mapping(trend.get('style'))
+    urls = [_mapping(item).get('url') for item in _list(style.get('example_images'))]
+    urls += [url for item in _list(trend.get('items')) for url in _list(_mapping(item).get('image_urls'))]
+    return tuple(dict.fromkeys(url.strip() for url in urls if isinstance(url, str) and url.strip()))[:limit]
+
+
+def _trend_focus(result: Mapping[str, Any]) -> TrendFocus | None:
+    trend = focus_trend(result)
+    if not trend:
+        return None
+    style = _mapping(trend.get('style'))
+    items = [_mapping(item) for item in _list(trend.get('items'))]
+    paragraphs = tuple(entry['text'].strip() for entry in (_mapping(e) for e in _list(style.get('description')))
+                       if isinstance(entry.get('text'), str) and entry['text'].strip())
+    colors = _unique(text for item in items for text in _texts(item.get('colors')))
+    materials = _unique(text for item in items for text in _texts(item.get('materials')))
+    features = _unique([*(item['name'].strip() for item in items if isinstance(item.get('name'), str) and item['name'].strip()),
+                        *(text for item in items for key in ('fit', 'shape', 'patterns', 'details') for text in _texts(item.get(key)))])
+    definition = style.get('definition')
+    return TrendFocus(
+        name=style['name'].strip() if isinstance(style.get('name'), str) and style['name'].strip() else '트렌드 이름 미제공',
+        seasons=' · '.join(text for text in (_season_text(s) for s in _list(style.get('seasons'))) if text),
+        definition=definition.strip() if isinstance(definition, str) and definition.strip() else None,
+        paragraphs=paragraphs, colors=colors, materials=materials, features=features)
+
+
+def focus_stock(result: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]] | None:
+    """The stock-agent slot (trend_results[]) and product matched to the focus Trend style, or None."""
+    raw = _raw(result, 'stock')
+    body = _mapping(raw.get('result')) if raw else {}
+    products = _list(body.get('products'))
+    slots = [_mapping(slot) for slot in _list(body.get('trend_results'))]
+    style = _mapping(focus_trend(result).get('style'))
+    wanted = {value for value in (style.get('id'), style.get('name')) if isinstance(value, str) and value}
+
+    def product_of(slot):
+        index = slot.get('product_index')
+        valid = isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(products)
+        return _mapping(products[index]) if valid else {}
+
+    matched = [slot for slot in slots if {_mapping(slot.get('style')).get('id'), _mapping(slot.get('style')).get('name')} & wanted]
+    slot = next((s for s in matched if product_of(s)), None) or next((s for s in slots if product_of(s)), None)
+    return (slot, product_of(slot)) if slot is not None else None
+
+
+def _stock_focus(result: Mapping[str, Any]) -> StockFocus | None:
+    focus = focus_stock(result)
+    if focus is None:
+        return None
+    slot, product = focus
+    attributes = _mapping(product.get('attributes'))
+    inventory = _mapping(product.get('inventory'))
+    quantity = inventory.get('quantity')
+    stock = (f'{quantity:,}{_unit_text(inventory.get("unit"))}' if isinstance(quantity, int) and not isinstance(quantity, bool)
+             else '수량 미확인')
+    basis = ' · '.join(text for text in (f'기준 {inventory["as_of"]}' if isinstance(inventory.get('as_of'), str) else '',
+                                         inventory['definition'] if isinstance(inventory.get('definition'), str) else '',
+                                         inventory['data_nature'] if isinstance(inventory.get('data_nature'), str) else '') if text)
+    reason = slot.get('summary').strip() if isinstance(slot.get('summary'), str) and slot['summary'].strip() else ''
+    return StockFocus(style_id=_scalar_text(product.get('style_id')) or '상품 식별자 미제공',
+                      category=_scalar_text(product.get('category')), colors=_texts(attributes.get('color')),
+                      materials=_texts(attributes.get('material')), fit=_scalar_text(attributes.get('fit')),
+                      quantity=stock, basis=basis, image=_product_image(product), reason=reason)
+
+
+PROFILE_FIELDS = (('category', '카테고리'), ('season', '시즌'), ('product_type', '상품 종류'), ('gender', '성별'),
+                  ('silhouette', '실루엣'), ('color', '컬러'), ('material', '소재'))
+GENDER_LABELS = {'women': '여성', 'men': '남성', 'unisex': '공용'}
+
+
+@dataclass(frozen=True)
+class ConceptView:
+    """new-product-agent's concept as the Design column shows it."""
+    line: BoardClaim | None  # product definition
+    opportunity: str | None
+    findings: tuple[str, ...]
+    profile: tuple[SpecRow, ...]  # draft.product_profile: the new product's own specification
+    differentiation: tuple[str, ...]
+    own_products: tuple[str, ...]
+    points: tuple[str, ...]
+    questions: tuple[str, ...]
+
+
+def _claim_value(value: Any) -> str | None:
+    """Text of a SourcedClaim {value, kind, evidence_ids} or of a plain string."""
+    text = _scalar_text(_mapping(value).get('value') if isinstance(value, Mapping) else value)
+    return text or None
+
+
+def _claim_kind(value: Any) -> str:
+    kind = _mapping(value).get('kind')
+    return kind if kind in KIND_LABELS else 'proposal'
+
+
+# A parenthesised snake_case source id inside new-product-agent sentences, e.g. "화이트 (trend_analysis_result)".
+_SOURCE_TAG = re.compile(r'\s*\((?:[a-z0-9]+_)+[a-z0-9]+\)')
+
+
+def _drop_source_tags(text: str | None) -> str | None:
+    """The sentence without its parenthesised source ids; the ids stay in the stored run."""
+    return _SOURCE_TAG.sub('', text).strip() if isinstance(text, str) else text
+
+
+def _concept_view(result: Mapping[str, Any]) -> ConceptView:
+    """Reads the current new-product-agent Draft (top-level product_definition, product_profile, opportunity, ...)
+    and, for runs recorded before that shape, the earlier draft.concept / draft.claims."""
+    _, body, _ = _draft_parts(result)
+    draft = _mapping(body.get('draft'))
+    concept = _mapping(draft.get('concept'))
+    line = None
+    for definition in (draft.get('product_definition'), concept.get('product_definition')):
+        text = _claim_value(definition)
+        if text:
+            line = _claim(_drop_source_tags(text), _claim_kind(definition), _strings(_mapping(definition).get('evidence_ids')))
+            break
+    profile = _mapping(draft.get('product_profile'))
+    rows = []
+    for key, label in PROFILE_FIELDS:
+        item = _mapping(profile.get(key))
+        text = _claim_value(item)
+        if not text or item.get('kind') == 'unknown':
             continue
+        rows.append(SpecRow(label, GENDER_LABELS.get(text, text) if key == 'gender' else text, _claim_kind(item),
+                            _strings(item.get('evidence_ids'))))
+    for item in (_mapping(entry) for entry in _list(profile.get('details'))):
+        text = _scalar_text(item.get('value'))
+        if text and item.get('kind') != 'unknown':
+            name = item.get('name') if isinstance(item.get('name'), str) and item['name'].strip() else 'detail'
+            rows.append(SpecRow(ATTRIBUTE_LABELS.get(name, name), text, _claim_kind(item), _strings(item.get('evidence_ids'))))
+    opportunity = _claim_value(draft.get('opportunity')) or _claim_value(concept.get('opportunity'))
+    findings = _unique(_claim_value(_mapping(item).get('statement')) for item in _list(draft.get('opportunity_findings')))
+    differentiation = _unique(_claim_value(item) for item in
+                              [*_list(draft.get('differentiation')), *_list(concept.get('differentiation'))])
+    own_products = _unique(_claim_value(item) for item in _list(draft.get('relation_to_own_products')))
+    analysis = _mapping(body.get('planning_analysis'))
+    points = _unique(_claim_value(item) for item in [*_list(analysis.get('proposals')), *_list(analysis.get('interpretations'))])
+    points = tuple(point for point in points if point not in (opportunity, line.text if line else None))
+    if not points:  # runs recorded before planning_analysis: the Draft's claims
+        claims = [_mapping(claim) for claim in _list(draft.get('claims'))]
+        texts = lambda kinds: [c['text'].strip() for c in claims  # noqa: E731
+                               if c.get('kind') in kinds and isinstance(c.get('text'), str) and c['text'].strip()]
+        points = _unique(texts(('proposal', 'interpretation'))) or _unique(texts(('fact',)))
+    questions = _unique((*_strings(draft.get('open_questions')), *_strings(draft.get('questions_for_validation')),
+                         *_strings(concept.get('questions_for_validation'))))
+    clean = lambda texts: tuple(_drop_source_tags(text) for text in texts)  # noqa: E731
+    return ConceptView(line, _drop_source_tags(opportunity), clean(findings), tuple(rows), clean(differentiation),
+                       clean(own_products), clean(points), questions)
+
+
+def _price_rows(result: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
+    """sales-market-agent price, cost and margin values exactly as reported (sales-market-review/0.1-internal); absent values are not shown."""
+    raw = _raw(result, 'sales_market_review')
+    body = _mapping(raw.get('result')) if raw else {}
+    units = {'KRW': '원', 'KRW/m': '원/m', 'USD': ' USD'}
+    rows = []
+    for key, field, label in (('price_analysis', 'proposed_price', '제안 판매가'),
+                              ('fabric_cost_analysis', 'unit_cost', '소재 원가'),
+                              ('margin_analysis', 'margin_rate_percent', '마진율')):
+        item = _mapping(body.get(key))
+        value = item.get(field)
+        if isinstance(value, bool) or value is None:
+            continue
+        unit = item.get('unit') or item.get('currency')
+        suffix = '%' if field == 'margin_rate_percent' else units.get(unit, f' {unit}' if isinstance(unit, str) and unit else '')
+        if isinstance(value, (int, float)):
+            shown = f'{int(value):,}' if float(value).is_integer() else f'{value:,}'
+            rows.append((label, shown + suffix))
+        elif isinstance(value, str) and value.strip():
+            rows.append((label, value.strip() + suffix))
+    return tuple(rows)
+
+
+@dataclass(frozen=True)
+class TargetView:
+    """sales-market-agent's target audience: the H&M age cohort (research aggregate) and the LLM target hypothesis."""
+    age: str | None
+    age_note: str | None
+    primary: str | None
+    summary: str | None
+    secondary: tuple[str, ...]
+    occasions: tuple[str, ...]
+    missing: str | None
+
+
+def _target_view(result: Mapping[str, Any]) -> TargetView | None:
+    raw = _raw(result, 'sales_market_review')
+    body = _mapping(raw.get('result')) if raw else {}
+    target = _mapping(body.get('target_audience')) or _mapping(body.get('target_audience_analysis'))
+    if not target:
+        return None
+    cohort = _mapping(target.get('age_cohort'))
+    age = age_note = None
+    if cohort:
+        age = _scalar_text(cohort.get('definition')) or _scalar_text(cohort.get('age_band')) or None
+        share = cohort.get('share_of_customers_with_known_age')
+        if cohort.get('suppressed') is True:
+            age_note = '표본이 적어 비율 비공개'
+        elif isinstance(share, (int, float)) and not isinstance(share, bool):
+            age_note = f'연령 확인 고객의 {share * 100:.1f}%'
+    hypothesis = target.get('proposal')
+    hypothesis = hypothesis if isinstance(hypothesis, Mapping) else ({'proposal': hypothesis} if isinstance(hypothesis, str) else {})
+    fit = _mapping(hypothesis.get('product_fit'))
+    limitations = _strings(target.get('limitations'))
+    return TargetView(age=age, age_note=age_note,
+                      primary=_scalar_text(hypothesis.get('primary_segment')) or None,
+                      summary=_scalar_text(hypothesis.get('proposal')) or None,
+                      secondary=_texts(hypothesis.get('secondary_segments')),
+                      occasions=_texts(fit.get('wearing_occasions')),
+                      missing=limitations[0] if limitations and not (age or hypothesis) else None)
+
+
+def _synthetic(result: Mapping[str, Any]) -> bool:
+    """Whether any source reports synthetic or sample data (the header badge)."""
+    for key in ('trend', 'stock', 'planning_draft', 'sales_market_review'):
+        source = _mapping(_mapping(result.get('sources')).get(key))
         observation = _mapping(source.get('observation'))
-        nature = _nature(observation)
-        values = {nature}
+        natures = {_nature(observation)}
         if key == 'sales_market_review':
             review = _mapping(_mapping(_mapping(source.get('raw_response')).get('result')).get('review'))
-            values |= {_nature(_mapping(metric).get('observation')) for metric in _list(review.get('metrics'))}
-        values.discard('unknown') if len(values) > 1 else None
-        synthetic |= bool(values & {'synthetic', 'sample'}) or observation.get('synthetic') is True
-        as_of = observation.get('as_of')
-        labels.append(f"{label} · {'/'.join(sorted(values))}" + (f' · 기준 {as_of}' if isinstance(as_of, str) else ''))
-    return tuple(labels), synthetic
+            natures |= {_nature(_mapping(metric).get('observation')) for metric in _list(review.get('metrics'))}
+        if natures & {'synthetic', 'sample'} or observation.get('synthetic') is True:
+            return True
+    return False
 
 
-def build_sheet(envelope: Mapping[str, Any], *, decisions: Sequence[Mapping[str, Any]] = ()) -> PlanningSheet:
-    """Map a stored integrated-result/1.0 envelope onto the planning-board model (presentation only)."""
+def build_sheet(envelope: Mapping[str, Any]) -> PlanningSheet:
+    """Map a stored integrated-result envelope onto the poster model (presentation only)."""
     envelope = _mapping(envelope)
     result = _mapping(envelope.get('result'))
     if not result:
         raise PlanningSheetError('PLANNING_SHEET_INPUT_INVALID', 422)
-    inventory, thumbnails = _inventory(result)
-    sections = (_concept(result), _trend(result), inventory, _sales(result),
-                _insight(result), _specifications(result), _references(result), _finance(result))
+    sections = (_trend(result), _inventory(result), _sales(result), _insight(result), _finance(result))
     _, draft_body, _ = _draft_parts(result)
     draft = _mapping(draft_body.get('draft'))
     context = _mapping(_mapping(result.get('planning_request')).get('context'))
     season = _scalar_text(draft.get('season')) or _scalar_text(context.get('season')) or '시즌 미정'
     category = _scalar_text(draft.get('category')) or _scalar_text(context.get('category')) or '카테고리 미정'
     title = draft.get('title') if isinstance(draft.get('title'), str) and draft['title'].strip() else f'{season} {category} 신상품 기획안'
-    limitations = _unique(_strings(result.get('limitations')))
-    natures, synthetic = _source_natures(result)
+    fixture = any(FIXTURE_IMAGE_MARKER in text for text in _strings(result.get('limitations')))
     image = _mapping(result.get('final_image'))
-    fixture = any(FIXTURE_IMAGE_MARKER in text for text in limitations)
-    image_errors = [_mapping(error) for error in _list(result.get('errors')) if _mapping(error).get('stage') == 'final_image']
     visuals = _mapping(draft.get('visuals'))
+    text_of = lambda value: value if isinstance(value, str) else None  # noqa: E731
     draft_visuals = tuple(
-        DraftVisual(key=key, label=label,
-                    status=_mapping(visuals.get(key)).get('status') if isinstance(_mapping(visuals.get(key)).get('status'), str) else None,
-                    reason=_mapping(visuals.get(key)).get('reason') if isinstance(_mapping(visuals.get(key)).get('reason'), str) else None,
+        DraftVisual(key=key, label=label, status=text_of(_mapping(visuals.get(key)).get('status')),
                     artifact=_mapping(visuals.get(key)).get('artifact') if isinstance(_mapping(visuals.get(key)).get('artifact'), Mapping) else None,
-                    model=_mapping(visuals.get(key)).get('model') if isinstance(_mapping(visuals.get(key)).get('model'), str) else None,
-                    prompt_version=_mapping(visuals.get(key)).get('prompt_version')
-                    if isinstance(_mapping(visuals.get(key)).get('prompt_version'), str) else None)
+                    model=text_of(_mapping(visuals.get(key)).get('model')))
         for key, label in DRAFT_VISUALS) if visuals else ()
-    calls = draft_body.get('image_generation_calls')
     visual = SheetVisual(
-        status=image.get('status') if isinstance(image.get('status'), str) else None,
-        reason=image.get('reason') if isinstance(image.get('reason'), str) else None,
-        provider_calls=image.get('provider_calls') if isinstance(image.get('provider_calls'), int) else None,
+        status=text_of(image.get('status')),
         artifact=image.get('artifact') if isinstance(image.get('artifact'), Mapping) else None,
-        fixture=fixture,
-        message=image_errors[0].get('message') if image_errors and isinstance(image_errors[0].get('message'), str) else None,
         draft_visuals=draft_visuals,
-        draft_fixture=any(DRAFT_FIXTURE_MARKER in text for text in _strings(draft.get('limitations'))),
-        image_generation_calls=calls if isinstance(calls, int) and not isinstance(calls, bool) else None)
-    stage_map = _stage_map(result)
-    stages = []
-    for key, number, label in STAGES:
-        status = stage_map.get(key, {}).get('status')
-        if key == 'final_image' and visual.status:
-            status = visual.status
-        stages.append((key, number, label, status if isinstance(status, str) else None))
+        draft_fixture=any(DRAFT_FIXTURE_MARKER in text for text in _strings(draft.get('limitations'))))
     traced = [stage for stage in _list(result.get('stages')) if isinstance(stage, Mapping)]
     started = min((s['started_at'] for s in traced if isinstance(s.get('started_at'), str)), default=None)
-    completed = max((s['completed_at'] for s in traced if isinstance(s.get('completed_at'), str)), default=None)
-    md_review = _mapping(result.get('md_review'))
-    evidence_ids = _unique(i for section in sections for claim in section.claims for i in claim.evidence_ids)
-    board = PlanningBoard(title=title.strip(), season=season, category=category, review_label=REVIEW_LABEL, process=PROCESS,
-                          sections=sections, evidence_ids=evidence_ids, limitations=limitations,
-                          synthetic_context=synthetic or fixture)
+    board = PlanningBoard(title=title.strip(), season=season, category=category, review_label=REVIEW_LABEL,
+                          sections=sections, synthetic_context=_synthetic(result) or fixture)
     request_id = result.get('request_id') or envelope.get('request_id')
-    brief = _brief_rows(draft_body, draft, md_review, limitations, visual, category, season)
+    concept = _concept_view(result)
     return PlanningSheet(
+        trend=_trend_focus(result), stock=_stock_focus(result), concept_line=concept.line, spec_rows=concept.profile,
+        insight_points=concept.points, review_items=concept.questions, price_rows=_price_rows(result),
+        concept=concept, target=_target_view(result),
         board=board, request_id=request_id if isinstance(request_id, str) else '—',
-        run_status=(result.get('status') or envelope.get('status')) if isinstance(result.get('status') or envelope.get('status'), str) else None,
-        contract_version=envelope.get('contract_version') if isinstance(envelope.get('contract_version'), str) else None,
-        schema_version=result.get('schema_version') if isinstance(result.get('schema_version'), str) else None,
-        stages=tuple(stages), visual=visual, thumbnails=thumbnails,
-        md_status=md_review.get('status') if isinstance(md_review.get('status'), str) else None,
-        md_choices=_strings(md_review.get('choices')), md_decisions=tuple(_mapping(item) for item in decisions),
-        natures=natures, started_at=started, completed_at=completed, brief=brief)
-
-
-def _brief_rows(body, draft, md_review, limitations, visual, category, season) -> tuple[tuple[str, str], ...]:
-    """CandidateBrief fields of the 상품기획서 (trend-batch-kg-rag-product-planning.md) and where the sheet shows them.
-    A field the Draft does not carry is reported as 미제공, never filled in."""
-    identity = _mapping(body.get('draft_identity'))
-    draft_id = identity.get('draft_id') if isinstance(identity.get('draft_id'), str) else None
-    revision = identity.get('revision')
-    reserved = _strings(draft.get('md_decision_required')) or _strings(md_review.get('reserved_decisions'))
-    questions = _strings(draft.get('open_questions'))
-    assumptions = _strings(draft.get('assumptions'))
-    score = draft.get('score')
-    image = RUN_STATUS_LABELS.get(visual.status or '', visual.status or '상태 미제공')
-    visual_row = ('시안', ' · '.join(text for text in (image, visual.reason or '') if text))
-    if visual.draft_visuals:  # 0.2.0: the visuals are P06's; stage 06 is this sheet itself
-        visual_row = ('시안 (P06)', ' · '.join(
-            f"{item.label.split(' · ')[0]} {RUN_STATUS_LABELS.get(item.status or '', item.status or '미제공')}"
-            + (f' ({item.reason})' if item.status != 'generated' and item.reason else '') for item in visual.draft_visuals))
-    return (
-        ('후보 ID', (draft_id + (f' · rev {revision}' if isinstance(revision, int) else '')) if draft_id else '미제공'),
-        ('후보 유형', _scalar_text(draft.get('candidate_type')) or '미제공 (초안에 없음)'),
-        ('대상', f'{category} · {season}'),
-        ('점수', _scalar_text(score) if _scalar_text(score) else '미제공 (초안에 점수 없음, 임의 산출 안 함)'),
-        ('가정', f'{len(assumptions)}건' if assumptions else '미제공'),
-        ('미확정', f"MD 판단 {len(reserved)}건: {', '.join(DECISION_LABELS.get(key, key) for key in reserved)}" if reserved else '없음'),
-        ('리스크·한계', f'{len(limitations):,}건 → 하단 Limitations'),
-        ('검증 질문', f'{len(questions)}건 → Insight 카드 ※' if questions else '없음'),
-        visual_row,
-    )
+        contract_version=text_of(envelope.get('contract_version')), schema_version=text_of(result.get('schema_version')),
+        visual=visual, started_at=started)
 
 
 # --- fonts ---------------------------------------------------------------------------------------
@@ -697,9 +733,9 @@ class Fonts:
         if key not in self._cache:
             if role.startswith('display') and self.display:
                 font = self._truetype(self.display, size)
-                font.set_variation_by_name('SemiBold' if role == 'display_bold' else 'Medium')
+                font.set_variation_by_name({'display_bold': 'SemiBold', 'display_heavy': 'Bold'}.get(role, 'Medium'))
             else:
-                path, index = self.bold if role in ('bold', 'display_bold') else self.regular
+                path, index = self.bold if role in ('bold', 'display_bold', 'display_heavy') else self.regular
                 font = self._truetype(path, size, index=index)
             self._cache[key] = font
         return self._cache[key]
@@ -708,25 +744,23 @@ class Fonts:
 # --- rendering -----------------------------------------------------------------------------------
 
 C = {
-    'ground': '#EDE8E1', 'surface': '#F6F3EE', 'raised': '#FBF9F6', 'line': '#D8D1C6', 'line_soft': '#E2DBD1',
-    'placeholder': '#DDD5CA', 'ink': '#2A2926', 'sub': '#5F5A52', 'sage': '#4F6150', 'sage_tint': '#DCE3D6',
-    'ochre': '#8A5A1F', 'ochre_tint': '#F1E4CF', 'slate': '#4D5662', 'slate_tint': '#E3E5E8', 'brick': '#9B3B2E',
-    'brick_tint': '#F3DEDA', 'plum': '#4A3F63', 'plum_tint': '#E6E1EE',
+    'page': '#EEEDEA', 'header': '#DCDAD6', 'card_grey': '#E3E2DF', 'paper': '#FFFFFF', 'ink': '#161616', 'ink2': '#474747',
+    'ink3': '#8A8A8A', 'rule': '#D5D3CF', 'rule_s': '#B8B6B1', 'accent': '#1A3A28', 'accent_lt': '#E1EAE3', 'red': '#C0392B',
+    'yellow': '#E6D45A', 'yellow_lt': '#FBF8E4', 'amber': '#92400E', 'amber_lt': '#FCEBC5', 'placeholder': '#D9D7D2',
+    'swot_s': '#2D7A45', 'swot_s_lt': '#E6F2EA', 'swot_w': '#B0392B', 'swot_w_lt': '#FBEDEB', 'swot_o': '#1A6FAF',
+    'swot_o_lt': '#E9F1F8', 'swot_t': '#8A6D00', 'swot_t_lt': '#FAF5DC',
+    'col_analysis': '#3E6B50', 'col_design': '#8F6A48', 'col_marketing': '#4A6A90',
 }
-KIND_STYLE = {'observation': ('sage_tint', 'sage'), 'evidence_observation': ('sage_tint', 'sage'),
-              'producer_finding': ('slate_tint', 'slate'), 'interpretation': ('line_soft', 'sub'),
-              'proposal': ('ink', 'raised'), 'user_requested': ('plum_tint', 'plum'), 'to_validate': ('ochre_tint', 'ochre')}
-STATE_COLOR = {'available': 'sage', 'partial': 'ochre', 'no_results': 'slate', 'not_provided': 'sub', 'unverified': 'ochre',
-               'blocked': 'slate', 'failed': 'brick'}
-STAGE_COLOR = {'ok': 'sage', 'generated': 'sage', 'partial': 'ochre', 'no_results': 'slate', 'error': 'brick',
-               'failed': 'brick', 'skipped': 'sub'}
+COLUMN_TONES = ('col_analysis', 'col_design', 'col_marketing')
+HEADER_H = 120   # banner height in design units
+BANNER_SLOGAN = 'Reframe the Everyday'  # fixed banner centre line on every poster
+BANNER_SUBTITLE = '일상을 새로운 시선으로 MERCHANDISING PROPOSAL'
+COL3_SCALE = 1.2
+SWOT_CELLS = (('strengths', 'S · 강점', 'swot_s'), ('weaknesses', 'W · 약점', 'swot_w'),
+              ('opportunities', 'O · 기회', 'swot_o'), ('threats', 'T · 위협', 'swot_t'))
 
-W = 1600          # design width (the board's SVG width); every coordinate below is in design units
-SCALE = 2         # device pixels per design unit
-COL = ((28, 490), (540, 490), (1052, 520))
-COLUMN_SECTIONS = (('concept', 'trend', 'inventory', 'sales_market'), ('insight', 'specifications', 'references', 'finance'))
-GAP = 16
-PILL_W = 70
+W = 1600          # design width; every coordinate below is in design units
+SCALE = 2         # device pixels per design unit (3200 px wide PNG)
 
 
 class _Canvas:
@@ -742,7 +776,7 @@ class _Canvas:
         return self.fonts.get(role, max(6, round(size * SCALE)))
 
     def role(self, text: str, role: str) -> str:
-        return role if text.isascii() and self.fonts.display else {'display': 'regular', 'display_bold': 'bold'}.get(role, role)
+        return role if text.isascii() and self.fonts.display else {'display': 'regular', 'display_bold': 'bold', 'display_heavy': 'bold'}.get(role, role)
 
     def width(self, text: str, role: str, size: float) -> float:
         return self.measure.textlength(text, font=self.font(self.role(text, role), size)) / SCALE
@@ -790,7 +824,7 @@ class _Canvas:
 
     def render(self, height: float, metadata: Mapping[str, str]) -> bytes:
         from PIL import ImageDraw, ImageOps, PngImagePlugin
-        canvas = self.Image.new('RGB', (W * SCALE, round(height * SCALE)), C['ground'])
+        canvas = self.Image.new('RGB', (W * SCALE, round(height * SCALE)), C['page'])
         draw = ImageDraw.Draw(canvas)
         s = lambda value: round(value * SCALE)  # noqa: E731
         for op in self.ops:
@@ -803,14 +837,23 @@ class _Canvas:
                 draw.text((s(x), s(y)), text, font=self.fonts.get(role, max(6, round(size * SCALE))), fill=color)
             elif op[0] == 'image':
                 _, x, y, w, h, data, mode = op
+                box = (s(w), s(h))
                 try:
                     with self.Image.open(io.BytesIO(data)) as source:
-                        source.load()
-                        picture = source.convert('RGBA')
+                        # Shrink to the slot before converting, so a large photo never sits in memory at full size as RGBA.
+                        width, height = source.size
+                        scale = (max if mode == 'cover' else min)(box[0] / width, box[1] / height)
+                        if scale < 1:
+                            target = (max(1, math.ceil(width * scale)), max(1, math.ceil(height * scale)))
+                            source.draft('RGB', target)  # JPEG decodes at a reduced scale; other formats ignore this
+                            source.load()
+                            picture = source.resize(target, self.Image.LANCZOS).convert('RGBA')
+                        else:
+                            source.load()
+                            picture = source.convert('RGBA')
                 except Exception:  # undecodable bytes: draw the failure, never crash the sheet
-                    draw.text((s(x) + 8, s(y) + 8), '이미지 읽기 실패', font=self.fonts.get('regular', s(12)), fill=C['brick'])
+                    draw.text((s(x) + 8, s(y) + 8), '이미지 읽기 실패', font=self.fonts.get('regular', s(12)), fill=C['red'])
                     continue
-                box = (s(w), s(h))
                 fitted = ImageOps.fit(picture, box) if mode == 'cover' else ImageOps.contain(picture, box)
                 left = s(x) + (box[0] - fitted.width) // 2
                 top = s(y) + (box[1] - fitted.height) // 2
@@ -823,114 +866,14 @@ class _Canvas:
         return out.getvalue()
 
 
-def _time_span(started: str | None, completed: str | None) -> str:
-    """Trim stored ISO timestamps for display (no time-zone conversion)."""
-    def trim(value: str | None) -> str:
-        if not value:
-            return '—'
-        match = re.fullmatch(r'(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})?', value)
-        if not match:
-            return value
-        zone = match.group(3) or ''
-        return f"{match.group(1)} {match.group(2)}{' UTC' if zone in ('Z', '+00:00') else (' ' + zone if zone else '')}"
-    start, end = trim(started), trim(completed)
-    if start[:10] == end[:10] and start != '—':
-        end = end[11:]
-    return f'{start} → {end}'
-
-
-def _ids_line(c: _Canvas, ids: Sequence[str], width: float) -> str:
-    if not ids:
-        return 'Evidence 미연결'
-    shown: list[str] = []
-    for index, evidence_id in enumerate(ids):
-        rest = len(ids) - index - 1
-        candidate = 'Evidence: ' + ', '.join([*shown, evidence_id]) + (f' 외 {rest:,}건' if rest else '')
-        if c.width(candidate, 'regular', 10) > width and shown:
-            return 'Evidence: ' + ', '.join(shown) + f' 외 {len(ids) - len(shown):,}건'
-        shown.append(evidence_id)
-    text = 'Evidence: ' + ', '.join(shown)
-    return text if c.width(text, 'regular', 10) <= width else c.wrap(text, 'regular', 10, width, 1)[0]
-
-
-def _card(c: _Canvas, section: BoardSection, x: float, y: float, w: float, thumbs: Sequence[bytes] = (), draw: bool = True) -> float:
-    """Lay out one section card; returns its height. With draw=False only measures."""
-    ops_before = len(c.ops)
-    pad, text_x = 14, x + 16 + PILL_W + 6
-    text_w = w - 32 - PILL_W - 6
-    cy = y + 66
-    limit = SECTION_LIMITS.get(section.section_id, 5)
-    visible = section.claims[:limit]
-    if draw:
-        c.rect(x + 12, y + 12, 40, 25, 'ink', 6)
-        code = section.section_id[:3].upper()
-        c.text(x + 32 - c.width(code, 'display_bold', 12) / 2, y + 16, code, 'display_bold', 12, 'raised')
-        c.text(x + 62, y + 13, section.title, 'bold', 17, 'ink')
-        color = STATE_COLOR.get(section.state, 'sub')
-        c.rect(x + 16, y + 47, 8, 8, color, 4)
-        meta = ' · '.join(text for text in (STATE_LABELS.get(section.state, section.state), section.producer,
-                                             section.input_status, section.schema_version or '') if text)
-        c.text(x + 30, y + 42, c.wrap(meta, 'regular', 11, w - 46, 1)[0], 'regular', 11, 'sub')
-    if not visible:
-        message = section.notes[0] if section.notes else STATE_LABELS.get(section.state, section.state)
-        for line in c.wrap(message, 'regular', 12, w - 32, 3):
-            if draw:
-                c.text(x + 16, cy, line, 'regular', 12, 'sub')
-            cy += 17
-        notes = section.notes[1:3]
-    else:
-        for claim in visible:
-            label = KIND_LABELS.get(claim.kind, claim.kind)
-            fill, ink = KIND_STYLE.get(claim.kind, ('line_soft', 'sub'))
-            lines = c.wrap(claim.text, 'regular', 12, text_w, 2)
-            if draw:
-                c.rect(x + 16, cy + 1, PILL_W, 18, fill, 9)
-                c.text(x + 16 + (PILL_W - c.width(label, 'bold', 10)) / 2, cy + 3, label, 'bold', 10, ink)
-                for index, line in enumerate(lines):
-                    c.text(text_x, cy + index * 17, line, 'regular', 12, 'ink')
-            cy += max(1, len(lines)) * 17
-            refs = _ids_line(c, claim.evidence_ids, text_w)
-            if draw:
-                c.text(text_x, cy + 1, refs, 'regular', 10, 'sage' if claim.evidence_ids else 'ochre')
-            cy += 15 + 6
-        notes = section.notes[:2]
-    for note in notes:
-        for line in c.wrap('※ ' + note, 'regular', 10.5, w - 32, 2):
-            if draw:
-                c.text(x + 16, cy, line, 'regular', 10.5, 'ochre')
-            cy += 15
-        cy += 2
-    omitted = len(section.claims) - len(visible)
-    hidden_notes = max(0, len(section.notes) - (len(notes) + (1 if not visible and section.notes else 0)))
-    if omitted or hidden_notes:
-        tail = ' · '.join(text for text in (f'항목 +{omitted:,}' if omitted else '', f'메모 +{hidden_notes:,}' if hidden_notes else '') if text)
-        if draw:
-            c.text(x + 16, cy + 2, f'{tail} — 전체는 실행 기록(JSON)에 있습니다', 'regular', 10, 'sub')
-        cy += 18
-    if thumbs:
-        cy += 4
-        for index, data in enumerate(thumbs[:4]):
-            if draw:
-                c.rect(x + 16 + index * 80, cy, 72, 72, 'raised', 8, 'line')
-                c.image(x + 18 + index * 80, cy + 2, 68, 68, data, 'contain')
-        cy += 72 + 6
-    height = max(cy - y + pad - 6, 96)
-    if draw:
-        # card background goes under its content
-        c.ops.insert(ops_before, ('rect', x, y, w, height, C['surface'], 12, C['line']))
-    return height
-
-
-def _decode_thumbs(encoded: Sequence[str]) -> list[bytes]:
-    out = []
-    for value in encoded[:4]:
-        try:
-            data = base64.b64decode(value, validate=True)
-        except (binascii.Error, ValueError):
-            continue
-        if 0 < len(data) <= MAX_EMBEDDED_IMAGE_BYTES:
-            out.append(data)
-    return out
+def _decode_image(value: str | None) -> bytes | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        data = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    return data if 0 < len(data) <= MAX_EMBEDDED_IMAGE_BYTES else None
 
 
 def _image_size(data: bytes | None) -> tuple[int, int] | None:
@@ -945,244 +888,639 @@ def _image_size(data: bytes | None) -> tuple[int, int] | None:
 
 
 def _any_landscape(images: Mapping[str, bytes | None]) -> bool:
-    """True when an embedded P06 visual is wider than tall (the outfit is 1536x1024): then the panels are stacked
-    full width, since side by side a landscape image would shrink to a quarter of the panel."""
+    """True when an embedded P06 visual is wider than tall (the outfit is 1536x1024): then the LOOK panels are stacked
+    full width, since side by side a landscape image would shrink to a strip."""
     sizes = [_image_size(data) for data in images.values() if data]
     return any(size is not None and size[0] > size[1] for size in sizes)
 
 
-def _draw_draft_visuals(c, visual: SheetVisual, vx: float, y: float, vw: float, visual_h: float,
-                        images: Mapping[str, bytes | None], unreadable: Sequence[str], *, stacked: bool = False) -> None:
-    """The two P06 visuals (workflow-contract 0.2.0): side by side, or stacked when they are landscape.
-    Stage 06 is this sheet, so it is never embedded."""
-    c.rect(vx, y, vw, visual_h, 'surface', 12, 'line')
-    c.text(vx + 20, y + 16, '신제품 시안 / P06 Product · Outfit', 'bold', 18, 'ink')
-    box_x, box_y, box_w, box_h = vx + 20, y + 52, vw - 40, visual_h - 120
-    gap = 12
-    count = len(visual.draft_visuals)
-    panel_w = box_w if stacked else (box_w - gap) / count
-    panel_h = (box_h - gap) / count if stacked else box_h
-    for index, item in enumerate(visual.draft_visuals):
-        px = box_x if stacked else box_x + index * (panel_w + gap)
-        py = box_y + index * (panel_h + gap) if stacked else box_y
-        status_text = RUN_STATUS_LABELS.get(item.status or '', item.status or '미제공')
-        c.text(px + 2, py, item.label, 'bold', 12, 'ink')
-        c.text(px + panel_w - c.width(status_text, 'regular', 11) - 2, py + 1, status_text, 'regular', 11,
-               'brick' if item.status == 'failed' else 'sub')
-        iy, ih = py + 22, panel_h - 22
-        data = images.get(item.key)
-        if data:
-            c.rect(px, iy, panel_w, ih, 'raised', 10)
-            c.image(px + 4, iy + 4, panel_w - 8, ih - 8, data, 'contain')
-            continue
-        c.rect(px, iy, panel_w, ih, 'placeholder', 10)
-        headline = '이미지를 읽지 못했습니다' if item.key in unreadable else \
-            {'failed': '생성 실패', 'skipped': '생략'}.get(item.status or '', '이미지 없음')
-        c.text(px + (panel_w - c.width(headline, 'bold', 16)) / 2, iy + ih / 2 - 24, headline, 'bold', 16, 'sub')
-        for line_no, line in enumerate(c.wrap(item.reason or '', 'regular', 10.5, panel_w - 24, 4)):
-            c.text(px + (panel_w - c.width(line, 'regular', 10.5)) / 2, iy + ih / 2 + 2 + line_no * 14, line, 'regular', 10.5, 'sub')
-    caption = ['P06 시안']
-    if visual.image_generation_calls is not None:
-        caption.append(f'이미지 호출 {visual.image_generation_calls}회')
-    models = list(dict.fromkeys(item.model for item in visual.draft_visuals if item.model))
-    if models:
-        caption.append('model ' + ', '.join(models))
-    if visual.draft_fixture:
-        caption.append('로컬 fixture 이미지 — 생성된 컨셉 아님')
-    caption.append('06 기획안 = 이 문서 (P08 합성, 이미지 모델 호출 없음)')
-    failed = any(item.status == 'failed' for item in visual.draft_visuals)
-    for index, line in enumerate(c.wrap(' · '.join(caption), 'regular', 11, vw - 40, 2)):
-        c.text(vx + 20, box_y + box_h + 12 + index * 15, line, 'regular', 11, 'brick' if failed else 'sub')
+# --- swatches and textures -------------------------------------------------------------------------
+
+# Colour names as the producers write them → swatch colour. A name not in the table is shown as text only.
+SWATCHES = {
+    '블랙': '#1C1C1C', '검정': '#1C1C1C', 'black': '#1C1C1C', '화이트': '#F7F7F4', '흰색': '#F7F7F4', 'white': '#F7F7F4',
+    '오프화이트': '#F2EFE6', '아이보리': '#F1EBDA', 'ivory': '#F1EBDA', '크림': '#EFE4CB', 'cream': '#EFE4CB',
+    '오트밀': '#E3D8C3', '베이지': '#D8C3A0', 'beige': '#D8C3A0', '샌드': '#D6C09A', '카멜': '#B98D5A', 'camel': '#B98D5A',
+    '탄': '#C2A27A', '브라운': '#6E4B33', 'brown': '#6E4B33', '다크브라운': '#4A3123', '초콜릿': '#4A3123', '모카': '#7B5B47',
+    '카키': '#6E6B43', 'khaki': '#6E6B43', '올리브': '#68703F', 'olive': '#68703F', '그레이': '#9B9B9B', '회색': '#9B9B9B',
+    'gray': '#9B9B9B', 'grey': '#9B9B9B', '라이트그레이': '#C9C9C9', '멜란지': '#B7B5B0', '차콜': '#3C3C3E', 'charcoal': '#3C3C3E',
+    '네이비': '#1F2B47', 'navy': '#1F2B47', '블루': '#2F5DA8', 'blue': '#2F5DA8', '스카이블루': '#9CC3E6', '하늘색': '#9CC3E6',
+    '데님': '#4A6A8F', 'denim': '#4A6A8F', '인디고': '#2E3C6E', '그린': '#3F7D4E', 'green': '#3F7D4E', '민트': '#A8D8C4',
+    '레드': '#B22D2D', 'red': '#B22D2D', '버건디': '#6E1F2B', 'burgundy': '#6E1F2B', '와인': '#6B1E33', '핑크': '#E8A5B5',
+    'pink': '#E8A5B5', '라벤더': '#BBA8D6', '퍼플': '#6E4A8E', 'purple': '#6E4A8E', '옐로우': '#E9C84A', '노랑': '#E9C84A',
+    'yellow': '#E9C84A', '머스타드': '#C99A2E', '오렌지': '#E07A2E', 'orange': '#E07A2E', '테라코타': '#B8603E', '코랄': '#E9806E',
+    '실버': '#BFC1C2', 'silver': '#BFC1C2', '골드': '#C8A951', 'gold': '#C8A951',
+}
+# Material words → texture pattern drawn on the chip (a schematic hint, not a photo of the fabric).
+TEXTURES = (('knit', ('니트', '울', '캐시미어', '모헤어', '앙고라', '알파카', 'wool', 'knit', 'cashmere')),
+            ('denim', ('데님', '진', 'denim')),
+            ('corduroy', ('코듀로이', '골덴', 'corduroy')),
+            ('leather', ('가죽', '레더', '스웨이드', 'leather', 'suede')),
+            ('silk', ('실크', '새틴', 'silk', 'satin')),
+            ('lace', ('레이스', 'lace')),
+            ('tweed', ('트위드', '부클', 'tweed', 'boucle')),
+            ('fur', ('퍼', '시어링', '플리스', '무스탕', 'fur', 'fleece', 'shearling')),
+            ('linen', ('린넨', '리넨', '마', 'linen')),
+            ('woven', ('면', '코튼', '옥스포드', 'cotton')),
+            ('synthetic', ('합성', '폴리', '나일론', '아크릴', '레이온', 'poly', 'nylon', 'acrylic')))
+
+
+def swatch_color(name: str) -> str | None:
+    key = name.replace(' ', '').lower()
+    if key in SWATCHES:
+        return SWATCHES[key]
+    for word in sorted(SWATCHES, key=len, reverse=True):  # '다크 브라운' → 다크브라운, '라이트 베이지' → 베이지
+        if word in key:
+            return SWATCHES[word]
+    return None
+
+
+def texture_kind(name: str) -> str:
+    key = name.replace(' ', '').lower()
+    return next((kind for kind, words in TEXTURES if any(word in key for word in words)), 'plain')
+
+
+_TEXTURE_CACHE: dict[str, bytes] = {}
+
+
+def _texture_png(kind: str) -> bytes:
+    """A small schematic pattern for a material chip, drawn once per kind."""
+    if kind in _TEXTURE_CACHE:
+        return _TEXTURE_CACHE[kind]
+    from PIL import Image, ImageDraw
+    size = 96
+    base, line = {'knit': ('#E9E1D3', '#B9A98E'), 'denim': ('#5B7899', '#3E5878'), 'corduroy': ('#B48C62', '#8E6A45'),
+                  'leather': ('#7A5238', '#5E3E2A'), 'silk': ('#ECE6EE', '#C9BED0'), 'lace': ('#F6F3EE', '#BDB3A6'),
+                  'tweed': ('#C9BCA8', '#6F6253'), 'fur': ('#D9CCBA', '#A8967F'), 'linen': ('#E7DFCF', '#BFB29A'),
+                  'woven': ('#EEEAE2', '#C4BBAB'), 'synthetic': ('#E3E6EA', '#B5BCC6'), 'plain': ('#ECEAE6', '#C8C4BC')}[kind]
+    image = Image.new('RGB', (size, size), base)
+    draw = ImageDraw.Draw(image)
+    if kind == 'knit':  # stacked V stitches
+        for y in range(0, size, 12):
+            for x in range(0, size, 12):
+                draw.line((x, y, x + 6, y + 10), fill=line, width=2)
+                draw.line((x + 6, y + 10, x + 12, y), fill=line, width=2)
+    elif kind in ('denim', 'synthetic'):  # twill diagonals
+        step = 7 if kind == 'denim' else 10
+        for offset in range(-size, size, step):
+            draw.line((offset, size, offset + size, 0), fill=line, width=2 if kind == 'denim' else 1)
+    elif kind == 'corduroy':  # vertical wales
+        for x in range(0, size, 8):
+            draw.rectangle((x, 0, x + 4, size), fill=line)
+    elif kind == 'leather':  # pebble grain
+        for y in range(4, size, 14):
+            for x in range(4 + (y // 14 % 2) * 7, size, 14):
+                draw.ellipse((x, y, x + 6, y + 5), outline=line, width=1)
+    elif kind == 'silk':  # sheen waves
+        for y in range(6, size, 14):
+            draw.arc((-20, y - 10, size // 2 + 10, y + 10), 0, 180, fill=line, width=2)
+            draw.arc((size // 2 - 10, y - 10, size + 20, y + 10), 180, 360, fill=line, width=2)
+    elif kind == 'lace':  # open rings
+        for y in range(6, size, 16):
+            for x in range(6 + (y // 16 % 2) * 8, size, 16):
+                draw.ellipse((x, y, x + 9, y + 9), outline=line, width=2)
+    elif kind == 'tweed':  # flecks
+        for index in range(220):
+            x, y = (index * 37) % size, (index * 53 + index // 7) % size
+            draw.line((x, y, x + 3, y + (index % 3) - 1), fill=line if index % 4 else '#A0523D', width=2)
+    elif kind == 'fur':  # pile strokes
+        for y in range(0, size, 8):
+            for x in range((y // 8 % 2) * 4, size, 8):
+                draw.line((x, y, x + 3, y + 7), fill=line, width=2)
+    elif kind in ('linen', 'woven'):  # plain weave grid
+        step = 6 if kind == 'linen' else 8
+        for x in range(0, size, step):
+            draw.line((x, 0, x, size), fill=line, width=1)
+        for y in range(0, size, step):
+            draw.line((0, y, size, y), fill=line, width=1)
+    else:
+        for y in range(6, size, 12):
+            for x in range(6, size, 12):
+                draw.point((x, y), fill=line)
+    out = io.BytesIO()
+    image.save(out, format='PNG')
+    _TEXTURE_CACHE[kind] = out.getvalue()
+    return _TEXTURE_CACHE[kind]
+
+
+# --- poster layout -----------------------------------------------------------------------------------
+
+MARGIN, GUTTER = 30, 30
+COLUMN_W = (W - 2 * MARGIN - 2 * GUTTER) / 3
+COLUMNS = tuple((MARGIN + index * (COLUMN_W + GUTTER), COLUMN_W) for index in range(3))
+COLUMN_TITLES = ('Analysis', 'Design', 'Marketing')
+
+
+def _heading(c: _Canvas, x: float, y: float, w: float, title: str, *, scale: float = 1.0) -> float:
+    s = 15 * scale
+    c.text(x, y, title, 'bold', s, 'ink')
+    start = x + c.width(title, 'bold', s) + 12
+    c.rect(start, y + 11 * scale, x + w - start, 1.2, 'ink2')
+    return y + 30 * scale
+
+
+def _paragraph(c: _Canvas, x: float, y: float, w: float, text: str, *, size: float = 11.5, lines: int = 6,
+               color: str = 'ink2', role: str = 'regular', leading: float = 1.55) -> float:
+    for line in c.wrap(text, role, size, w, lines):
+        c.text(x, y, line, role, size, color)
+        y += size * leading
+    return y
+
+
+def _bullets(c: _Canvas, x: float, y: float, w: float, items: Sequence[str], *, limit: int, lines: int = 3,
+             mark: str = 'dot', scale: float = 1.0) -> float:
+    indent = 20 * scale
+    for item in items[:limit]:
+        if mark == 'warn':
+            r = 14 * scale
+            fs = 8.5 * scale
+            c.rect(x, y + 2, r, r, 'amber_lt', r / 2)
+            c.text(x + r / 2 - c.width('!', 'bold', fs) / 2, y + 3, '!', 'bold', fs, 'amber')
+        else:
+            ds = 5 * scale
+            c.rect(x + 3 * scale, y + 7 * scale, ds, ds, 'ink', 3 * scale)
+        y = _paragraph(c, x + indent, y, w - indent, item, size=11 * scale, lines=lines) + 6 * scale
+    if len(items) > limit:
+        fs = 9.5 * scale
+        c.text(x + indent, y, f'외 {len(items) - limit:,}건 — 전체는 실행 기록(JSON)에 있습니다', 'regular', fs, 'ink3')
+        y += 18 * scale
+    return y
+
+
+def _label(c: _Canvas, x: float, y: float, text: str, *, scale: float = 1.0) -> None:
+    c.text(x, y, text, 'display_bold', 9.5 * scale, 'ink3')
+
+
+def _swatches(c: _Canvas, x: float, y: float, w: float, names: Sequence[str]) -> float:
+    """Colour circles with their names; a name outside the swatch table is a plain text chip."""
+    px, row_h = x, 56
+    for name in names[:8]:
+        colour = swatch_color(name)
+        label_w = c.width(name, 'regular', 9.5)
+        width = max(30, label_w) + 12 if colour else label_w + 20
+        if px + width > x + w and px > x:
+            px, y = x, y + row_h
+        if colour:
+            centre = px + width / 2
+            c.rect(centre - 13, y, 26, 26, colour, 13, 'rule_s')
+            c.text(centre - label_w / 2, y + 30, name, 'regular', 9.5, 'ink2')
+        else:
+            c.rect(px, y + 4, width, 20, 'paper', 10, 'rule_s')
+            c.text(px + 10, y + 7, name, 'regular', 9.5, 'ink2')
+        px += width + 6
+    return y + row_h
+
+
+def _textures(c: _Canvas, x: float, y: float, w: float, names: Sequence[str]) -> float:
+    px, row_h = x, 74
+    for name in names[:6]:
+        label_w = c.width(name, 'regular', 9.5)
+        width = max(44, label_w)
+        if px + width > x + w and px > x:
+            px, y = x, y + row_h
+        tile = px + (width - 44) / 2
+        c.rect(tile - 1, y - 1, 46, 46, 'rule_s', 6)
+        c.image(tile, y, 44, 44, _texture_png(texture_kind(name)), 'cover')
+        c.text(px + (width - label_w) / 2, y + 48, name, 'regular', 9.5, 'ink2')
+        px += width + 12
+    return y + row_h
+
+
+def _pills(c: _Canvas, x: float, y: float, w: float, items: Sequence[str], limit: int = 10, *,
+           scale: float = 1.0) -> float:
+    px = x
+    s = 10 * scale
+    pad = 10 * scale
+    for text in items[:limit]:
+        text = c.wrap(text, 'regular', s, w - 2 * pad, 1)[0]
+        width = c.width(text, 'regular', s) + 2 * pad
+        h = 20 * scale
+        if px + width > x + w and px > x:
+            px, y = x, y + 26 * scale
+        c.rect(px, y, width, h, 'accent_lt', h / 2)
+        c.text(px + pad, y + 3 * scale, text, 'regular', s, 'accent')
+        px += width + 6
+    return y + 28 * scale
+
+
+def _photo(c: _Canvas, x: float, y: float, w: float, h: float, data: bytes | None, mode: str = 'cover',
+           empty: str = '이미지 없음') -> None:
+    if data:
+        c.rect(x, y, w, h, 'paper')
+        c.image(x, y, w, h, data, mode)
+    else:
+        c.rect(x, y, w, h, 'placeholder')
+        c.text(x + (w - c.width(empty, 'regular', 10.5)) / 2, y + h / 2 - 7, empty, 'regular', 10.5, 'ink3')
+
+
+# --- Analysis ----------------------------------------------------------------------------------------
+
+def _analysis(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet,
+              photos: Sequence[tuple[bytes, str]], swot: Mapping[str, Any] | None = None) -> float:
+    trend = sheet.trend
+    sections = {section.section_id: section for section in sheet.board.sections}
+    y = _heading(c, x, y, w, '소비 트렌드')
+    if trend is None:
+        y = _paragraph(c, x, y, w, sections['trend'].notes[0] if sections['trend'].notes else '트렌드 결과 없음', lines=3)
+    else:
+        c.text(x, y, c.wrap(trend.name, 'bold', 21, w, 1)[0], 'bold', 21, 'ink')
+        y += 32
+        if trend.seasons:
+            c.text(x, y, trend.seasons, 'display', 10.5, 'ink3')
+            y += 20
+        if trend.definition:
+            box_lines = c.wrap(trend.definition, 'regular', 11.5, w - 28, 4)
+            c.rect(x, y, w, len(box_lines) * 18 + 20, 'card_grey')
+            y = _paragraph(c, x + 14, y + 10, w - 28, trend.definition, lines=4, color='ink') + 18
+        if trend.paragraphs:
+            y = _paragraph(c, x, y, w, ' '.join(trend.paragraphs), lines=9) + 8
+        if trend.colors:
+            _label(c, x, y, 'COLOR')
+            y = _swatches(c, x, y + 18, w, trend.colors)
+        if trend.materials:
+            _label(c, x, y, 'MATERIAL · TEXTURE')
+            y = _textures(c, x, y + 18, w, trend.materials)
+        if trend.features:
+            _label(c, x, y, 'KEY ITEM · DETAIL')
+            y = _pills(c, x, y + 18, w, trend.features)
+    # article photos from the Trend result (fetched and stored by stage 06)
+    if photos:
+        count = len(photos[:3])
+        gap = 8
+        pw = (w - gap * (count - 1)) / count
+        ph = round(pw * 4 / 3) if count > 1 else round(w * 0.62)
+        for index, (data, url) in enumerate(photos[:3]):
+            _photo(c, x + index * (pw + gap), y, pw, ph, data)
+        y += ph + 6
+        hosts = ', '.join(dict.fromkeys(host for host in (_host(url) for _, url in photos[:3]) if host))
+        c.text(x, y, f'트렌드 기사 이미지 · 출처 {hosts}' if hosts else '트렌드 기사 이미지', 'regular', 9.5, 'ink3')
+        y += 22
+    elif trend is not None:
+        _photo(c, x, y, w, 90, None, empty='트렌드 기사 이미지 없음')
+        y += 104
+    # the stock product matched to this trend
+    y = _heading(c, x, y + 8, w, '재고 현황')
+    stock = sheet.stock
+    if stock is None:
+        section = sections['inventory']
+        y = _paragraph(c, x, y, w, section.notes[0] if section.notes else '매칭된 재고 상품 없음', lines=3)
+        return _swot_box(c, x, y + 12, w, swot)
+    image = _decode_image(stock.image)
+    iw, ih = 168, 210
+    top = y
+    _photo(c, x, y, iw, ih, image, 'contain', '재고 이미지 없음')
+    rx, rw = x + iw + 16, w - iw - 16
+    c.text(rx, y, c.wrap(stock.style_id, 'display_bold', 17, rw, 1)[0], 'display_bold', 17, 'ink')
+    y += 26
+    if stock.category:
+        c.text(rx, y, stock.category, 'regular', 11, 'ink3')
+        y += 22
+    rows = [('컬러', None), ('소재', None), ('핏', stock.fit or '미제공'), ('재고', stock.quantity)]
+    for label, value in rows:
+        _label(c, rx, y + 3, label)
+        vx = rx + 44
+        if label == '컬러':
+            if stock.colors:
+                for name in stock.colors[:3]:
+                    colour = swatch_color(name)
+                    if colour:
+                        c.rect(vx, y + 1, 16, 16, colour, 8, 'rule_s')
+                        vx += 22
+                    c.text(vx, y + 1, name, 'regular', 11, 'ink')
+                    vx += c.width(name, 'regular', 11) + 12
+            else:
+                c.text(vx, y + 1, '미제공', 'regular', 11, 'ink3')
+            y += 26
+        elif label == '소재':
+            if stock.materials:
+                for name in stock.materials[:3]:
+                    c.rect(vx - 1, y - 1, 22, 22, 'rule_s', 3)
+                    c.image(vx, y, 20, 20, _texture_png(texture_kind(name)), 'cover')
+                    c.text(vx + 26, y + 2, name, 'regular', 11, 'ink')
+                    vx += 26 + c.width(name, 'regular', 11) + 12
+            else:
+                c.text(vx, y + 1, '미제공', 'regular', 11, 'ink3')
+            y += 28
+        else:
+            c.text(vx, y + 1, c.wrap(value, 'regular', 11, rw - 44, 1)[0], 'bold' if label == '재고' else 'regular', 11, 'ink')
+            y += 24
+    if stock.basis:
+        y = _paragraph(c, rx, y + 2, rw, stock.basis, size=9.5, lines=2, color='ink3')
+    y = max(y, top + ih) + 12
+    if stock.reason:
+        _label(c, x, y, 'MATCH · 매칭 이유')
+        y = _paragraph(c, x, y + 18, w, stock.reason, size=11, lines=5)
+    return _swot_box(c, x, y + 12, w, swot)
+
+
+def _swot_box(c: _Canvas, x: float, y: float, w: float, swot: Mapping[str, Any] | None) -> float:
+    """The LLM SWOT draft stage 06 kept for this run, as a 2x2 grid; absent drafts leave a one-line note."""
+    y = _heading(c, x, y + 8, w, 'SWOT 분석')
+    quadrants = _mapping(_mapping(swot).get('swot'))
+    if not quadrants:
+        return _paragraph(c, x, y, w, 'SWOT 초안 없음 (LLM 미설정 또는 생성 실패)', size=10.5, lines=1, color='ink3') + 6
+    gap, pad = 8, 12
+    cell_w = (w - gap) / 2
+    text_w = cell_w - 2 * pad - 10
+    cells = []
+    for key, title, tone in SWOT_CELLS:
+        entries = [_mapping(item) for item in _list(quadrants.get(key))]
+        lines = [c.wrap(item.get('text') or '', 'regular', 10.5, text_w, 3) for item in entries]
+        height = 34 + sum(len(item) * 15 + 4 for item in lines) + (15 if not entries else 0) + 6
+        cells.append((title, tone, entries, lines, height))
+    for row in range(2):
+        row_cells = cells[row * 2:row * 2 + 2]
+        row_h = max(cell[4] for cell in row_cells)
+        for column, (title, tone, entries, lines, _) in enumerate(row_cells):
+            cx = x + column * (cell_w + gap)
+            c.rect(cx, y, cell_w, row_h, tone + '_lt', 4)
+            c.text(cx + pad, y + 10, title, 'bold', 11, tone)
+            cy = y + 32
+            if not entries:
+                c.text(cx + pad, cy, '근거 부족', 'regular', 10, 'ink3')
+            for item, wrapped in zip(entries, lines):
+                c.rect(cx + pad + 1, cy + 6, 4, 4, tone, 2)
+                for index, line in enumerate(wrapped):
+                    c.text(cx + pad + 10, cy + index * 15, line, 'regular', 10.5, 'ink2')
+                cy += len(wrapped) * 15 + 4
+        y += row_h + gap
+    note = 'LLM 가설 · MD 검토 필요' + (f" · model {swot.get('model')}" if _mapping(swot).get('model') else '')
+    return _paragraph(c, x, y, w, note, size=9.5, lines=1, color='ink3')
+
+
+# --- Design ------------------------------------------------------------------------------------------
+
+def _design(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet, images: Mapping[str, bytes | None],
+            unreadable: Sequence[str], final_image: bytes | None, final_unreadable: bool,
+            swot: Mapping[str, Any] | None = None) -> float:
+    sections = {section.section_id: section for section in sheet.board.sections}
+    y = _heading(c, x, y, w, '신상품 컨셉')
+    concept = sheet.concept_line.text if sheet.concept_line else None
+    if concept:
+        lines = c.wrap(concept, 'regular', 12, w - 32, 6)
+        c.rect(x, y, w, len(lines) * 19 + 24, 'card_grey')
+        y = _paragraph(c, x + 16, y + 12, w - 32, concept, size=12, lines=6, color='ink') + 22
+    view = sheet.concept
+    if view and view.opportunity:
+        _label(c, x, y, 'OPPORTUNITY · 기획 기회')
+        y = _paragraph(c, x, y + 18, w, view.opportunity, size=11, lines=4) + 4
+        for finding in view.findings[:2]:
+            y = _paragraph(c, x, y, w, '· ' + finding, size=10, lines=2, color='ink3')
+        y += 12
+    visual = sheet.visual
+    if visual.draft_visuals:
+        stacked = _any_landscape(images)
+        count = len(visual.draft_visuals)
+        gap = 12
+        pw = w if stacked else (w - gap * (count - 1)) / count
+        ph = round(w * 2 / 3) if stacked else round(pw * 3 / 2)
+        for index, item in enumerate(visual.draft_visuals):
+            px = x if stacked else x + index * (pw + gap)
+            py = y if not stacked else y + index * (ph + 40)
+            name = 'NEW PRODUCT' if item.key == 'product' else 'STYLING'
+            c.text(px, py, f'LOOK {index + 1:02d}.', 'display_bold', 15, 'ink')
+            c.text(px + c.width(f'LOOK {index + 1:02d}.', 'display_bold', 15) + 8, py + 4,
+                   f"{name} · {item.label.split(' · ')[0]}", 'regular', 10.5, 'ink3')
+            data = images.get(item.key)
+            if data:
+                _photo(c, px, py + 26, pw, ph, data, 'contain')
+            else:
+                headline = '이미지를 읽지 못했습니다' if item.key in unreadable else \
+                    {'failed': '생성 실패', 'skipped': '생략'}.get(item.status or '', '이미지 없음')
+                _photo(c, px, py + 26, pw, ph, None, empty=headline)
+        y += (count * (ph + 40) - 14) if stacked else ph + 26
+        y += 8
+        models = list(dict.fromkeys(item.model for item in visual.draft_visuals if item.model))
+        note = 'new-product-agent 생성 시안' + (f' · {", ".join(models)}' if models else '') + \
+            (' · 로컬 fixture 이미지 — 생성된 컨셉 아님' if visual.draft_fixture else '')
+        c.text(x, y, note, 'regular', 9.5, 'red' if any(i.status == 'failed' for i in visual.draft_visuals) else 'ink3')
+        y += 24
+    else:  # earlier runs: the final image
+        ph = round(w * 1.1)
+        headline = '시안 이미지를 읽지 못했습니다' if final_unreadable else \
+            {'failed': '시안 이미지 생성 실패', 'skipped': '시안 이미지 생략'}.get(visual.status or '', '시안 이미지 없음')
+        _photo(c, x, y, w, ph, final_image, 'contain', headline)
+        y += ph + 24
+    rows = [row for row in sheet.spec_rows]
+    y = _heading(c, x, y, w, '상품 프로필')
+    if not rows:
+        y = _paragraph(c, x, y, w, '상품 프로필 미제공 — MD 확인 필요', size=11, lines=2, color='ink3') + 6
+    for row in rows[:10]:
+        c.text(x, y + 1, c.wrap(row.label, 'bold', 11, 80, 1)[0], 'bold', 11, 'ink')
+        vx, vw = x + 86, w - 86
+        if row.label == '컬러' and swatch_color(row.value):
+            c.rect(vx, y + 1, 16, 16, swatch_color(row.value), 8, 'rule_s')
+            vx, vw = vx + 22, vw - 22
+        elif row.label == '소재':
+            c.rect(vx - 1, y - 1, 20, 20, 'rule_s', 3)
+            c.image(vx, y, 18, 18, _texture_png(texture_kind(row.value)), 'cover')
+            vx, vw = vx + 26, vw - 26
+        lines = c.wrap(row.value, 'regular', 11, vw - 70, 3)
+        for index, line in enumerate(lines):
+            c.text(vx, y + 1 + index * 16, line, 'regular', 11, 'ink2')
+        if row.kind not in ('user_requested', 'evidence_observation'):
+            c.text(x + w - c.width('MD 확인', 'regular', 9.5), y + 2, 'MD 확인', 'regular', 9.5, 'amber')
+        y += max(1, len(lines)) * 16 + 10
+        c.rect(x, y - 5, w, 1, 'rule')
+    if len(rows) > 10:
+        c.text(x, y + 2, f'외 {len(rows) - 10:,}개 — 전체는 실행 기록(JSON)에 있습니다', 'regular', 9.5, 'ink3')
+        y += 18
+    y += 10
+    # new-product-agent's differentiation first; while it is empty, the stage-06 LLM stand-in (swot.py, prompt v3).
+    stand_in = () if view and view.differentiation else tuple(
+        text for text in (_mapping(item).get('text') for item in _list(_mapping(_mapping(swot).get('swot')).get('differentiation')))
+        if isinstance(text, str) and text.strip())
+    if view and (view.differentiation or view.own_products or stand_in):
+        y = _heading(c, x, y, w, '차별화 포인트')
+        if view.differentiation:
+            y = _bullets(c, x, y, w, view.differentiation, limit=3)
+        elif stand_in:
+            y = _bullets(c, x, y, w, stand_in, limit=3)
+            y = _paragraph(c, x, y, w, 'vogue-orchestrator LLM 가설 (new-product-agent 차별화 미제공) · MD 검토 필요',
+                           size=9.5, lines=1, color='ink3') + 4
+        if view.own_products:
+            _label(c, x, y + 2, 'OWN PRODUCTS · 자사 상품과의 관계')
+            y = _bullets(c, x, y + 20, w, view.own_products, limit=2)
+        y += 10
+    if sheet.insight_points:
+        y = _heading(c, x, y, w, '기획 포인트')
+        y = _bullets(c, x, y, w, sheet.insight_points, limit=4)
+    elif not sections['insight'].claims and sections['insight'].notes:
+        y = _heading(c, x, y, w, '기획 포인트')
+        y = _paragraph(c, x, y, w, sections['insight'].notes[0], size=11, lines=3, color='ink3')
+    return y
+
+
+# --- Marketing ---------------------------------------------------------------------------------------
+
+def _promotions(c: _Canvas, x: float, y: float, w: float, swot: Mapping[str, Any] | None, *,
+                scale: float = 1.0) -> float:
+    """Promotion ideas from the stage-06 LLM draft (swot.py): numbered title and one line each."""
+    y = _heading(c, x, y, w, '프로모션 아이디어', scale=scale)
+    if not _mapping(swot).get('swot'):
+        return _paragraph(c, x, y, w, '프로모션 초안 없음 (LLM 미설정 또는 생성 실패)', size=10.5 * scale, lines=1, color='ink3') + 4
+    ideas = [_mapping(item) for item in _list(_mapping(swot.get('swot')).get('promotions'))]
+    if not ideas:
+        return _paragraph(c, x, y, w, '근거가 부족해 제안된 프로모션 없음', size=10.5 * scale, lines=1, color='ink3') + 4
+    badge = 18 * scale
+    indent = 28 * scale
+    for index, idea in enumerate(ideas[:3]):
+        c.rect(x, y + 1, badge, badge, 'accent', badge / 2)
+        number = str(index + 1)
+        ns = 9.5 * scale
+        c.text(x + badge / 2 - c.width(number, 'display_bold', ns) / 2, y + 3, number, 'display_bold', ns, 'paper')
+        ts = 12 * scale
+        c.text(x + indent, y, c.wrap(idea.get('title') or '', 'bold', ts, w - indent, 1)[0], 'bold', ts, 'ink')
+        y = _paragraph(c, x + indent, y + 21 * scale, w - indent, idea.get('text') or '', size=10.5 * scale, lines=3) + 8 * scale
+    return _paragraph(c, x, y, w, 'LLM 가설 · MD 검토 필요', size=9.5 * scale, lines=1, color='ink3')
+
+
+def _target(c: _Canvas, x: float, y: float, w: float, target: TargetView | None, *,
+            scale: float = 1.0) -> float:
+    y = _heading(c, x, y, w, '타깃', scale=scale)
+    if target is None or not (target.age or target.primary or target.summary):
+        message = target.missing if target and target.missing else '타깃 분석 결과 없음'
+        return _paragraph(c, x, y, w, message, size=11 * scale, lines=2, color='ink3') + 14
+    if target.age:
+        _label(c, x, y, 'AGE · 연령대', scale=scale)
+        age_s = 18 * scale
+        c.text(x, y + 16 * scale, c.wrap(target.age, 'bold', age_s, w, 1)[0], 'bold', age_s, 'ink')
+        y += 44 * scale
+        note = ' · '.join(text for text in (target.age_note, 'H&M 과거 구매 고객 기준 (연구용)') if text)
+        y = _paragraph(c, x, y, w, note, size=9.5 * scale, lines=2, color='ink3') + 8
+    if target.primary or target.summary:
+        sum_s = 11 * scale
+        pri_s = 12.5 * scale
+        sum_lead = 17 * scale
+        pri_lead = 19 * scale
+        pad = 14 * scale
+        lines = c.wrap(target.summary or '', 'regular', sum_s, w - 2 * pad, 6) if target.summary else []
+        primary = c.wrap(target.primary or '', 'bold', pri_s, w - 2 * pad, 2) if target.primary else []
+        box_h = 34 * scale + len(primary) * pri_lead + len(lines) * sum_lead + (8 * scale if lines and primary else 0)
+        c.rect(x, y, w, box_h, 'card_grey')
+        _label(c, x + pad, y + 10 * scale, 'TARGET HYPOTHESIS · 가설', scale=scale)
+        ty = y + 28 * scale
+        for line in primary:
+            c.text(x + pad, ty, line, 'bold', pri_s, 'ink')
+            ty += pri_lead
+        if lines and primary:
+            ty += 8 * scale
+        for line in lines:
+            c.text(x + pad, ty, line, 'regular', sum_s, 'ink2')
+            ty += sum_lead
+        y += box_h + 10
+        if target.secondary:
+            _label(c, x, y, 'SECONDARY', scale=scale)
+            y = _pills(c, x, y + 18 * scale, w, target.secondary, limit=2, scale=scale)
+        if target.occasions:
+            _label(c, x, y, 'OCCASION · 착용 상황', scale=scale)
+            y = _pills(c, x, y + 18 * scale, w, target.occasions, limit=4, scale=scale)
+        y = _paragraph(c, x, y, w, 'sales-market-agent LLM 가설 · 검증 필요', size=9.5 * scale, lines=1, color='ink3')
+    return y + 14
+
+
+def _marketing(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet,
+               swot: Mapping[str, Any] | None = None) -> float:
+    sc = COL3_SCALE
+    sections = {section.section_id: section for section in sheet.board.sections}
+    sales = sections['sales_market']
+    y = _target(c, x, y, w, sheet.target, scale=sc)
+    y = _heading(c, x, y, w, '판매·시장 분석', scale=sc)
+    findings = [claim.text for claim in sales.claims]
+    if findings:
+        y = _bullets(c, x, y, w, findings, limit=5, scale=sc)
+        for note in sales.notes[:2]:
+            y = _paragraph(c, x, y, w, '※ ' + note, size=9.5 * sc, lines=2, color='ink3') + 2
+    else:
+        y = _paragraph(c, x, y, w, sales.notes[0] if sales.notes else '판매·시장 분석 결과 없음', size=11 * sc, lines=3, color='ink3')
+    y += 12
+    y = _heading(c, x, y, w, '가격 전략', scale=sc)
+    price = dict(sheet.price_rows).get('제안 판매가')
+    box_h = 70 * sc
+    c.rect(x, y, w, box_h, 'yellow_lt', 4, 'yellow')
+    _label(c, x + 14, y + 10 * sc, 'PRICE', scale=sc)
+    c.text(x + 14, y + 26 * sc, price or '미제공', 'bold', 20 * sc, 'ink' if price else 'ink3')
+    sub = 'sales-market-agent 제안값 · MD 확인 필요' if price else '판매가 근거 없음 · MD 판단 필요'
+    sub_s = 9.5 * sc
+    c.text(x + w - 14 - c.width(sub, 'regular', sub_s), y + 34 * sc, sub, 'regular', sub_s, 'ink3')
+    y += box_h + 12
+    for label, value in [row for row in sheet.price_rows if row[0] != '제안 판매가']:
+        ls, vs = 11 * sc, 12.5 * sc
+        c.text(x, y + 2, label, 'regular', ls, 'ink2')
+        c.text(x + w - c.width(value, 'display_bold', vs), y, value, 'display_bold', vs, 'ink')
+        y += 24 * sc
+        c.rect(x, y - 4, w, 1, 'rule')
+    decisions = [claim.text.partition(':')[0] for claim in sections['finance'].claims]
+    if decisions:
+        _label(c, x, y + 4, 'MD DECISION', scale=sc)
+        y = _pills(c, x, y + 22 * sc, w, decisions, scale=sc)
+        c.text(x, y - 2, '위 항목은 MD가 결정합니다 (자동 산출하지 않음)', 'regular', 9.5 * sc, 'ink3')
+        y += 20
+    y = _promotions(c, x, y + 12, w, swot, scale=sc)
+    y += 12
+    y = _heading(c, x, y, w, 'MD 검토 포인트', scale=sc)
+    if sheet.review_items:
+        y = _bullets(c, x, y, w, sheet.review_items, limit=6, lines=3, mark='warn', scale=sc)
+    else:
+        y = _paragraph(c, x, y, w, '추가 확인 질문 없음', size=11 * sc, lines=1, color='ink3')
+    return y
+
+
+# --- the poster --------------------------------------------------------------------------------------
+
+def _header(c: _Canvas, sheet: PlanningSheet) -> float:
+    board = sheet.board
+    k = HEADER_H / 130  # the banner layout below is drawn on a 130-unit grid and scaled to HEADER_H
+    c.rect(0, 0, W, HEADER_H, 'header')
+    c.text(MARGIN + 5, 40.5 * k, 'VOGUE', 'display_bold', 34 * k, 'ink')  # vertically centred in the banner
+    slogan_s = 50 * k
+    sub_s = 15.6 * k
+    gap = 20 * k
+    block_h = slogan_s + gap + sub_s
+    top_y = (HEADER_H - block_h) / 2
+    c.text((W - c.width(BANNER_SLOGAN, 'display_heavy', slogan_s)) / 2, top_y, BANNER_SLOGAN, 'display_heavy', slogan_s, 'ink')
+    c.text((W - c.width(BANNER_SUBTITLE, 'display', sub_s)) / 2, top_y + slogan_s + gap, BANNER_SUBTITLE, 'display', sub_s, 'ink2')
+    created = sheet.started_at[:10] if isinstance(sheet.started_at, str) and len(sheet.started_at) >= 10 else '—'
+    right = W - MARGIN - 6
+    for index, (text, role, size, colour) in enumerate(((f'{board.season} · {board.category}', 'bold', 20.4 * k, 'ink'),
+                                                        (f'생성일 {created}', 'regular', 14 * k, 'ink2'))):
+        c.text(right - c.width(text, role, size), (21 + index * 32) * k, text, role, size, colour)
+    stamp = board.review_label
+    stamp_w = c.width(stamp, 'bold', 12 * k) + 20 * k
+    c.rect(right - stamp_w, 84 * k, stamp_w, 28 * k, 'accent', 4)
+    c.text(right - stamp_w + 10 * k, 89 * k, stamp, 'bold', 12 * k, 'paper')
+    if board.synthetic_context:
+        badge = '합성·샘플 데이터 포함'
+        badge_w = c.width(badge, 'bold', 12 * k) + 20 * k
+        c.rect(right - stamp_w - 8 * k - badge_w, 84 * k, badge_w, 28 * k, 'amber_lt', 4)
+        c.text(right - stamp_w - 8 * k - badge_w + 10 * k, 89 * k, badge, 'bold', 12 * k, 'amber')
+    for (x, w), title_text, tone in zip(COLUMNS, COLUMN_TITLES, COLUMN_TONES):
+        c.rect(x, HEADER_H + 20, w, 66, tone, 6)  # each column title sits in its own colour band
+        c.text(x + (w - c.width(title_text, 'display_bold', 36)) / 2, HEADER_H + 30, title_text, 'display_bold', 36, 'paper')
+    return HEADER_H + 116
 
 
 def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_unreadable: bool = False,
                fonts: Fonts | None = None, draft_images: Mapping[str, bytes | None] | None = None,
-               draft_unreadable: Sequence[str] = ()) -> bytes:
+               draft_unreadable: Sequence[str] = (), trend_photos: Sequence[tuple[bytes, str]] = (),
+               swot: Mapping[str, Any] | None = None) -> bytes:
+    """A one-product proposal poster in three columns: Analysis (the Trend style with colour, texture and article
+    photos; the stock product matched to it), Design (new-product-agent's concept, LOOK visuals, specification, planning points)
+    and Marketing (target, sales & market, price, promotion ideas, MD review points). Producer values are shown as stored; nothing is
+    invented, and absent values stay absent."""
     c = _Canvas(fonts or Fonts())
+    top = _header(c, sheet)
+    (x1, w1), (x2, w2), (x3, w3) = COLUMNS
+    bottoms = [_analysis(c, x1, top, w1, sheet, trend_photos, swot),
+               _design(c, x2, top, w2, sheet, draft_images or {}, draft_unreadable, image_bytes, image_unreadable, swot),
+               _marketing(c, x3, top, w3, sheet, swot)]
+    y = max(bottoms) + 30
+    c.rect(MARGIN, y, W - 2 * MARGIN, 1, 'rule_s')
+    c.text(MARGIN, y + 12, FOOTER_NOTE, 'regular', 9.5, 'ink3')
+    right = f'VOGUE · {SHEET_FORMAT} · {sheet.request_id}'
+    c.text(W - MARGIN - c.width(right, 'regular', 9.5), y + 12, right, 'regular', 9.5, 'ink3')
+    height = y + 40
     board = sheet.board
-    # header band
-    c.rect(18, 14, 1564, 82, 'ink', 14)
-    c.text(44, 26, f'{board.season} / MERCHANDISING PROPOSAL', 'display', 15, 'sage_tint')
-    c.text(44, 50, c.wrap(board.title, 'bold', 27, 900, 1)[0], 'bold', 27, 'raised')
-    c.rect(1300, 28, 255, 34, 'sage_tint', 17)
-    label = 'MD REVIEW DRAFT'
-    c.text(1300 + (255 - c.width(label, 'display_bold', 13)) / 2, 35, label, 'display_bold', 13, 'ink')
-    c.text(1300 + (255 - c.width(board.review_label, 'regular', 11)) / 2, 70, board.review_label, 'regular', 11, 'line')
-    if board.synthetic_context:
-        badge = '합성·샘플 데이터 포함'
-        bw = c.width(badge, 'bold', 11) + 24
-        c.rect(1280 - bw, 33, bw, 24, 'ochre_tint', 12)
-        c.text(1280 - bw + 12, 38, badge, 'bold', 11, 'ochre')
-    # process strip with the six stage traces
-    c.rect(28, 108, 1544, 44, 'sage_tint', 10)
-    px = 52
-    for index, step in enumerate(board.process):
-        c.text(px, 118, step, 'display_bold', 17, 'ink')
-        px += c.width(step, 'display_bold', 17) + 16
-        if index < len(board.process) - 1:
-            c.text(px, 118, '→', 'bold', 17, 'sage')
-            px += c.width('→', 'bold', 17) + 16
-    sx = 1556
-    for key, number, stage_label, status in reversed(sheet.stages):
-        status_text = RUN_STATUS_LABELS.get(status or '', status or '미실행').split(' · ')[0]
-        chip = f'{number} {stage_label}'
-        chip_w = c.width(chip, 'display_bold', 11) + c.width(status_text, 'regular', 10.5) + 30
-        sx -= chip_w
-        c.rect(sx, 118, chip_w, 24, 'raised', 12, 'line')
-        c.rect(sx + 9, 127, 7, 7, STAGE_COLOR.get(status or '', 'line'), 4)
-        c.text(sx + 21, 122, chip, 'display_bold', 11, 'ink')
-        c.text(sx + 24 + c.width(chip, 'display_bold', 11), 123, status_text, 'regular', 10.5, 'sub')
-        sx -= 6
-    # section columns
-    top = 168
-    sections = {section.section_id: section for section in board.sections}
-    thumbs = _decode_thumbs(sheet.thumbnails)
-    bottoms = []
-    for (x, w), ids in zip(COL[:2], COLUMN_SECTIONS):
-        y = top
-        for section_id in ids:
-            section = sections[section_id]
-            y += _card(c, section, x, y, w, thumbs if section_id == 'inventory' else ()) + GAP
-        bottoms.append(y)
-    # visual column
-    vx, vw = COL[2]
-    y = top
-    visual_h = 640
-    if sheet.visual.draft_visuals:  # 0.2.0: P06's product and outfit images
-        stacked = _any_landscape(draft_images or {})
-        visual_h = 800 if stacked else visual_h
-        _draw_draft_visuals(c, sheet.visual, vx, y, vw, visual_h, draft_images or {}, draft_unreadable, stacked=stacked)
-    else:  # earlier runs: the final image
-        c.rect(vx, y, vw, visual_h, 'surface', 12, 'line')
-        c.text(vx + 20, y + 16, '신제품 이미지 / Product Visual', 'bold', 18, 'ink')
-        box_x, box_y, box_w, box_h = vx + 20, y + 52, vw - 40, 520
-        visual = sheet.visual
-        if image_bytes:
-            c.rect(box_x, box_y, box_w, box_h, 'raised', 10)
-            c.image(box_x + 6, box_y + 6, box_w - 12, box_h - 12, image_bytes, 'contain')
-        else:
-            c.rect(box_x, box_y, box_w, box_h, 'placeholder', 10)
-            headline = '시안 이미지를 읽지 못했습니다' if image_unreadable else \
-                {'failed': '시안 이미지 생성 실패', 'skipped': '시안 이미지 생략'}.get(visual.status or '', '시안 이미지 없음')
-            c.text(box_x + (box_w - c.width(headline, 'bold', 20)) / 2, box_y + box_h / 2 - 30, headline, 'bold', 20, 'sub')
-            detail = ' · '.join(text for text in (visual.reason or '', f'provider_calls {visual.provider_calls}'
-                                                  if visual.provider_calls is not None else '') if text)
-            if detail:
-                c.text(box_x + (box_w - c.width(detail, 'regular', 12)) / 2, box_y + box_h / 2 + 4, detail, 'regular', 12, 'sub')
-            if visual.message:
-                for index, line in enumerate(c.wrap(visual.message, 'regular', 11, box_w - 60, 2)):
-                    c.text(box_x + (box_w - c.width(line, 'regular', 11)) / 2, box_y + box_h / 2 + 26 + index * 15, line, 'regular', 11, 'sub')
-        status_text = RUN_STATUS_LABELS.get(visual.status or '', visual.status or '상태 미제공')
-        caption = [f'최종 이미지: {status_text}']
-        if visual.provider_calls is not None:
-            caption.append(f'provider_calls {visual.provider_calls}')
-        if visual.fixture:
-            caption.append('로컬 fixture 이미지 — 생성된 컨셉 아님')
-        artifact = _mapping(visual.artifact)
-        if isinstance(artifact.get('sha256'), str):
-            caption.append(f"sha256 {artifact['sha256'][:12]}")
-        for index, line in enumerate(c.wrap(' · '.join(caption), 'regular', 11, vw - 40, 2)):
-            c.text(vx + 20, y + 584 + index * 15, line, 'regular', 11, 'brick' if visual.status == 'failed' else 'sub')
-    y += visual_h + GAP
-    # review notes
-    notes_top = y
-    c.ops.append(('marker',))
-    marker = len(c.ops)
-    cy = y + 16
-    c.text(vx + 18, cy, '근거 요약 / Review Notes', 'bold', 17, 'ink')
-    cy += 32
-    c.text(vx + 18, cy, '기획서 항목 (CandidateBrief)', 'bold', 11, 'sub')
-    cy += 17
-    for name, value in sheet.brief:
-        c.text(vx + 18, cy, name, 'bold', 11, 'sub')
-        for line in c.wrap(value, 'regular', 11, vw - 128, 2):
-            c.text(vx + 110, cy, line, 'regular', 11, 'brick' if value.startswith('실패') else 'ink')
-            cy += 15
-        cy += 2
-    cy += 6
-    c.rect(vx + 18, cy, vw - 36, 1, 'line')
-    cy += 12
-    c.text(vx + 18, cy, f'입력 Evidence {len(board.evidence_ids):,}건 · 미확정 분석은 검토 필요로 표시', 'regular', 12, 'ink')
-    cy += 20
-    ids = ', '.join(board.evidence_ids[:24]) + (f' 외 {len(board.evidence_ids) - 24:,}건' if len(board.evidence_ids) > 24 else '')
-    for line in c.wrap(ids or '연결된 Evidence ID 없음', 'regular', 10, vw - 36, 5):
-        c.text(vx + 18, cy, line, 'regular', 10, 'sage')
-        cy += 14
-    cy += 10
-    c.rect(vx + 18, cy, vw - 36, 1, 'line')
-    cy += 12
-    latest = sheet.md_decisions[-1] if sheet.md_decisions else None
-    if latest:
-        decision = MD_DECISION_LABELS.get(str(latest.get('decision')), str(latest.get('decision')))
-        decided = _time_span(latest.get('decided_at') if isinstance(latest.get('decided_at'), str) else None, None).split(' → ')[0]
-        md_text = f"MD 판단: {decision} · {decided} · 기록 {len(sheet.md_decisions)}건"
-    else:
-        md_text = f"MD 판단: {'대기' if sheet.md_status == 'pending' else (sheet.md_status or '미기록')}" + (
-            f" ({' · '.join(sheet.md_choices)} 중 선택)" if sheet.md_choices else '')
-    c.text(vx + 18, cy, md_text, 'bold', 12, 'ink')
-    cy += 19
-    if latest and isinstance(latest.get('note'), str) and latest['note'].strip():
-        for line in c.wrap('메모: ' + latest['note'].strip(), 'regular', 11, vw - 36, 2):
-            c.text(vx + 18, cy, line, 'regular', 11, 'sub')
-            cy += 15
-    rows = [('실행 ID', sheet.request_id), ('실행 상태', RUN_STATUS_LABELS.get(sheet.run_status or '', sheet.run_status or '—')),
-            ('계약', ' · '.join(text for text in (sheet.contract_version, sheet.schema_version) if text) or '—'),
-            ('단계 시각', _time_span(sheet.started_at, sheet.completed_at))]
-    for name, value in rows:
-        c.text(vx + 18, cy, name, 'bold', 11, 'sub')
-        for line in c.wrap(value, 'regular', 11, vw - 110, 2):
-            c.text(vx + 92, cy, line, 'regular', 11, 'ink')
-            cy += 15
-        cy += 2
-    cy += 4
-    c.text(vx + 18, cy, '데이터 성격', 'bold', 11, 'sub')
-    cy += 17
-    for nature in sheet.natures:
-        tone = 'ochre' if ('synthetic' in nature or 'sample' in nature) else 'sub'
-        for line in c.wrap(nature, 'regular', 10.5, vw - 46, 1):
-            c.rect(vx + 18, cy + 4, 6, 6, tone, 3)
-            c.text(vx + 30, cy, line, 'regular', 10.5, tone)
-            cy += 15
-    notes_h = cy - notes_top + 14
-    c.ops.pop(marker - 1)
-    c.ops.insert(marker - 1, ('rect', vx, notes_top, vw, notes_h, C['sage_tint'], 12, C['line']))
-    bottoms.append(notes_top + notes_h + GAP)
-    # limitations band (full width, two columns)
-    y = max(bottoms) + 2
-    band_top = y
-    c.ops.append(('marker',))
-    marker = len(c.ops)
-    c.text(46, y + 16, '한계 · 확인 필요 / Limitations', 'bold', 15, 'ink')
-    c.text(46 + c.width('한계 · 확인 필요 / Limitations', 'bold', 15) + 12, y + 19,
-           f'실행 기록의 한계 {len(board.limitations):,}건(중복 제거) · 생산자 문구 그대로', 'regular', 11, 'sub')
-    y += 44
-    shown = list(board.limitations[:16])
-    half = (len(shown) + 1) // 2
-    column_y = []
-    for column, items in enumerate((shown[:half], shown[half:])):
-        ly = y
-        for item in items:
-            for index, line in enumerate(c.wrap(item, 'regular', 11, 700, 2)):
-                c.text(64 + column * 770, ly, line, 'regular', 11, 'ink')
-                if index == 0:
-                    c.rect(50 + column * 770, ly + 6, 5, 5, 'ochre', 3)
-                ly += 15
-            ly += 4
-        column_y.append(ly)
-    y = max(column_y or [y])
-    if len(board.limitations) > len(shown):
-        c.text(64, y + 2, f'+{len(board.limitations) - len(shown):,}건은 실행 기록(JSON)의 limitations에 있습니다', 'regular', 10.5, 'sub')
-        y += 18
-    band_h = y - band_top + 12
-    c.ops.pop(marker - 1)
-    c.ops.insert(marker - 1, ('rect', 28, band_top, 1544, band_h, C['surface'], 12, C['line']))
-    y = band_top + band_h + 14
-    # footer
-    c.text(30, y, FOOTER_NOTE, 'regular', 10.5, 'sub')
-    right = f'VOGUE — Atelier · {SHEET_FORMAT} · {sheet.request_id}'
-    c.text(1570 - c.width(right, 'regular', 10.5), y, right, 'regular', 10.5, 'sub')
-    height = y + 30
-    c.ops = [op for op in c.ops if op[0] != 'marker']
     metadata = {'Title': f'{board.title} — 상품기획서 (검토용)', 'Software': 'vogue-orchestrator planning_sheet',
                 'vogue:format': SHEET_FORMAT, 'vogue:request_id': sheet.request_id,
                 'vogue:contract_version': sheet.contract_version or '', 'vogue:schema_version': sheet.schema_version or ''}
@@ -1190,10 +1528,12 @@ def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_
 
 
 def planning_sheet_png(envelope: Mapping[str, Any], *, load_artifact: Callable[[Mapping[str, Any]], bytes] | None = None,
-                       decisions: Sequence[Mapping[str, Any]] = (), fonts: Fonts | None = None) -> bytes:
+                       fonts: Fonts | None = None,
+                       trend_photos: Sequence[tuple[bytes, str]] = (), swot: Mapping[str, Any] | None = None) -> bytes:
     """PNG bytes for a run. ``load_artifact`` returns verified bytes for an image reference: the P06 visuals
-    (workflow-contract 0.2.0) or, for earlier runs, the final image."""
-    sheet = build_sheet(envelope, decisions=decisions)
+    (workflow-contract 0.2.0) or, for earlier runs, the final image. ``trend_photos`` are the Trend article photos
+    stage 06 stored for this run, as (bytes, source URL); ``swot`` is the SWOT draft it kept (swot.py), or None."""
+    sheet = build_sheet(envelope)
     image_bytes, unreadable = None, False
     if sheet.visual.draft_visuals:
         # 0.2.0: embed P06's verified visuals; the final image of such a run is this sheet and is never embedded.
@@ -1209,7 +1549,8 @@ def planning_sheet_png(envelope: Mapping[str, Any], *, load_artifact: Callable[[
                 data = None
                 missing.append(item.key)
             images[item.key] = data
-        return render_png(sheet, fonts=fonts, draft_images=images, draft_unreadable=tuple(missing))
+        return render_png(sheet, fonts=fonts, draft_images=images, draft_unreadable=tuple(missing),
+                          trend_photos=trend_photos, swot=swot)
     artifact = sheet.visual.artifact
     if artifact and sheet.visual.status == 'generated' and artifact.get('media_type') in IMAGE_MEDIA:
         try:
@@ -1219,7 +1560,8 @@ def planning_sheet_png(envelope: Mapping[str, Any], *, load_artifact: Callable[[
         if image_bytes is not None and (not isinstance(image_bytes, bytes) or len(image_bytes) > MAX_EMBEDDED_IMAGE_BYTES):
             image_bytes = None
         unreadable = image_bytes is None
-    return render_png(sheet, image_bytes=image_bytes, image_unreadable=unreadable, fonts=fonts)
+    return render_png(sheet, image_bytes=image_bytes, image_unreadable=unreadable, fonts=fonts,
+                      trend_photos=trend_photos, swot=swot)
 
 
 # --- command line (read-only) --------------------------------------------------------------------
@@ -1234,10 +1576,6 @@ def _read_only_store(store_dir: Path, request_id: str):
     connection = sqlite3.connect(f'file:{database}?mode=ro&immutable=1', uri=True)
     try:
         rows = dict(connection.execute('SELECT attempt, value FROM runs WHERE rid=?', (request_id,)).fetchall())
-        decisions = connection.execute(
-            'SELECT sequence, integrated_response_sha256, decision, note, decided_at FROM md_decisions WHERE rid=? ORDER BY sequence',
-            (request_id,)).fetchall() if connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='md_decisions'").fetchone() else []
     finally:
         connection.close()
     value = rows.get('current') or rows.get('initial')
@@ -1254,9 +1592,7 @@ def _read_only_store(store_dir: Path, request_id: str):
             raise ValueError('artifact bytes do not match the reference')
         return data
 
-    history = [dict(request_id=request_id, sequence=s, integrated_response_sha256=h, decision=d, note=n, decided_at=t)
-               for s, h, d, n, t in decisions]
-    return envelope, load, history
+    return envelope, load
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1273,10 +1609,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         envelope = envelope.get('envelope', envelope)
         image = args.image.read_bytes() if args.image else None
         load = (lambda artifact: image) if image else None  # noqa: E731
-        decisions: list = []
     else:
-        envelope, load, decisions = _read_only_store(args.store_dir, args.request_id)
-    png = planning_sheet_png(envelope, load_artifact=load, decisions=decisions)
+        envelope, load = _read_only_store(args.store_dir, args.request_id)
+    png = planning_sheet_png(envelope, load_artifact=load)
     if args.output == '-':
         sys.stdout.buffer.write(png)
     else:

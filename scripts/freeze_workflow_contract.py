@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record the vogue-workflow/0.1 contract baseline: contracts/workflow/baseline.json.
+"""Record the current vogue-workflow contract baseline: contracts/workflow/baseline.json.
 
 This script is the only writer of baseline.json. The runtime gate in
 vogue_orchestrator.workflow_http reads it; "frozen" is never hand-edited.
@@ -19,6 +19,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import stat
 import shlex
 import subprocess
 import sys
@@ -31,12 +32,15 @@ SNAPSHOT = CONTRACTS / "snapshot.json"
 BASELINE = CONTRACTS / "baseline.json"
 TOOLS = ROOT / "tools" / "workflow_contract"
 FORMAT = "vogue-workflow-baseline/1"
-SIBLINGS = ("trend-analysis-agent", "stock-agent", "new-product-agent", "sales-market-agent", "vogue-orchestrator")
-# Byte-identical copies of the P08 schema files that producers vendor (repo, relative directory).
-VENDORED = (
-    ("new-product-agent", "contracts/workflow-proposed"),
-    ("sales-market-agent", "src/market_research_agent/resources/workflow_contract"),
-)
+SOURCE_PATHS = {
+    "trend-analysis-agent": ("trend-analysis-agent",),
+    "stock-agent": ("stock-agent",),
+    "new-product-agent": ("new-product-agent", "project_06"),
+    "sales-market-agent": ("sales-market-agent", "project_07"),
+    "vogue-orchestrator": (".",),
+}
+# P06 and P07 own their native wire contracts; P08 call-side schemas are not vendored there.
+VENDORED = ()
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -110,18 +114,70 @@ def git(repo: Path, *args):
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()
 
 
-def sources():
+def _worktree_fingerprint(repo: Path, exclude=()):
+    """Hash exact non-ignored tracked and untracked checkout contents without exposing them."""
+    excluded = {Path(item).as_posix() for item in exclude}
+    status = subprocess.run(
+        ["git", "-C", str(repo), "status", "--porcelain=v1", "--untracked-files=all", "-z"],
+        capture_output=True, check=True,
+    ).stdout
+    listed = subprocess.run(
+        ["git", "-C", str(repo), "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        capture_output=True, check=True,
+    ).stdout
+    digest = hashlib.sha256()
+    for raw_path in sorted(set(filter(None, listed.split(b"\0")))):
+        rel = raw_path.decode("utf-8", "surrogateescape")
+        if Path(rel).as_posix() in excluded:
+            continue
+        path = repo / rel
+        digest.update(raw_path + b"\0")
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            digest.update(b"missing\0")
+        else:
+            if stat.S_ISLNK(info.st_mode):
+                digest.update(b"symlink\0" + os.readlink(path).encode("utf-8", "surrogateescape"))
+            elif stat.S_ISREG(info.st_mode):
+                digest.update(b"file\0" + path.read_bytes())
+            else:
+                digest.update(b"other\0" + str(stat.S_IFMT(info.st_mode)).encode("ascii"))
+        digest.update(b"\0")
+    return status, digest.hexdigest()
+
+
+def sources(allow_dirty=False):
     report, problems = {}, []
-    for name in SIBLINGS:
-        repo = ROOT if name == "vogue-orchestrator" else ROOT.parent / name
-        if not (repo / ".git").exists():
+    for name, candidates in SOURCE_PATHS.items():
+        repo = None
+        for candidate in candidates:
+            path = ROOT if candidate == "." else ROOT.parent / candidate
+            if not path.is_dir():
+                continue
+            top = subprocess.run(["git", "-C", str(path), "rev-parse", "--show-toplevel"],
+                                 capture_output=True, text=True)
+            if top.returncode == 0 and Path(top.stdout.strip()).resolve() == path.resolve():
+                repo = path
+                break
+        if repo is None:
             report[name] = {"status": "missing"}
             problems.append(f"{name}:missing")
             continue
-        status = git(repo, "status", "--porcelain")
-        clean = status == ""
-        report[name] = {"branch": git(repo, "rev-parse", "--abbrev-ref", "HEAD"), "head": git(repo, "rev-parse", "HEAD"), "clean": clean}
-        if not clean:
+        excluded = ("contracts/workflow/baseline.json",) if repo == ROOT else ()
+        status, worktree_sha = _worktree_fingerprint(repo, exclude=excluded)
+        clean = status == b""
+        report[name] = {
+            "path": str(repo.relative_to(ROOT.parent)) if repo != ROOT else ".",
+            "branch": git(repo, "rev-parse", "--abbrev-ref", "HEAD"),
+            "head": git(repo, "rev-parse", "HEAD"),
+            "clean": clean,
+            "worktree_sha256": worktree_sha,
+            "status_sha256": hashlib.sha256(status).hexdigest(),
+        }
+        if excluded:
+            report[name]["worktree_fingerprint_excludes"] = list(excluded)
+        if not clean and not allow_dirty:
             problems.append(f"{name}:dirty")
     return report, problems
 
@@ -198,6 +254,8 @@ def main(argv=None):
     mode.add_argument("--init", action="store_true")
     mode.add_argument("--freeze", action="store_true")
     parser.add_argument("--suite", action="append", default=[], help="extra test command that must exit 0 (repeatable)")
+    parser.add_argument("--allow-dirty-sources", action="store_true",
+                        help="allow dirty checkouts while recording exact non-ignored worktree SHA-256 values")
     args = parser.parse_args(argv)
 
     snapshot, snapshot_sha, file_errors = snapshot_state()
@@ -224,7 +282,7 @@ def main(argv=None):
 
     reference, mutations = reference_suite()
     vendored, vendored_problems = vendored_check(snapshot)
-    source_report, source_problems = sources()
+    source_report, source_problems = sources(allow_dirty=args.allow_dirty_sources)
     suites = [run_suite(command) for command in args.suite]
     problems = []
     if reference["failed"]:
@@ -246,6 +304,10 @@ def main(argv=None):
         "Frozen = contract evidence only (offline fixtures, owner serializer/parser boundary and in-process TCP suites). "
         "Live data, model quality and browser acceptance are recorded separately."
     )
+    if args.allow_dirty_sources and any(not source.get("clean", True) for source in source_report.values()):
+        document["notes"].append(
+            "Dirty source checkouts were explicitly allowed; exact non-ignored worktree contents are fingerprinted in sources."
+        )
     write_atomic(BASELINE, document)
     print(json.dumps({"frozen": True, "snapshot_sha256": snapshot_sha, "suites": len(suites)}))
     return 0

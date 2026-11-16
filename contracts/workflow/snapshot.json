@@ -1,14 +1,16 @@
 {
-  "contract_version": "workflow-contract/0.2.0",
-  "transport_version": "vogue-workflow/0.1",
+  "contract_version": "workflow-contract/0.5.0",
+  "transport_version": "vogue-workflow/0.2",
   "source": "contracts/workflow",
   "files": {
-    "common.schema.json": "3b975dbc370c84673399bc14526bbb4de4d3bc27c75a0fda8e89bce6a6930568",
-    "integrated-result.schema.json": "221f7e04c9751b3c9fb6be6ca6390b14f29f5194caeea28657c9a895a108c5d3",
-    "planning-draft-request.schema.json": "f8b41e14d9a129b3c4a0ad59986944719d4164862b29f77a636baba06a69e079",
-    "planning-draft-response.schema.json": "9f07bc07ca153c2cc09b9dfea5989bf009aeb4c0a318b37ee08dde440a9f3eaa",
-    "sales-market-review-request.schema.json": "2b2e130402371f537089067a86b50626dd28d38897a428fb70ae7a33ad829415",
-    "sales-market-review-response.schema.json": "a2614dffbd8256a01e81c776a9c046f3663d49d1834104cf5bf890555067e9e4",
+    "common.schema.json": "76f30ce0969edcdde6ddc736ea01788fc249d3016f8392eaa408f7230e6c0f28",
+    "integrated-result.schema.json": "ae869fb216f57ebbd508f4807ae0fb7882b0d110446a5b5a082564d92260efb9",
+    "planning-draft-request.schema.json": "aed84aad7a512b2b3adc9a15a4eebee29928601ac05689b7e70679a7f415b0e5",
+    "planning-draft-response.schema.json": "401a2bed4f7813639ee3f145303bcc805f35d9e13436ee7e1457a630d175d073",
+    "sales-market-review-error.schema.json": "b9f2315469a4edd19370f5b5009aa298454213b57158965f6d8a73f4ce22a156",
+    "sales-market-review-request.schema.json": "438865278f11f37cb89c2500d9f9edf8b99a9cdee3917e094a00b1d27a93aaf1",
+    "sales-market-review-response.schema.json": "7256537b970283a32e408da0c439c24b33a20dda22a81e53558876b9696b5273",
+    "source-consumer-matrix.json": "b33269233114a01e63a294066785465dd9476725c387d7d61377f2fef825052d",
     "upstream/stock-result-1.0.schema.json": "f2b6984bb37cca4333559e4e05b88312ecf511f578803adee51885c344e6ce00",
     "upstream/trend-result-1.1.schema.json": "7618fb459eb68f56bb12d2c5b171ff0a1fcd066a9ae987c2b4f9a3095d74dbef"
   }

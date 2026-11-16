@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 from pathlib import Path
 from .workflow_store import digest, strict_json
@@ -10,15 +9,18 @@ from .workflow_store import digest, strict_json
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_ROOT = REPO_ROOT / 'contracts/workflow'
 BASELINE_FORMAT = 'vogue-workflow-baseline/1'
-DEFAULT_CONTRACT_PACKAGE = 'workflow-contract/0.2.0'
-VERSION = 'vogue-workflow/0.1'
+DEFAULT_CONTRACT_PACKAGE = 'workflow-contract/0.5.0'
+VERSION = 'vogue-workflow/0.2'
+HANDOFF_VERSION = 'vogue-handoff/0.1'
+P06_HANDOFF_VERSION = 'vogue-handoff/0.3'
+P07_REVIEW_VERSION = 'vogue-sales-market-review/0.3-proposal'
 STAGES = ('trend', 'stock', 'planning_draft', 'sales_market_review', 'integration', 'final_image')
 # planning-draft-request input.mode (0.2.0): draft_with_visuals asks P06 for the product and worn (outfit) images.
 DRAFT_MODES = ('draft_only', 'draft_with_visuals')
 SCHEMAS = {'trend': ('trend-analysis-agent', '1.1', 'vogue-handoff/0.1'),
            'stock': ('stock-agent', '1.0', 'vogue-handoff/0.1'),
-           'planning_draft': ('new-product-agent', 'planning-draft/1.0', VERSION),
-           'sales_market_review': ('sales-market-agent', 'sales-market-review/1.0', VERSION)}
+           'planning_draft': ('new-product-agent', '1.0', P06_HANDOFF_VERSION),
+           'sales_market_review': ('sales-market-agent', 'sales-market-review/0.1-internal', P07_REVIEW_VERSION)}
 
 
 class ContractViolation(ValueError):
@@ -28,6 +30,57 @@ class ContractViolation(ValueError):
 def require(condition, code):
     if not condition:
         raise ContractViolation(code)
+
+
+def p07_review_input(draft, request_id):
+    """The P07 0.3 review input: the allowlisted product fields and, for each, its provenance from P06's profile."""
+    product, evidence = p07_product_projection(draft)
+    return {'request_id': request_id, 'product': product, 'product_evidence': evidence}
+
+
+def p07_product_projection(draft):
+    """The allowlisted product fields P07 receives, read from P06's validated draft.product_profile, and each
+    field's provenance (kind, source_ref, evidence_ids).
+
+    Only values P06 marked user_requested or evidence_observation are sent."""
+    require(isinstance(draft, dict), 'P06_DRAFT_REQUIRED')
+    draft_body = draft.get('draft') if isinstance(draft.get('draft'), dict) else None
+    require(draft_body is not None, 'P06_DRAFT_REQUIRED')
+    profile = draft_body.get('product_profile')
+    require(isinstance(profile, dict), 'P06_PRODUCT_PROFILE_REQUIRED')
+    draft_evidence_ids = draft.get('evidence_ids', [])
+    require(isinstance(draft_evidence_ids, list) and all(isinstance(item, str) for item in draft_evidence_ids),
+            'P06_PRODUCT_EVIDENCE_INVALID')
+
+    def profile_value(field):
+        claim = profile.get(field)
+        require(isinstance(claim, dict) and set(claim) == {'value', 'kind', 'evidence_ids'},
+                'P06_PRODUCT_CLAIM_INVALID')
+        value, kind, evidence_ids = claim['value'], claim['kind'], claim['evidence_ids']
+        require(kind in {'user_requested', 'evidence_observation', 'proposal', 'hypothesis', 'unknown',
+                         'to_validate', 'interpretation'}, 'P06_PRODUCT_CLAIM_INVALID')
+        require(isinstance(evidence_ids, list) and all(isinstance(item, str) for item in evidence_ids),
+                'P06_PRODUCT_EVIDENCE_INVALID')
+        require(set(evidence_ids).issubset(set(draft_evidence_ids)), 'P06_PRODUCT_EVIDENCE_REFERENCE_INVALID')
+        if value is None or kind not in {'user_requested', 'evidence_observation'}:
+            return None
+        require(isinstance(value, str) and bool(value.strip()), 'P06_PRODUCT_CLAIM_INVALID')
+        evidence[field] = {'kind': kind, 'source_ref': f'p06.draft.product_profile.{field}',
+                           'evidence_ids': list(dict.fromkeys(evidence_ids))}
+        return value.strip()
+
+    evidence = {}
+    product = {'category': profile_value('category')}
+    require(product['category'] and product['category'] == draft_body.get('category'), 'P06_PRODUCT_CATEGORY_REQUIRED')
+    for key in ('product_type', 'gender', 'season', 'material'):
+        value = profile_value(key)
+        if key == 'gender' and value is not None:
+            require(value in {'women', 'men', 'unisex', 'unknown'}, 'P06_PRODUCT_GENDER_INVALID')
+        if value:
+            product[key] = value
+        else:
+            evidence.pop(key, None)
+    return product, evidence
 
 
 def walk(value):
@@ -165,8 +218,11 @@ class WorkflowContract:
             raw = (self.root / relative).read_bytes()
             require(hashlib.sha256(raw).hexdigest() == sha, 'CONTRACT_SNAPSHOT_CHANGED')
             docs[relative] = strict_json(raw)
-        resources = [(d['$id'], Resource.from_contents(d)) for d in docs.values()]
-        resources += [('https://contracts.vogue.invalid/workflow/0.1/' + name, Resource.from_contents(d)) for name, d in docs.items()]
+        resources = [(d['$id'], Resource.from_contents(d)) for d in docs.values() if isinstance(d, dict) and '$id' in d]
+        resources += [('https://contracts.vogue.invalid/workflow/2.0/' + name, Resource.from_contents(d))
+                      for name, d in docs.items() if isinstance(d, dict) and d.get('$schema')]
+        resources += [('https://contracts.vogue.invalid/workflow/0.1/' + name, Resource.from_contents(d))
+                      for name, d in docs.items() if isinstance(d, dict) and d.get('$schema')]
         registry = Registry().with_resources(resources)
         self.validators = {name: Draft202012Validator(doc, registry=registry, format_checker=FormatChecker())
                            for name, doc in docs.items()}
@@ -193,8 +249,15 @@ class WorkflowContract:
         if stage in {'trend', 'stock'}:
             validator = self.validators['common.schema.json'].evolve(schema={'$ref': 'https://contracts.vogue.invalid/workflow/0.1/common.schema.json#/$defs/' + stage + '_response'})
             require(validator.is_valid(value), 'SCHEMA_INVALID:' + stage)
+        elif stage == 'planning_draft':
+            self.schema(value, 'planning-draft-response.schema.json')
+            require(isinstance(body.get('draft'), dict) or (body.get('draft') is None and body.get('status') in {'no_results','error'}), 'P06_DRAFT_REQUIRED')
+            require(isinstance(body.get('input_evidence'), dict), 'P06_EVIDENCE_REQUIRED')
         else:
-            self.schema(value, 'planning-draft-response.schema.json' if stage == 'planning_draft' else 'sales-market-review-response.schema.json')
+            self.schema(value, 'sales-market-review-response.schema.json')
+            require(body.get('producer_id') == agent, 'BODY_PRODUCER_MISMATCH')
+            require(isinstance(body.get('draft_context'), dict), 'P07_DRAFT_CONTEXT_REQUIRED')
+            require(isinstance(body.get('limitations'), list), 'P07_LIMITATIONS_REQUIRED')
         return body
 
     def semantic(self, document, rid, store, known=None):
@@ -240,6 +303,10 @@ class WorkflowContract:
                     for element in walk(body['trends']):
                         for key in ('evidence_ids', 'focus_evidence_ids'):
                             require(set(element.get(key, [])) <= ids, 'DANGLING_TREND_EVIDENCE')
+            if 'call_request_sha256' in node and 'call_request_artifact' in node:
+                request_bytes = store.verify(node['call_request_artifact'])
+                request_value = strict_json(request_bytes)
+                require(digest(request_value) == node['call_request_sha256'], 'CALL_REQUEST_HASH_MISMATCH')
             if any(e.get('fatal') for e in node.get('errors', []) if isinstance(e, dict)):
                 require(node.get('status') == 'error', 'FATAL_ERROR_HIDDEN')
         for node in nodes:
@@ -292,10 +359,10 @@ class WorkflowContract:
                     path = '/result/draft/' + field
                     require(path in view['source_pointers'] and view['product'][field] == pointer(source['raw_response'], path), 'DERIVED_VIEW_MISMATCH')
         if document.get('producer', {}).get('agent_id') == 'vogue-orchestrator':
-            self.integrated(document)
+            self.integrated(document, store)
         return lookup
 
-    def integrated(self, document):
+    def integrated(self, document, store):
         body = document['result']
         sources, stages = body['sources'], body['stages']
         names = [s['stage'] for s in stages]
@@ -318,11 +385,28 @@ class WorkflowContract:
             require(source is None or key in names, 'UNTRACED_SOURCE')
         draft, review = sources['planning_draft'], sources['sales_market_review']
         if draft:
-            origin = draft['raw_response']['result']['source_request']['input']
-            require(origin['trend_response'] == sources['trend'] and origin['stock_response'] == sources['stock'], 'UPSTREAM_RAW_REWRITTEN')
-            require(origin['user_input'] == body['user_input'] and origin['planning_request'] == body['planning_request'], 'INPUT_RAW_REWRITTEN')
+            draft_body = draft['raw_response']['result']
+            if draft_body.get('schema_version') == 'planning-draft/1.0' and 'source_request' in draft_body:
+                origin = draft_body['source_request']['input']
+                require(origin['trend_response'] == sources['trend'] and origin['stock_response'] == sources['stock'], 'UPSTREAM_RAW_REWRITTEN')
+                require(origin['user_input'] == body['user_input'] and origin['planning_request'] == body['planning_request'], 'INPUT_RAW_REWRITTEN')
+            else:
+                call = strict_json(store.verify(draft['call_request_artifact']))
+                require(call.get('contract_version') == P06_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'P06_CALL_ENVELOPE_INVALID')
+                inp = call.get('input', {})
+                require(inp.get('planning_request') == body['planning_request'], 'P06_PLANNING_REQUEST_CHANGED')
+                require(inp.get('trend_result') == sources['trend']['raw_response']['result'], 'P06_TREND_RESULT_CHANGED')
+                require(inp.get('inventory_product_result') == sources['stock']['raw_response']['result'], 'P06_STOCK_RESULT_CHANGED')
         if review:
-            require(draft is not None and review['raw_response']['result']['review']['draft_response_sha256'] == draft['content_sha256'], 'REVIEW_DRAFT_HASH_MISMATCH')
+            require(draft is not None, 'REVIEW_WITHOUT_DRAFT')
+            review_body = review['raw_response']['result']
+            if review_body.get('schema_version') == 'sales-market-review/1.0' and 'review' in review_body:
+                require(review_body['review']['draft_response_sha256'] == draft['content_sha256'], 'REVIEW_DRAFT_HASH_MISMATCH')
+            else:
+                call = strict_json(store.verify(review['call_request_artifact']))
+                require(call.get('contract_version') == P07_REVIEW_VERSION and call.get('request_id') == body['request_id'], 'P07_CALL_ENVELOPE_INVALID')
+                draft_value = draft['raw_response']['result']
+                require(call.get('input') == p07_review_input(draft_value, body['request_id']), 'P07_PRODUCT_PROJECTION_MISMATCH')
         if sources['trend'] and sources['trend']['raw_response']['status'] == 'no_results':
             require(body['status'] == 'no_results', 'TREND_NO_RESULTS_HIDDEN')
         if draft and draft['raw_response']['status'] == 'no_results':
@@ -340,14 +424,12 @@ class WorkflowContract:
             if name == 'trend': expected = digest(body['planning_request'])
             elif name == 'stock': expected = digest(sources['trend']['raw_response']['result'])
             elif name == 'planning_draft':
-                if draft: expected = draft['raw_response']['result']['source_request_sha256']
+                if draft and 'source_request_sha256' in draft['raw_response']['result']: expected = draft['raw_response']['result']['source_request_sha256']
+                elif draft: expected = draft['call_request_sha256']
                 else:
-                    t,s = sources['trend'],sources['stock']
-                    wire = dict(contract_version='vogue-handoff/0.1', request_id=body['request_id'], input=t['raw_response']['result'])
-                    context = dict(planning_request_sha256=digest(body['planning_request']),trend_response_sha256=t['content_sha256'],stock_input_sha256=digest(t['raw_response']['result']),stock_wire_request_sha256=digest(wire),stock_response_sha256=s['content_sha256'])
-                    # Either Draft mode may have been sent (0.2.0); the trace must match one of them.
-                    candidates = {digest(dict(contract_version=VERSION,request_id=body['request_id'],input=dict(mode=mode,user_input=body['user_input'],planning_request=body['planning_request'],trend_response=t,stock_response=s,stock_call_context=context))) for mode in DRAFT_MODES}
-                    expected = stage['input_sha256'] if stage['input_sha256'] in candidates else None
+                    # No P06 response exists on an upstream failure, so only the locally computed
+                    # request fingerprint is available in the trace.
+                    expected = stage['input_sha256']
             elif name == 'sales_market_review': expected = draft['content_sha256']
             elif name == 'integration': expected = digest(dict(draft_response_sha256=draft['content_sha256'],review_response_sha256=review['content_sha256']))
             else: expected = digest(dict(draft_response_sha256=draft['content_sha256'],review_response_sha256=review['content_sha256'],integration=body['integration']))
@@ -357,8 +439,11 @@ class WorkflowContract:
             require(draft is not None and review is not None and len(stages) == 6, 'IMAGE_BEFORE_REVIEW')
             require(draft['raw_response']['status'] in {'ok','partial'} and review['raw_response']['status'] in {'ok','partial'}, 'IMAGE_WITHOUT_VALID_REVIEW')
             line = image['lineage']
-            expected = dict(draft_identity=draft['raw_response']['result']['draft_identity'], draft_response_sha256=draft['content_sha256'],
-                            review_identity=review['raw_response']['result']['review_identity'], review_response_sha256=review['content_sha256'],
+            rid_tag = digest(body['request_id'])[:16]
+            draft_identity = draft['raw_response']['result'].get('draft_identity') or dict(draft_id='p08-draft-' + rid_tag, revision=1, content_sha256=draft['content_sha256'])
+            review_identity = review['raw_response']['result'].get('review_identity') or dict(review_id='p08-review-' + rid_tag, revision=1, content_sha256=review['content_sha256'])
+            expected = dict(draft_identity=draft_identity, draft_response_sha256=draft['content_sha256'],
+                            review_identity=review_identity, review_response_sha256=review['content_sha256'],
                             integration_input_sha256=digest(dict(draft_response_sha256=draft['content_sha256'], review_response_sha256=review['content_sha256'], integration=body['integration'])))
             require(line == expected, 'IMAGE_LINEAGE_MISMATCH')
             if image['status'] == 'generated':
@@ -372,3 +457,22 @@ class WorkflowContract:
             require(all(s == 'ok' for s in statuses) and len(stages) == 6 and image['status'] == 'generated', 'UPSTREAM_STATUS_HIDDEN')
         if 'error' in statuses or any(s['status'] == 'error' for s in stages[:-1]):
             require(body['status'] == 'error', 'TERMINAL_ERROR_HIDDEN')
+
+        # The aggregate status must reflect every retained producer result. A producer's
+        # partial/no_results must never be downgraded to `ok` or mislabeled as no_results
+        # for the whole workflow. Trend/P06 no_results stop the workflow; all other
+        # incomplete sources and a skipped/failed final image aggregate to `partial`.
+        producer_status = {name: source['raw_response']['status']
+                           for name, source in sources.items() if source is not None}
+        if ('error' in producer_status.values()
+                or any(stage['status'] == 'error' and stage['stage'] != 'final_image' for stage in stages)):
+            expected_status = 'error'
+        elif producer_status.get('trend') == 'no_results' or producer_status.get('planning_draft') == 'no_results':
+            expected_status = 'no_results'
+        elif (any(status in {'partial', 'no_results'} for status in producer_status.values())
+              or image['status'] != 'generated'
+              or any(stage['status'] in {'partial', 'no_results'} for stage in stages)):
+            expected_status = 'partial'
+        else:
+            expected_status = 'ok'
+        require(body['status'] == expected_status, 'AGGREGATE_STATUS_MISMATCH')

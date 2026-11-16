@@ -1,0 +1,76 @@
+{
+  "_provenance": {
+    "agent_id": "vogue-orchestrator",
+    "contract": "vogue-orchestrator MD decision request (POST /api/workflow/runs/{rid}/md-decision)",
+    "direction": "input",
+    "method": "authored",
+    "source_repo": "KG-RAG-02/vogue-orchestrator",
+    "source_branch": "ui-edit",
+    "source_commit": "b259b97d7523",
+    "source_files": [
+      {
+        "path": "src/vogue_orchestrator/workflow_http.py",
+        "sha256": "996f601ba44c89e73fdb0d99b16c621912866bae3feb1100fb43d764a38af190"
+      },
+      {
+        "path": "src/vogue_orchestrator/workflow_store.py",
+        "sha256": "dfdefa0b96938dfcd18919c3215e809b517518c159df0eb9155f39095a5d4c29"
+      },
+      {
+        "path": "src/vogue_orchestrator/workflow_contract.py",
+        "sha256": "9c64a4ac659033022b68bd3a6e6d5055b0e4dcaf413e0849463c668864e97153"
+      }
+    ],
+    "handoff": {
+      "route": "/api/workflow/runs/{rid}/md-decision",
+      "contract_version": "vogue-workflow/0.2",
+      "detected_from": "src/vogue_orchestrator/workflow_contract.py:VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "소유 레포에 JSON Schema가 없어 코드를 읽고 이 저장소에서 작성했다. 스크립트가 다시 쓰지 않는다. source_files의 sha256이 달라지면 코드를 다시 읽고 손으로 갱신한다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:vogue:orchestrator:contract:md-decision-request:2.0",
+    "title": "MD decision request (vogue-workflow/0.2)",
+    "description": "POST /api/workflow/runs/{rid}/md-decision 본문 (workflow_http._md_decision_error·_post_md_decision). trusted-local 전용(아니면 403 LOCAL_WORKFLOW_ONLY), application/json(415 JSON_MIME_REQUIRED), 65,536 bytes 이하(413 BODY_TOO_LARGE), 중복 키·NaN 없는 엄격 JSON(400 MALFORMED_JSON). 경로의 {rid}가 id 형식이 아니면 404 RUN_NOT_FOUND. 본문 오류는 422이고 검사 순서대로 MD_DECISION_INVALID(객체 아님), UNSUPPORTED_CONTRACT_VERSION, MD_DECISION_UNKNOWN_FIELD, REQUEST_ID_MISMATCH, INTEGRATED_RESPONSE_SHA256_INVALID, MD_DECISION_INVALID, MD_NOTE_INVALID. request_id는 경로의 {rid}와 같아야 한다 (JSON Schema로 표현 불가). 상태 오류: 404 RUN_NOT_FOUND, 409 RUN_NOT_COMPLETE, 409 INTEGRATED_RESPONSE_MISMATCH. 성공은 201 {request_id, sequence, integrated_response_sha256, decision, note, decided_at}이고 결정은 append-only로 쌓인다. 가격·원가·수량·발주·최종 채택은 MD 결정이다.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract_version",
+      "request_id",
+      "integrated_response_sha256",
+      "decision"
+    ],
+    "properties": {
+      "contract_version": {
+        "const": "vogue-workflow/0.2"
+      },
+      "request_id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+        "description": "경로의 {rid}와 같아야 한다 (422 REQUEST_ID_MISMATCH). common.schema.json#/$defs/id와 같은 형식"
+      },
+      "integrated_response_sha256": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$",
+        "description": "저장된 최종 통합 응답 envelope의 python-json-sort/1 sha256 (소문자 hex 64자). GET .../md-decision이 integrated_response_sha256으로 돌려주는 값이고, 다르면 409 INTEGRATED_RESPONSE_MISMATCH"
+      },
+      "decision": {
+        "enum": [
+          "adopt",
+          "revise",
+          "hold"
+        ]
+      },
+      "note": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 2000,
+        "description": "생략 가능. null은 생략과 같다 (저장 값 null). 2000자 초과·문자열 아님은 422 MD_NOTE_INVALID"
+      }
+    }
+  }
+}

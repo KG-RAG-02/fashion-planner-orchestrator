@@ -1,6 +1,6 @@
 """Real LLM call for query structuring (opt-in; sends the user's query to an external provider).
 
-This is the `DraftProvider` the query module leaves open (docs/query-structuring.md §10): it takes the
+This module supplies the configured LLM provider used by query structuring: it takes the
 rendered prompt (`PromptBundle`: `.system`, `.user`) and returns the model's text, which the query
 module parses and validates. It lives outside `query/` on purpose: the query package itself stays
 offline (tests/test_query_isolation.py).
@@ -192,6 +192,20 @@ def _call_openai(client: Any, settings: LLMSettings, system: str, user: str) -> 
 _CLIENTS: dict[str, Callable[[LLMSettings], Any]] = {"anthropic": _anthropic_client, "openai": _openai_client}
 _CALLS: dict[str, Callable[[Any, LLMSettings, str, str], str]] = {"anthropic": _call_anthropic,
                                                                   "openai": _call_openai}
+
+
+def build_text_call(settings: LLMSettings | None = None, *, client: Any = None) -> Callable[[str, str], str]:
+    """Return ``call(system, user) -> text`` on the configured model (the same settings as query structuring).
+    Used by the planning-sheet SWOT (swot.py). Configuration problems raise here, before any request is sent."""
+    settings = settings or load_settings()
+    client = client if client is not None else _CLIENTS[settings.provider](settings)
+    call = _CALLS[settings.provider]
+
+    def text_call(system: str, user: str) -> str:
+        return call(client, settings, system, user)
+
+    text_call.model = settings.model  # type: ignore[attr-defined]
+    return text_call
 
 
 def build_draft_provider(settings: LLMSettings | None = None, *, client: Any = None) -> Callable[[Any], str]:

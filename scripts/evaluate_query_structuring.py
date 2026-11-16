@@ -1,6 +1,6 @@
 """Evaluate the StructuredQuery path (prompt v6, flat conditions with `item`) on data/user_queries.v3.json.
 
-Each query is run through `structured.structure_query_v2` and the produced StructuredQuery is compared
+Each query is run through `structured.structure_query` and the produced StructuredQuery is compared
 with the item's `expected_structured_query` as a set of facts. Since 2026-11-11 (decisions IT-1..IT-7) the
 condition facts carry the ITEM they belong to (its position i in `items`, which follows the query order):
 
@@ -144,7 +144,7 @@ def _provider(name: str, item: dict[str, Any], replayed: dict[str, Any] | None =
 def run(data: dict[str, Any], provider_name: str, ids: Iterable[str] | None, prompt_version: str,
         replay: dict[str, Any] | None = None) -> dict[str, Any]:
     from vogue_orchestrator.query.errors import QueryStructuringError
-    from vogue_orchestrator.query.structured import structure_query_v2
+    from vogue_orchestrator.query.structured import structure_query
 
     today = date.fromisoformat(data["reference_today"])
     llm = None
@@ -175,7 +175,7 @@ def run(data: dict[str, Any], provider_name: str, ids: Iterable[str] | None, pro
         started = time.perf_counter()
         row: dict[str, Any] = {"id": item["id"], "query": item["query"], "tags": item["tags"]}
         try:
-            result = structure_query_v2(item["query"], request_id=item["id"], draft_provider=recording, today=today,
+            result = structure_query(item["query"], request_id=item["id"], draft_provider=recording, today=today,
                                         prompt_version=prompt_version)
         except QueryStructuringError as exc:
             row.update(error=exc.code, raw_output=raw_output.get("text"), exact=False, exact_with_match=False)

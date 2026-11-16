@@ -1,0 +1,72 @@
+{
+  "_provenance": {
+    "agent_id": "sales-market-agent",
+    "contract": "P07 /reviews error response",
+    "direction": "output",
+    "payload_schema_version": "vogue-sales-market-review/0.3-proposal",
+    "method": "copy",
+    "source_repo": "KG-RAG-02/sales-market-agent",
+    "source_branch": "main",
+    "source_commit": "2738e9f9c0b8",
+    "source_schema": "contracts/schemas/proposals/sales-market-review-0.3-error.schema.json",
+    "source_files": [
+      {
+        "path": "src/market_research_agent/http_server.py",
+        "sha256": "b79891a3d251f1b3a0296756572177fab05aa87b2a4ee194dbb0a8c4de016e99"
+      },
+      {
+        "path": "contracts/schemas/proposals/sales-market-review-0.3-error.schema.json",
+        "sha256": "b9f2315469a4edd19370f5b5009aa298454213b57158965f6d8a73f4ce22a156"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/sales-market-agent/reviews",
+      "contract_version": "vogue-sales-market-review/0.3-proposal",
+      "detected_from": "src/market_research_agent/http_server.py:REVIEW_CONTRACT_VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:vogue:sales-market-review:0.3:error",
+    "title": "Project_07 review request/service error envelope",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract_version",
+      "request_id",
+      "error"
+    ],
+    "properties": {
+      "contract_version": {
+        "const": "vogue-sales-market-review/0.3-proposal"
+      },
+      "request_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 128
+      },
+      "error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,11 +1,26 @@
 __pycache__/
 *.py[cod]
 .venv/
-.env
 .pytest_cache/
+
+# Local configuration and run state.
+.env
+.env.*
+!.env.example
 .local/
 .DS_Store
 
-# iCloud Drive conflict copies (e.g. "server 2.py"); never commit them.
-* [0-9]
+# Generated live integration images and other run artifacts.
+artifacts/
+
+# iCloud Drive conflict copies (for example, "server 2.py").
+* [0-9]/
 * [0-9].*
+
+# Finder metadata.
+.DS_Store
+
+# Python packaging output
+*.egg-info/
+build/
+dist/

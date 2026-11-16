@@ -1,7 +1,8 @@
-"""Reference checks for the vogue-workflow/0.1 contract package (contracts/workflow/).
+"""Reference checks for the proposed vogue-workflow/0.2 contract package.
 
-Runs the coordinator reference validator over the indexed synthetic fixtures, the
-semantic mutation probes, the baseline consistency check and the vendored-copy check.
+Runs the P08 reference validator over committed synthetic fixtures, semantic
+mutation probes, baseline consistency, and the check that no shared schema copies
+are assumed in producer repositories.
 Offline: no network, no services. Requires the `workflow` extra (jsonschema).
 """
 import importlib
@@ -40,8 +41,8 @@ class WorkflowContractReferenceTest(unittest.TestCase):
         summary = self.validate.collect()
         failed = [r["case"] for r in summary["results"] if not r["pass"]]
         self.assertEqual(failed, [])
-        self.assertGreaterEqual(summary["fixtures"], 76)
-        self.assertEqual(summary["schemas_checked"], 8)
+        self.assertGreaterEqual(summary["fixtures"], 4)
+        self.assertEqual(summary["schemas_checked"], 9)
 
     def test_semantic_mutations_are_all_rejected(self):
         result = self.probes.collect()
@@ -55,7 +56,7 @@ class WorkflowContractReferenceTest(unittest.TestCase):
         self.assertEqual(self.freeze.check_baseline(baseline, snapshot, snapshot_sha, file_errors), [])
         self.assertNotIn("state", snapshot, "snapshot.json is digested into checkpoint keys; keep state in baseline.json")
 
-    def test_vendored_producer_copies_match_byte_for_byte(self):
+    def test_no_shared_p08_schema_copies_are_assumed_in_producer_repositories(self):
         missing = [repo for repo, rel in self.freeze.VENDORED if not (ROOT.parent / repo / rel).is_dir()]
         if missing:
             self.skipTest(f"sibling checkouts not present: {', '.join(missing)}")

@@ -14,7 +14,7 @@ from vogue_orchestrator.workflow_contract import (CONTRACT_ROOT, baseline_proble
                                                   snapshot_state)
 
 ROOT = Path(__file__).resolve().parents[1]
-DEV_LIMITATION = 'workflow-contract/0.2.0 not frozen; development run'
+DEV_LIMITATION = 'workflow-contract/0.5.0 not frozen; development run'
 GATE_KEYS = ('VOGUE_WORKFLOW_ALLOW_PROPOSED', 'VOGUE_WORKFLOW_CONTRACT_BASELINE')
 
 
@@ -56,7 +56,7 @@ class ContractGateTests(unittest.TestCase):
         self.assertTrue(status['consistent'], status['problems'])
         self.assertFalse(status['frozen'])
         self.assertEqual(status['gate'], 'closed')
-        self.assertEqual(status['contract_version'], 'workflow-contract/0.2.0')
+        self.assertEqual(status['contract_version'], 'workflow-contract/0.5.0')
 
     def test_allow_proposed_opens_a_development_run_with_the_exact_limitation(self):
         from vogue_orchestrator.workflow_http import ensure_live_contract
@@ -140,6 +140,7 @@ class ContractGateTests(unittest.TestCase):
         from vogue_orchestrator import workflow_http
         from vogue_orchestrator.workflow_store import WorkflowStore
         env = {'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_AGENT_HTTP_DEV_MODE': '1',
+               'VOGUE_AGENT_SERVICE_BEARER_TOKEN': 'synthetic-test-token',
                'VOGUE_TREND_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_STOCK_AGENT_URL': 'http://127.0.0.1:9',
                'VOGUE_NEW_PRODUCT_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_SALES_MARKET_AGENT_URL': 'http://127.0.0.1:9'}
         store = WorkflowStore(Path(os.path.realpath(self.tmp)) / 'store')
@@ -147,6 +148,16 @@ class ContractGateTests(unittest.TestCase):
             os.environ.pop('VOGUE_WORKFLOW_CONTRACT_BASELINE', None)
             workflow = workflow_http.build_workflow()
         self.assertEqual(workflow.limitations, (DEV_LIMITATION,))
+
+    @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
+    def test_build_workflow_requires_p07_bearer_even_in_loopback_development_mode(self):
+        from vogue_orchestrator import workflow_http
+        from vogue_orchestrator.connectors import ConnectorConfigurationError
+        env = {'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_AGENT_HTTP_DEV_MODE': '1',
+               'VOGUE_TREND_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_STOCK_AGENT_URL': 'http://127.0.0.1:9',
+               'VOGUE_NEW_PRODUCT_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_SALES_MARKET_AGENT_URL': 'http://127.0.0.1:9'}
+        with patch.dict(os.environ, env), self.assertRaisesRegex(ConnectorConfigurationError, 'required by P07 /reviews'):
+            workflow_http.build_workflow()
 
 
 if __name__ == '__main__':

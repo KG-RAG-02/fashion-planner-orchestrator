@@ -1,10 +1,10 @@
 # StructuredQuery 1.0 — 구조화된 질의 계약
 
-> 상태: **1.0 확정 (2026-11-11, 결정 SQ-F).** 이 문서와 JSON Schema [structured-query.schema.json](structured-query-1.0.schema.json)이 받는 쪽에 넘기는 계약이다. 남은 개선은 스키마가 아니라 **생산 품질**(LLM 모델·프롬프트 버전)이며, 이는 계약을 바꾸지 않는다. 모델 원본 `src/vogue_orchestrator/query/models.py`(JSON Schema는 여기서 생성, 직접 수정 금지). 생산 경로 `query/structured.py` `structure_query_v2`(프롬프트 v6)는 **2026-11-11부터 화면 서버(`server.py`)가 쓴다**(FW-1). trend가 받을 입력은 첫 품목·첫 시즌만 담은 `TrendQuery`로 변환되고(§7), **HTTP v0.1 실행에서는 그 `TrendQuery`가 Trend에 실제로 전송된다**(§0.4, `main` 병합 후). 소유: **이 저장소(vogue-orchestrator)** — 결정 Y1. 근거와 결정 기록은 [query-decisions.md](../../../../docs/query-decisions.md) (X1·X2·X3·X4·Y1·R0·Q3·G-1~G-3·IT-1~IT-9·SQ-1·SQ-2·CR-1·SQ-F). **처음 받는 Agent는 §0부터 읽는다.**
+> 상태: **1.0 확정 (2026-11-11, 결정 SQ-F).** 이 문서와 JSON Schema [structured-query-1.0.schema.json](structured-query-1.0.schema.json)이 받는 쪽에 넘기는 계약이다. 모델 원본은 `src/vogue_orchestrator/query/models.py`이며 JSON Schema는 코드에서 생성한다. 현재 화면 경로는 `server.py` → `query.structured.structure_query` → `query.to_trend.to_trend_query` → 계약 기반 순차 workflow이다. Trend에는 `StructuredQuery` 자체가 아니라 첫 품목·첫 시즌을 변환한 `TrendQuery`를 전달한다. 현재 실행과 서비스 간 전달은 [P08 현재 기준](../../../../docs/current-state.md) 및 [workflow 계약](../../../workflow/workflow-contract.md)을 따른다. 소유: **이 저장소(vogue-orchestrator)**. 결정 이력은 [query-structuring.md](../../../../docs/query-structuring.md)에 있다.
 > 이 문서는 **받는 쪽**(trend-analysis-agent, 이후 재고 등 다른 Agent)이 각 필드의 뜻과 쓰는 법을 판단할 수 있게 쓴 정의서다. 받는 쪽이 어떤 필드를 어떻게 쓸지는 **받는 쪽이 정한다.** 이 문서의 "활용 예"는 권장이지 강제가 아니다.
 
 ## 0. 받는 Agent를 위한 인수인계 (2026-11-11, 1.0 확정)
-이 절만 읽어도 `StructuredQuery`를 받아 쓸 수 있도록 요약했다. 자세한 뜻은 §2~§7, 근거는 [query-decisions.md](../../../../docs/query-decisions.md).
+이 절만 읽어도 `StructuredQuery`를 받아 쓸 수 있도록 요약했다. 자세한 뜻은 §2~§7, 근거는 [query-structuring.md](../../../../docs/query-structuring.md).
 
 **0.1 넘기는 것**
 | 무엇 | 위치 | 비고 |
@@ -27,7 +27,7 @@
 | `OutOfScopeItem` | `models.py` | `out_of_scope_items[]` |
 | 표준 값 목록 | `vocabulary.py`(생성 파일), `contract_vocabulary.py`(기장 2종 포함 7종) | 각 `value`의 허용 값 |
 | `TrendQuery` 등 (trend의 옛 계약) | `trend_query.py` | §7 비교·변환 대상. **이름이 같은 클래스(`CategoryRef`·`SeasonRequest`·`TermRef`·`TrendTerms`·`GenderRef`·`UnsupportedCondition`)가 `models.py`에도 있고 모양이 다르다** — `StructuredQuery` 쪽은 항상 `models.py` |
-| 만드는 코드 | `structured.py`(`structure_query_v2`, `assemble_structured_query`), `draft_v4.py`(LLM 초안·품목별 묶기), `resolve.py`(값·`match` 확정), `to_trend.py`(`to_trend_query`) | §4.1, §7 |
+| 만드는 코드 | `structured.py`(`structure_query`, `assemble_structured_query`), `draft_v4.py`(LLM 초안·품목별 묶기), `resolve.py`(값·`match` 확정), `to_trend.py`(`to_trend_query`) | §4.1, §7 |
 
 **0.2 받는 쪽이 꼭 알아야 할 것**
 1. **품목 단위로 처리한다.** `items`의 품목 하나하나가 독립된 요청이다(§5.1 규칙 1). 질의 전체에 걸린 조건은 이미 **모든 품목에 복사**되어 있으므로 품목 하나만 보고 처리하면 된다. 결과는 `item_id`(i1, i2, …)로 다시 잇는다.
@@ -47,25 +47,27 @@
 | 기준일(`reference_date`) | 문서에 없음. `default_next` 시즌과 연도 추정은 질의한 날짜 기준 | 저장된 결과를 나중에 다시 해석할 때 |
 | 품목별 시즌, 범위 밖 품목 조건의 구조화, `missing_fields`의 뜻 | 시즌은 질의 전체, `conditions_raw`는 원문, `missing_fields`는 항상 `[]` | — |
 
-**0.4 생산 상태 (받는 쪽이 기대할 품질)**
-- 생산 함수: `vogue_orchestrator.query.structured.structure_query_v2(query, request_id=..., draft_provider=...)` → `result.structured_query`(이 계약), `result.warnings`. LLM 호출은 `vogue_orchestrator.llm_provider.build_draft_provider()`(키는 `.env`). LLM은 해석만 하고 값과 `match`는 코드가 정한다(§4.1).
+**0.4 생산 상태 및 전달 경계**
+- 생산 함수: `vogue_orchestrator.query.structured.structure_query(query, request_id=..., draft_provider=...)` → `result.structured_query`(이 계약), `result.warnings`. LLM 호출은 `vogue_orchestrator.llm_provider.build_draft_provider()`(키는 `.env`). LLM은 해석만 하고 값과 `match`는 코드가 정한다(§4.1).
 - 프롬프트 v6, gpt-4o-mini, temperature 0. 예상 질의 30개(dev)에서 **완전 일치 21/30, 형식 오류 0, 조건을 다른 품목에 붙인 경우 0**. 틀린 것은 주로 **조건을 빠뜨린 것**(품목 바로 앞 꾸밈말, 품목 이름 속 기장)이고, 그다음이 일반어를 품목으로 읽음·포함/제외 뒤집힘이다. 따라서 받는 쪽은 "잘못 들어간 조건"보다 "빠진 조건"을 더 자주 만난다. 별도 holdout 20개 측정은 아직이다([query-structuring.md §15.7·§15.8](../../../../docs/query-structuring.md)).
 - 개선은 LLM 모델·프롬프트 버전 올리기로 한다. **계약(이 문서·스키마)은 바뀌지 않는다.**
-- **연결 상태 (2026-11-11, FW-1)**: 화면 서버(`server.py` `structure_query_for_ui`)가 이 계약을 만든다(`structure_query_v2`, 프롬프트 v6). 응답에는 `structured_query`(전체)와, trend가 받을 `trend_query`(**첫 품목·첫 시즌만**, `query/to_trend.py` `to_trend_query()`)가 함께 있다. (병합 전 기록) 어느 Agent에도 전송하지 않았다(`sent: false`). 아래 표는 병합 전의 확인 결과다. **2026-11-11 `main` 병합 후(팀원 5aro의 HTTP v0.1 E2E 연결)**: HTTP v0.1 실행 — 화면 `/api/run`(`mode: agent_http_v01`, 구조화 동의) 또는 공개 API `POST /v1/orchestrations`(`input.structure_query: true`) — 에서는 `structure_query_for_ui`가 만든 **`trend_query`(첫 품목·첫 시즌만, `to_trend_query()`)를 Trend `/runs`에 실제로 보낸다**(`trend_input_preview.sent: true`). 찾는 품목이 모두 범위 밖이어도 2026-11-12부터는 모든 카테고리 품목으로 Trend를 부른다(IT-7′). 422 `query_structuring_no_item`은 보낼 품목이 없을 때의 안전장치로만 남았다. demo·connected 모드는 미리보기만(`sent: false`). 재고·시장성·새 상품 기획은 여전히 구조화 결과를 받지 않는다(원문 또는 앞 단계 결과). 오프라인 E2E용 `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`는 `examples/fixtures/query/*.synthetic.json`의 `structured_draft`(draft_v4)를 쓴다. `StructuredQuery` 자체를 받는 Agent는 아직 없다(trend는 변환된 `TrendQuery`를 받는다). 화면의 품목 목록 표시는 아직 없다(U4).
+질의 구조화는 독립적인 Agent 호출이 아니라 P08 workflow의 입력 변환 단계다. 현재 전달은 다음과 같다.
 
-  | Agent (단계) | 이 저장소의 단계 이름 | 사용자 질의와 관련해 받는 입력 (`core.py` `Orchestrator.run`) | 이 저장소의 질의 구조화 결과를 받나 |
-  |---|---|---|---|
-  | trend-analysis-agent (트렌드) | `trend` | demo·connected 모드(화면 `/api/run`): `{request_id, query(원문), scope}`. agent_http_v01 모드(공개 API `POST /v1/orchestrations`): **호출자가 준** `input.trend_query`(`TrendQuery`)를 그대로 | **받지 않음.** 화면의 구조화 결과는 미리보기(`trend_input_preview.sent: false`)뿐. v01 모드의 `TrendQuery`는 외부 호출자가 만든 것이고 모양상 품목·시즌이 하나다 |
-  | stock-agent (재고) | `stock` | `trend_result`(trend 결과)만 | 받지 않음 (질의 자체를 받지 않음) |
-  | sales-market-agent (시장성, Project_07) | `project_07` | `planning_request` = `{schema_version "1.0", request_id, query(원문), context(=scope)}` + `trend_result` + `inventory_product_result`. 로컬 어댑터는 `requested_query`에 원문을 넣고 시장·채널은 scope에서만 꺼냄 | 받지 않음 (원문만) |
-  | new-product-agent (새 상품 기획, Project_06) | `project_06` | `planning_request`(원문) + `trend_result` + `inventory_product_result` + `sales_market_result` | 받지 않음 (원문만) |
+| 단계 | 전달 입력 | 구조화 질의 사용 |
+|---|---|---|
+| Trend | `to_trend_query()`가 만든 `TrendQuery` | 첫 품목·첫 시즌의 조건을 사용 |
+| Stock | Trend 결과 및 workflow가 구성한 Stock 요청 | `StructuredQuery` 원문 객체를 직접 받지 않음 |
+| P06 Planning Draft | workflow 계약의 Planning Draft 요청 | Trend·Stock 근거와 요청 정보를 받음 |
+| P07 Sales Market Review | 검증·보존된 P06 Draft를 바탕으로 만든 P07 요청 | P06/P07 간 직접 호출 없음. 요청 전달은 P08이 담당 |
+
+이 문서에 보존된 모델·프롬프트 품질 측정치는 기록 당시의 개발 측정이며 현재 모델 성능 보증이 아니다. synthetic fixture와 제거된 실행 모드 설명은 이 현행 전달 표의 일부가 아니다.
 
 
 **0.5 스키마를 바꾸는 절차 (체크리스트)**
 1.0은 확정되었다(SQ-F). 필드를 바꾸려면 아래 순서를 따른다. 각 단계 옆은 그 단계를 지키는 테스트·명령이다.
 | # | 할 일 | 지키는 테스트·명령 |
 |---|---|---|
-| 1 | **사용자 결정을 먼저 기록**: [query-decisions.md](../../../../docs/query-decisions.md) §2.2에 결정 행(이유·쉬운 예·예상 JSON), 버전 규칙(필드 추가 = 1.x, 깨지는 변경 = 2.0, `schema_version` 값 변경) | — |
+| 1 | **사용자 결정을 먼저 기록**: [query-structuring.md](../../../../docs/query-structuring.md) §2.2에 결정 행(이유·쉬운 예·예상 JSON), 버전 규칙(필드 추가 = 1.x, 깨지는 변경 = 2.0, `schema_version` 값 변경) | — |
 | 2 | 모델 수정: `query/models.py` (필요하면 `contract_vocabulary.py`) | `tests/test_query_structured_models.py` |
 | 3 | JSON Schema 다시 만들기: `PYTHONPATH=src py scripts/export_structured_query_schema.py` → `contracts/agents/vogue-orchestrator/output/structured-query-1.0.schema.json` (직접 고치지 않음) | `py scripts/export_structured_query_schema.py --check`, `test_committed_schema_is_the_exporter_output` |
 | 4 | 이 정의서: §0(인수인계·클래스 표), §2 모양, §3 필드 표, 필요하면 §5.1 규칙, §6 예시, §7 차이·변환 표, §8 변경 이력 | — (문서) |
@@ -246,7 +248,7 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](../../trend-anal
 | 남녀공용, 유니섹스 | 공용 | `alias` |
 | 표에 없는 표현 | LLM 제안이 남·여·공용 중 하나면 그 값 | `llm` |
 
-- 이 표는 trend 사전에 **없는 속성**에 대한 것이라 "질의 전용 별칭 사전을 만들지 않는다"(사전 중복 금지, [query-decisions.md](../../../../docs/query-decisions.md) §5)와 충돌하지 않는다. trend 사전에 성별이 생기면 그쪽을 따르고 이 표는 지운다.
+- 이 표는 trend 사전에 **없는 속성**에 대한 것이라 "질의 전용 별칭 사전을 만들지 않는다"(사전 중복 금지, [query-structuring.md](../../../../docs/query-structuring.md))와 충돌하지 않는다. trend 사전에 성별이 생기면 그쪽을 따르고 이 표는 지운다.
 - 표 항목 (2026-11-10 U2 확정): 여 = 여성·여자·여성용·우먼·위민즈·women·womens, 남 = 남성·남자·남성용·맨즈·men·mens, 공용 = 남녀공용·유니섹스·unisex. "젠더리스"는 같은 뜻이 아니라 넣지 않았다. 비교는 사전과 같은 방식(소문자, 공백·`-`·`_` 무시)이라 "남녀 공용"도 맞는다. 위치: `configs/query_structuring.json`의 `gender.aliases`.
 - **성별 제외와 여러 성별 (결정 G-3, 2026-11-10 사용자 확정, U3.5 구현)**: 성별도 카테고리·속성처럼 `include`/`exclude` 목록이다.
 
@@ -468,7 +470,7 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](../../trend-anal
 
 이 차이 목록은 `tests/test_query_structured_models.py`의 `INTENDED_DIFFERENCES`로 검사한다. 목록에 없는 차이가 생기면 테스트가 실패한다.
 
-trend에 넘길 때의 변환(`to_trend_query()`)은 2026-11-11 구현됐다(위 표). 실제 전송과 trend 쪽 계약 반영(속성 제외·`match`를 받을 칸)은 **Action Item**이다([query-decisions.md §0](../../../../docs/query-decisions.md)의 7·8). 변환에서 trend가 아직 모르는 필드(속성 제외, `match`)를 그냥 버리면 안 된다. trend가 반영하기 전에는 결과에 "반영되지 않은 조건"으로 알려야 한다 (X4 안전 조건).
+`to_trend_query()` 결과는 현재 순차 workflow의 Trend 입력으로 전달된다. TrendQuery에 표현할 수 없는 조건은 `unsupported`와 warning으로 남기고, `match`와 나머지 품목은 P08의 StructuredQuery 및 실행 trace에 보존한다. 최신 호출·오류·계약 동작은 [query-structuring.md](../../../../docs/query-structuring.md)와 [workflow contract](../../../workflow/workflow-contract.md)를 따른다.
 
 ## 8. 변경 이력
 | 날짜 | 내용 |

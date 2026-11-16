@@ -1,0 +1,7 @@
+{
+  "prompt_id": "planning_sheet_swot",
+  "version": "v1",
+  "used_by": "src/vogue_orchestrator/swot.py",
+  "input": "one JSON object built by swot.swot_input() from the stored run: trend, stock, product, market, limitations",
+  "output": "one JSON object {strengths, weaknesses, opportunities, threats}; each a list of 0-4 {text, basis} items, validated by swot.parse_swot()"
+}

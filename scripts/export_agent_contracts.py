@@ -6,8 +6,7 @@ provenance (repo, branch, commit, source-file sha256) so a later change in the o
 Entries of this repository (agent id vogue-orchestrator) read their sources from this checkout.
 
 Methods
-  copy      wrap a JSON Schema file that the agent repository already publishes. A vogue-workflow/0.1
-            schema is copied from the producer's vendored copy of contracts/workflow (P08: the canonical file)
+  copy      wrap a JSON Schema file published by the producer or in this repository's contracts/workflow package.
   pydantic  run the agent's own Python (its .venv) and call `model_json_schema()` on its model
   pinned    an existing snapshot that generated code depends on (trend-query: query/vocabulary.py is
             generated from it). Checked only; refresh it through its own workflow
@@ -15,15 +14,11 @@ Methods
             JSON Schema (new-product-agent /runs, the P08 MD decision request). Never rewritten; the
             check reports when its sources change
 
-Also reads the `contract_version` constant of every agent route from its source (`NAME = "..."` or
-`NAME = '...'`) and compares it with the value the orchestrator uses on that route: core.py for /runs
-(`CONTRACT_VERSION`, or `PROJECT06_CONTRACT_VERSION` for new-product-agent; ORCHESTRATOR_VERSION_CONSTANT),
-or the "<file>:<CONSTANT>" an Envelope names in `expected_from` (the vogue-workflow/0.1 routes compare with
-src/vogue_orchestrator/workflow_contract.py:VERSION). A mismatch means the HTTP call on that route fails.
+Also reads each agent route's `contract_version` constant and compares it with the version used by
+the orchestrator on that route.
 
-Both modes also compare the workflow contract copies: every file pinned in contracts/workflow/snapshot.json
-must have its pinned sha256 (after CRLF -> LF) in contracts/workflow and in each vendored copy (VENDORED);
-a sibling checkout that is absent is skipped with the reason. Only --check turns a difference into exit 1.
+Both modes compare the schemas with contracts/workflow/snapshot.json. P06 and P07 own their native wire contracts;
+P08's package records the call-side shape and is not copied into either producer repository.
 
 Usage
   py scripts/export_agent_contracts.py            # write copy/pydantic snapshots (pinned/authored untouched)
@@ -70,8 +65,11 @@ class Envelope:
     source_file: str  # in the agent repository
     constant: str  # name of the contract_version constant in source_file
     # "<file in this repository>:<CONSTANT>" holding the value the orchestrator uses on this route.
-    # None keeps the /runs default: core.py with ORCHESTRATOR_VERSION_CONSTANT (else CONTRACT_VERSION).
+    # None keeps the /runs default: the workflow's handoff transport version.
     expected_from: str | None = None
+    # For a route whose source checks a string literal instead of a module constant: a regular expression
+    # whose first group is the accepted contract_version; `constant` then only names the check in reports.
+    pattern: str | None = None
 
 
 @dataclass(frozen=True)
@@ -92,42 +90,37 @@ ENVELOPES = {
     "trend-analysis-agent": Envelope("/v1/agents/trend-analysis-agent/runs", "src/trend_agent/api/server.py",
                                      "CONTRACT_VERSION"),
     "stock-agent": Envelope("/v1/agents/stock-agent/runs", "stock_agent/api.py", "HANDOFF_CONTRACT_VERSION"),
-    "sales-market-agent": Envelope("/v1/agents/sales-market-agent/runs", "src/market_research_agent/http_server.py",
-                                   "CONTRACT_VERSION"),
-    "new-product-agent": Envelope("/v1/agents/new-product-agent/runs", "src/vogue_npp/adapters/handoff.py",
-                                  "CONTRACT_VERSION"),
+    # P06 compares the envelope's contract_version with a literal inside _build_handoff_run.
+    "new-product-agent": Envelope("/v1/agents/new-product-agent/runs", "src/vogue_npp/prototype/server.py",
+                                  "_build_handoff_run contract_version check",
+                                  "src/vogue_orchestrator/workflow_contract.py:P06_HANDOFF_VERSION",
+                                  pattern=r"""payload\.get\(["']contract_version["']\)\s*!=\s*["']([^"'\n]+)["']"""),
 }
 
-# vogue-workflow/0.1 routes (conventions section 1). The orchestrator sends workflow_contract.py:VERSION.
+# P07 proposal review route. Its contract version is independent from the P08 public workflow version.
 WORKFLOW_CONTRACT_PY = "src/vogue_orchestrator/workflow_contract.py"
 WORKFLOW_ENVELOPES = {
-    "new-product-agent": Envelope("/v1/agents/new-product-agent/drafts", "src/vogue_npp/adapters/planning_draft.py",
-                                  "CONTRACT_VERSION", f"{WORKFLOW_CONTRACT_PY}:VERSION"),
-    "sales-market-agent": Envelope("/v1/agents/sales-market-agent/reviews", "src/market_research_agent/reviews.py",
-                                   "VERSION", f"{WORKFLOW_CONTRACT_PY}:VERSION"),
+    "sales-market-agent": Envelope("/v1/agents/sales-market-agent/reviews", "src/market_research_agent/http_server.py",
+                                   "REVIEW_CONTRACT_VERSION", f"{WORKFLOW_CONTRACT_PY}:P07_REVIEW_VERSION"),
 }
 # Routes this repository serves. Read from this checkout; there is no other side to compare with.
-RUN_ENVELOPE = Envelope("/api/workflow/run, /v1/orchestrations", WORKFLOW_CONTRACT_PY, "VERSION")
-MD_DECISION_ENVELOPE = Envelope("/api/workflow/runs/{rid}/md-decision", WORKFLOW_CONTRACT_PY, "VERSION")
+RUN_ENVELOPE = Envelope("/api/workflow/run, /v1/orchestrations", WORKFLOW_CONTRACT_PY, "VERSION",
+                        f"{WORKFLOW_CONTRACT_PY}:VERSION")
+MD_DECISION_ENVELOPE = Envelope("/api/workflow/runs/{rid}/md-decision", WORKFLOW_CONTRACT_PY, "VERSION",
+                                f"{WORKFLOW_CONTRACT_PY}:VERSION")
 
-# Byte-identical copies of contracts/workflow that producers vendor (conventions section 1).
-VENDORED = {
-    "new-product-agent": "contracts/workflow-proposed",
-    "sales-market-agent": "src/market_research_agent/resources/workflow_contract",
-}
-# Pinned files a vogue-workflow/0.1 schema's $ref resolves to (common.schema.json refers to upstream/).
+# P06 and P07 do not vendor P08 call-side schemas.
+VENDORED = {}
+# Pinned files a P08 call-side schema's $ref resolves to.
 WORKFLOW_REFS = ("common.schema.json", "upstream/trend-result-1.1.schema.json", "upstream/stock-result-1.0.schema.json")
 
 
 def workflow_entry(agent_id: str, direction: str, name: str, contract: str, payload_version: str | None,
                    directory: str, envelope: Envelope) -> Entry:
-    """Copy of one vogue-workflow/0.1 schema from `directory` of the agent's repository.
-
-    The file name carries the boundary's producer schema version (planning-draft/1.0, sales-market-review/1.0,
-    integrated-result/1.0). source_files add the pinned files its $ref resolves to.
-    """
+    """Copy a P08-owned schema; source_files add the pinned files its $ref resolves to."""
     source = f"{directory}/{name}.schema.json"
-    return Entry(agent_id, direction, f"{name}-1.0.contract.json", contract, payload_version, "copy",
+    target_version = "2.0" if name == "integrated-result" else "1.0"
+    return Entry(agent_id, direction, f"{name}-{target_version}.contract.json", contract, payload_version, "copy",
                  (source, *(f"{directory}/{rel}" for rel in WORKFLOW_REFS)), source, envelope=envelope)
 
 
@@ -147,43 +140,29 @@ ENTRIES = (
     Entry("stock-agent", "output", "stock-agent-result-1.0.contract.json", "stock-agent result", "1.0", "copy",
           ("contracts/schemas/stock-agent-result.schema.json",),
           "contracts/schemas/stock-agent-result.schema.json"),
-    Entry("sales-market-agent", "input", "sales-market-run-request-0.1.contract.json",
-          "sales-market-agent /runs request (envelope + input)", None, "copy",
-          ("contracts/schemas/vogue-handoff-0.1-request.schema.json", "src/market_research_agent/http_server.py"),
-          "contracts/schemas/vogue-handoff-0.1-request.schema.json"),
-    Entry("sales-market-agent", "output", "market-research-result-1.0.contract.json", "MarketResearchResult", "1.0",
-          "copy", ("contracts/schemas/market-research-result.schema.json",),
-          "contracts/schemas/market-research-result.schema.json"),
-    Entry("sales-market-agent", "output", "sales-market-run-response-0.1.contract.json",
-          "sales-market-agent /runs response envelope", None, "copy",
-          ("contracts/schemas/vogue-handoff-0.1-response.schema.json",),
-          "contracts/schemas/vogue-handoff-0.1-response.schema.json"),
-    Entry("sales-market-agent", "output", "sales-market-run-error-0.1.contract.json",
-          "sales-market-agent /runs error body", None, "copy",
-          ("contracts/schemas/vogue-handoff-0.1-error.schema.json",),
-          "contracts/schemas/vogue-handoff-0.1-error.schema.json"),
-    workflow_entry("sales-market-agent", "input", "sales-market-review-request",
-                   "sales-market-agent /reviews request (P08 → P07 full-Draft review)", None,
-                   VENDORED["sales-market-agent"], WORKFLOW_ENVELOPES["sales-market-agent"]),
-    workflow_entry("sales-market-agent", "output", "sales-market-review-response",
-                   "sales-market-agent /reviews response (SalesMarketReview envelope)", "sales-market-review/1.0",
-                   VENDORED["sales-market-agent"], WORKFLOW_ENVELOPES["sales-market-agent"]),
+    Entry("sales-market-agent", "input", "sales-market-review-proposal-0.3.contract.json",
+          "P07 /reviews proposal request (allowlisted product projection with per-field provenance)",
+          "vogue-sales-market-review/0.3-proposal", "copy",
+          ("src/market_research_agent/http_server.py", "contracts/examples/sales-market-review-0.3-proposal.request.json"),
+          "contracts/schemas/proposals/sales-market-review-0.3-proposal.schema.json",
+          envelope=WORKFLOW_ENVELOPES["sales-market-agent"]),
+    Entry("sales-market-agent", "output", "sales-market-review-proposal-response-0.1.contract.json",
+          "P07 /reviews native review response", "sales-market-review/0.1-internal", "copy",
+          ("src/market_research_agent/http_server.py", "contracts/schemas/proposals/sales-market-review-0.3-proposal-response.schema.json"),
+          "contracts/schemas/proposals/sales-market-review-0.3-proposal-response.schema.json",
+          envelope=WORKFLOW_ENVELOPES["sales-market-agent"]),
+    Entry("sales-market-agent", "output", "sales-market-review-proposal-error-0.3.contract.json",
+          "P07 /reviews error response", "vogue-sales-market-review/0.3-proposal", "copy",
+          ("src/market_research_agent/http_server.py", "contracts/schemas/proposals/sales-market-review-0.3-error.schema.json"),
+          "contracts/schemas/proposals/sales-market-review-0.3-error.schema.json",
+          envelope=WORKFLOW_ENVELOPES["sales-market-agent"]),
     Entry("new-product-agent", "input", "planning-draft-input-0.3.contract.json",
           "new-product-agent /runs input (three producer payloads)", None, "authored",
           ("src/vogue_npp/adapters/handoff.py", "src/vogue_npp/prototype/server.py")),
-    Entry("new-product-agent", "output", "planning-draft-result-1.0.contract.json",
-          "new-product-agent planning draft result", "1.0", "authored",
-          ("src/vogue_npp/prototype/server.py", "src/vogue_npp/adapters/handoff.py")),
-    workflow_entry("new-product-agent", "input", "planning-draft-request",
-                   "new-product-agent /drafts request (P08 → P06 Draft: draft_only | draft_with_visuals)", None,
-                   VENDORED["new-product-agent"], WORKFLOW_ENVELOPES["new-product-agent"]),
-    workflow_entry("new-product-agent", "output", "planning-draft-response",
-                   "new-product-agent /drafts response (PlanningDraft envelope)", "planning-draft/1.0",
-                   VENDORED["new-product-agent"], WORKFLOW_ENVELOPES["new-product-agent"]),
     workflow_entry(SELF, "output", "integrated-result", "vogue-orchestrator workflow run response (integrated result)",
-                   "integrated-result/1.0", "contracts/workflow", RUN_ENVELOPE),
-    Entry(SELF, "input", "md-decision-request-1.0.contract.json",
-          "vogue-orchestrator MD decision request (POST /api/workflow/runs/{rid}/md-decision)", None, "authored",
+                   "integrated-result/2.0", "contracts/workflow", RUN_ENVELOPE),
+    Entry(SELF, "input", "md-decision-request-2.0.contract.json",
+          "vogue-orchestrator MD decision request (POST /api/workflow/runs/{rid}/md-decision)", "vogue-workflow/0.2", "authored",
           ("src/vogue_orchestrator/workflow_http.py", "src/vogue_orchestrator/workflow_store.py",
            WORKFLOW_CONTRACT_PY),
           envelope=MD_DECISION_ENVELOPE),
@@ -249,26 +228,30 @@ def read_constant(path: Path, name: str) -> str | None:
     return match.group(1) if match.group(1) is not None else match.group(2)
 
 
+def read_pattern(path: Path, pattern: str) -> str | None:
+    """First group of the first match of `pattern` in `path`, or None if absent; more than one distinct match is None."""
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    values = {match.group(1) for match in re.finditer(pattern, text)}
+    return values.pop() if len(values) == 1 else None
+
+
 def envelope_version(agent_id: str, envelope: Envelope | None = None) -> dict[str, Any]:
     """The contract_version an agent route accepts, read from the agent source (default: its /runs)."""
     envelope = envelope or ENVELOPES[agent_id]
-    value = read_constant(repo_root(agent_id) / envelope.source_file, envelope.constant)
+    source = repo_root(agent_id) / envelope.source_file
+    value = read_pattern(source, envelope.pattern) if envelope.pattern else read_constant(source, envelope.constant)
     return {"route": envelope.route, "contract_version": value,
             "detected_from": f"{envelope.source_file}:{envelope.constant}"}
 
 
-# The core.py constant each agent's /runs version is compared with. new-product-agent has its own constant
-# (main 559a39d, 2026-11-12: vogue-handoff/0.2); new-product-agent moved /runs to vogue-handoff/0.3 in 340a7d4
-# (2026-11-12), so that row reports MISMATCH until core.py follows. P08 calls P06 on /drafts, not /runs.
-ORCHESTRATOR_VERSION_CONSTANT = {"new-product-agent": "PROJECT06_CONTRACT_VERSION"}
-CORE_PY = "src/vogue_orchestrator/core.py"
+HANDOFF_VERSION_SOURCE = "src/vogue_orchestrator/workflow_contract.py"
 
 
 def expected_from(agent_id: str | None = None, envelope: Envelope | None = None) -> str:
     """"<file>:<CONSTANT>" in this repository holding the value the orchestrator uses on an agent route."""
     if envelope is not None and envelope.expected_from:
         return envelope.expected_from
-    return f"{CORE_PY}:{ORCHESTRATOR_VERSION_CONSTANT.get(agent_id or '', 'CONTRACT_VERSION')}"
+    return f"{HANDOFF_VERSION_SOURCE}:HANDOFF_VERSION"
 
 
 def orchestrator_contract_version(agent_id: str | None = None, envelope: Envelope | None = None) -> str:
@@ -291,7 +274,8 @@ def source_hashes(agent_root: Path, files: tuple[str, ...]) -> list[dict[str, st
 
 def fresh_schema(entry: Entry, agent_root: Path) -> dict[str, Any] | None:
     if entry.method == "copy":
-        return json.loads((agent_root / entry.source).read_text(encoding="utf-8"))
+        source_root = ROOT if entry.source.startswith("contracts/workflow/") else agent_root
+        return json.loads((source_root / entry.source).read_text(encoding="utf-8"))
     if entry.method in {"pydantic", "pinned"}:
         return pydantic_schema(agent_root, entry.source)
     return None  # authored
@@ -392,10 +376,8 @@ def render_sources() -> str:
         "## HTTP handoff contract_version",
         "",
         "Agent 경로마다 Agent 소스의 값과 오케스트레이터가 그 경로에 쓰는 값을 비교한다. `/runs`(vogue-handoff)는 "
-        "`src/vogue_orchestrator/core.py`의 상수와, vogue-workflow/0.1 경로(P06 `/drafts`, P07 `/reviews`)는 "
-        "`src/vogue_orchestrator/workflow_contract.py`의 `VERSION`과 비교한다. route는 Agent 저장소가 제공하는 경로이며, "
-        "오케스트레이터가 실제로 부르는 경로와는 다를 수 있다 (2026-11-13 `integration/docker-e2e`: 워크플로 실행은 "
-        "Trend·Stock `/runs` 후 P06 `/drafts`, P07 `/reviews`를 부르고, New Product `/runs`는 부르지 않음).",
+        "Trend·Stock `/runs`는 `HANDOFF_VERSION`, P06 `/runs`는 `P06_HANDOFF_VERSION`, "
+        "P07 `/reviews`는 `P07_REVIEW_VERSION`, P08 public API는 `VERSION`과 비교한다.",
         "",
         "| Agent | route | Agent가 받는 contract_version | 읽은 위치 | 오케스트레이터 값 | 읽은 위치 (이 저장소) | 비교 |",
         "|---|---|---|---|---|---|---|",

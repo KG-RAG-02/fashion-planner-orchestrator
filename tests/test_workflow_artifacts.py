@@ -195,7 +195,7 @@ class PeerArtifactReaderTests(unittest.TestCase):
         reader = workflow_http.peer_artifact_reader({'VOGUE_PEER_ARTIFACT_ROOT': str(self.root)})
         self.assertEqual(reader(self.reference), self.data)
         env = dict(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1', VOGUE_PEER_ARTIFACT_ROOT=str(self.root),
-                   VOGUE_WORKFLOW_STORE_DIR=str(self.root.parent / 'wf'),
+                   VOGUE_WORKFLOW_STORE_DIR=str(self.root.parent / 'wf'), VOGUE_AGENT_SERVICE_BEARER_TOKEN='test-token',
                    **{k: 'http://127.0.0.1:9' for k in ('VOGUE_TREND_AGENT_URL', 'VOGUE_STOCK_AGENT_URL',
                                                        'VOGUE_NEW_PRODUCT_AGENT_URL', 'VOGUE_SALES_MARKET_AGENT_URL')})
         with environment(**env):
