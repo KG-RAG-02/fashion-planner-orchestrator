@@ -191,6 +191,20 @@ class WorkflowTests(unittest.TestCase):
                              'evidence_ids': ['trend:e1']}}})
         self.contract.semantic(result, self.rid, self.store)
 
+    def test_p07_receives_the_proposed_material_with_its_proposal_kind(self):
+        from vogue_orchestrator.workflow_contract import p07_review_input
+        profile = {'category':{'value':'가디건','kind':'user_requested','evidence_ids':[]},
+                   'material':{'value':'울 혼방 니트','kind':'proposal','evidence_ids':[]},
+                   'season':{'value':'2026FW','kind':'proposal','evidence_ids':[]},
+                   **{key:{'value':None,'kind':'unknown','evidence_ids':[]} for key in ('product_type','gender')}}
+        draft = {'evidence_ids': [], 'draft': {'category': '가디건', 'product_profile': profile}}
+        self.assertEqual(p07_review_input(draft, 'req-1'), {
+            'request_id': 'req-1',
+            'product': {'category': '가디건', 'material': '울 혼방 니트'},  # a proposal-kind season is still not sent
+            'product_evidence': {
+                'category': {'kind': 'user_requested', 'source_ref': 'p06.draft.product_profile.category', 'evidence_ids': []},
+                'material': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.material', 'evidence_ids': []}}})
+
     def test_user_category_season_and_partial_peer_results_are_preserved(self):
         scenario = json.loads((FIXTURES/'p06-p07-partial-handoff.json').read_bytes())
         request = self.sample['input']
@@ -218,7 +232,9 @@ class WorkflowTests(unittest.TestCase):
 
         self.assertEqual(calls['p06']['input']['planning_request'], request['planning_request'])
         self.assertEqual(calls['p06']['input']['planning_request']['context'], scenario['planning_context'])
-        self.assertEqual(calls['p07']['input']['product'], {'category': '니트웨어', 'season': '2027SS'})
+        # P06's proposed material ('니트', kind proposal) is forwarded too (user decision 2026-11-16).
+        self.assertEqual(calls['p07']['input']['product'], {'category': '니트웨어', 'season': '2027SS', 'material': '니트'})
+        self.assertEqual(calls['p07']['input']['product_evidence']['material']['kind'], 'proposal')
         self.assertEqual(body['status'], 'partial')
         self.assertEqual(body['sources']['planning_draft']['raw_response'], p06_raw)
         self.assertEqual(body['sources']['sales_market_review']['raw_response'], p07_raw)
