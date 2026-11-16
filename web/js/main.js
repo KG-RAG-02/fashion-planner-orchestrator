@@ -10,7 +10,6 @@ const SYSTEM_REFRESH_MS = 30000;
 
 const el = {
   form: $('#brief-form'), brief: $('#brief'), counter: $('#brief-counter'), run: $('#run-button'), notice: $('#notice'),
-  file: $('#ref-image'), preview: $('#ref-preview'), fileName: $('#ref-name'), clearFile: $('#ref-clear'),
   pipeline: $('#pipeline'), rail: $('#rail'), results: $('#results'),
   concept: $('#concept'), trends: $('#trend-block'), stock: $('#stock-block'), draft: $('#draft-block'), review: $('#review-block'),
   md: $('#md-card'), runCard: $('#run-card'),
@@ -20,7 +19,7 @@ const el = {
 };
 
 const state = {
-  envelope: null, requestId: null, inFlight: false, poller: null, previewUrl: null,
+  envelope: null, requestId: null, inFlight: false, poller: null,
   p07CallRequest: null, p07CallRequestArtifactId: null, p07CallRequestState: 'unavailable',
   md: { decisions: [], integratedSha: null, selected: null, busy: false, message: '' },
   system: null, evidenceTab: 'evidence',
@@ -36,38 +35,12 @@ function setRunning(running) {
   el.run.disabled = running;
   el.run.textContent = running ? '실행 중…' : '기획 시작';
   el.brief.readOnly = running;
-  el.file.disabled = running;
 }
 
 // --- Composer --------------------------------------------------------------
 
 function updateCounter() {
   el.counter.textContent = `${el.brief.value.length.toLocaleString('ko-KR')} / ${model.MAX_BRIEF.toLocaleString('ko-KR')}`;
-}
-
-function clearImage() {
-  if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
-  state.previewUrl = null;
-  el.file.value = '';
-  el.preview.hidden = true;
-  el.preview.removeAttribute('src');
-  el.fileName.textContent = 'PNG · JPEG · WebP, 최대 10MB 1장';
-  el.clearFile.hidden = true;
-}
-
-function onImageChosen() {
-  const file = el.file.files[0];
-  if (!file) { clearImage(); return; }
-  const check = model.validateImage(file);
-  if (!check.ok) { clearImage(); showNotice(check.message); return; }
-  showNotice('');
-  if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
-  state.previewUrl = URL.createObjectURL(file);
-  el.preview.src = state.previewUrl;
-  el.preview.alt = `선택한 참고 이미지: ${file.name}`;
-  el.preview.hidden = false;
-  el.fileName.textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)}MB`;
-  el.clearFile.hidden = false;
 }
 
 // --- Rendering -------------------------------------------------------------
@@ -189,9 +162,6 @@ async function startRun(event) {
   showNotice('');
   const brief = model.validateBrief(el.brief.value);
   if (!brief.ok) { showNotice(brief.message); el.brief.focus(); return; }
-  const file = el.file.files[0] ?? null;
-  const fileCheck = model.validateImage(file);
-  if (!fileCheck.ok) { showNotice(fileCheck.message); return; }
 
   const requestId = model.newRequestId();
   state.requestId = requestId;
@@ -202,12 +172,8 @@ async function startRun(event) {
   el.results.hidden = true;
   view.renderRail(el.rail, model.rail(null, { inFlight: true }));
 
+  // Image input was removed from the workspace: the request keeps the contract's user_input.images as [].
   const images = [];
-  if (file) {
-    const upload = await api.uploadImage(file, requestId);
-    if (!upload.ok) { setRunning(false); showNotice(model.problemMessage(upload.body, upload.status)); return; }
-    images.push(upload.body);
-  }
   localStorage.setItem(LAST_RUN_KEY, requestId);
   poll(requestId);
   const response = await api.runWorkflow({ requestId, text: brief.text, images });
@@ -284,8 +250,6 @@ function renderEvidence() {
 
 function bind() {
   el.brief.addEventListener('input', updateCounter);
-  el.file.addEventListener('change', onImageChosen);
-  el.clearFile.addEventListener('click', clearImage);
   el.form.addEventListener('submit', startRun);
   el.runsRefresh.addEventListener('click', showRuns);
   window.addEventListener('hashchange', route);
@@ -312,6 +276,7 @@ async function restore() {
 
 bind();
 updateCounter();
+view.renderRail(el.rail, model.rail(null));
 route();
 refreshSystem();
 setInterval(refreshSystem, SYSTEM_REFRESH_MS);

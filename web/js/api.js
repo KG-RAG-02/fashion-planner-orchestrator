@@ -24,14 +24,6 @@ export function systemStatus() {
   return request('/api/system/status', { headers: { Accept: 'application/json' } });
 }
 
-export function uploadImage(file, requestId) {
-  return request('/v1/input-images', {
-    method: 'POST',
-    headers: { 'Content-Type': file.type, 'X-Request-ID': requestId, Accept: 'application/json' },
-    body: file,
-  });
-}
-
 export function runWorkflow({ requestId, text, images }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), RUN_TIMEOUT_MS);

@@ -28,21 +28,12 @@ export function statusMeta(status) {
 }
 
 export const MAX_BRIEF = 8000;
-export const MAX_IMAGE_BYTES = 10485760;
-export const IMAGE_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/webp']);
 
 export function validateBrief(text) {
   const trimmed = (text ?? '').trim();
   if (!trimmed) return { ok: false, message: '기획 질의를 입력해 주세요.' };
   if (trimmed.length > MAX_BRIEF) return { ok: false, message: `질의는 ${MAX_BRIEF.toLocaleString('ko-KR')}자 이하로 입력해 주세요.` };
   return { ok: true, text: trimmed };
-}
-
-export function validateImage(file) {
-  if (!file) return { ok: true };
-  if (!IMAGE_TYPES.includes(file.type)) return { ok: false, message: 'PNG · JPEG · WebP 이미지만 올릴 수 있습니다.' };
-  if (file.size > MAX_IMAGE_BYTES) return { ok: false, message: '이미지는 10MB 이하여야 합니다.' };
-  return { ok: true };
 }
 
 export function newRequestId(cryptoObject = globalThis.crypto) {

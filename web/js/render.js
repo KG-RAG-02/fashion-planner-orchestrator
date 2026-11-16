@@ -21,6 +21,11 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
+// replaceChildren() would print an empty slot (null) as the text "null"; drop empty slots first.
+function fill(node, ...children) {
+  node.replaceChildren(...children.flat(Infinity).filter((child) => child !== null && child !== undefined && child !== false));
+}
+
 function svg(tag, attrs) {
   const el = document.createElementNS(SVG_NS, tag);
   for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, String(value));
@@ -60,58 +65,86 @@ function emptyNote(text) {
 // --- Rail ------------------------------------------------------------------
 
 export function renderRail(list, items) {
-  list.replaceChildren(...items.map((item) => h('li', { class: `rail-step tone-${item.tone}` },
-    h('span', { class: 'rail-index' }, `${item.n} · ${item.en}`),
-    h('span', { class: 'rail-name' }, item.ko),
+  fill(list, items.map((item) => h('li', { class: `rail-step tone-${item.tone}` },
+    h('span', { class: 'rail-n' }, item.n),
+    h('span', { class: 'rail-label' }, h('span', { class: 'rail-en' }, item.en), ' ', h('span', { class: 'rail-name' }, item.ko)),
     h('span', { class: `chip tone-${item.tone}` }, statusIcon(item.tone), item.label))));
 }
 
-// --- Concept / final image -------------------------------------------------
+// --- Concept: integrated draft and the lookbook ----------------------------
+// The 기획서 (stage 06 PNG composed by P08's planning_sheet.py) is the fixed deliverable: it is shown
+// whole and flat, never cropped, tilted or restyled. P06's two visuals flank it.
+
+function sheetFigure(image, draft, sheet) {
+  if (image.status === 'generated' && image.artifact?.artifact_id) {
+    const src = artifactUrl(image.artifact.artifact_id);
+    return h('figure', { class: `look look-sheet${sheet ? ' is-sheet' : ''}` },
+      h('a', { class: 'look-frame', href: src, target: '_blank', rel: 'noopener', title: '원본 크기로 열기' },
+        h('img', { src, alt: sheet ? `${draft?.title ?? '기획'} — 기획안 사진 (P08 합성)` : `${draft?.title ?? '기획'} — 시장 검토 이후 생성한 최종 기획 이미지`, loading: 'lazy' })),
+      h('figcaption', {}, h('strong', {}, '기획안 사진'), sheet ? ' P08 합성' : ' 최종 기획 이미지'));
+  }
+  const label = image.status === 'failed' ? '이미지 생성 실패' : image.status === 'skipped' ? '이미지 생략' : '이미지 없음';
+  return h('figure', { class: `look look-sheet is-empty state-${image.status ?? 'none'}` },
+    h('div', { class: 'look-frame look-empty' }, h('strong', {}, label), h('span', {}, image.reason || '시장 검토가 끝난 뒤에만 한 번 생성합니다.')),
+    h('figcaption', {}, h('strong', {}, '기획안 사진')));
+}
+
+function visualFigure(view, item, side) {
+  return h('figure', { class: `look look-side look-${side} state-${item.status ?? 'none'}` },
+    item.sha256
+      ? h('a', { class: 'look-frame', href: artifactUrl(item.sha256), target: '_blank', rel: 'noopener', title: '원본 크기로 열기' },
+          h('img', { src: artifactUrl(item.sha256), alt: `${view.title} — ${item.label} 시안 (P06)`, loading: 'lazy' }))
+      : h('div', { class: 'look-frame look-empty' }, item.reason || '이미지 없음'),
+    h('figcaption', {}, h('strong', {}, item.label), ` ${model.statusMeta(item.status).label}${item.model ? ` · ${item.model}` : ''}`));
+}
 
 export function renderConcept(section, envelope, { retryEnabled = false, onRetry } = {}) {
   const result = envelope.result ?? {};
   const draft = model.draftView(model.sourceResult(result, 'planning_draft'));
   const image = result.final_image ?? {};
   const lineage = image.lineage ?? {};
-  let figure;
-  // 0.2.0: the visuals are P06's (Draft section); stage 06 is the planning sheet composed by P08.
-  const sheet = Boolean(draft?.visuals?.length);
-  if (image.status === 'generated' && image.artifact?.artifact_id) {
-    const src = artifactUrl(image.artifact.artifact_id);
-    figure = h('figure', { class: `concept-figure${sheet ? ' is-sheet' : ''}` },
-      h('a', { href: src, target: '_blank', rel: 'noopener', title: '원본 크기로 열기' },
-        h('img', { src, alt: sheet ? `${draft?.title ?? '기획'} — 기획안 사진 (P08 합성)` : `${draft?.title ?? '기획'} — 시장 검토 이후 생성한 최종 기획 이미지`, loading: 'lazy' })));
-  } else {
-    const label = image.status === 'failed' ? '이미지 생성 실패' : image.status === 'skipped' ? '이미지 생략' : '이미지 없음';
-    figure = h('figure', { class: `concept-figure is-empty state-${image.status ?? 'none'}` },
-      h('figcaption', {}, h('strong', {}, label), h('span', {}, image.reason || '시장 검토가 끝난 뒤에만 한 번 생성합니다.')));
-  }
+  // 0.2.0: the visuals are P06's; stage 06 is the planning sheet composed by P08.
+  const visuals = draft?.visuals ?? [];
+  const sheet = Boolean(visuals.length);
+  const product = visuals.find((item) => item.key === 'product');
+  const outfit = visuals.find((item) => item.key === 'outfit');
+  const calls = Number.isInteger(draft?.imageCalls) ? ` · 이미지 호출 ${draft.imageCalls}회` : '';
   const retry = retryEnabled && image.status === 'failed' && typeof onRetry === 'function'
     ? h('button', { type: 'button', class: 'btn btn-ghost', onClick: onRetry }, '이미지 단계만 다시 시도')
     : null;
-  section.replaceChildren(figure, h('div', { class: 'concept-body' },
-    h('p', { class: 'eyebrow' }, 'INTEGRATED DRAFT'),
-    h('h2', { id: 'concept-title', class: 'concept-title' }, draft?.title ?? '통합 결과'),
-    h('p', { class: 'muted' }, '기획 초안과 시장 검토를 통합한 결과입니다. 가격·원가·수량·발주·최종 채택은 MD가 결정합니다.'),
-    h('div', { class: 'chip-row' },
-      chip(result.status),
-      draft?.identity ? h('span', { class: 'tag' }, `Draft r${draft.identity.revision ?? '?'}`) : null,
-      image.status ? h('span', { class: 'tag' }, `이미지 ${model.statusMeta(image.status).label}${Number.isInteger(image.provider_calls) ? ` · 호출 ${image.provider_calls}회` : ''}`) : null),
-    h('dl', { class: 'meta-list' },
-      h('dt', {}, 'Draft'), h('dd', { class: 'mono' }, model.shortSha(lineage.draft_response_sha256)),
-      h('dt', {}, 'Review'), h('dd', { class: 'mono' }, model.shortSha(lineage.review_response_sha256)),
-      h('dt', {}, 'Image'), h('dd', { class: 'mono' }, model.shortSha(image.artifact?.sha256))),
-    retry));
+  fill(section,
+    h('div', { class: 'feature-intro' },
+      h('div', { class: 'feature-head' },
+        h('p', { class: 'eyebrow' }, 'INTEGRATED DRAFT'),
+        h('h2', { id: 'concept-title', class: 'concept-title' }, draft?.title ?? '통합 결과')),
+      h('div', { class: 'feature-copy' },
+        h('p', { class: 'muted' }, '기획 초안과 시장 검토를 통합한 결과입니다. 가격·원가·수량·발주·최종 채택은 MD가 결정합니다.'),
+        h('div', { class: 'chip-row' },
+          chip(result.status),
+          draft?.identity ? h('span', { class: 'tag' }, `Draft r${draft.identity.revision ?? '?'}`) : null,
+          image.status ? h('span', { class: 'tag' }, `이미지 ${model.statusMeta(image.status).label}${Number.isInteger(image.provider_calls) ? ` · 호출 ${image.provider_calls}회` : ''}`) : null),
+        h('dl', { class: 'meta-list' },
+          h('dt', {}, 'Draft'), h('dd', { class: 'mono' }, model.shortSha(lineage.draft_response_sha256)),
+          h('dt', {}, 'Review'), h('dd', { class: 'mono' }, model.shortSha(lineage.review_response_sha256)),
+          h('dt', {}, 'Image'), h('dd', { class: 'mono' }, model.shortSha(image.artifact?.sha256))),
+        retry)),
+    h('div', { class: `lookbook${sheet ? '' : ' is-single'}`, role: 'group', 'aria-label': sheet ? '기획안 사진과 P06 시안 이미지' : '기획안 사진' },
+      product ? visualFigure(draft, product, 'left') : null,
+      sheetFigure(image, draft, sheet),
+      outfit ? visualFigure(draft, outfit, 'right') : null),
+    sheet ? h('p', { class: 'small muted lookbook-note' }, `P06(new-product-agent)가 트렌드 근거로 만든 검토용 시안${calls}`) : null);
 }
 
 // --- Trend -----------------------------------------------------------------
 
 export function renderTrends(section, cards) {
-  const grid = h('div', { class: 'card-grid' });
+  const grid = h('div', { class: 'entry-grid' });
   for (const card of cards) {
     const quote = card.quotes[0];
-    grid.append(h('article', { class: 'card trend-card' },
-      h('div', { class: 'card-top' }, h('span', { class: 'eyebrow' }, `STYLE ${card.rank}`), card.seasons ? h('span', { class: 'muted small' }, card.seasons) : null),
+    grid.append(h('article', { class: 'entry trend-card' },
+      h('div', { class: 'entry-top' },
+        h('span', { class: 'rank' }, h('span', { class: 'eyebrow' }, 'STYLE'), ' ', h('span', { class: 'numeral' }, card.rank)),
+        card.seasons ? h('span', { class: 'muted small' }, card.seasons) : null),
       h('h3', {}, card.name),
       card.definition ? h('p', { class: 'muted small' }, card.definition) : null,
       card.items.length ? h('ul', { class: 'pill-list', 'aria-label': '아이템' }, card.items.slice(0, 6).map((item) => h('li', {}, item))) : null,
@@ -119,13 +152,13 @@ export function renderTrends(section, cards) {
       quote?.url ? h('a', { class: 'link', href: quote.url, target: '_blank', rel: 'noopener noreferrer' }, `${quote.title || '원문'}${quote.date ? ` · ${quote.date}` : ''}`) : null,
       card.exampleLinks.length ? h('p', { class: 'link-row' }, '예시 이미지 ', card.exampleLinks.map((link, i) => h('a', { class: 'link', href: link.url, target: '_blank', rel: 'noopener noreferrer', title: link.basis }, `${i + 1}`))) : null));
   }
-  section.replaceChildren(sectionHead('trend-title', '트렌드 근거', 'Trend 1.1 · Vogue Korea 기사 그래프'), cards.length ? grid : emptyNote('트렌드 결과가 없습니다.'));
+  fill(section, sectionHead('trend-title', '트렌드 근거', 'Trend 1.1 · Vogue Korea 기사 그래프'), cards.length ? grid : emptyNote('트렌드 결과가 없습니다.'));
 }
 
 // --- Stock -----------------------------------------------------------------
 
 export function renderStock(section, slots) {
-  const grid = h('div', { class: 'card-grid' });
+  const grid = h('div', { class: 'entry-grid' });
   for (const slot of slots) {
     const product = slot.product;
     const body = product
@@ -138,10 +171,10 @@ export function renderStock(section, slots) {
         h('div', { class: 'chip-row' }, h('span', { class: 'badge nature-synthetic' }, product.dataNature ?? 'sample'), product.asOf ? h('span', { class: 'tag' }, `as_of ${product.asOf}`) : null),
         slot.reason ? h('p', { class: 'small' }, slot.reason) : null]
       : [h('div', { class: 'no-match' }, h('strong', {}, '매칭 없음 · no_results'), h('span', {}, '재고가 0이라는 뜻이 아닙니다. 조건에 맞는 후보를 찾지 못했습니다.'))];
-    grid.append(h('article', { class: 'card stock-card' },
-      h('div', { class: 'card-top' }, h('span', { class: 'muted small' }, slot.styleName), chip(slot.status)), body));
+    grid.append(h('article', { class: 'entry stock-card' },
+      h('div', { class: 'entry-top' }, h('span', { class: 'muted small' }, slot.styleName), chip(slot.status)), body));
   }
-  section.replaceChildren(sectionHead('stock-title', '재고 매칭', 'Stock 1.0 · 스타일별 과잉 재고 후보'), slots.length ? grid : emptyNote('재고 단계 결과가 없습니다.'));
+  fill(section, sectionHead('stock-title', '재고 매칭', 'Stock 1.0 · 스타일별 과잉 재고 후보'), slots.length ? grid : emptyNote('재고 단계 결과가 없습니다.'));
 }
 
 // --- Draft / Review --------------------------------------------------------
@@ -153,49 +186,37 @@ function claimList(claims) {
     h('span', { class: 'muted small' }, `근거 ${claim.refs}건`))));
 }
 
-function draftVisualsFigure(view) {
-  const calls = Number.isInteger(view.imageCalls) ? ` · 이미지 호출 ${view.imageCalls}회` : '';
-  return h('div', { class: 'draft-visuals', role: 'group', 'aria-label': 'P06 시안 이미지' },
-    view.visuals.map((item) => h('figure', { class: `draft-visual state-${item.status ?? 'none'}` },
-      item.sha256
-        ? h('a', { href: artifactUrl(item.sha256), target: '_blank', rel: 'noopener' },
-            h('img', { src: artifactUrl(item.sha256), alt: `${view.title} — ${item.label} 시안 (P06)`, loading: 'lazy' }))
-        : h('div', { class: 'draft-visual-empty' }, item.reason || '이미지 없음'),
-      h('figcaption', {}, h('strong', {}, item.label), ` ${model.statusMeta(item.status).label}${item.model ? ` · ${item.model}` : ''}`))),
-    h('p', { class: 'small muted draft-visuals-note' }, `P06(new-product-agent)가 트렌드 근거로 만든 검토용 시안${calls}`));
-}
-
 export function renderDraft(section, view) {
-  if (!view) { section.replaceChildren(sectionHead('draft-title', '기획 초안'), emptyNote('초안이 아직 없습니다.')); return; }
+  if (!view) { fill(section, sectionHead('draft-title', '기획 초안'), emptyNote('초안이 아직 없습니다.')); return; }
   const draftVersion = view.contractVersion?.startsWith('planning-draft/')
     ? view.contractVersion : view.contractVersion ? `planning-draft/${view.contractVersion}` : 'planning-draft/1.0';
   const detailBlock = (title, items) => items.length
     ? h('details', { class: 'limits' }, h('summary', {}, `${title} ${items.length}건`),
         h('ul', {}, items.map((item) => h('li', {}, typeof item === 'string' ? item : JSON.stringify(item)))))
     : null;
-  section.replaceChildren(
+  // P06's product/outfit visuals are shown in the lookbook beside the 기획서 (renderConcept).
+  fill(section,
     sectionHead('draft-title', '기획 초안', `${draftVersion} · ${model.statusMeta(view.status).label}${view.category ? ` · ${view.category}` : ''}${view.season ? ` · ${view.season}` : ''}`),
     h('h3', { class: 'draft-title' }, view.title),
-    view.visuals?.length ? draftVisualsFigure(view) : null,
     view.claims.length ? claimList(view.claims) : emptyNote('주장이 없습니다.'),
     h('div', { class: 'open-questions' },
       h('p', { class: 'eyebrow' }, 'OPEN QUESTIONS · MD'),
       view.openQuestions.length ? h('ul', {}, view.openQuestions.map((q) => h('li', {}, q))) : emptyNote('명시된 확인 사항이 없습니다.'),
       view.mdRequired.length ? h('p', { class: 'small muted' }, `MD 결정 필요: ${view.mdRequired.join(' · ')}`) : null),
     detailBlock('P06 오류', view.errors),
-    view.sections.length ? h('div', { class: 'review-analyses' }, view.sections.map(({ key, label, value }) => h('details', { class: 'limits review-analysis' },
+    view.sections.length ? h('div', { class: 'review-analyses' }, view.sections.map(({ label, value }) => h('details', { class: 'limits review-analysis' },
       h('summary', {}, label), h('pre', { class: 'review-payload' }, JSON.stringify(value, null, 2))))) : null,
     view.limitations.length ? h('details', { class: 'limits' }, h('summary', {}, `제한 ${view.limitations.length}건`), h('ul', {}, view.limitations.map((l) => h('li', {}, l)))) : null);
 }
 
 export function renderReview(section, view) {
-  if (!view) { section.replaceChildren(sectionHead('review-title', '시장 검토'), emptyNote('시장 검토 결과가 없습니다.')); return; }
+  if (!view) { fill(section, sectionHead('review-title', '시장 검토'), emptyNote('시장 검토 결과가 없습니다.')); return; }
   if (view.format === 'native') {
     const dataBlock = (title, items) => items.length
       ? h('details', { class: 'limits' }, h('summary', {}, `${title} ${items.length}건`),
           h('ul', {}, items.map((item) => h('li', {}, typeof item === 'string' ? item : JSON.stringify(item)))))
       : null;
-    const sections = view.sections.map(({ key, label, value }) => h('details', { class: 'limits review-analysis' },
+    const sections = view.sections.map(({ label, value }) => h('details', { class: 'limits review-analysis' },
       h('summary', {}, label, value && typeof value === 'object' && value.status ? ` · ${model.statusMeta(value.status).label}` : ''),
       h('pre', { class: 'review-payload' }, JSON.stringify(value, null, 2))));
     let inputBlock;
@@ -211,7 +232,7 @@ export function renderReview(section, view) {
           ? h('ul', { class: 'review-evidence-ids' }, field.evidenceIds.map((id) => h('li', { class: 'mono small' }, id)))
           : h('span', { class: 'small muted' }, field.kind === 'user_requested' ? '연결된 연구 Evidence ID 없음' : 'Evidence ID 없음'))));
       inputBlock = h('details', { class: 'review-input-card', open: true },
-      h('summary', {}, `P07에 전달한 입력 · ${view.inputContractVersion ?? '계약 미확인'}`),
+        h('summary', {}, `P07에 전달한 입력 · ${view.inputContractVersion ?? '계약 미확인'}`),
         h('p', { class: 'small muted review-input-meta' }, `요청 ID ${view.inputRequestId ?? '—'} · ${view.inputEvidenceSent ? '출처 표시는 P07 요청에 함께 보낸 product_evidence입니다.' : '이 실행의 P07 요청에는 product_evidence가 없어 출처는 P06 Draft 기준으로 표시합니다.'}`),
         h('div', { class: 'table-scroll' }, h('table', { class: 'metric-table review-input-table' },
           h('thead', {}, h('tr', {}, ['항목', '전달값', '출처 종류 · 경로', 'Evidence ID'].map((label) => h('th', { scope: 'col' }, label)))),
@@ -228,7 +249,7 @@ export function renderReview(section, view) {
     } else {
       inputBlock = h('div', { class: 'review-input-card' }, emptyNote('P07 호출 요청이 보존되지 않았습니다.'));
     }
-    section.replaceChildren(
+    fill(section,
       sectionHead('review-title', '시장 검토', `${view.contractVersion ?? 'P07 응답'} · ${model.statusMeta(view.status).label}`),
       inputBlock,
       view.sections.length ? h('div', { class: 'review-analyses' }, sections) : emptyNote('P07 응답에 분석 항목이 없습니다.'),
@@ -237,13 +258,13 @@ export function renderReview(section, view) {
       dataBlock('제한 사항', view.limitations));
     return;
   }
-  section.replaceChildren(sectionHead('review-title', '시장 검토'), emptyNote('현재 P07 응답 계약과 일치하는 결과가 없습니다.'));
+  fill(section, sectionHead('review-title', '시장 검토'), emptyNote('현재 P07 응답 계약과 일치하는 결과가 없습니다.'));
 }
 
 // --- Aside -----------------------------------------------------------------
 
 export function renderRun(section, summary, { sheet = null } = {}) {
-  section.replaceChildren(
+  fill(section,
     h('h2', { id: 'run-title' }, '실행 요약'),
     h('dl', { class: 'meta-list' },
       h('dt', {}, '상태'), h('dd', {}, chip(summary.status)),
@@ -254,7 +275,9 @@ export function renderRun(section, summary, { sheet = null } = {}) {
       '기획서 PNG 저장') : null,
     sheet ? h('p', { class: 'small muted' }, '저장된 실행 결과를 근거 연결 기획 보드 양식으로 그린 PNG입니다. 값은 다시 계산하지 않습니다.') : null,
     summary.errors.length ? h('div', { class: 'error-box', role: 'status' }, h('strong', {}, '오류'), h('ul', {}, summary.errors.map((e) => h('li', {}, e)))) : null,
-    summary.limitations.length ? h('div', {}, h('p', { class: 'eyebrow' }, 'LIMITATIONS'), h('ul', { class: 'small' }, summary.limitations.map((l) => h('li', {}, l)))) : null);
+    summary.limitations.length ? h('details', { class: 'limits run-limits' },
+      h('summary', {}, h('span', { class: 'eyebrow' }, 'LIMITATIONS'), ` ${summary.limitations.length}건`),
+      h('ul', { class: 'small' }, summary.limitations.map((l) => h('li', {}, l)))) : null);
 }
 
 const CHOICES = [['adopt', '채택'], ['revise', '수정'], ['hold', '보류']];
@@ -268,7 +291,7 @@ export function renderMd(section, { decisions, selected, busy, message, disabled
   const history = decisions.length
     ? h('ol', { class: 'decision-list' }, [...decisions].reverse().map((d) => h('li', {}, h('strong', {}, CHOICE_LABEL[d.decision] ?? d.decision), h('span', { class: 'muted small' }, d.decided_at ?? d.created_at ?? ''), d.note ? h('span', { class: 'small as-block' }, d.note) : null)))
     : h('p', { class: 'small muted' }, '아직 저장된 결정이 없습니다.');
-  section.replaceChildren(
+  fill(section,
     h('h2', { id: 'md-title' }, 'MD 판단'),
     group,
     h('label', { for: 'md-note', class: 'field-label' }, '판단 메모 (선택, 2,000자 이내)'),
@@ -286,12 +309,12 @@ export function renderEvidence(container, envelope, tab) {
     const blocks = model.STAGES.filter((s) => result.sources?.[s.key]).map((s) => h('details', { class: 'raw-block' },
       h('summary', {}, `${s.en} · ${s.ko}`),
       h('pre', { class: 'mono small' }, JSON.stringify(result.sources[s.key].raw_response, null, 2))));
-    container.replaceChildren(...(blocks.length ? blocks : [emptyNote('보존된 원문이 없습니다.')]));
+    fill(container, blocks.length ? blocks : emptyNote('보존된 원문이 없습니다.'));
     return;
   }
   if (tab === 'lineage') {
     const rows = model.lineageRows(result);
-    container.replaceChildren(rows.length ? h('div', { class: 'table-scroll' }, h('table', { class: 'metric-table' },
+    fill(container, rows.length ? h('div', { class: 'table-scroll' }, h('table', { class: 'metric-table' },
       h('thead', {}, h('tr', {}, ['#', '단계', '상태', '입력 sha', '응답 sha', '완료'].map((t) => h('th', { scope: 'col' }, t)))),
       h('tbody', {}, rows.map((r) => h('tr', {}, h('td', { class: 'mono' }, r.n), h('td', {}, r.stage), h('td', {}, chip(r.status)), h('td', { class: 'mono' }, r.input), h('td', { class: 'mono' }, r.response), h('td', { class: 'small muted' }, r.completed))))))
       : emptyNote('실행 trace가 없습니다.'));
@@ -299,29 +322,29 @@ export function renderEvidence(container, envelope, tab) {
   }
   const trend = model.sourceResult(result, 'trend');
   const evidence = trend?.evidence ?? [];
-  container.replaceChildren(...(evidence.length ? evidence.map((e) => {
+  fill(container, evidence.length ? evidence.map((e) => {
     const url = model.safeUrl(e.url);
     return h('article', { class: 'evidence-item' },
       h('p', { class: 'mono small muted' }, e.evidence_id),
       h('blockquote', { class: 'quote' }, `“${e.quote ?? ''}”`),
       url ? h('a', { class: 'link', href: url, target: '_blank', rel: 'noopener noreferrer' }, `${e.title || '원문'}${e.published_at ? ` · ${e.published_at}` : ''}`) : h('p', { class: 'small muted' }, e.title || '출처 링크 없음'));
-  }) : [emptyNote('트렌드 근거가 없습니다.')]));
+  }) : emptyNote('트렌드 근거가 없습니다.'));
 }
 
 // --- Runs & system ---------------------------------------------------------
 
 export function renderRuns(list, runs, onOpen) {
-  if (!runs.length) { list.replaceChildren(h('li', { class: 'empty-note' }, '아직 실행 이력이 없습니다.')); return; }
-  list.replaceChildren(...runs.map((run) => h('li', { class: 'run-item' },
+  if (!runs.length) { fill(list, h('li', { class: 'empty-note' }, '아직 실행 이력이 없습니다.')); return; }
+  fill(list, runs.map((run) => h('li', { class: 'run-item' },
     h('div', { class: 'run-main' }, h('strong', {}, run.query_excerpt || run.request_id), h('span', { class: 'muted small mono' }, run.request_id)),
     h('div', { class: 'run-meta' }, chip(run.status), h('span', { class: 'muted small' }, run.created_at ?? ''),
       h('button', { type: 'button', class: 'btn btn-ghost', onClick: () => onOpen(run.request_id) }, '열기')))));
 }
 
 export function renderSystem(container, status) {
-  if (!status) { container.replaceChildren(emptyNote('시스템 상태를 불러오지 못했습니다.')); return; }
+  if (!status) { fill(container, emptyNote('시스템 상태를 불러오지 못했습니다.')); return; }
   const agents = Array.isArray(status.agents) ? status.agents : [];
-  container.replaceChildren(
+  fill(container,
     h('ul', { class: 'service-list' }, agents.map((svc) => h('li', {},
       h('span', {}, svc.id),
       h('span', { class: svc.reachable && svc.healthy ? 'ok-text' : 'error-text' },

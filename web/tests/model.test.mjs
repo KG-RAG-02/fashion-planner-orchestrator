@@ -20,13 +20,6 @@ test('validateBrief trims, rejects blank and over-long text', () => {
   assert.deepEqual(m.validateBrief('  27SS 스커트  '), { ok: true, text: '27SS 스커트' });
 });
 
-test('validateImage enforces MIME allow-list and 10 MB limit', () => {
-  assert.equal(m.validateImage(null).ok, true);
-  assert.equal(m.validateImage({ type: 'image/gif', size: 10 }).ok, false);
-  assert.equal(m.validateImage({ type: 'image/png', size: 10485761 }).ok, false);
-  assert.equal(m.validateImage({ type: 'image/webp', size: 10485760 }).ok, true);
-});
-
 test('newRequestId matches the common id grammar', () => {
   const id = m.newRequestId();
   assert.match(id, /^[A-Za-z0-9][A-Za-z0-9_.:-]*$/);
