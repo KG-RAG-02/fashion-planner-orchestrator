@@ -31,6 +31,7 @@ services:
     environment:
       # P07's optional target-audience hypothesis (llm/responses_api.py needs LLM_API_KEY and LLM_MODEL);
       # without them it records TARGET_AUDIENCE_LLM_FAILED and sends nothing. One paid call per review.
-      # Same model as P08 (user decision 2026-11-16).
+      # Model gpt-6-luna, as in P07's own env (P06's default too); user decision 2026-11-17, replacing the
+      # 2026-11-16 "same model as P08". VOGUE_P07_LLM_MODEL in the env file overrides it.
       LLM_API_KEY: ${VOGUE_OPENAI_API_KEY:?VOGUE_OPENAI_API_KEY missing in the env file}
-      LLM_MODEL: ${VOGUE_P08_LLM_MODEL:?VOGUE_P08_LLM_MODEL missing in the env file}
+      LLM_MODEL: ${VOGUE_P07_LLM_MODEL:-gpt-6-luna}
