@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+from .upstream_projection import p06_stock_views, p06_trend_views
 from .workflow_store import digest, strict_json
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +33,11 @@ def require(condition, code):
         raise ContractViolation(code)
 
 
+# P06 profile claim kinds P08 forwards to P07, per field ('*' = every other allowlisted field).
+FORWARDED_CLAIM_KINDS = {'*': frozenset({'user_requested', 'evidence_observation'}),
+                         'material': frozenset({'user_requested', 'evidence_observation', 'proposal'})}
+
+
 def p07_review_input(draft, request_id):
     """The P07 0.3 review input: the allowlisted product fields and, for each, its provenance from P06's profile."""
     product, evidence = p07_product_projection(draft)
@@ -42,7 +48,9 @@ def p07_product_projection(draft):
     """The allowlisted product fields P07 receives, read from P06's validated draft.product_profile, and each
     field's provenance (kind, source_ref, evidence_ids).
 
-    Only values P06 marked user_requested or evidence_observation are sent."""
+    Only values P06 marked user_requested or evidence_observation are sent, except the material: P06's proposed
+    material is also sent, with kind 'proposal' kept in its provenance, so P07 can look up fabric costs for the
+    proposed product (user decision 2026-11-16; P07 0.3 field_evidence accepts 'proposal')."""
     require(isinstance(draft, dict), 'P06_DRAFT_REQUIRED')
     draft_body = draft.get('draft') if isinstance(draft.get('draft'), dict) else None
     require(draft_body is not None, 'P06_DRAFT_REQUIRED')
@@ -62,7 +70,7 @@ def p07_product_projection(draft):
         require(isinstance(evidence_ids, list) and all(isinstance(item, str) for item in evidence_ids),
                 'P06_PRODUCT_EVIDENCE_INVALID')
         require(set(evidence_ids).issubset(set(draft_evidence_ids)), 'P06_PRODUCT_EVIDENCE_REFERENCE_INVALID')
-        if value is None or kind not in {'user_requested', 'evidence_observation'}:
+        if value is None or kind not in FORWARDED_CLAIM_KINDS.get(field, FORWARDED_CLAIM_KINDS['*']):
             return None
         require(isinstance(value, str) and bool(value.strip()), 'P06_PRODUCT_CLAIM_INVALID')
         evidence[field] = {'kind': kind, 'source_ref': f'p06.draft.product_profile.{field}',
@@ -81,6 +89,15 @@ def p07_product_projection(draft):
         else:
             evidence.pop(key, None)
     return product, evidence
+
+
+def require_registered_p06_inputs(call_input, trend_result, stock_result):
+    """P06 received the stored raw Trend/Stock result or a registered projection of it (upstream_projection).
+
+    One rule for the check before the P06 call and for integrated(), so an omitted, altered or unregistered
+    projection fails with the same code in both places."""
+    require(call_input.get('trend_result') in p06_trend_views(trend_result), 'P06_TREND_RESULT_CHANGED')
+    require(call_input.get('inventory_product_result') in p06_stock_views(stock_result), 'P06_STOCK_RESULT_CHANGED')
 
 
 def walk(value):
@@ -395,8 +412,9 @@ class WorkflowContract:
                 require(call.get('contract_version') == P06_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'P06_CALL_ENVELOPE_INVALID')
                 inp = call.get('input', {})
                 require(inp.get('planning_request') == body['planning_request'], 'P06_PLANNING_REQUEST_CHANGED')
-                require(inp.get('trend_result') == sources['trend']['raw_response']['result'], 'P06_TREND_RESULT_CHANGED')
-                require(inp.get('inventory_product_result') == sources['stock']['raw_response']['result'], 'P06_STOCK_RESULT_CHANGED')
+                # The run keeps the raw results; P06 may have received them raw or as any registered projection.
+                require_registered_p06_inputs(inp, sources['trend']['raw_response']['result'],
+                                              sources['stock']['raw_response']['result'])
         if review:
             require(draft is not None, 'REVIEW_WITHOUT_DRAFT')
             review_body = review['raw_response']['result']

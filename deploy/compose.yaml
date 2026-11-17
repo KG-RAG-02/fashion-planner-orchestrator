@@ -60,7 +60,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
-        mkdir -p /v/p08/workflow/blobs /v/p07/reviews /v/p07/hm-cache /v/p06/p06-artifacts/images &&
+        mkdir -p /v/p08/workflow/blobs /v/p07/reviews /v/p07/hm-cache /v/p07/duckdb-tmp /v/p06/p06-artifacts/images &&
         chown -R 10001:10001 /v/p08 /v/p07 /v/p06 &&
         chmod 0750 /v/p08 /v/p07 /v/p06 && echo volume-init-ok
     volumes:
@@ -128,6 +128,13 @@ services:
         volume: { subpath: workflow/blobs }
     networks: [backend]
     mem_limit: 512m
+    # The P06 image has no HEALTHCHECK; in private mode /api/health also needs the bearer token.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os,sys,urllib.request as u; r=u.Request('http://127.0.0.1:8767/api/health', headers={'Authorization': 'Bearer ' + os.environ['VOGUE_AGENT_SERVICE_BEARER_TOKEN']}); sys.exit(0 if u.build_opener(u.ProxyHandler({})).open(r, timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     depends_on:
       volume-init: { condition: service_completed_successfully }
 
@@ -140,6 +147,15 @@ services:
       VOGUE_UPSTREAM_ARTIFACT_ROOT: /artifacts
       VOGUE_P07_REVIEW_ARTIFACT_DIR: /data/reviews
       VOGUE_PROJECT07_DISABLE_DOTENV: "1"
+      # P07 (c662d4d) gives its H&M age query (hm_customer_age_source._configure_age_duckdb) a DuckDB
+      # memory_limit of VOGUE_HM_AGE_DUCKDB_MEMORY_LIMIT, default 3GB. In the live Linux container over R2,
+      # 1GB was too small: req-xxxxxxxx (2026-11-17) failed with DuckDB OutOfMemoryException after 38 s and the
+      # container's memory.peak reached its 1536m limit. User decision 2026-11-17: P07's memory limit is 3 GB,
+      # so mem_limit is 3g and DuckDB gets 2GB of it, leaving room for the Python process and the price query
+      # before the kernel limit. Past 2GB DuckDB spills to VOGUE_HM_AGE_DUCKDB_TEMP_DIRECTORY
+      # (P07 image default /data/hm-cache/duckdb-age-tmp, writable where compose.data.yaml mounts /data/hm-cache;
+      # without R2 settings, as in stub, the query does not run). Threads stay at P07's default (1).
+      VOGUE_HM_AGE_DUCKDB_MEMORY_LIMIT: "2GB"
     volumes:
       - type: volume
         source: p07_state
@@ -150,8 +166,14 @@ services:
         target: /artifacts/p08/blobs
         read_only: true
         volume: { subpath: workflow/blobs }
+      # DuckDB spills to "<cwd>/.tmp" (= /app/.tmp) when an R2 aggregate exceeds its memory limit; the
+      # read-only root filesystem refuses that directory (IOException), so give it a writable disk path.
+      - type: volume
+        source: p07_state
+        target: /app/.tmp
+        volume: { subpath: duckdb-tmp }
     networks: [backend]
-    mem_limit: 1536m
+    mem_limit: 3g
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8766/api/health', timeout=3).status == 200 else 1)"]
       interval: 10s
@@ -186,6 +208,10 @@ services:
       # P06 generates two images inside the Draft call; only that read waits longer.
       VOGUE_WORKFLOW_DRAFT_MODE: draft_with_visuals
       VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS: "600"
+      # P06 receives the registered projection p06-input/2 of the Trend/Stock results (P08 keeps the raw ones in
+      # its run): p06-input/1 plus each stock product's photo once, for P06's outfit image with the stock item.
+      # Rollout stage 1 sets raw: P08 already accepts projections but still sends the raw results.
+      VOGUE_WORKFLOW_P06_INPUT_PROJECTION: ${VOGUE_WORKFLOW_P06_INPUT_PROJECTION:-p06-input/2}
       VOGUE_WORKFLOW_IMAGES_ENABLED: "1"
       # Stage 06 composes the planning sheet (기획안 사진) locally; P08 never calls an image model.
       VOGUE_WORKFLOW_IMAGE_PROVIDER: planning_sheet

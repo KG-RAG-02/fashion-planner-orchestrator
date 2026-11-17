@@ -20,13 +20,6 @@ test('validateBrief trims, rejects blank and over-long text', () => {
   assert.deepEqual(m.validateBrief('  27SS 스커트  '), { ok: true, text: '27SS 스커트' });
 });
 
-test('validateImage enforces MIME allow-list and 10 MB limit', () => {
-  assert.equal(m.validateImage(null).ok, true);
-  assert.equal(m.validateImage({ type: 'image/gif', size: 10 }).ok, false);
-  assert.equal(m.validateImage({ type: 'image/png', size: 10485761 }).ok, false);
-  assert.equal(m.validateImage({ type: 'image/webp', size: 10485760 }).ok, true);
-});
-
 test('newRequestId matches the common id grammar', () => {
   const id = m.newRequestId();
   assert.match(id, /^[A-Za-z0-9][A-Za-z0-9_.:-]*$/);
@@ -86,7 +79,7 @@ test('problemMessage maps known codes and falls back to the producer message', (
 
 test('the integrated-review-no-results fixture keeps the image skipped and the draft visible', () => {
   const result = fixture('integrated-review-no-results').result;
-  assert.equal(m.runSummary({ result }).image.status, 'skipped');
+  assert.equal(result.final_image.status, 'skipped');
   assert.ok(m.draftView(m.sourceResult(result, 'planning_draft')));
   assert.equal(m.rail(result).at(-1).status, 'skipped');
 });
@@ -181,6 +174,8 @@ test('P06 status and provenance diagnostics survive the Draft view mapping', () 
   assert.equal(view.status, 'partial');
   assert.equal(view.contractVersion, '1.0');
   assert.ok(view.sections.some(({ key, value }) => key === 'field_origins' && value.season === 'unknown'));
+  assert.equal(view.sections.find(({ key }) => key === 'field_origins').path, 'draft.field_origins');
+  assert.equal(view.sections.find(({ key }) => key === 'input_statuses').path, 'input_statuses');
   assert.ok(view.sections.some(({ key, value }) => key === 'input_statuses' && value.planning_request === 'ok'));
   assert.ok(view.sections.some(({ key }) => key === 'attributes'));
 });
@@ -213,4 +208,129 @@ test('P06 visuals (workflow-contract 0.2.0) are shown only from verified generat
   const view = m.draftView({ draft: { title: 't', claims: [], visuals: { product: { status: 'skipped', reason: 'r' } } }, image_generation_calls: 0 });
   assert.equal(view.imageCalls, 0);
   assert.equal(m.STAGES.at(-1).en, 'Sheet');
+});
+
+// --- Side panel: evidence and JSON printed once ------------------------------------
+
+const envelopeWith = (sources) => ({ sources: Object.fromEntries(Object.entries(sources).map(([key, result]) => [key, { raw_response: { contract_version: 'x/1', status: 'ok', result } }])) });
+
+test('evidenceGroups files each trend evidence under the first style citing it, then stock and P07', () => {
+  const result = envelopeWith({
+    trend: {
+      trends: [
+        { style: { name: 'A', focus_evidence_ids: ['e1', 'e2'], example_images: [{ url: 'https://v/1' }] }, items: [] },
+        { style: { name: 'B', focus_evidence_ids: ['e2'] }, items: [{ name: 'i', evidence_ids: ['e3'] }] },
+      ],
+      evidence: [{ evidence_id: 'e1', quote: 'q1', url: 'https://a' }, { evidence_id: 'e2', quote: 'q2' }, { evidence_id: 'e3', quote: 'q3' }, { evidence_id: 'e4', quote: 'q4' }],
+    },
+    stock: { evidence: [{ evidence_id: 's1', locator: 'stock_v1' }] },
+    sales_market_review: { evidence: [{ evidence_id: 'p1', source_name: 'H&M', analysis: { interpretation: '해석' } }] },
+  });
+  const groups = m.evidenceGroups(result);
+  assert.deepEqual(groups.map((g) => [g.anchor, g.items.map((i) => i.id), g.sharedCount]), [
+    ['ev-trend-0', ['e1', 'e2'], 0], ['ev-trend-1', ['e3'], 1], ['ev-trend-other', ['e4'], 0],
+    ['ev-stock', ['s1'], 0], ['ev-sales_market_review', ['p1'], 0]]);
+  assert.equal(groups[0].exampleLinks.length, 1);
+  assert.deepEqual([groups[4].items[0].text, groups[4].items[0].title], ['해석', 'H&M']);
+  assert.equal(groups[3].items[0].detail, 'stock_v1');
+  assert.deepEqual(m.evidenceGroups(null), []);
+});
+
+test('P07 consumer projection (P07 main c662d4d) keeps its sections, Korean limitations and compact evidence', () => {
+  const response = fixture('p07-review-v0.3.consumer-projection.response');
+  const view = m.reviewView(response);
+  assert.equal(view.format, 'native');
+  assert.equal(view.status, 'ok');
+  const sections = Object.fromEntries(view.sections.map(({ key, value }) => [key, value]));
+  for (const key of ['price_analysis', 'fabric_cost_analysis', 'material_cost_analysis', 'margin_analysis', 'target_audience', 'target_audience_analysis', 'evidence']) {
+    assert.ok(key in sections, `${key} reaches the review view`);
+  }
+  assert.ok(!('margin_price_range_analysis' in sections), 'a null section is not listed');
+  assert.equal(sections.fabric_cost_analysis.unit_cost, undefined);
+  assert.equal(sections.target_audience.proposal.price_positioning, undefined);
+  assert.deepEqual(view.limitations, response.result.limitations);
+  assert.equal(view.limitations[0], '[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.');
+  assert.deepEqual(view.missingData, []);
+  const p07 = m.evidenceGroups(envelopeWith({ sales_market_review: response.result })).find((g) => g.anchor === 'ev-sales_market_review');
+  assert.equal(p07.items.length, response.result.evidence.length);
+  const benchmark = p07.items.find((item) => item.raw.source_type === 'industry_gross_margin_benchmark');
+  assert.equal(benchmark.title, 'NYU Stern Damodaran Margins by Sector (US), January 2026');
+  assert.match(benchmark.text, /^Sector-level benchmark/);
+  assert.equal(benchmark.detail, 'https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/margin.html');
+  assert.equal(benchmark.url, null);  // P07 evidence carries a locator, not a url field
+});
+
+test('rawFields splits a raw result into anchored fields and points evidence to the evidence tab', () => {
+  const result = envelopeWith({
+    planning_draft: { draft: { title: 't', input_conflicts: [] }, input_statuses: { trend_result: 'ok' } },
+    trend: { trends: [], evidence: [{ evidence_id: 'e1' }] },
+  });
+  const draft = m.rawFields(result, 'planning_draft');
+  assert.deepEqual(draft.map((f) => f.path), ['draft.title', 'draft.input_conflicts', 'input_statuses']);
+  assert.equal(draft.find((f) => f.path === 'draft.input_conflicts').empty, true);
+  assert.equal(draft.find((f) => f.path === 'input_statuses').anchor, m.jsonAnchor('planning_draft', 'input_statuses'));
+  const trend = m.rawFields(result, 'trend');
+  assert.deepEqual(trend.find((f) => f.path === 'evidence'), { path: 'evidence', anchor: 'json-trend-evidence', pointer: 'evidence', count: 1 });
+  assert.deepEqual(m.rawFields(result, 'stock'), []);
+});
+
+test('draft and review rows link to the same anchors the panel prints', () => {
+  const draftResult = { draft: { title: 't', attributes: [] }, planning_analysis: { a: 1 } };
+  const result = envelopeWith({ planning_draft: draftResult });
+  const anchors = new Set(m.rawFields(result, 'planning_draft').map((f) => f.anchor));
+  for (const section of m.draftView(draftResult).sections) assert.ok(anchors.has(m.jsonAnchor('planning_draft', section.path)), section.path);
+  const draftLists = m.draftView({ ...draftResult, draft: { ...draftResult.draft, limitations: ['x'] }, errors: [] }).listPaths;
+  assert.deepEqual(draftLists, { limitations: 'draft.limitations', errors: 'errors' });
+  const review = m.reviewView({ schema_version: 's', status: 'ok', price_analysis: { status: 'ok' }, limitations: ['y'] });
+  assert.equal(review.sections[0].path, 'price_analysis');
+  const reviewAnchors = new Set(m.rawFields(envelopeWith({ sales_market_review: { schema_version: 's', price_analysis: {}, limitations: ['y'] } }), 'sales_market_review').map((f) => f.anchor));
+  assert.ok(reviewAnchors.has(m.jsonAnchor('sales_market_review', review.listPaths.limitations)));
+});
+
+test('compactJson summarises long encoded strings only', () => {
+  const text = m.compactJson({ data: 'A'.repeat(5000), note: '짧은 문장' });
+  assert.match(text, /5,000자 인코딩 데이터 생략/);
+  assert.match(text, /짧은 문장/);
+});
+
+test('stage errors come from the orchestrator record and are not repeated by the producer list', () => {
+  const result = { errors: [{ stage: 'sales_market_review', code: 'TARGET_AUDIENCE_LLM_FAILED', message: 'm' }, { stage: 'planning_draft', code: 'UPSTREAM_UNAVAILABLE' }] };
+  const review = m.stageErrors(result, 'sales_market_review');
+  assert.deepEqual(review, [{ code: 'TARGET_AUDIENCE_LLM_FAILED', message: 'm' }]);
+  assert.deepEqual(m.stageErrors(result, ['integration', 'final_image']), []);
+  assert.deepEqual(m.withoutShownErrors([{ code: 'TARGET_AUDIENCE_LLM_FAILED' }, { code: 'OTHER' }, 'text'], review), [{ code: 'OTHER' }, 'text']);
+});
+
+test('limitations keep their first occurrence across sections', () => {
+  assert.deepEqual(m.firstOccurrences([['a', 'b'], ['b', 'c'], ['a', 'c', 'd', 'd']]), [['a', 'b'], ['c'], ['d']]);
+  assert.deepEqual(m.firstOccurrences([undefined, ['x']]), [[], ['x']]);
+});
+
+test('railProgress counts stages with a producer outcome and finds the running one', () => {
+  const live = m.railProgress(m.rail({ stages: [{ stage: 'trend', status: 'ok' }, { stage: 'stock', status: 'partial' }] }, { inFlight: true }));
+  assert.deepEqual([live.done, live.total, live.running.key], [2, 6, 'planning_draft']);
+  const stopped = m.railProgress(m.rail({ stages: [{ stage: 'trend', status: 'ok' }, { stage: 'stock', status: 'error' }], final_image: { status: 'skipped' } }));
+  assert.deepEqual([stopped.done, stopped.running], [2, null]);
+});
+
+test('panelJson prints a long value once and points later copies to it', () => {
+  const ids = ['trend:1:aaaaaaaa', 'trend:2:bbbbbbbb', 'trend:3:cccccccc'];
+  const result = envelopeWith({
+    trend: { status: 'ok', request_id: 'req-1', evidence: [] },
+    planning_draft: { status: 'ok', request_id: 'req-1', evidence_ids: ids, draft: { evidence_ids: ids } },
+  });
+  const stages = m.panelJson(result);
+  assert.deepEqual(stages.map((s) => s.key), ['trend', 'planning_draft']);
+  const draft = stages[1].fields;
+  assert.ok(!draft.some((f) => f.path === 'request_id'));
+  assert.equal(draft.find((f) => f.path === 'evidence_ids').sameAs, undefined);
+  assert.deepEqual(draft.find((f) => f.path === 'draft.evidence_ids').sameAs, { path: '03 evidence_ids', anchor: 'json-planning_draft-evidence_ids' });
+  assert.equal(draft.find((f) => f.path === 'status').sameAs, undefined);  // short scalars are not pointers
+});
+
+test('evidence records sharing a sentence print it under the first record only', () => {
+  const result = envelopeWith({ sales_market_review: { evidence: [
+    { evidence_id: 'p1', analysis: { interpretation: '같은 해석' } }, { evidence_id: 'p2', analysis: { interpretation: '같은 해석' } }] } });
+  const items = m.evidenceGroups(result)[0].items;
+  assert.deepEqual(items.map((i) => [i.text, i.sameTextAs]), [['같은 해석', undefined], [null, 'p1']]);
 });

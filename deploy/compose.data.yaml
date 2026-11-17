@@ -31,6 +31,8 @@ services:
       <<: *r2
       HOME: /tmp
       STOCK_CACHE_DIR: /cache
+      # Optional: with R2_CLIP_INDEX_KEY, --prepare-cache also caches the stock CLIP index next to the DB.
+      R2_CLIP_INDEX_KEY: ${R2_CLIP_INDEX_KEY:-}
     command: ["python", "-m", "stock_agent.server", "--prepare-cache"]
     volumes:
       - stock_cache:/cache
@@ -41,8 +43,14 @@ services:
     environment:
       <<: *r2
       STOCK_CACHE_DIR: /cache
+      # CLIP filter (stock README): the cached index, Musinsa snap photos on R2, and the open_clip weights
+      # (HF hub, ~350 MB) kept on a volume because /tmp is a 128 MB tmpfs. Empty keys leave CLIP off.
+      R2_CLIP_INDEX_KEY: ${R2_CLIP_INDEX_KEY:-}
+      R2_SNAP_IMAGE_PREFIX: ${R2_SNAP_IMAGE_PREFIX:-}
+      HF_HOME: /models/hf
     volumes:
       - stock_cache:/cache:ro
+      - stock_models:/models
     networks: [backend, egress]
     depends_on:
       stock-cache-init: { condition: service_completed_successfully }
@@ -76,6 +84,8 @@ services:
       <<: *r2
       VOGUE_R2_HM_DB_CACHE_DIR: /data/hm-cache
     volumes:
+      # Writable: it also holds the H&M age query's DuckDB spill directory (P07 image default
+      # VOGUE_HM_AGE_DUCKDB_TEMP_DIRECTORY=/data/hm-cache/duckdb-age-tmp; memory limit set in compose.yaml).
       - type: volume
         source: p07_state
         target: /data/hm-cache
@@ -87,3 +97,5 @@ services:
 volumes:
   stock_cache:
     name: vogue_stock_cache
+  stock_models:
+    name: vogue_stock_models

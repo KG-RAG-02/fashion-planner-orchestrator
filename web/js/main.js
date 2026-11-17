@@ -7,20 +7,29 @@ const $ = (selector) => document.querySelector(selector);
 const LAST_RUN_KEY = 'vogue-atelier:last-request-id';
 const POLL_MS = 1500;
 const SYSTEM_REFRESH_MS = 30000;
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
 
 const el = {
-  form: $('#brief-form'), brief: $('#brief'), counter: $('#brief-counter'), run: $('#run-button'), notice: $('#notice'),
-  file: $('#ref-image'), preview: $('#ref-preview'), fileName: $('#ref-name'), clearFile: $('#ref-clear'),
-  pipeline: $('#pipeline'), rail: $('#rail'), results: $('#results'),
-  concept: $('#concept'), trends: $('#trend-block'), stock: $('#stock-block'), draft: $('#draft-block'), review: $('#review-block'),
-  md: $('#md-card'), runCard: $('#run-card'),
+  form: $('#brief-form'), brief: $('#brief'), counter: $('#brief-counter'), run: $('#run-button'), runLabel: $('#run-label'), notice: $('#notice'),
+  rail: $('#rail'), progressCount: $('#progress-count'), progressState: $('#progress-state'),
+  results: $('#results'), concept: $('#concept'), trends: $('#trend-block'), stock: $('#stock-block'), draft: $('#draft-block'), review: $('#review-block'),
+  md: $('#md-card'), mdLink: $('#md-link'),
   evidenceButton: $('#evidence-button'), evidenceDialog: $('#evidence-dialog'), evidenceBody: $('#evidence-body'),
   systemButton: $('#system-button'), systemDot: $('#system-dot'), systemSummary: $('#system-summary'), systemDialog: $('#system-dialog'), systemBody: $('#system-body'),
   workspace: $('#workspace'), runsView: $('#runs'), runsList: $('#runs-list'), runsRefresh: $('#runs-refresh'),
 };
 
+// Section order on the page and the stage whose result each section prints.
+const SECTIONS = [
+  { el: el.concept, stage: 'planning_draft', head: { id: 'concept-title', title: '통합 기획안' } },
+  { el: el.trends, stage: 'trend', head: { id: 'trend-title', n: '01', title: '트렌드 근거' } },
+  { el: el.stock, stage: 'stock', head: { id: 'stock-title', n: '02', title: '재고 매칭' } },
+  { el: el.draft, stage: 'planning_draft', head: { id: 'draft-title', n: '03', title: '기획 초안' } },
+  { el: el.review, stage: 'sales_market_review', head: { id: 'review-title', n: '04', title: '시장 검토' } },
+];
+
 const state = {
-  envelope: null, requestId: null, inFlight: false, poller: null, previewUrl: null,
+  envelope: null, requestId: null, inFlight: false, poller: null,
   p07CallRequest: null, p07CallRequestArtifactId: null, p07CallRequestState: 'unavailable',
   md: { decisions: [], integratedSha: null, selected: null, busy: false, message: '' },
   system: null, evidenceTab: 'evidence',
@@ -34,43 +43,85 @@ function showNotice(text) {
 function setRunning(running) {
   state.inFlight = running;
   el.run.disabled = running;
-  el.run.textContent = running ? '실행 중…' : '기획 시작';
+  el.runLabel.textContent = running ? '실행 중…' : '기획 시작';
   el.brief.readOnly = running;
-  el.file.disabled = running;
+  document.body.dataset.run = running ? 'running' : (state.envelope ? 'done' : 'idle');
 }
-
-// --- Composer --------------------------------------------------------------
 
 function updateCounter() {
   el.counter.textContent = `${el.brief.value.length.toLocaleString('ko-KR')} / ${model.MAX_BRIEF.toLocaleString('ko-KR')}`;
 }
 
-function clearImage() {
-  if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
-  state.previewUrl = null;
-  el.file.value = '';
-  el.preview.hidden = true;
-  el.preview.removeAttribute('src');
-  el.fileName.textContent = 'PNG · JPEG · WebP, 최대 10MB 1장';
-  el.clearFile.hidden = true;
+// --- Motion: sections clear like frosted glass when their result is in and they come into view ---------
+
+const motion = 'IntersectionObserver' in window && !REDUCED.matches;
+if (motion) document.documentElement.classList.add('has-motion');
+const visible = new Set();
+
+function revealIfReady(section) {
+  if (section.dataset.state === 'settled' && (!motion || visible.has(section))) section.classList.add('is-revealed');
 }
 
-function onImageChosen() {
-  const file = el.file.files[0];
-  if (!file) { clearImage(); return; }
-  const check = model.validateImage(file);
-  if (!check.ok) { clearImage(); showNotice(check.message); return; }
-  showNotice('');
-  if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
-  state.previewUrl = URL.createObjectURL(file);
-  el.preview.src = state.previewUrl;
-  el.preview.alt = `선택한 참고 이미지: ${file.name}`;
-  el.preview.hidden = false;
-  el.fileName.textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)}MB`;
-  el.clearFile.hidden = false;
+const revealer = motion ? new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) { visible.add(entry.target); revealIfReady(entry.target); } else visible.delete(entry.target);
+  }
+}, { threshold: 0.06 }) : null;
+
+// Scrollspy: the stage whose section crosses the upper third of the viewport is marked in the sidebar.
+let here = null;
+function markHere() {
+  for (const li of el.rail.children) {
+    const target = document.getElementById(li.dataset.target);
+    li.classList.toggle('is-here', Boolean(here && target && (target === here || here.contains(target))));
+  }
+}
+const spy = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
+  for (const entry of entries) if (entry.isIntersecting) { here = entry.target; markHere(); }
+}, { rootMargin: '-30% 0px -66% 0px' }) : null;
+
+for (const section of [...SECTIONS.map((s) => s.el), el.md]) {
+  section.tabIndex = -1;
+  revealer?.observe(section);
+  spy?.observe(section);
+}
+
+function setSectionState(section, value) {
+  if (section.dataset.state !== value && value !== 'settled') section.classList.remove('is-revealed');
+  section.dataset.state = value;
+  revealIfReady(section);
 }
 
 // --- Rendering -------------------------------------------------------------
+
+function renderSpine(result, { inFlight = false } = {}) {
+  const items = model.rail(result, { inFlight });
+  view.renderRail(el.rail, items, { linked: !el.results.hidden });
+  const progress = view.renderProgress({ count: el.progressCount, state: el.progressState, root: document.documentElement }, items,
+    { status: inFlight ? null : result?.status ?? null, inFlight });
+  if (state.inFlight) el.runLabel.textContent = progress.running ? `실행 중 · ${progress.running.n} ${progress.running.ko}` : '실행 중…';
+  el.mdLink.hidden = el.results.hidden;
+  el.evidenceButton.hidden = el.results.hidden || !result;
+  markHere();
+  return Object.fromEntries(items.map((item) => [item.key, item.status]));
+}
+
+function reviewViewFor(result) {
+  const source = result?.sources?.sales_market_review;
+  return model.reviewView(
+    source?.raw_response?.result ?? null,
+    state.p07CallRequest,
+    source?.call_request_artifact?.artifact_id ?? null,
+    state.p07CallRequestState,
+    model.sourceResult(result, 'planning_draft'),
+  );
+}
+
+// Producer limitations open from their section in the side panel; the concept lists only the run's own.
+function runOnlyLimitations(result) {
+  const draft = model.draftView(model.sourceResult(result, 'planning_draft'));
+  return model.firstOccurrences([draft?.limitations, reviewViewFor(result)?.limitations, result?.limitations])[2];
+}
 
 function renderEnvelope(envelope, { inFlight = false } = {}) {
   const result = envelope?.result;
@@ -82,29 +133,43 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
     state.p07CallRequest = null;
     state.p07CallRequestState = p07ArtifactId ? 'loading' : 'unavailable';
   }
-  el.pipeline.hidden = false;
-  view.renderRail(el.rail, model.rail(result, { inFlight }));
   el.results.hidden = false;
-  view.renderConcept(el.concept, envelope, { retryEnabled: Boolean(state.system?.image?.retry_enabled), onRetry: retryImage });
-  view.renderTrends(el.trends, model.trendCards(model.sourceResult(result, 'trend')));
-  view.renderStock(el.stock, model.stockSlots(model.sourceResult(result, 'stock')));
-  view.renderDraft(el.draft, model.draftView(model.sourceResult(result, 'planning_draft')));
+  const stageStatus = renderSpine(result, { inFlight });
+  // Only a stage that has not run yet waits; a stage skipped after a stop prints its (empty) result.
+  const waiting = (key) => (stageStatus[key] === 'running' || stageStatus[key] === 'pending' ? stageStatus[key] : null);
+  const runLimits = runOnlyLimitations(result);
+  const groups = model.evidenceGroups(result);
+
+  const section = (index, render) => {
+    const { el: node, stage, head } = SECTIONS[index];
+    const wait = waiting(stage);
+    if (wait) view.renderWaiting(node, head, wait); else render(node);
+    setSectionState(node, wait ?? 'settled');
+  };
+  section(0, (node) => view.renderConcept(node, envelope, {
+    retryEnabled: Boolean(state.system?.image?.retry_enabled), onRetry: retryImage,
+    errors: model.stageErrors(result, ['integration', 'final_image']), limitations: runLimits,
+    sheetLink: model.planningSheetLink({ requestId: result.request_id ?? envelope.request_id, status: result.status }, { inFlight }),
+    sheetWaiting: waiting('final_image'),
+  }));
+  section(1, (node) => view.renderTrends(node, model.trendCards(model.sourceResult(result, 'trend')), { errors: model.stageErrors(result, 'trend'), groups }));
+  section(2, (node) => view.renderStock(node, model.stockSlots(model.sourceResult(result, 'stock')), { errors: model.stageErrors(result, 'stock') }));
+  section(3, (node) => view.renderDraft(node, model.draftView(model.sourceResult(result, 'planning_draft')), { errors: model.stageErrors(result, 'planning_draft') }));
   renderReview();
   void loadP07CallRequest(result);
-  const summary = model.runSummary(envelope);
-  view.renderRun(el.runCard, summary, { sheet: model.planningSheetLink(summary, { inFlight }) });
+  setSectionState(el.md, 'settled');
   renderMd();
+  if (el.evidenceDialog.open) renderEvidence();
 }
 
 function renderReview() {
-  const source = state.envelope?.result?.sources?.sales_market_review;
-  view.renderReview(el.review, model.reviewView(
-    source?.raw_response?.result ?? null,
-    state.p07CallRequest,
-    source?.call_request_artifact?.artifact_id ?? null,
-    state.p07CallRequestState,
-    model.sourceResult(state.envelope?.result, 'planning_draft'),
-  ));
+  const result = state.envelope?.result;
+  if (!result) return;
+  const { el: node, stage, head } = SECTIONS[4];
+  const status = model.rail(result, { inFlight: state.inFlight }).find((item) => item.key === stage)?.status;
+  if (status === 'running' || status === 'pending') { view.renderWaiting(node, head, status); setSectionState(node, status); return; }
+  view.renderReview(node, reviewViewFor(result), { errors: model.stageErrors(result, stage) });
+  setSectionState(node, 'settled');
 }
 
 async function loadP07CallRequest(result) {
@@ -121,6 +186,7 @@ async function loadP07CallRequest(result) {
   state.p07CallRequest = response.ok && response.body && typeof response.body === 'object' && !Array.isArray(response.body) ? response.body : null;
   state.p07CallRequestState = state.p07CallRequest ? 'loaded' : 'error';
   renderReview();
+  if (el.evidenceDialog.open) renderEvidence();
 }
 
 function renderMd() {
@@ -161,6 +227,81 @@ async function retryImage() {
   if (!response.ok) showNotice(model.problemMessage(response.body, response.status));
 }
 
+// A fresh run: every section is laid out as a waiting glass skeleton, then fills stage by stage.
+function resetSections() {
+  const items = model.rail(null, { inFlight: true });
+  for (const { el: node, stage, head } of SECTIONS) {
+    const status = items.find((item) => item.key === stage)?.status ?? 'pending';
+    view.renderWaiting(node, head, status);
+    setSectionState(node, status);
+  }
+}
+
+// --- Navigation and the side panel -------------------------------------------------
+
+function scrollBehavior() {
+  return REDUCED.matches ? 'auto' : 'smooth';
+}
+
+function jumpTo(target) {
+  if (!el.runsView.hidden) { history.pushState(null, '', '#workspace'); route(); }
+  target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+  target.focus({ preventScroll: true });
+}
+
+function renderEvidence() {
+  for (const tab of el.evidenceDialog.querySelectorAll('[role="tab"]')) {
+    const selected = tab.dataset.tab === state.evidenceTab;
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+  }
+  const result = state.envelope?.result ?? null;
+  view.renderEvidence(el.evidenceBody, {
+    result, groups: model.evidenceGroups(result), p07Request: state.p07CallRequest, p07RequestId: state.p07CallRequestArtifactId,
+  }, state.evidenceTab);
+}
+
+function openDialog(dialog, trigger) {
+  if (!dialog.open) {
+    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
+  }
+  trigger?.setAttribute('aria-expanded', 'true');
+  dialog.addEventListener('close', () => trigger?.setAttribute('aria-expanded', 'false'), { once: true });
+}
+
+function openPanel(tab, anchor = null) {
+  state.evidenceTab = tab;
+  renderEvidence();
+  openDialog(el.evidenceDialog, el.evidenceButton);
+  el.evidenceBody.classList.remove('is-switching');
+  void el.evidenceBody.offsetWidth;
+  el.evidenceBody.classList.add('is-switching');
+  const target = anchor ? document.getElementById(anchor) : null;
+  if (!target) { el.evidenceBody.scrollTop = 0; return; }
+  if (target.tagName === 'DETAILS') target.open = true;
+  requestAnimationFrame(() => {
+    target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+    target.classList.remove('is-target');
+    void target.offsetWidth;
+    target.classList.add('is-target');
+  });
+}
+
+// In-page links (sidebar stages, wordmark, skip link, MD) scroll without rewriting the hash, so the
+// workspace/runs routing keeps working; panel buttons open the side panel at their anchor.
+function onDocumentClick(event) {
+  const panel = event.target.closest('[data-panel-tab]');
+  if (panel) { openPanel(panel.dataset.panelTab, panel.dataset.panelAnchor || null); return; }
+  const link = event.target.closest('a[href^="#"]');
+  if (!link) return;
+  const id = link.getAttribute('href').slice(1);
+  if (id === 'workspace' || id === 'runs') return;
+  const target = document.getElementById(id);
+  if (!target || !el.workspace.contains(target)) return;
+  event.preventDefault();
+  jumpTo(target);
+}
+
 // --- Run lifecycle ---------------------------------------------------------
 
 function stopPolling() {
@@ -176,7 +317,7 @@ function poll(requestId, { untilTerminal = false, deadline = Date.now() + api.RU
     if (response.ok && response.body?.result) {
       const terminal = Boolean(response.body.result.final_image?.status) || ['error', 'no_results'].includes(response.body.result.status);
       renderEnvelope(response.body, { inFlight: !(untilTerminal && terminal) && state.inFlight });
-      if (untilTerminal && terminal) { setRunning(false); await loadDecisions(requestId); return; }
+      if (untilTerminal && terminal) { setRunning(false); renderEnvelope(response.body); await loadDecisions(requestId); return; }
     }
     if ((state.inFlight || untilTerminal) && Date.now() < deadline) state.poller = setTimeout(tick, POLL_MS);
     else if (untilTerminal) setRunning(false);
@@ -189,25 +330,20 @@ async function startRun(event) {
   showNotice('');
   const brief = model.validateBrief(el.brief.value);
   if (!brief.ok) { showNotice(brief.message); el.brief.focus(); return; }
-  const file = el.file.files[0] ?? null;
-  const fileCheck = model.validateImage(file);
-  if (!fileCheck.ok) { showNotice(fileCheck.message); return; }
 
   const requestId = model.newRequestId();
   state.requestId = requestId;
   state.envelope = null;
   state.md = { decisions: [], integratedSha: null, selected: null, busy: false, message: '' };
   setRunning(true);
-  el.pipeline.hidden = false;
-  el.results.hidden = true;
-  view.renderRail(el.rail, model.rail(null, { inFlight: true }));
+  el.results.hidden = false;
+  resetSections();
+  renderSpine(null, { inFlight: true });
+  setSectionState(el.md, 'pending');
+  renderMd();
 
+  // Image input was removed from the workspace: the request keeps the contract's user_input.images as [].
   const images = [];
-  if (file) {
-    const upload = await api.uploadImage(file, requestId);
-    if (!upload.ok) { setRunning(false); showNotice(model.problemMessage(upload.body, upload.status)); return; }
-    images.push(upload.body);
-  }
   localStorage.setItem(LAST_RUN_KEY, requestId);
   poll(requestId);
   const response = await api.runWorkflow({ requestId, text: brief.text, images });
@@ -219,18 +355,28 @@ async function startRun(event) {
     if (response.status === 0) { poll(requestId, { untilTerminal: true }); return; }
   }
   setRunning(false);
-  if (response.body?.result) { renderEnvelope(response.body); await loadDecisions(requestId); }
-  el.results.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  if (response.body?.result) {
+    renderEnvelope(response.body);
+    await loadDecisions(requestId);
+    el.concept.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+  } else if (state.envelope) {
+    renderEnvelope(state.envelope);
+  } else {
+    el.results.hidden = true;
+    renderSpine(null);
+  }
 }
 
 async function openRun(requestId) {
-  location.hash = '#workspace';
+  history.pushState(null, '', '#workspace');
+  route();
   state.requestId = requestId;
   const response = await api.getRun(requestId);
   if (!response.ok || !response.body?.result) { showNotice(model.problemMessage(response.body, response.status)); return; }
   localStorage.setItem(LAST_RUN_KEY, requestId);
   renderEnvelope(response.body);
   await loadDecisions(requestId);
+  jumpTo(el.concept);
 }
 
 // --- Views, dialogs, system status ------------------------------------------
@@ -267,32 +413,16 @@ async function refreshSystem() {
   view.renderSystem(el.systemBody, state.system);
 }
 
-function openDialog(dialog, trigger) {
-  if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
-  trigger?.setAttribute('aria-expanded', 'true');
-  dialog.addEventListener('close', () => trigger?.setAttribute('aria-expanded', 'false'), { once: true });
-}
-
-function renderEvidence() {
-  for (const tab of el.evidenceDialog.querySelectorAll('[role="tab"]')) {
-    const selected = tab.dataset.tab === state.evidenceTab;
-    tab.setAttribute('aria-selected', String(selected));
-    tab.tabIndex = selected ? 0 : -1;
-  }
-  view.renderEvidence(el.evidenceBody, state.envelope, state.evidenceTab);
-}
-
 function bind() {
   el.brief.addEventListener('input', updateCounter);
-  el.file.addEventListener('change', onImageChosen);
-  el.clearFile.addEventListener('click', clearImage);
   el.form.addEventListener('submit', startRun);
   el.runsRefresh.addEventListener('click', showRuns);
   window.addEventListener('hashchange', route);
+  document.addEventListener('click', onDocumentClick);
   el.systemButton.addEventListener('click', () => { refreshSystem(); openDialog(el.systemDialog, el.systemButton); });
-  el.evidenceButton.addEventListener('click', () => { renderEvidence(); openDialog(el.evidenceDialog, el.evidenceButton); });
+  el.evidenceButton.addEventListener('click', () => openPanel(state.evidenceTab));
   for (const tab of el.evidenceDialog.querySelectorAll('[role="tab"]')) {
-    tab.addEventListener('click', () => { state.evidenceTab = tab.dataset.tab; renderEvidence(); });
+    tab.addEventListener('click', () => openPanel(tab.dataset.tab));
   }
   for (const button of document.querySelectorAll('[data-close]')) {
     button.addEventListener('click', () => button.closest('dialog')?.close());
@@ -312,6 +442,7 @@ async function restore() {
 
 bind();
 updateCounter();
+renderSpine(null);
 route();
 refreshSystem();
 setInterval(refreshSystem, SYSTEM_REFRESH_MS);

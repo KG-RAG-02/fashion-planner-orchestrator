@@ -2,6 +2,8 @@
 
 Project 08 (P08) is the coordinator and UI for the VOGUE product-planning workflow. It structures the user's request, calls the producer agents in sequence, validates and records their responses, then presents one integrated result. Agents do not call one another directly.
 
+시스템 아키텍처와 단계별 입출력은 [docs/architecture/index.html](docs/architecture/index.html)(PNG·SVG·[PDF](output/pdf/vogue-integrated-architecture.pdf))에 정리되어 있습니다. 2026-11-13 `main · b259b97` 시점의 스냅샷이므로 현재 계약 상태는 [workflow-contract](contracts/workflow/workflow-contract.md)를 확인하세요.
+
 ```text
 사용자 요청(텍스트·이미지)
   → 질의 구조화

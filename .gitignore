@@ -8,6 +8,7 @@ __pycache__/
 .env.*
 !.env.example
 .local/
+.DS_Store
 
 # Generated live integration images and other run artifacts.
 artifacts/

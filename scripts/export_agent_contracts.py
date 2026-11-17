@@ -156,9 +156,12 @@ ENTRIES = (
           ("src/market_research_agent/http_server.py", "contracts/schemas/proposals/sales-market-review-0.3-error.schema.json"),
           "contracts/schemas/proposals/sales-market-review-0.3-error.schema.json",
           envelope=WORKFLOW_ENVELOPES["sales-market-agent"]),
+    # The modules that read the three payloads (adapters/handoff.py no longer exists), so a reader change is seen.
     Entry("new-product-agent", "input", "planning-draft-input-0.3.contract.json",
           "new-product-agent /runs input (three producer payloads)", None, "authored",
-          ("src/vogue_npp/adapters/handoff.py", "src/vogue_npp/prototype/server.py")),
+          ("src/vogue_npp/adapters/draft_inputs.py", "src/vogue_npp/workflows/planning_draft.py",
+           "src/vogue_npp/domain/context.py", "src/vogue_npp/workflows/text_concept_generation.py",
+           "src/vogue_npp/prototype/server.py")),
     workflow_entry(SELF, "output", "integrated-result", "vogue-orchestrator workflow run response (integrated result)",
                    "integrated-result/2.0", "contracts/workflow", RUN_ENVELOPE),
     Entry(SELF, "input", "md-decision-request-2.0.contract.json",

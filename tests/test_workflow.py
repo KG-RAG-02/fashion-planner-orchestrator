@@ -12,6 +12,35 @@ from vogue_orchestrator.workflow_contract import WorkflowContract
 from vogue_orchestrator.workflow_store import WorkflowStore, canonical, digest
 
 FIXTURES = Path(__file__).parent / 'fixtures/workflow'
+CONTRACT_FIXTURES = Path(__file__).resolve().parents[1] / 'tools/workflow_contract/fixtures'
+
+
+def consumer_projection_p07_review(request_id, product):
+    """P07 main c662d4d's response shape (its consumer projection; a fabricated fixture) for this run and product."""
+    value = json.loads((CONTRACT_FIXTURES / 'p07-review-v0.3.consumer-projection.response.json').read_bytes())
+    value['request_id'] = value['result']['request_id'] = request_id
+    value['result']['draft_context'] = copy.deepcopy(product)
+    return value
+
+
+def add_second_trend_style(sample, style_id='fixture:style-2', name='합성 블라우스'):
+    """Give the sample run a second Trend style and the stock slot stock-agent returns for it (products[i] ↔
+    trend_results[i]); the stock provenance hash follows the changed Trend result. Returns the new style."""
+    trend = sample['input']['trend_response']['raw_response']['result']
+    second = copy.deepcopy(trend['trends'][0])
+    second['style'].update(id=style_id, name=name)
+    for item in second['items']:
+        item['id'] += '-2'
+    trend['trends'].append(second)
+    stock = sample['input']['stock_response']['raw_response']['result']
+    evidence = dict(copy.deepcopy(stock['evidence'][0]), evidence_id=stock['evidence'][0]['evidence_id'] + '-2',
+                    style_id=style_id)
+    stock['evidence'].append(evidence)
+    stock['products'].append(dict(copy.deepcopy(stock['products'][0]), style_id=style_id, sku_ids=['fixture:sku-2']))
+    stock['trend_results'].append(dict(copy.deepcopy(stock['trend_results'][0]), style={'id': style_id, 'name': name},
+                                       product_index=len(stock['products']) - 1, evidence_ids=[evidence['evidence_id']]))
+    stock['input_provenance']['source_payload_sha256'] = digest(trend)
+    return second['style']
 
 
 def native_p07_review(request_id, product, status='ok'):
@@ -191,6 +220,70 @@ class WorkflowTests(unittest.TestCase):
                              'evidence_ids': ['trend:e1']}}})
         self.contract.semantic(result, self.rid, self.store)
 
+    def test_p07_receives_the_proposed_material_with_its_proposal_kind(self):
+        from vogue_orchestrator.workflow_contract import p07_review_input
+        profile = {'category':{'value':'가디건','kind':'user_requested','evidence_ids':[]},
+                   'material':{'value':'울 혼방 니트','kind':'proposal','evidence_ids':[]},
+                   'season':{'value':'2026FW','kind':'proposal','evidence_ids':[]},
+                   **{key:{'value':None,'kind':'unknown','evidence_ids':[]} for key in ('product_type','gender')}}
+        draft = {'evidence_ids': [], 'draft': {'category': '가디건', 'product_profile': profile}}
+        self.assertEqual(p07_review_input(draft, 'req-1'), {
+            'request_id': 'req-1',
+            'product': {'category': '가디건', 'material': '울 혼방 니트'},  # a proposal-kind season is still not sent
+            'product_evidence': {
+                'category': {'kind': 'user_requested', 'source_ref': 'p06.draft.product_profile.category', 'evidence_ids': []},
+                'material': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.material', 'evidence_ids': []}}})
+
+    def test_p06_trend_basis_and_the_p07_consumer_projection_pass_every_check(self):
+        """A Draft with draft.trend_basis (P06 rule, 2026-11-17) and P07 main c662d4d's response run end to end."""
+        from vogue_orchestrator.planning_sheet import build_sheet, draft_trend_citations, focus_stock, focus_trend
+        # Two Trend styles and a Draft that cites neither: without trend_basis the focus would be the first style,
+        # so the focus below is the basis's doing.
+        first = self.sample['input']['trend_response']['raw_response']['result']['trends'][0]['style']['id']
+        style = add_second_trend_style(self.sample)
+        profile = {'category': {'value': 'Outerwear', 'kind': 'user_requested', 'evidence_ids': []},
+                   'material': {'value': 'wool', 'kind': 'proposal', 'evidence_ids': []},
+                   **{key: {'value': None, 'kind': 'unknown', 'evidence_ids': []} for key in ('product_type', 'gender', 'season')}}
+        draft = {'title': '검증용 Draft', 'category': 'Outerwear', 'product_profile': profile, 'limitations': [],
+                 'trend_basis': {'source_style_id': style['id'], 'name': style['name'],
+                                 'selection_rule': 'most_evidence_linked_design_attributes/1',
+                                 'evidence_ids': [], 'design_attributes': [], 'candidates_considered': 2}}
+        result = {'schema_version': '1.0', 'request_id': self.rid, 'status': 'ok', 'draft': draft, 'evidence_ids': [],
+                  'input_evidence': {}, 'limitations': [], 'errors': []}
+        sent = []
+
+        def p06(_payload):
+            self.trace.append('planning_draft')
+            return WireResponse(json.dumps({'contract_version': 'vogue-handoff/0.3', 'request_id': self.rid,
+                                            'producer': {'agent_id': 'new-product-agent', 'schema_version': '1.0'},
+                                            'status': 'ok', 'result': result}, ensure_ascii=False).encode())
+
+        def p07(payload):
+            self.trace.append('sales_market_review')
+            sent.append(copy.deepcopy(payload['input']['product']))
+            review = consumer_projection_p07_review(self.rid, payload['input']['product'])
+            return WireResponse(json.dumps(review, ensure_ascii=False).encode())
+
+        self.workflow.adapters['planning_draft'] = p06
+        self.workflow.adapters['sales_market_review'] = p07
+        envelope = self.run_flow()['envelope']
+        self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
+        self.assertEqual(sent, [{'category': 'Outerwear', 'material': 'wool'}])
+        self.contract.schema(envelope, 'integrated-result.schema.json')
+        self.contract.semantic(envelope, self.rid, self.store)
+        body = envelope['result']
+        self.assertEqual([trend['style']['id'] for trend in body['sources']['trend']['raw_response']['result']['trends']],
+                         [first, style['id']])
+        self.assertEqual(draft_trend_citations(body), {})
+        self.assertEqual(focus_trend(body)['style']['id'], style['id'])
+        self.assertEqual(focus_stock(body)[1]['style_id'], style['id'])
+        sheet = build_sheet(envelope)
+        self.assertEqual(sheet.trend.name, '합성 블라우스')
+        self.assertEqual(sheet.stock.style_id, style['id'])
+        self.assertEqual(sheet.price_rows, (('제안 판매가', '66,000원'), ('마진율', '56.88%')))
+        self.assertIn('[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.',
+                      envelope['result']['integration']['limitations'])
+
     def test_user_category_season_and_partial_peer_results_are_preserved(self):
         scenario = json.loads((FIXTURES/'p06-p07-partial-handoff.json').read_bytes())
         request = self.sample['input']
@@ -218,7 +311,9 @@ class WorkflowTests(unittest.TestCase):
 
         self.assertEqual(calls['p06']['input']['planning_request'], request['planning_request'])
         self.assertEqual(calls['p06']['input']['planning_request']['context'], scenario['planning_context'])
-        self.assertEqual(calls['p07']['input']['product'], {'category': '니트웨어', 'season': '2027SS'})
+        # P06's proposed material ('니트', kind proposal) is forwarded too (user decision 2026-11-16).
+        self.assertEqual(calls['p07']['input']['product'], {'category': '니트웨어', 'season': '2027SS', 'material': '니트'})
+        self.assertEqual(calls['p07']['input']['product_evidence']['material']['kind'], 'proposal')
         self.assertEqual(body['status'], 'partial')
         self.assertEqual(body['sources']['planning_draft']['raw_response'], p06_raw)
         self.assertEqual(body['sources']['sales_market_review']['raw_response'], p07_raw)
@@ -572,6 +667,257 @@ class WorkflowTests(unittest.TestCase):
         link=Path(self.tmp.name)/'symlink'
         link.symlink_to(self.store.blobs, target_is_directory=True)
         with self.assertRaises(ValueError): WorkflowStore(link)
+
+    # P06 input projection (upstream_projection): P06 receives a registered projection, the run keeps the raw.
+
+    def use_upstream_projection_fixture(self):
+        """Trend/Stock answers in which every p06-input/1 rule has something to drop: similar products, evidence
+        url and title, and a stock image carrying base64 data (no url) next to a null stock slot."""
+        upstream = json.loads((FIXTURES/'upstream-projection.json').read_bytes())
+        trend_hash = digest(upstream['trend_response'])
+
+        def mutate(stage, value):
+            if stage in {'trend', 'stock'}:
+                return copy.deepcopy(upstream[stage + '_response'])
+            if stage == 'planning_draft':
+                # draft-response-ok.json cites the base sample's Trend response by hash; cite this run's instead.
+                value['result']['draft']['claims'][0]['evidence_refs'][0]['source_response_sha256'] = trend_hash
+                value['result']['draft_identity']['content_sha256'] = digest(value['result']['draft'])
+            return value
+        self.mutate = mutate
+        return upstream['trend_response']['result'], upstream['stock_response']['result']
+
+    def rebuild(self, **options):
+        """The same fake producers in a Workflow with extra options (e.g. p06_input_projection)."""
+        adapters = self.workflow.adapters
+        self.workflow = Workflow(trend=adapters['trend'], stock=adapters['stock'], draft=adapters['planning_draft'],
+                                 review=adapters['sales_market_review'], image=self.workflow.image, store=self.store,
+                                 contract=self.contract, draft_mode=self.draft_mode,
+                                 artifact_reader=self.artifact_reader, **options)
+
+    def capture_p06(self):
+        sent = []
+        original = self.workflow.adapters['planning_draft']
+
+        def p06(payload):
+            sent.append(copy.deepcopy(payload))
+            return original(payload)
+        self.workflow.adapters['planning_draft'] = p06
+        return sent
+
+    def test_p06_receives_the_registered_projection_and_the_run_keeps_the_raw(self):
+        from vogue_orchestrator.upstream_projection import p06_inputs
+        from vogue_orchestrator.workflow import LOGGER
+        trend_raw, stock_raw = self.use_upstream_projection_fixture()
+        sent = self.capture_p06()
+        records = []
+
+        class Capture(logging.Handler):
+            def emit(self, record):
+                records.append(json.loads(record.getMessage()))
+
+        handler = Capture()
+        LOGGER.addHandler(handler)
+        self.addCleanup(LOGGER.removeHandler, handler)
+        self.addCleanup(LOGGER.setLevel, LOGGER.level)
+        LOGGER.setLevel(logging.INFO)
+        envelope = self.run_flow()['envelope']
+        body = envelope['result']
+        self.assertEqual(envelope['status'], 'ok', body['errors'])
+        self.assertEqual(self.trace, ['trend', 'stock', 'planning_draft', 'sales_market_review', 'final_image'])
+        # The run keeps the raw results, image data included; P06 received the registered projection.
+        self.assertEqual(body['sources']['trend']['raw_response']['result'], trend_raw)
+        self.assertEqual(body['sources']['stock']['raw_response']['result'], stock_raw)
+        self.assertIn('data', body['sources']['stock']['raw_response']['result']['products'][0]['image'])
+        trend_view, stock_view = p06_inputs(trend_raw, stock_raw, 'p06-input/2')
+        self.assertEqual((sent[0]['input']['trend_result'], sent[0]['input']['inventory_product_result']), (trend_view, stock_view))
+        # p06-input/2 (current): the product's photo reaches P06 once, for the outfit image with the stock item.
+        self.assertEqual(sent[0]['input']['inventory_product_result']['products'], [stock_raw['products'][0], None])
+        self.assertEqual(json.loads(self.store.verify(body['sources']['planning_draft']['call_request_artifact'])), sent[0])
+        raw_request = dict(sent[0], input=dict(sent[0]['input'], trend_result=trend_raw, inventory_product_result=stock_raw))
+        self.assertLess(len(canonical(sent[0])), len(canonical(raw_request)))
+        self.contract.schema(envelope, 'integrated-result.schema.json')
+        self.contract.semantic(envelope, self.rid, self.store)  # integrated(): P06 saw a registered projection
+        # The call log carries the size of the bytes sent (no payload).
+        call = next(e for e in records if e['event'] == 'workflow_agent_call' and e['stage'] == 'planning_draft')
+        self.assertEqual(call['request_bytes'], len(canonical(sent[0])))
+        self.assertTrue(all('request_bytes' in e for e in records if e['event'] == 'workflow_agent_call'))
+
+    def test_stock_still_receives_the_raw_trend_result(self):
+        # Decision B4: only P06 gets the projection. The stock trace and integrated() hash the stored raw result
+        # rather than the bytes sent, so a regression here would pass both; pin what stock actually receives.
+        from vogue_orchestrator.upstream_projection import p06_inputs
+        trend_raw, stock_raw = self.use_upstream_projection_fixture()
+        sent = []
+        original = self.workflow.adapters['stock']
+
+        def stock(payload):
+            sent.append(copy.deepcopy(payload))
+            return original(payload)
+        self.workflow.adapters['stock'] = stock
+        envelope = self.run_flow()['envelope']
+        self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]['input'], trend_raw)
+        # Meaningful only because P06's view of the same result differs (similar_products, evidence url/title).
+        self.assertNotEqual(sent[0]['input'], p06_inputs(trend_raw, stock_raw, 'p06-input/1')[0])
+
+    def test_raw_mode_sends_the_stored_results_unchanged(self):
+        trend_raw, stock_raw = self.use_upstream_projection_fixture()
+        self.rebuild(p06_input_projection='raw')
+        sent = self.capture_p06()
+        envelope = self.run_flow()['envelope']
+        self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
+        before = dict(contract_version='vogue-handoff/0.3', request_id=self.rid, input=dict(
+            planning_request=self.sample['input']['planning_request'], trend_result=trend_raw, inventory_product_result=stock_raw))
+        self.assertEqual(canonical(sent[0]), canonical(before))  # the request bytes P08 sent before the projection
+        self.contract.semantic(envelope, self.rid, self.store)
+
+    def test_an_unregistered_projection_stops_before_p06(self):
+        from unittest.mock import patch
+        from vogue_orchestrator import workflow as workflow_module
+        from vogue_orchestrator.upstream_projection import p06_inputs
+        from vogue_orchestrator.workflow_contract import ContractViolation, require_registered_p06_inputs
+
+        def drop_quotes(trend, stock):  # a projection nobody registered
+            for row in trend['evidence']:
+                row.pop('quote')
+
+        def drop_slot(trend, stock):
+            stock['products'].pop()
+
+        for change, code in ((drop_quotes, 'P06_TREND_RESULT_CHANGED'), (drop_slot, 'P06_STOCK_RESULT_CHANGED')):
+            with self.subTest(code=code):
+                self.setUp()
+                self.use_upstream_projection_fixture()
+                raised = []
+
+                def unregistered(trend_result, stock_result, version):
+                    trend, stock = p06_inputs(trend_result, stock_result, version)
+                    change(trend, stock)
+                    return trend, stock
+
+                def checked(*args):
+                    try:
+                        return require_registered_p06_inputs(*args)
+                    except ContractViolation as exc:
+                        raised.append(str(exc))
+                        raise
+
+                with patch.object(workflow_module, 'p06_inputs', unregistered), \
+                        patch.object(workflow_module, 'require_registered_p06_inputs', checked):
+                    result = self.run_flow()
+                body = result['envelope']['result']
+                self.assertEqual(raised, [code])
+                self.assertEqual(self.trace, ['trend', 'stock'])  # the P06 adapter was called 0 times
+                self.assertEqual((result['http_status'], body['errors'][-1]['stage'], body['errors'][-1]['code']),
+                                 (502, 'planning_draft', 'CONTRACT_VIOLATION'))
+                self.assertIsNone(body['sources']['planning_draft'])
+                with self.store.db() as db:  # nothing was recorded for a P06 call
+                    rows = db.execute("SELECT value FROM checkpoints WHERE key LIKE '%:request'").fetchall()
+                self.assertEqual(sorted(json.loads(value)['stage'] for (value,) in rows), ['stock', 'trend'])
+
+    def test_p06_binding_accepts_raw_or_a_registered_projection_only(self):
+        from vogue_orchestrator.upstream_projection import p06_inputs
+        from vogue_orchestrator.workflow_contract import ContractViolation
+        trend_raw, stock_raw = self.use_upstream_projection_fixture()
+        envelope = self.run_flow()['envelope']
+        self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
+        draft = envelope['result']['sources']['planning_draft']
+        sent = json.loads(self.store.verify(draft['call_request_artifact']))
+        trend_view, stock_view = p06_inputs(trend_raw, stock_raw, 'p06-input/1')
+
+        def as_if_p06_received(**fields):
+            """The stored run, with the request P06 received replaced (None = field omitted)."""
+            call = copy.deepcopy(sent)
+            for key, value in fields.items():
+                if value is None:
+                    call['input'].pop(key)
+                else:
+                    call['input'][key] = value
+            value = copy.deepcopy(envelope)
+            value['result']['sources']['planning_draft']['call_request_artifact'] = self.store.put(canonical(call))
+            return value
+
+        def changed(value, edit):
+            value = copy.deepcopy(value)
+            edit(value)
+            return value
+
+        accepted = {
+            'registered projection (as sent)': {},
+            'raw': dict(trend_result=trend_raw, inventory_product_result=stock_raw),
+            'raw trend, projected stock': dict(trend_result=trend_raw),
+        }
+        rejected = {
+            'trend omitted': (dict(trend_result=None), 'P06_TREND_RESULT_CHANGED'),
+            'stock omitted': (dict(inventory_product_result=None), 'P06_STOCK_RESULT_CHANGED'),
+            'trend tampered': (dict(trend_result=changed(trend_view, lambda t: t['evidence'][0].update(quote='바뀐 문장'))),
+                               'P06_TREND_RESULT_CHANGED'),
+            'stock tampered': (dict(inventory_product_result=changed(stock_view, lambda s: s['products'][0]['inventory'].update(quantity=8))),
+                               'P06_STOCK_RESULT_CHANGED'),
+            'trend evidence emptied': (dict(trend_result=changed(trend_view, lambda t: t.update(evidence=[]))),
+                                       'P06_TREND_RESULT_CHANGED'),
+            'trend unregistered projection (quote dropped)': (
+                dict(trend_result=changed(trend_view, lambda t: [row.pop('quote') for row in t['evidence']])),
+                'P06_TREND_RESULT_CHANGED'),
+            'stock unregistered projection (image data dropped, image kept)': (
+                dict(inventory_product_result=changed(stock_raw, lambda s: s['products'][0]['image'].pop('data'))),
+                'P06_STOCK_RESULT_CHANGED'),
+        }
+        for name, fields in accepted.items():
+            with self.subTest(accepted=name):
+                self.contract.integrated(as_if_p06_received(**fields), self.store)
+        for name, (fields, code) in rejected.items():
+            with self.subTest(rejected=name), self.assertRaisesRegex(ContractViolation, code):
+                self.contract.integrated(as_if_p06_received(**fields), self.store)
+
+    def test_an_image_retry_of_a_projected_run_passes_the_binding(self):
+        self.use_upstream_projection_fixture()
+        self.fail_image = True
+        first = self.run_flow()
+        self.assertEqual(first['envelope']['result']['final_image']['status'], 'failed')
+        self.fail_image = False
+        retried = self.workflow.retry_image(self.rid, 'retry-projection')
+        self.assertEqual((retried['envelope']['status'], retried['envelope']['result']['final_image']['status']), ('ok', 'generated'))
+        self.assertEqual(self.trace.count('planning_draft'), 1)
+        self.contract.semantic(retried['envelope'], self.rid, self.store)
+
+    def test_a_run_that_died_between_p06_and_initial_resumes_without_calling_p06(self):
+        from unittest.mock import patch
+        from vogue_orchestrator import workflow as workflow_module
+
+        class Crash(BaseException):  # stands in for the process dying; run() only catches Exception
+            pass
+
+        def dying(draft, request_id):  # building the P07 request: after the P06 call, before 'initial'
+            raise Crash()
+
+        keys = []
+        key = Workflow._key
+
+        def recording_key(workflow, rid, stage, payload, attempt='initial'):
+            value = key(workflow, rid, stage, payload, attempt)
+            if stage == 'planning_draft':
+                keys.append(value)
+            return value
+
+        self.use_upstream_projection_fixture()
+        with patch.object(Workflow, '_key', recording_key):
+            with patch.object(workflow_module, 'p07_review_input', dying), self.assertRaises(Crash):
+                self.run_flow()
+            self.assertEqual(self.trace, ['trend', 'stock', 'planning_draft'])
+            self.assertIsNone(self.store.run(self.rid))  # no 'initial'
+            self.assertIsNotNone(self.store.run(self.rid, 'progress'))
+            self.workflow = self.build()  # a new process on the same store
+            result = self.run_flow()
+        envelope = result['envelope']
+        self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
+        # Rebuilt from the checkpointed raw results, the projection gives the same P06 key: no second P06 call.
+        self.assertEqual(self.trace, ['trend', 'stock', 'planning_draft', 'sales_market_review', 'final_image'])
+        self.assertEqual(len(keys), 2)
+        self.assertEqual(keys[0], keys[1])
+        self.contract.semantic(envelope, self.rid, self.store)  # integrated() passes on the resumed run
 
 
 def _png(colour, size=(48, 72)):

@@ -50,6 +50,20 @@ class InputTests(unittest.TestCase):
         self.assertEqual(summary['market']['merchandising_actions'], ['합성 운영 제안'])
         self.assertNotIn('RAW USER REQUEST', json.dumps(summary, ensure_ascii=False))
 
+    def test_the_p07_consumer_projection_reaches_the_market_summary(self):
+        # P07 main c662d4d sends no fabric unit cost and no price_positioning; nothing stands in for them.
+        value = envelope()
+        value['result']['sources']['sales_market_review']['raw_response'] = json.loads(
+            (FIXTURES / 'p07-review-v0.3.consumer-projection.response.json').read_text(encoding='utf-8'))
+        market = swot_input(value)['market']
+        self.assertEqual((market['proposed_price'], market['price_currency'], market['margin_rate_percent']), (66000, 'KRW', 56.88))
+        self.assertEqual((market['target_age_cohort'], market['target_age_share']), ('20–39 (20s and 30s)', 0.5973))
+        self.assertEqual(market['primary_segment'], '합성 예시: 출퇴근과 주말을 함께 입는 20–30대 여성')
+        self.assertEqual(market['channel_content_hypotheses'], ['합성 예시: 출근룩 코디 콘텐츠', '합성 예시: 소재 클로즈업 이미지'])
+        self.assertEqual(market['merchandising_actions'], ['합성 예시: 기본 컬러 2종 우선 검토', '합성 예시: 사이즈 구간 검증'])
+        self.assertNotIn('fabric_unit_cost', market)
+        self.assertNotIn('price_positioning', market)
+
     def test_a_draft_claim_repeating_the_request_is_not_sent(self):
         value = envelope()  # runs recorded before planning_analysis carry the request among the Draft claims
         body = value['result']['sources']['planning_draft']['raw_response']['result']

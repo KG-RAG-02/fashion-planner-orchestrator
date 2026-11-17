@@ -5,87 +5,86 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>VOGUE Atelier — MD Workspace</title>
+  <link rel="preload" href="/fonts/bodoni-moda/BodoniModa-Latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/jost/Jost-Variable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/img/atelier-silk.jpg" as="image">
   <link rel="stylesheet" href="/css/atelier.css">
   <script type="module" src="/js/main.js"></script>
 </head>
-<body>
-  <a class="skip-link" href="#composer-title">본문으로 건너뛰기</a>
+<body data-run="idle">
+  <a class="skip-link" href="#compose">본문으로 건너뛰기</a>
 
-  <header class="topbar">
-    <a class="wordmark" href="#workspace" aria-label="VOGUE Atelier 작업 공간">
-      <span class="wordmark-strong">VOGUE</span><span class="wordmark-light">Atelier</span>
-    </a>
-    <nav class="nav" aria-label="주 메뉴">
-      <a class="nav-link is-active" href="#workspace" data-view="workspace" aria-current="page">Workspace</a>
-      <a class="nav-link" href="#runs" data-view="runs">Runs</a>
-    </nav>
-    <button type="button" class="status-pill" id="system-button" aria-haspopup="dialog" aria-controls="system-dialog" aria-expanded="false">
-      <span class="dot" id="system-dot" data-tone="pending" aria-hidden="true"></span>
-      <span id="system-summary">시스템 확인 중…</span>
-    </button>
-  </header>
-
-  <main id="workspace" class="workspace">
-    <section class="card composer" aria-labelledby="composer-title">
-      <form id="brief-form" class="composer-form" novalidate>
-        <p class="eyebrow">NEW PLANNING BRIEF</p>
-        <h1 id="composer-title" class="display">다음 시즌, 무엇을 만들까요?</h1>
-        <label class="field-label" for="brief">기획 질의</label>
-        <textarea id="brief" name="brief" rows="3" maxlength="8000" required aria-describedby="brief-hint brief-counter"
-          placeholder="예: 27SS 여성 스커트 기획 — 절제된 맥시멀리즘 무드로 칼럼 실루엣 중심 캡슐을 제안해줘"></textarea>
-        <div class="composer-meta">
-          <p class="hint" id="brief-hint">시즌·카테고리·성별을 문장에 적으면 구조화 단계가 반영합니다.</p>
-          <span class="counter mono" id="brief-counter" aria-live="off">0 / 8,000</span>
-        </div>
-      </form>
-      <div class="composer-side">
-        <label class="field-label" for="ref-image">참고 이미지 (선택)</label>
-        <div class="dropzone">
-          <img id="ref-preview" class="dropzone-preview" alt="" hidden>
-          <div class="dropzone-body">
-            <span id="ref-name" class="small">PNG · JPEG · WebP, 최대 10MB 1장</span>
-            <input id="ref-image" type="file" accept="image/png,image/jpeg,image/webp">
-            <button type="button" id="ref-clear" class="btn btn-ghost btn-small" hidden>이미지 제거</button>
-          </div>
-        </div>
-        <button type="submit" form="brief-form" class="btn btn-primary btn-lg" id="run-button">기획 시작</button>
-        <p class="hint">단계는 순서대로 실행됩니다. 실데이터 실행은 수 분이 걸릴 수 있고, 결과가 도착하는 대로 표시됩니다.</p>
-        <p class="notice" id="notice" role="alert" hidden></p>
+  <div class="shell">
+    <!-- Glass sidebar: views, the six stages as one progress bar (each stage jumps to its section), shortcuts. -->
+    <aside class="spine" aria-label="작업 탐색과 진행 상황">
+      <div class="spine-top">
+        <a class="wordmark" href="#compose" aria-label="VOGUE Atelier 기획 질의로 이동">
+          <span class="wordmark-strong">VOGUE</span><span class="wordmark-light">Atelier</span>
+        </a>
+        <nav class="views" aria-label="주 메뉴">
+          <a class="view-link is-active" href="#workspace" data-view="workspace" aria-current="page">작업 공간</a>
+          <a class="view-link" href="#runs" data-view="runs">실행 이력</a>
+        </nav>
       </div>
-    </section>
+      <section class="progress" id="pipeline" aria-labelledby="progress-title">
+        <div class="progress-head">
+          <h2 id="progress-title">진행</h2>
+          <span class="progress-count" id="progress-count">0 / 6</span>
+        </div>
+        <p class="progress-state" id="progress-state" aria-live="polite">실행 전</p>
+        <ol class="stages" id="rail"></ol>
+      </section>
+      <nav class="shortcuts" aria-label="바로가기">
+        <a class="shortcut" href="#md-card" id="md-link" hidden>MD 판단</a>
+        <button type="button" class="shortcut" id="evidence-button" aria-haspopup="dialog" aria-controls="evidence-dialog" aria-expanded="false" hidden>근거·원문 패널</button>
+      </nav>
+      <button type="button" class="system" id="system-button" aria-haspopup="dialog" aria-controls="system-dialog" aria-expanded="false">
+        <span class="dot" id="system-dot" data-tone="pending" aria-hidden="true"></span>
+        <span id="system-summary">시스템 확인 중…</span>
+      </button>
+    </aside>
 
-    <section class="card rail-card" id="pipeline" aria-labelledby="rail-title" hidden>
-      <h2 id="rail-title" class="sr-only">파이프라인 진행 상황</h2>
-      <ol class="rail" id="rail" aria-live="polite"></ol>
-    </section>
+    <div class="page">
+      <main id="workspace" class="workspace">
+        <section class="hero" id="compose" aria-labelledby="composer-title" tabindex="-1">
+          <div class="hero-silk" aria-hidden="true"></div>
+          <p class="masthead" aria-hidden="true"><span>V</span><span>O</span><span>G</span><span>U</span><span>E</span></p>
+          <form id="brief-form" class="composer" novalidate>
+            <p class="eyebrow">NEW PLANNING BRIEF</p>
+            <h1 id="composer-title" class="display">다음 시즌, 무엇을 만들까요?</h1>
+            <label class="field-label" for="brief">기획 질의</label>
+            <textarea id="brief" name="brief" rows="3" maxlength="8000" required aria-describedby="brief-hint brief-counter"
+              placeholder="예: 27SS 여성 스커트 기획 — 절제된 맥시멀리즘 무드로 칼럼 실루엣 중심 캡슐을 제안해줘"></textarea>
+            <div class="composer-meta">
+              <p class="hint" id="brief-hint">시즌·카테고리·성별을 문장에 적으면 구조화 단계가 반영합니다. 실데이터 실행은 몇 분 걸릴 수 있고, 결과는 도착하는 대로 아래에 채워집니다.</p>
+              <span class="counter mono" id="brief-counter" aria-live="off">0 / 8,000</span>
+            </div>
+            <div class="composer-actions">
+              <button type="submit" class="btn btn-cta" id="run-button"><span class="btn-cta-label" id="run-label">기획 시작</span></button>
+              <p class="notice" id="notice" role="alert" hidden></p>
+            </div>
+          </form>
+        </section>
 
-    <div class="layout" id="results" hidden>
-      <div class="layout-main">
-        <section class="card concept" id="concept" aria-labelledby="concept-title"></section>
-        <section class="block" id="trend-block" aria-labelledby="trend-title"></section>
-        <section class="block" id="stock-block" aria-labelledby="stock-title"></section>
-        <section class="card" id="draft-block" aria-labelledby="draft-title"></section>
-        <section class="card" id="review-block" aria-labelledby="review-title"></section>
-      </div>
-      <aside class="layout-side" aria-label="MD 판단과 실행 정보">
-        <section class="card md-card" id="md-card" aria-labelledby="md-title"></section>
-        <section class="card" id="run-card" aria-labelledby="run-title"></section>
-        <button type="button" class="evidence-button" id="evidence-button" aria-haspopup="dialog" aria-controls="evidence-dialog" aria-expanded="false">
-          <span>근거 · 원문 · 계보 보기</span>
-          <span class="evidence-sub">EVIDENCE · RAW JSON · LINEAGE</span>
-        </button>
-      </aside>
+        <div class="results" id="results" hidden>
+          <section class="sheet feature" id="concept" aria-labelledby="concept-title"></section>
+          <section class="sheet" id="trend-block" aria-labelledby="trend-title"></section>
+          <section class="sheet" id="stock-block" aria-labelledby="stock-title"></section>
+          <section class="sheet" id="draft-block" aria-labelledby="draft-title"></section>
+          <section class="sheet" id="review-block" aria-labelledby="review-title"></section>
+          <section class="sheet md-card" id="md-card" aria-labelledby="md-title"></section>
+        </div>
+      </main>
+
+      <section id="runs" class="runs" aria-labelledby="runs-title" hidden>
+        <div class="section-head runs-head">
+          <h1 id="runs-title">실행 이력</h1>
+          <button type="button" class="btn btn-ghost" id="runs-refresh">새로 고침</button>
+        </div>
+        <ol class="runs-list" id="runs-list"></ol>
+      </section>
     </div>
-  </main>
-
-  <section id="runs" class="runs" aria-labelledby="runs-title" hidden>
-    <div class="section-head">
-      <h1 id="runs-title">실행 이력</h1>
-      <button type="button" class="btn btn-ghost" id="runs-refresh">새로 고침</button>
-    </div>
-    <ol class="runs-list" id="runs-list"></ol>
-  </section>
+  </div>
 
   <dialog id="system-dialog" class="popover" aria-labelledby="system-title">
     <div class="dialog-head">
@@ -98,17 +97,17 @@
     <p class="small muted">응답 여부는 각 서비스의 liveness 확인입니다. 데이터·모델 품질을 뜻하지 않습니다.</p>
   </dialog>
 
+  <!-- The one place evidence and JSON are printed. Sections link into it by anchor. -->
   <dialog id="evidence-dialog" class="drawer" aria-labelledby="evidence-title">
     <div class="dialog-head">
-      <h2 id="evidence-title">근거 · 원문 · 계보</h2>
-      <button type="button" class="icon-button" data-close aria-label="근거 서랍 닫기">
+      <h2 id="evidence-title">근거 · 원문</h2>
+      <button type="button" class="icon-button" data-close aria-label="근거 패널 닫기">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg>
       </button>
     </div>
     <div class="tabs" role="tablist" aria-label="보기 선택">
-      <button type="button" role="tab" data-tab="evidence" aria-selected="true" aria-controls="evidence-body">Evidence</button>
-      <button type="button" role="tab" data-tab="raw" aria-selected="false" aria-controls="evidence-body" tabindex="-1">Raw JSON</button>
-      <button type="button" role="tab" data-tab="lineage" aria-selected="false" aria-controls="evidence-body" tabindex="-1">Lineage</button>
+      <button type="button" role="tab" id="tab-evidence" data-tab="evidence" aria-selected="true" aria-controls="evidence-body">근거</button>
+      <button type="button" role="tab" id="tab-json" data-tab="json" aria-selected="false" aria-controls="evidence-body" tabindex="-1">원문 JSON</button>
     </div>
     <div id="evidence-body" class="drawer-body" role="tabpanel" aria-labelledby="evidence-title"></div>
   </dialog>

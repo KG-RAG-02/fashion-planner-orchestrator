@@ -52,6 +52,26 @@ class BoundaryTests(unittest.TestCase):
             dispatch(handler, request)
         handler._json.assert_called_once_with(502, response['envelope'])
 
+    def test_requested_gender_reaches_the_planning_request(self):
+        def planning_for(gender):
+            trend = {'request_id': 'test-gender', 'original_query': 'test',
+                     'trend_terms': {'season': {'year': 2026, 'season': 'FW', 'origin': 'user_requested'}},
+                     'requested': {'categories': {'include': [{'major': '아우터', 'minor': '가디건'}]},
+                                   'gender': gender}}
+            request = {'contract_version': 'vogue-workflow/0.2', 'request_id': 'test-gender',
+                       'input': {'user_input': {'text': 'test', 'images': []}, 'trend_query': trend}}
+            fake = Mock()
+            fake.run.return_value = {'http_status': 200, 'envelope': {}}
+            with patch('vogue_orchestrator.workflow_http.build_workflow', return_value=fake):
+                dispatch(self.handler(request), request)
+            return fake.run.call_args.kwargs['planning_request']
+
+        planning = planning_for({'raw': '여성', 'value': '여'})
+        self.assertEqual(planning['context'], {'season': '2026FW', 'category': '가디건'})
+        self.assertEqual(planning['requested_attributes'], [{'name': 'gender', 'value': 'women', 'source': 'user'}])
+        self.assertEqual(planning_for({'raw': '공용', 'value': '공용'})['requested_attributes'][0]['value'], 'unisex')
+        self.assertNotIn('requested_attributes', planning_for(None))
+
     def test_upload_limits_and_remote_boundary(self):
         handler = self.handler({}, '/v1/input-images')
         handler.headers = {'Content-Length': '10485761', 'Host': '127.0.0.1:8765'}

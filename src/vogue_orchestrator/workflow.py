@@ -8,8 +8,9 @@ import http.client
 import json
 import logging
 import time
+from .upstream_projection import CURRENT_P06_INPUT_PROJECTION, p06_input_projection_valid, p06_inputs
 from .workflow_contract import (VERSION, HANDOFF_VERSION, P06_HANDOFF_VERSION, P07_REVIEW_VERSION,
-                                STAGES, DRAFT_MODES, p07_review_input, require, walk)
+                                STAGES, DRAFT_MODES, p07_review_input, require, require_registered_p06_inputs, walk)
 from .workflow_store import ArtifactError, RESOLVER_CODES, canonical, digest, strict_json, checked_image
 
 # Namespaces whose artifacts P08 imports through a reader (conventions section 8): peer review artifacts.
@@ -75,11 +76,16 @@ def stage_failure(exc, artifact=None):
 class Workflow:
     """Injected producers return actual WireResponse bytes. No implicit fallbacks."""
     def __init__(self, *, trend, stock, draft, review, image, store, contract, artifact_reader=None, limitations=(),
-                 draft_mode='draft_with_visuals', trend_photos=None, swot=None):
+                 draft_mode='draft_with_visuals', trend_photos=None, swot=None,
+                 p06_input_projection=CURRENT_P06_INPUT_PROJECTION):
         require(draft_mode in DRAFT_MODES, 'DRAFT_MODE_INVALID')
+        require(p06_input_projection_valid(p06_input_projection), 'P06_INPUT_PROJECTION_INVALID')
         self.adapters = dict(trend=trend, stock=stock, planning_draft=draft, sales_market_review=review)
         # P06 handoff/0.3 currently returns the native draft without P08 image references.
         self.draft_mode = draft_mode
+        # What P06 receives of the Trend/Stock results: a registered projection key, or raw (rollout stage 1).
+        # The run itself always keeps the raw results.
+        self.p06_input_projection = p06_input_projection
         self.image, self.store, self.contract = image, store, contract
         self.artifact_reader = artifact_reader
         # Stage 06 hook (trend_photos.TrendPhotos): the Trend article photos shown on the planning sheet.
@@ -114,6 +120,9 @@ class Workflow:
 
     def _call(self, stage, payload, rid, known):
         key = self._key(rid, stage, payload)
+        # post_wire sends exactly these bytes; their length is logged to watch the margin to a producer's body
+        # limit (P06 refuses more than 1,000,000 B).
+        request_body = canonical(payload)
         cached = self.store.checkpoint(key)
         if cached:
             state, value = cached
@@ -123,21 +132,24 @@ class Workflow:
                 _log_event(logging.INFO, 'workflow_agent_call', request_id=rid, stage=stage,
                            agent_id=STAGE_PRODUCERS[stage], status=raw.get('status', 'cached'),
                            duration_ms=0.0, upstream_http_ms=0.0, p08_call_overhead_ms=0.0,
-                           retryable=False, fatal=False, cache_hit=True, outbound_attempted=False)
+                           retryable=False, fatal=False, cache_hit=True, outbound_attempted=False,
+                           request_bytes=len(request_body))
                 return value
             if state == 'failed':
                 _log_event(logging.WARNING, 'workflow_agent_call', request_id=rid, stage=stage,
                            agent_id=STAGE_PRODUCERS[stage], status='error', duration_ms=0.0,
                            upstream_http_ms=0.0, p08_call_overhead_ms=0.0,
                            retryable=value.get('http_status') in {503, 504}, fatal=True,
-                           error_code=value['code'], cache_hit=True, outbound_attempted=False)
+                           error_code=value['code'], cache_hit=True, outbound_attempted=False,
+                           request_bytes=len(request_body))
                 raise StageFailure(value['code'], value['http_status'], value.get('artifact'))
             _log_event(logging.WARNING, 'workflow_agent_call', request_id=rid, stage=stage,
                        agent_id=STAGE_PRODUCERS[stage], status='error', duration_ms=0.0,
                        upstream_http_ms=0.0, p08_call_overhead_ms=0.0, retryable=False, fatal=True,
-                       error_code='STAGE_OUTCOME_UNKNOWN', cache_hit=True, outbound_attempted=False)
+                       error_code='STAGE_OUTCOME_UNKNOWN', cache_hit=True, outbound_attempted=False,
+                       request_bytes=len(request_body))
             raise StageFailure('STAGE_OUTCOME_UNKNOWN', 409)
-        request_artifact = self.store.put(canonical(payload))
+        request_artifact = self.store.put(request_body)
         self.store.checkpoint_write(key + ':request', 'done', dict(stage=stage, request_artifact=request_artifact))
         self.store.checkpoint_write(key, 'started')
         artifact = None
@@ -208,7 +220,8 @@ class Workflow:
                        p08_call_overhead_ms=round(max(0.0, duration_ms - wire_elapsed_ms), 3)
                        if wire_elapsed_ms is not None else None,
                        retryable=any(bool(e.get('retryable')) for e in producer_errors if isinstance(e, dict)),
-                       fatal=raw['status'] == 'error', cache_hit=False, outbound_attempted=True)
+                       fatal=raw['status'] == 'error', cache_hit=False, outbound_attempted=True,
+                       request_bytes=len(request_body))
             return retained
         except Exception as exc:
             wire_elapsed_ms = getattr(exc, 'elapsed_ms', wire_elapsed_ms)
@@ -221,7 +234,7 @@ class Workflow:
                        p08_call_overhead_ms=round(max(0.0, duration_ms - wire_elapsed_ms), 3)
                        if wire_elapsed_ms is not None else None,
                        retryable=failure.http_status in {503, 504}, fatal=True, error_code=failure.code,
-                       cache_hit=False, outbound_attempted=True)
+                       cache_hit=False, outbound_attempted=True, request_bytes=len(request_body))
             raise failure from None
 
     def _import_peer_artifacts(self, raw):
@@ -378,11 +391,15 @@ class Workflow:
             return dict(contract_version=HANDOFF_VERSION, request_id=request_id,
                         input=body['sources']['trend']['raw_response']['result'])
         if stage == 'planning_draft':
+            # P06 gets the configured projection of the results; body['sources'] keeps the raw for the rest of
+            # the run (stage 06, the stored record). Deterministic, so a resumed run rebuilds the same P06 key.
             trend, stock = body['sources']['trend'], body['sources']['stock']
+            trend_view, stock_view = p06_inputs(trend['raw_response']['result'], stock['raw_response']['result'],
+                                                self.p06_input_projection)
             return dict(contract_version=P06_HANDOFF_VERSION, request_id=request_id, input=dict(
                 planning_request=planning_request,
-                trend_result=trend['raw_response']['result'],
-                inventory_product_result=stock['raw_response']['result']))
+                trend_result=trend_view,
+                inventory_product_result=stock_view))
         if stage == 'sales_market_review':
             # P07 0.3: P08 sends the allowlisted product fields of P06's Draft with their per-field provenance.
             planning_draft = body['sources']['planning_draft']['raw_response']['result']
@@ -461,6 +478,10 @@ class Workflow:
                 try:
                     payload = self._stage_payload(stage, request_id, planning_request, trend_query, body)
                     if stage == 'planning_draft':
+                        # integrated() applies this binding only at the end of the run, after the paid calls;
+                        # an unregistered projection must stop here, before P06 is called.
+                        require_registered_p06_inputs(payload['input'], body['sources']['trend']['raw_response']['result'],
+                                                      body['sources']['stock']['raw_response']['result'])
                         self.contract.schema(payload, 'planning-draft-request.schema.json')
                     elif stage == 'sales_market_review':
                         self.contract.schema(payload, 'sales-market-review-request.schema.json')
