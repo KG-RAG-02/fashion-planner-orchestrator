@@ -84,7 +84,9 @@ services:
       <<: *r2
       VOGUE_R2_HM_DB_CACHE_DIR: /data/hm-cache
       # P07 reads its H&M age, price and fabric research from one precomputed aggregate snapshot.
-      # Keep the content-addressed key aligned with P07 mapping 1.3.
+      # The current mapping-1.3 snapshot has fingerprint <snapshot-fingerprint>,
+      # 53 profiles, 711,302 bytes, at <aggregate-snapshot-prefix>/<aggregate-snapshot-key>.json.
+      # The deployment environment supplies the selected content-addressed key below.
       VOGUE_HM_RESEARCH_AGGREGATE_R2_KEY: ${VOGUE_HM_RESEARCH_AGGREGATE_R2_KEY:?P07 aggregate snapshot key is required for rehearsal/live}
     volumes:
       # Writable: it also holds the H&M age query's DuckDB spill directory (P07 image default
