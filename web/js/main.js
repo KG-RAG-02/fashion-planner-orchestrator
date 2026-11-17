@@ -6,8 +6,10 @@ import * as view from './render.js';
 const $ = (selector) => document.querySelector(selector);
 const LAST_RUN_KEY = 'vogue-atelier:last-request-id';
 const POLL_MS = 1500;
+const STAGE_READING_MS = 5200;
 const SYSTEM_REFRESH_MS = 30000;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
+const AUTO_SCROLL_ORDER = ['trend', 'stock', 'planning_draft', 'sales_market_review'];
 
 const el = {
   form: $('#brief-form'), brief: $('#brief'), counter: $('#brief-counter'), run: $('#run-button'), runLabel: $('#run-label'), notice: $('#notice'),
@@ -31,7 +33,8 @@ const SECTIONS = [
 
 const state = {
   envelope: null, requestId: null, inFlight: false, poller: null,
-  autoScrollStage: null, completedScrollRequestId: null,
+  autoScrollActive: false, autoScrollStage: null, autoScrollQueue: [], autoScrollSeen: new Set(), autoScrollTimer: null,
+  returnToTopAfterQueue: false, completedScrollRequestId: null,
   p07CallRequest: null, p07CallRequestArtifactId: null, p07CallRequestState: 'unavailable',
   md: { decisions: [], integratedSha: null, selected: null, busy: false, message: '' },
   system: null, evidenceTab: 'evidence',
@@ -44,7 +47,6 @@ function showNotice(text) {
 
 function setRunning(running) {
   state.inFlight = running;
-  if (!running) state.autoScrollStage = null;
   el.run.disabled = running;
   el.runLabel.textContent = running ? '실행 중…' : '기획 시작';
   el.brief.readOnly = running;
@@ -79,6 +81,49 @@ function markHere() {
     li.classList.toggle('is-here', Boolean(here && target && (target === here || here.contains(target))));
   }
 }
+
+function stopAutoScrollQueue() {
+  if (state.autoScrollTimer) clearTimeout(state.autoScrollTimer);
+  state.autoScrollTimer = null;
+  state.autoScrollQueue = [];
+  state.autoScrollStage = null;
+  state.returnToTopAfterQueue = false;
+}
+
+function queueCompletedStages(items) {
+  if (!state.autoScrollActive) return;
+  const statusByStage = new Map(items.map((item) => [item.key, item.status]));
+  for (const stage of AUTO_SCROLL_ORDER) {
+    const status = statusByStage.get(stage);
+    if (['ok', 'partial', 'error', 'no_results'].includes(status) && !state.autoScrollSeen.has(stage)) {
+      state.autoScrollSeen.add(stage);
+      state.autoScrollQueue.push(stage);
+    }
+  }
+  advanceAutoScrollQueue();
+}
+
+function advanceAutoScrollQueue() {
+  if (!state.autoScrollActive || state.autoScrollTimer) return;
+  if (!state.autoScrollQueue.length) {
+    if (state.returnToTopAfterQueue) {
+      state.returnToTopAfterQueue = false;
+      state.autoScrollActive = false;
+      window.scrollTo({ top: 0, behavior: scrollBehavior() });
+    } else if (!state.inFlight) state.autoScrollActive = false;
+    return;
+  }
+  const stage = state.autoScrollQueue.shift();
+  const target = SECTIONS.find((section) => section.stage === stage)?.el;
+  if (!target) { advanceAutoScrollQueue(); return; }
+  state.autoScrollStage = stage;
+  target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+  state.autoScrollTimer = setTimeout(() => {
+    state.autoScrollTimer = null;
+    state.autoScrollStage = null;
+    advanceAutoScrollQueue();
+  }, STAGE_READING_MS);
+}
 const spy = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
   for (const entry of entries) if (entry.isIntersecting) { here = entry.target; markHere(); }
 }, { rootMargin: '-30% 0px -66% 0px' }) : null;
@@ -105,18 +150,7 @@ function renderSpine(result, { inFlight = false } = {}) {
   const progress = view.renderProgress({ count: el.progressCount, state: el.progressState, root: document.documentElement }, items,
     { status: inFlight ? null : result?.status ?? null, inFlight });
   if (state.inFlight) el.runLabel.textContent = progress.running ? `실행 중 · ${progress.running.n} ${progress.running.ko}` : '실행 중…';
-  if (state.inFlight) {
-    const active = items.find((item) => item.status === 'running');
-    const activeSection = SECTIONS.find((section) => section.stage === active?.key);
-    if (activeSection && activeSection.stage !== state.autoScrollStage) {
-      state.autoScrollStage = activeSection.stage;
-      requestAnimationFrame(() => {
-        if (state.inFlight && state.autoScrollStage === activeSection.stage) {
-          activeSection.el.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
-        }
-      });
-    }
-  }
+  queueCompletedStages(items);
   el.mdLink.hidden = el.results.hidden;
   el.evidenceButton.hidden = el.results.hidden || !result;
   markHere();
@@ -167,8 +201,8 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
     const runId = result.request_id ?? envelope.request_id;
     if (runId && runId !== state.completedScrollRequestId) {
       state.completedScrollRequestId = runId;
-      state.autoScrollStage = null;
-      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: scrollBehavior() }));
+      state.returnToTopAfterQueue = true;
+      advanceAutoScrollQueue();
     }
   }
   void loadP07CallRequest(result);
@@ -345,7 +379,9 @@ async function startRun(event) {
 
   const requestId = model.newRequestId();
   state.requestId = requestId;
-  state.autoScrollStage = null;
+  stopAutoScrollQueue();
+  state.autoScrollSeen = new Set();
+  state.autoScrollActive = true;
   state.completedScrollRequestId = null;
   state.envelope = null;
   state.md = { decisions: [], integratedSha: null, selected: null, busy: false, message: '' };
