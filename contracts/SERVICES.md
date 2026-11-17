@@ -133,7 +133,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 
 | 메서드 · 경로 | 입력 | 출력 |
 |---|---|---|
-| `POST /v1/agents/new-product-agent/runs` | `vogue-handoff/0.3`: `planning_request` 1.0, `trend_result` 1.1, `inventory_product_result` 1.0. P08 forwards the actual Trend and Stock producer payloads → `agents/new-product-agent/input/planning-draft-input-0.3.contract.json` | Native P06 result schema 1.0, retained raw → `agents/new-product-agent/output/planning-draft-result-1.0.contract.json` |
+| `POST /v1/agents/new-product-agent/runs` | `vogue-handoff/0.3`: `planning_request` 1.0, `trend_result` 1.1, `inventory_product_result` 1.0. P08 sends the registered projection p06-input/1 of the Trend and Stock results (no similar_products, no evidence url/title, url-less product images null; other values unchanged; the run keeps the raw results; `VOGUE_WORKFLOW_P06_INPUT_PROJECTION=raw` sends them unchanged) → `agents/new-product-agent/input/planning-draft-input-0.3.contract.json` | Native P06 result schema 1.0, retained raw → `agents/new-product-agent/output/planning-draft-result-1.0.contract.json` |
 
 - P08 calls the native `/runs` input above. It does not send `user_input.images` or a visual generation mode in this contract.
 - **상태**: P06 native response status is retained and validated as returned.

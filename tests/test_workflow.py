@@ -663,6 +663,25 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(call['request_bytes'], len(canonical(sent[0])))
         self.assertTrue(all('request_bytes' in e for e in records if e['event'] == 'workflow_agent_call'))
 
+    def test_stock_still_receives_the_raw_trend_result(self):
+        # Decision B4: only P06 gets the projection. The stock trace and integrated() hash the stored raw result
+        # rather than the bytes sent, so a regression here would pass both; pin what stock actually receives.
+        from vogue_orchestrator.upstream_projection import p06_inputs
+        trend_raw, stock_raw = self.use_upstream_projection_fixture()
+        sent = []
+        original = self.workflow.adapters['stock']
+
+        def stock(payload):
+            sent.append(copy.deepcopy(payload))
+            return original(payload)
+        self.workflow.adapters['stock'] = stock
+        envelope = self.run_flow()['envelope']
+        self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]['input'], trend_raw)
+        # Meaningful only because P06's view of the same result differs (similar_products, evidence url/title).
+        self.assertNotEqual(sent[0]['input'], p06_inputs(trend_raw, stock_raw, 'p06-input/1')[0])
+
     def test_raw_mode_sends_the_stored_results_unchanged(self):
         trend_raw, stock_raw = self.use_upstream_projection_fixture()
         self.rebuild(p06_input_projection='raw')
