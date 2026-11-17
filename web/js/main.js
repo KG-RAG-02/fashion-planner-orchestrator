@@ -13,8 +13,7 @@ const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
 const el = {
   form: $('#brief-form'), brief: $('#brief'), counter: $('#brief-counter'), run: $('#run-button'), runLabel: $('#run-label'), notice: $('#notice'),
   rail: $('#rail'), progressCount: $('#progress-count'), progressState: $('#progress-state'),
-  sheetViewer: $('#sheet-viewer'), sheetViewerImage: $('#sheet-viewer-image'), sheetViewerContent: $('#sheet-viewer-content'),
-  sheetViewerPoster: $('#sheet-viewer-poster'), sheetViewerToggle: $('#sheet-viewer-toggle'),
+  sheetViewer: $('#sheet-viewer'), sheetViewerImage: $('#sheet-viewer-image'),
   results: $('#results'), concept: $('#concept'), trends: $('#trend-block'), stock: $('#stock-block'), draft: $('#draft-block'), market: $('#market-block'),
   md: $('#md-card'), mdLink: $('#md-link'),
   evidenceButton: $('#evidence-button'), evidenceDialog: $('#evidence-dialog'), evidenceBody: $('#evidence-body'),
@@ -339,10 +338,6 @@ function onDocumentClick(event) {
     event.preventDefault();
     el.sheetViewerImage.src = imageViewerLink.dataset.imageSrc;
     el.sheetViewerImage.alt = imageViewerLink.dataset.imageAlt || '최종 기획안 원본';
-    view.renderSheetOverview(el.sheetViewerContent, state.envelope);
-    el.sheetViewerContent.hidden = false;
-    el.sheetViewerPoster.hidden = true;
-    el.sheetViewerToggle.textContent = '원본 포스터 보기';
     openDialog(el.sheetViewer, imageViewerLink);
     return;
   }
@@ -476,12 +471,6 @@ function bind() {
   window.addEventListener('hashchange', route);
   document.addEventListener('click', onDocumentClick);
   el.systemButton.addEventListener('click', () => { refreshSystem(); openDialog(el.systemDialog, el.systemButton); });
-  el.sheetViewerToggle.addEventListener('click', () => {
-    const showPoster = el.sheetViewerPoster.hidden;
-    el.sheetViewerPoster.hidden = !showPoster;
-    el.sheetViewerContent.hidden = showPoster;
-    el.sheetViewerToggle.textContent = showPoster ? '요약 보드 보기' : '원본 포스터 보기';
-  });
   el.evidenceButton.addEventListener('click', () => openPanel(state.evidenceTab));
   for (const tab of el.evidenceDialog.querySelectorAll('[role="tab"]')) {
     tab.addEventListener('click', () => openPanel(tab.dataset.tab));

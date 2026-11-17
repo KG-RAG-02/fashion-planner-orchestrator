@@ -255,52 +255,6 @@ export function renderConcept(section, envelope, { retryEnabled = false, onRetry
     sheet ? h('p', { class: 'small muted lookbook-note' }, 'P06(new-product-agent)가 트렌드 근거로 만든 검토용 시안') : null);
 }
 
-export function renderSheetOverview(container, envelope) {
-  const result = envelope?.result ?? {};
-  const draft = model.draftView(model.sourceResult(result, 'planning_draft'));
-  const trends = model.trendCards(model.sourceResult(result, 'trend')).slice(0, 2);
-  const stock = model.stockSlots(model.sourceResult(result, 'stock')).slice(0, 2);
-  const market = model.marketView(model.sourceResult(result, 'sales_market_review'));
-  const integration = Array.isArray(result.integration?.claims) ? result.integration.claims : [];
-  const profile = [
-    ['카테고리', draft?.category], ['종류', draft?.productType], ['성별', draft?.gender],
-    ['시즌', draft?.season], ['소재', draft?.material],
-  ].filter(([, value]) => typeof value === 'string' && value.trim());
-  const visuals = (draft?.visuals ?? []).filter((item) => item.sha256);
-  fill(container,
-    h('div', { class: 'sheet-overview-grid' },
-      h('section', { class: 'sheet-overview-card sheet-product-card' },
-        h('p', { class: 'eyebrow' }, '03 · 새상품 생성'),
-        h('h3', {}, draft?.title ?? '신상품 기획'),
-        draft?.concept ? h('p', { class: 'sheet-overview-definition' }, draft.concept) : emptyNote('상품 정의가 없습니다.'),
-        profile.length ? h('ul', { class: 'sheet-overview-profile' }, profile.map(([label, value]) => h('li', {}, h('strong', {}, label), value))) : null,
-        visuals.length ? h('div', { class: 'sheet-overview-visuals' }, visuals.map((item) => h('figure', {},
-          h('img', { src: artifactUrl(item.sha256), alt: `${draft?.title ?? '신상품'} ${item.label}`, loading: 'lazy' }),
-          h('figcaption', {}, item.label)))) : null),
-      h('section', { class: 'sheet-overview-card sheet-evidence-card' },
-        h('div', { class: 'sheet-overview-subsection' },
-          h('p', { class: 'eyebrow' }, '01 · 트렌드 근거'),
-          trends.length ? trends.map((item) => h('article', { class: 'sheet-overview-item' },
-            h('h3', {}, item.name), item.seasons ? h('p', { class: 'muted small' }, item.seasons) : null,
-            item.definition ? h('p', { class: 'sheet-overview-clamp' }, item.definition) : null,
-            item.items.length ? h('p', { class: 'muted small' }, item.items.slice(0, 3).join(' · ')) : null)) : emptyNote('트렌드 결과가 없습니다.')),
-        h('div', { class: 'sheet-overview-subsection' },
-          h('p', { class: 'eyebrow' }, '02 · 재고 근거'),
-          stock.length ? stock.map((slot) => h('article', { class: 'sheet-overview-item' },
-            h('h3', {}, slot.styleName), slot.product
-              ? h('p', {}, `${slot.product.category} · ${slot.product.color ?? '색상 미확인'} · ${slot.product.quantity === null ? '수량 미확인' : `가상 재고 ${slot.product.quantity.toLocaleString('ko-KR')}개`}`)
-              : h('p', { class: 'muted small' }, slot.summary || '매칭 상품이 없습니다.'),
-            slot.reason ? h('p', { class: 'sheet-overview-clamp muted small' }, slot.reason) : null)) : emptyNote('재고 결과가 없습니다.'))),
-      h('section', { class: 'sheet-overview-card sheet-market-card' },
-        h('p', { class: 'eyebrow' }, '04 · 판매·시장 분석'),
-        market?.sections.length ? h('div', { class: 'sheet-overview-metrics' }, market.sections.map((item) => h('article', {},
-          h('p', {}, item.label), h('strong', {}, item.value), item.note ? h('small', {}, item.note) : null))) : emptyNote('시장 분석 결과가 없습니다.'),
-        integration.length ? h('div', { class: 'sheet-overview-integration' },
-          h('p', { class: 'eyebrow' }, '05 · 종합 결과'),
-          integration.slice(0, 2).map((claim) => h('p', {}, claim.text))) : null,
-        h('p', { class: 'sheet-overview-footnote' }, 'SWOT·프로모션 상세는 원본 포스터 보기에서 확인할 수 있습니다.'))));
-}
-
 // --- Trend -----------------------------------------------------------------
 // Cards carry the style and every item it cites, each with its Vogue article photos in a strip that scrolls
 // sideways inside the card; quotes, articles and the style's example-image links open in the side panel.

@@ -630,45 +630,15 @@ dialog {
 dialog::backdrop { background: rgba(0, 0, 0, 0.22); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
 .popover { width: min(460px, calc(100vw - 32px)); }
 .sheet-viewer {
-  width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 14px 20px 20px;
-  overflow: hidden; border: 0; border-radius: 0; color: #fff; background: rgba(18, 18, 18, 0.97);
+  width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0;
+  overflow: auto; border: 0; border-radius: 0; color: #fff; background: rgba(18, 18, 18, 0.97);
 }
-.sheet-viewer[open] { display: flex; flex-direction: column; gap: 10px; }
+.sheet-viewer[open] { display: block; }
 .sheet-viewer::backdrop { background: rgba(0, 0, 0, 0.82); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-.sheet-viewer-head { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; }
+.sheet-viewer-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-sizing: border-box; width: 100vw; padding: 10px 16px; background: rgba(18, 18, 18, 0.97); }
 .sheet-viewer-head h2 { margin: 0; font-size: 16px; font-weight: 500; }
-.sheet-viewer-actions { display: flex; align-items: center; gap: 12px; }
 .sheet-viewer .icon-button { color: #fff; border-color: rgba(255, 255, 255, 0.32); }
-.sheet-viewer-content, .sheet-viewer-poster { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.sheet-viewer-content[hidden], .sheet-viewer-poster[hidden] { display: none; }
-.sheet-viewer-poster { display: flex; justify-content: center; background: #f1f1f0; border-radius: 14px; }
-.sheet-viewer-poster img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.sheet-overview-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.9fr) minmax(300px, 1fr); gap: 14px; width: 100%; height: 100%; min-height: 100%; }
-.sheet-overview-card { min-width: 0; overflow: auto; padding: clamp(18px, 2vw, 30px); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 18px; background: rgba(255, 255, 255, 0.075); }
-.sheet-overview-card .eyebrow { margin: 0 0 10px; color: rgba(255, 255, 255, 0.62); }
-.sheet-overview-card .muted, .sheet-overview-card .empty-note { color: rgba(255, 255, 255, 0.62); }
-.sheet-overview-card h3 { margin: 0 0 8px; font-size: clamp(18px, 1.55vw, 24px); line-height: 1.25; }
-.sheet-overview-definition { margin: 12px 0; color: rgba(255, 255, 255, 0.82); line-height: 1.55; }
-.sheet-overview-profile { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; padding: 0; list-style: none; }
-.sheet-overview-profile li { display: flex; gap: 5px; padding: 6px 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); font-size: 12px; }
-.sheet-overview-profile strong { color: rgba(255, 255, 255, 0.65); font-weight: 500; }
-.sheet-overview-visuals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 16px; }
-.sheet-overview-visuals figure { min-width: 0; margin: 0; }
-.sheet-overview-visuals img { display: block; width: 100%; height: clamp(100px, 18vh, 180px); object-fit: contain; border-radius: 10px; background: rgba(255, 255, 255, 0.9); }
-.sheet-overview-visuals figcaption { margin-top: 5px; color: rgba(255, 255, 255, 0.65); font-size: 11px; }
-.sheet-overview-subsection + .sheet-overview-subsection { margin-top: 20px; padding-top: 18px; border-top: 1px solid rgba(255, 255, 255, 0.13); }
-.sheet-overview-item { padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, 0.1); }
-.sheet-overview-item h3 { font-size: 16px; }
-.sheet-overview-item p { margin: 4px 0 0; color: rgba(255, 255, 255, 0.78); line-height: 1.45; }
-.sheet-overview-clamp { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-.sheet-overview-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-.sheet-overview-metrics article { min-width: 0; padding: 13px; border-radius: 12px; background: rgba(255, 255, 255, 0.1); }
-.sheet-overview-metrics p { margin: 0; color: rgba(255, 255, 255, 0.65); font-size: 12px; }
-.sheet-overview-metrics strong { display: block; margin-top: 7px; font-size: clamp(18px, 1.7vw, 27px); line-height: 1.15; overflow-wrap: anywhere; }
-.sheet-overview-metrics small { display: block; margin-top: 5px; color: rgba(255, 255, 255, 0.58); line-height: 1.35; }
-.sheet-overview-integration { margin-top: 20px; padding-top: 18px; border-top: 1px solid rgba(255, 255, 255, 0.13); }
-.sheet-overview-integration > p:not(.eyebrow) { margin: 8px 0 0; color: rgba(255, 255, 255, 0.82); line-height: 1.45; }
-.sheet-overview-footnote { margin: 18px 0 0; color: rgba(255, 255, 255, 0.55); font-size: 11px; }
+.sheet-viewer-image { display: block; width: 200vw; max-width: none; height: auto; margin: 0; object-fit: contain; }
 /* The panel keeps its head and tabs in place; only its body scrolls. */
 .drawer {
   width: min(780px, calc(100vw - 24px)); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px);
@@ -815,8 +785,6 @@ pre.json, .ev-raw pre {
   .stage-n { font-size: 19px; }
   .stage-name, .stage-status { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .md-grid { grid-template-columns: minmax(0, 1fr); }
-  .sheet-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .sheet-product-card { grid-column: 1 / -1; }
 }
 
 @media (max-width: 860px) {
@@ -839,11 +807,6 @@ pre.json, .ev-raw pre {
   .look-left, .look-right { transform: none; animation: none; }
   .look-sheet { order: -1; }
   .section-n { font-size: 36px; }
-  .sheet-viewer { padding: 10px; }
-  .sheet-viewer-actions { gap: 7px; }
-  .sheet-viewer-actions .btn { min-height: 36px; padding-inline: 10px; font-size: 12px; }
-  .sheet-overview-grid { grid-template-columns: minmax(0, 1fr); }
-  .sheet-product-card { grid-column: auto; }
   .drawer { margin: 8px; width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); }
   .drawer > .dialog-head { padding: 14px 16px 6px; }
   .tabs { padding: 4px 16px 12px; }
