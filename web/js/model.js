@@ -104,6 +104,7 @@ export function trendCards(trendResult) {
       seasons: (style.seasons ?? []).map(seasonLabel).filter(Boolean).join(' · '),
       items: unique(items.map((item) => item.name)),
       quotes,
+      evidenceIds: ids.filter((id) => evidence.has(id)),
       // The UI shows Vogue example images as links; only the planning poster (stage 06) downloads and embeds them.
       exampleLinks: (style.example_images ?? []).slice(0, 5)
         .map((image) => ({ url: safeUrl(image.url), basis: image.basis ?? '' }))
@@ -168,22 +169,26 @@ export function claimView(claim) {
 export function draftView(draftResult) {
   const draft = draftResult?.draft;
   if (!draft) return null;
+  // [key, label, preferred holder]: 'draft' reads result.draft first, 'result' reads the result first.
   const sourceFields = [
-    ['product_profile', '제품 프로필', draft.product_profile],
-    ['attributes', '속성 및 제안', draft.attributes],
-    ['field_origins', '필드 출처', draft.field_origins],
-    ['input_conflicts', '입력 충돌', draft.input_conflicts],
-    ['input_statuses', '상류 입력 상태', draft.input_statuses ?? draftResult.input_statuses],
-    ['planning_analysis', '기획 분석', draftResult.planning_analysis],
-    ['observations', '관측값', draftResult.observations ?? draft.observations],
-    ['proposals', '제안', draftResult.proposals ?? draft.proposals],
-    ['questions_for_validation', '검증 질문', draftResult.questions_for_validation ?? draft.questions_for_validation],
-    ['conflicts', '충돌', draftResult.conflicts],
-    ['validation_issues', '검증 이슈', draftResult.validation_issues],
-    ['generation_metadata', '생성 정보', draftResult.generation_metadata],
-    ['compatibility', '입력 호환성 정보', draftResult.compatibility],
-  ].filter(([, , value]) => value !== undefined && value !== null)
-    .map(([key, label, value]) => ({ key, label, value }));
+    ['product_profile', '제품 프로필', 'draft'],
+    ['attributes', '속성 및 제안', 'draft'],
+    ['field_origins', '필드 출처', 'draft'],
+    ['input_conflicts', '입력 충돌', 'draft'],
+    ['input_statuses', '상류 입력 상태', 'draft'],
+    ['planning_analysis', '기획 분석', 'result'],
+    ['observations', '관측값', 'result'],
+    ['proposals', '제안', 'result'],
+    ['questions_for_validation', '검증 질문', 'result'],
+    ['conflicts', '충돌', 'result'],
+    ['validation_issues', '검증 이슈', 'result'],
+    ['generation_metadata', '생성 정보', 'result'],
+    ['compatibility', '입력 호환성 정보', 'result'],
+  ].map(([key, label, first]) => {
+    const order = first === 'draft' ? [['draft', draft], ['result', draftResult]] : [['result', draftResult], ['draft', draft]];
+    const hit = order.find(([, holder]) => holder[key] !== undefined && holder[key] !== null);
+    return hit ? { key, label, value: hit[1][key], path: hit[0] === 'draft' ? `draft.${key}` : key } : null;
+  }).filter(Boolean);
   return {
     status: draftResult.status ?? null,
     contractVersion: draftResult.schema_version ?? null,
@@ -200,6 +205,11 @@ export function draftView(draftResult) {
     concept: typeof draft.concept?.product_definition?.value === 'string' ? draft.concept.product_definition.value : null,
     errors: Array.isArray(draftResult.errors) ? draftResult.errors : [],
     sections: sourceFields,
+    // Where the lists live in the raw response, so a row can open them in the side panel.
+    listPaths: {
+      limitations: Array.isArray(draft.limitations) && draft.limitations.length ? 'draft.limitations' : 'limitations',
+      errors: 'errors',
+    },
   };
 }
 
@@ -236,7 +246,7 @@ export function reviewView(reviewResult, callRequest = null, callRequestArtifact
     ['draft_context', '검토 대상 상품 정보'],
     ['evidence', '근거'],
   ].filter(([key]) => result[key] !== undefined && result[key] !== null)
-    .map(([key, label]) => ({ key, label, value: result[key] }));
+    .map(([key, label]) => ({ key, label, value: result[key], path: result === reviewResult ? key : `result.${key}` }));
   const product = callRequest?.input?.product && typeof callRequest.input.product === 'object' && !Array.isArray(callRequest.input.product)
     ? callRequest.input.product : null;
   // Under 0.3 P08 sends each field's provenance with the request (input.product_evidence); a run whose
@@ -275,6 +285,7 @@ export function reviewView(reviewResult, callRequest = null, callRequestArtifact
     inputEvidenceSent: Boolean(sentEvidence),
     callRequestArtifactId,
     errors: Array.isArray(result.errors) ? result.errors : [],
+    listPaths: Object.fromEntries(['errors', 'missing_data', 'limitations'].map((key) => [key, result === reviewResult ? key : `result.${key}`])),
     missingData: Array.isArray(result.missing_data) ? result.missing_data : [],
     limitations: unique([...(Array.isArray(result.limitations) ? result.limitations : []), ...(Array.isArray(reviewResult.limitations) ? reviewResult.limitations : [])]),
   };
@@ -311,21 +322,6 @@ export function sourceResult(result, key) {
   return result?.sources?.[key]?.raw_response?.result ?? null;
 }
 
-export function runSummary(envelope) {
-  const result = envelope?.result ?? {};
-  const image = result.final_image ?? {};
-  const imageCalls = Number.isInteger(image.provider_calls) ? image.provider_calls : null;
-  return {
-    requestId: result.request_id ?? envelope?.request_id ?? null,
-    status: result.status ?? envelope?.status ?? null,
-    contract: envelope?.contract_version ?? null,
-    image: { status: image.status ?? null, reason: image.reason ?? '', calls: imageCalls },
-    limitations: unique(result.limitations ?? []),
-    errors: (result.errors ?? []).map((error) => `${error.stage ?? '-'} · ${error.code ?? 'ERROR'}`),
-    mdReview: result.md_review ?? null,
-  };
-}
-
 // 기획서 PNG (GET /api/workflow/runs/{id}/planning-sheet.png): offered only for a finished run.
 const TERMINAL = new Set(['ok', 'partial', 'no_results', 'error']);
 const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
@@ -339,16 +335,139 @@ export function planningSheetLink(summary, { inFlight = false } = {}) {
   };
 }
 
-export function lineageRows(result) {
-  return (result?.stages ?? []).map((stage) => ({
-    n: String(stage.sequence ?? '').padStart(2, '0'),
-    stage: stage.stage,
-    status: stage.status,
-    input: shortSha(stage.input_sha256),
-    response: shortSha(stage.response_sha256),
-    started: stage.started_at ?? '',
-    completed: stage.completed_at ?? '',
+// --- One fact, one place -----------------------------------------------------
+// The page prints readable summaries; evidence and JSON live only in the side panel, each once.
+
+// The orchestrator's per-stage errors ({stage, code, message}), printed in that stage's section.
+export function stageErrors(result, stageKeys) {
+  const keys = new Set([stageKeys].flat());
+  return (Array.isArray(result?.errors) ? result.errors : [])
+    .filter((error) => error && keys.has(error.stage))
+    .map((error) => ({ code: error.code ?? 'ERROR', message: typeof error.message === 'string' ? error.message : '' }));
+}
+
+// A producer's own error list, minus the codes its section already prints.
+export function withoutShownErrors(errors, shown) {
+  const codes = new Set((shown ?? []).map((error) => error.code));
+  return (errors ?? []).filter((error) => !(error && typeof error === 'object' && codes.has(error.code)));
+}
+
+// Keeps the first occurrence of each item across several lists, in order.
+export function firstOccurrences(lists) {
+  const seen = new Set();
+  return lists.map((list) => (list ?? []).filter((item) => {
+    const key = typeof item === 'string' ? item : JSON.stringify(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   }));
+}
+
+// Spine progress: a stage counts once it has a producer outcome.
+const SETTLED_TONES = new Set(['ok', 'partial', 'none', 'error']);
+
+export function railProgress(items) {
+  const done = items.filter((item) => SETTLED_TONES.has(item.tone)).length;
+  return { done, total: items.length, running: items.find((item) => item.tone === 'running') ?? null };
+}
+
+export function evidenceItem(evidence) {
+  const e = evidence && typeof evidence === 'object' ? evidence : {};
+  return {
+    id: typeof e.evidence_id === 'string' ? e.evidence_id : null,
+    text: e.quote ?? e.analysis?.interpretation ?? null,
+    title: e.title ?? e.source_name ?? null,
+    url: safeUrl(e.url),
+    date: e.published_at ?? e.as_of ?? e.fetched_at ?? null,
+    detail: typeof e.locator === 'string' ? e.locator : null,
+    raw: e,
+  };
+}
+
+// Side-panel evidence: trend evidence grouped under the first style that cites it, the trend evidence no
+// style cites, then stock and P07 evidence. Every evidence record appears in exactly one group.
+export function evidenceGroups(result) {
+  const groups = [];
+  const trend = sourceResult(result, 'trend');
+  const records = new Map((Array.isArray(trend?.evidence) ? trend.evidence : []).map((e) => [e.evidence_id, e]));
+  const shown = new Set();
+  trendCards(trend).forEach((card, index) => {
+    const ids = card.evidenceIds;
+    const fresh = ids.filter((id) => !shown.has(id));
+    fresh.forEach((id) => shown.add(id));
+    groups.push({ anchor: `ev-trend-${index}`, stage: 'trend', title: card.name, items: fresh.map((id) => evidenceItem(records.get(id))),
+      sharedCount: ids.length - fresh.length, exampleLinks: card.exampleLinks });
+  });
+  const rest = [...records.keys()].filter((id) => !shown.has(id));
+  if (rest.length) groups.push({ anchor: 'ev-trend-other', stage: 'trend', title: '스타일에 연결되지 않은 트렌드 근거', items: rest.map((id) => evidenceItem(records.get(id))), sharedCount: 0, exampleLinks: [] });
+  for (const [stage, title] of [['stock', '재고 근거'], ['sales_market_review', '시장 근거 (P07)']]) {
+    const list = sourceResult(result, stage)?.evidence;
+    if (Array.isArray(list) && list.length) groups.push({ anchor: `ev-${stage}`, stage, title, items: list.map(evidenceItem), sharedCount: 0, exampleLinks: [] });
+  }
+  // Different records can carry the same sentence (e.g. P07's interpretation); it is printed under the first.
+  const texts = new Map();
+  for (const group of groups) {
+    group.items = group.items.map((item) => {
+      if (!item.text) return item;
+      if (texts.has(item.text)) return { ...item, text: null, sameTextAs: texts.get(item.text) };
+      texts.set(item.text, item.id);
+      return item;
+    });
+  }
+  return groups;
+}
+
+// Side-panel JSON: a stage's raw result split into its top-level fields (Draft fields one level deeper),
+// each with a stable anchor. `evidence` is printed by the evidence tab, so here it is only pointed to.
+const EXPAND = Object.freeze({ planning_draft: 'draft', sales_market_review: 'result' });
+
+export function jsonAnchor(stage, path) {
+  return `json-${stage}-${String(path).replace(/[^A-Za-z0-9_.-]/g, '_')}`;
+}
+
+export function isEmptyValue(value) {
+  return value === null || value === undefined || (Array.isArray(value) ? value.length === 0 : typeof value === 'object' && Object.keys(value).length === 0);
+}
+
+export function rawFields(result, stage) {
+  const raw = result?.sources?.[stage]?.raw_response;
+  if (!raw || typeof raw !== 'object') return [];
+  const fields = [];
+  const push = (path, value) => fields.push(path.endsWith('evidence') && Array.isArray(value)
+    ? { path, anchor: jsonAnchor(stage, path), pointer: 'evidence', count: value.length }
+    : { path, anchor: jsonAnchor(stage, path), value, empty: isEmptyValue(value) });
+  // The response envelope (contract, producer, status) and the echoed request id are run bookkeeping, not content.
+  const body = raw.result && typeof raw.result === 'object' ? raw.result : {};
+  for (const [key, value] of Object.entries(body)) {
+    if (key === 'request_id') continue;
+    if (key === EXPAND[stage] && value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [sub, subValue] of Object.entries(value)) push(`${key}.${sub}`, subValue);
+    } else push(key, value);
+  }
+  return fields;
+}
+
+// The panel's JSON tab: every stage's fields, where a value already printed above (producers copy lists such as
+// evidence_ids or input_statuses between fields and stages) becomes a pointer to its first print.
+export function panelJson(result) {
+  const seen = new Map();
+  return STAGES.filter((stage) => result?.sources?.[stage.key]).map((stage) => ({
+    ...stage,
+    fields: rawFields(result, stage.key).map((field) => {
+      if (field.pointer || field.empty) return field;
+      const text = JSON.stringify(field.value);
+      if (text.length <= 40) return field;
+      if (seen.has(text)) return { ...field, sameAs: seen.get(text) };
+      seen.set(text, { path: `${stage.n} ${field.path}`, anchor: field.anchor });
+      return field;
+    }),
+  }));
+}
+
+// Long encoded strings (base64 images) are summarised in the JSON view; the value itself is not changed.
+export function compactJson(value, limit = 600) {
+  return JSON.stringify(value, (key, item) => (typeof item === 'string' && item.length > limit && /^[A-Za-z0-9+/=\s]+$/.test(item.slice(0, 200))
+    ? `…(${item.length.toLocaleString('ko-KR')}자 인코딩 데이터 생략)` : item), 2);
 }
 
 // --- Errors ----------------------------------------------------------------
