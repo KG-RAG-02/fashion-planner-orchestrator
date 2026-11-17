@@ -102,6 +102,7 @@ export const STAGE_TARGET = Object.freeze({
 
 // Stages without a page section (03 Draft, 04 Review): once they have reported, their sidebar row opens the
 // side panel's JSON tab at that stage, where its errors and raw response are printed.
+// Keep these for raw JSON/error fallback rendering; both stages now have page sections.
 export const PANEL_STAGES = Object.freeze(['planning_draft', 'sales_market_review']);
 
 export function panelStageAnchor(stage) {
@@ -113,7 +114,7 @@ const SETTLED = new Set(['ok', 'partial', 'none', 'error']);
 function railLink(item, { linked, reported }) {
   if (!linked) return h('span', { class: 'stage-link' });
   if (STAGE_TARGET[item.key]) return h('a', { class: 'stage-link', href: `#${STAGE_TARGET[item.key]}` });
-  if (PANEL_STAGES.includes(item.key) && reported.has(item.key)) {
+  if (!STAGE_TARGET[item.key] && PANEL_STAGES.includes(item.key) && reported.has(item.key)) {
     return h('button', { type: 'button', class: 'stage-link', title: `${item.ko} 오류·원문을 패널에서 보기`,
       dataset: { panelTab: 'json', panelAnchor: panelStageAnchor(item.key) } });
   }
