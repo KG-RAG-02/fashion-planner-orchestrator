@@ -95,8 +95,7 @@
             "women",
             "men",
             "unisex",
-            "unknown",
-            null
+            "unknown"
           ]
         },
         "season": {
