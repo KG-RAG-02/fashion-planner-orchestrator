@@ -239,7 +239,7 @@ export function renderConcept(section, envelope, { retryEnabled = false, onRetry
   fill(section,
     h('div', { class: 'feature-intro' },
       h('div', { class: 'feature-head' },
-        h('p', { class: 'eyebrow' }, 'INTEGRATED DRAFT'),
+        h('p', { class: 'eyebrow' }, '05 · INTEGRATED DRAFT'),
         h('h2', { id: 'concept-title', class: 'concept-title' }, draft?.title ?? '통합 결과')),
       h('div', { class: 'feature-copy' },
         h('p', { class: 'muted' }, '기획 초안과 시장 검토를 통합한 결과입니다. 가격·원가·수량·발주·최종 채택은 MD가 결정합니다.'),
