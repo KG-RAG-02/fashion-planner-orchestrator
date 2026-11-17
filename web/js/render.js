@@ -97,7 +97,7 @@ function foldList(title, items) {
 
 // Stages with a page section: their sidebar row scrolls to it.
 export const STAGE_TARGET = Object.freeze({
-  trend: 'trend-block', stock: 'stock-block', sales_market_review: 'market-block', integration: 'concept', final_image: 'lookbook',
+  trend: 'trend-block', stock: 'stock-block', planning_draft: 'draft-block', sales_market_review: 'market-block', integration: 'concept', final_image: 'lookbook',
 });
 
 // Stages without a page section (03 Draft, 04 Review): once they have reported, their sidebar row opens the
@@ -194,6 +194,30 @@ function visualFigure(view, item, side) {
           h('img', { src: artifactUrl(item.sha256), alt: `${view.title} — ${item.label} 시안 (P06)`, loading: 'lazy' }))
       : h('div', { class: 'look-frame look-empty' }, item.reason || '이미지 없음'),
     h('figcaption', {}, h('strong', {}, item.label), ` ${model.statusMeta(item.status).label}${item.model ? ` · ${item.model}` : ''}`));
+}
+
+export function renderDraftStage(section, draft, { errors = [] } = {}) {
+  const meta = model.statusMeta(draft?.status);
+  if (!draft) {
+    fill(section, sectionHead({ id: 'draft-title', n: '03', title: '새상품 생성' }), stageErrorList(errors),
+      emptyNote(errors.length ? 'P06 응답에 새상품 결과가 없습니다.' : 'P06 응답을 아직 받지 않았습니다.'));
+    return;
+  }
+  const profile = [
+    ['카테고리', draft.category], ['상품 종류', draft.productType], ['성별', draft.gender],
+    ['시즌', draft.season], ['소재', draft.material],
+  ].filter(([, value]) => typeof value === 'string' && value.trim());
+  const visuals = draft.visuals ?? [];
+  fill(section,
+    sectionHead({ id: 'draft-title', n: '03', title: '새상품 생성', meta: `P06 · ${meta.label}` }),
+    stageErrorList(errors),
+    h('div', { class: 'draft-stage-main' },
+      h('div', { class: 'draft-stage-copy' },
+        h('p', { class: 'draft-stage-name' }, draft.title),
+        draft.concept ? h('p', { class: 'draft-stage-definition' }, draft.concept) : null,
+        profile.length ? h('ul', { class: 'draft-profile' }, profile.map(([label, value]) => h('li', {}, h('strong', {}, `${label} · `), value))) : null),
+      visuals.length ? h('div', { class: 'draft-visuals' }, visuals.map((item, index) => visualFigure(draft, item, index ? 'right' : 'left'))) : null),
+    foldList('기획 한계', draft.limitations));
 }
 
 export function renderConcept(section, envelope, { retryEnabled = false, onRetry, errors = [], limitations = [], sheetLink = null, sheetWaiting = null } = {}) {

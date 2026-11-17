@@ -194,6 +194,13 @@ export function claimView(claim) {
 export function draftView(draftResult) {
   const draft = draftResult?.draft;
   if (!draft) return null;
+  const productDefinition = draft.product_definition ?? draft.concept?.product_definition;
+  const definitionText = typeof productDefinition === 'string' ? productDefinition
+    : typeof productDefinition?.value === 'string' ? productDefinition.value : null;
+  const profileValue = (key) => {
+    const value = draft.product_profile?.[key];
+    return typeof value === 'string' ? value : typeof value?.value === 'string' ? value.value : null;
+  };
   // [key, label, preferred holder]: 'draft' reads result.draft first, 'result' reads the result first.
   const sourceFields = [
     ['product_profile', '제품 프로필', 'draft'],
@@ -227,7 +234,10 @@ export function draftView(draftResult) {
     identity: draftResult.draft_identity ?? null,
     visuals: draftVisuals(draft.visuals),
     imageCalls: Number.isInteger(draftResult.image_generation_calls) ? draftResult.image_generation_calls : null,
-    concept: typeof draft.concept?.product_definition?.value === 'string' ? draft.concept.product_definition.value : null,
+    concept: definitionText,
+    productType: profileValue('product_type'),
+    gender: profileValue('gender'),
+    material: profileValue('material'),
     errors: Array.isArray(draftResult.errors) ? draftResult.errors : [],
     sections: sourceFields,
     // Where the lists live in the raw response, so a row can open them in the side panel.
