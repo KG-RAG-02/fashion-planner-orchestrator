@@ -213,9 +213,13 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotEqual(result['status'], 'error', result['result']['errors'])
         self.assertEqual(calls[0]['input'], {
             'request_id': self.rid,
-            'product': {'category': 'Outerwear', 'material': 'wool blend'},  # a proposal-kind season is not sent
+            'product': {'category': 'Outerwear', 'product_type': 'Outerwear', 'gender': 'unknown',
+                        'season': '미정', 'material': 'wool blend'},
             'product_evidence': {
                 'category': {'kind': 'user_requested', 'source_ref': 'p06.draft.product_profile.category', 'evidence_ids': []},
+                'product_type': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.product_type', 'evidence_ids': []},
+                'gender': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.gender', 'evidence_ids': []},
+                'season': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.season', 'evidence_ids': []},
                 'material': {'kind': 'evidence_observation', 'source_ref': 'p06.draft.product_profile.material',
                              'evidence_ids': ['trend:e1']}}})
         self.contract.semantic(result, self.rid, self.store)
@@ -229,9 +233,13 @@ class WorkflowTests(unittest.TestCase):
         draft = {'evidence_ids': [], 'draft': {'category': '가디건', 'product_profile': profile}}
         self.assertEqual(p07_review_input(draft, 'req-1'), {
             'request_id': 'req-1',
-            'product': {'category': '가디건', 'material': '울 혼방 니트'},  # a proposal-kind season is still not sent
+            'product': {'category': '가디건', 'product_type': '가디건', 'gender': 'unknown',
+                        'season': '2026FW', 'material': '울 혼방 니트'},
             'product_evidence': {
                 'category': {'kind': 'user_requested', 'source_ref': 'p06.draft.product_profile.category', 'evidence_ids': []},
+                'product_type': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.product_type', 'evidence_ids': []},
+                'gender': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.gender', 'evidence_ids': []},
+                'season': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.season', 'evidence_ids': []},
                 'material': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.material', 'evidence_ids': []}}})
 
     def test_p06_trend_basis_and_the_p07_consumer_projection_pass_every_check(self):
@@ -268,7 +276,8 @@ class WorkflowTests(unittest.TestCase):
         self.workflow.adapters['sales_market_review'] = p07
         envelope = self.run_flow()['envelope']
         self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
-        self.assertEqual(sent, [{'category': 'Outerwear', 'material': 'wool'}])
+        self.assertEqual(sent, [{'category': 'Outerwear', 'product_type': 'Outerwear', 'gender': 'unknown',
+                              'season': '미정', 'material': 'wool'}])
         self.contract.schema(envelope, 'integrated-result.schema.json')
         self.contract.semantic(envelope, self.rid, self.store)
         body = envelope['result']

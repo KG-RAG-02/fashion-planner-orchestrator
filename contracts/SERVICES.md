@@ -174,7 +174,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 - **합성 source**: `VOGUE_P07_REVIEW_SOURCE=synthetic_local_fixture`이면 고정된 합성 발췌를 씁니다. 결과는 `SYNTHETIC TEST DATA ONLY`로 표기되며, Draft의 카테고리·시즌과 연결되지 않습니다.
 - **계약 고정**: `resources/workflow_contract/snapshot.json`. 불일치하면 import 단계에서 `SCHEMA_SNAPSHOT_CHANGED`로 막힙니다.
 - **환경변수**: `VOGUE_AGENT_SERVICE_BEARER_TOKEN`, `VOGUE_UPSTREAM_ARTIFACT_ROOT`, `VOGUE_P07_REVIEW_ARTIFACT_DIR`, `VOGUE_R2_HM_DB_CACHE_DIR`, `VOGUE_P07_REVIEW_SOURCE`, `R2_*`, `VOGUE_PROJECT07_DISABLE_DOTENV=1`
-- **배포 차이**: P08 Compose는 P07에 `GET /api/health` healthcheck와 `service_healthy` 의존 조건을 둡니다. 다만 확인한 P07 `main`의 Dockerfile은 `python -m market_research_agent.runtime`을 실행하고, 이 모듈은 HTTP 서버를 시작하지 않습니다. handler의 `serve()`도 loopback 외 bind를 거부합니다. 그러므로 Compose의 healthcheck는 현재 P07 이미지에서 통과할 수 없습니다. P07 소유 저장소에서 서비스 진입점과 bind 정책을 구현한 뒤 연결을 검증해야 합니다.
+- **배포 차이**: P07 `main`의 Dockerfile은 `vogue-sales-market-review-http --service-mode --host 0.0.0.0 --port 8766`을 실행합니다. P08 Compose의 `GET /api/health` healthcheck와 `service_healthy` 의존 조건이 동작합니다. 2026-11-17 P08/P06/P07 실연결 통합 실행에서 P07 `/reviews`는 HTTP 200과 이 계약에 맞는 `partial` 응답을 반환했습니다. P07은 DuckDB 메모리 부족과 타깃 LLM 출력 검증 오류를 보고했습니다. workflow baseline은 `proposed`라 개발 실행에만 `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`을 사용했습니다.
 - **증거**: 테스트 191 / 17 / 19건(DuckDB 포함, skip 0)
 
 ## 5. vogue-orchestrator (P08 · 오케스트레이터와 UI)

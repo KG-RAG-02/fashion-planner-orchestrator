@@ -37,6 +37,7 @@ LAYOUT = (
     ("R2_SECRET_ACCESS_KEY", "copy:R2_SECRET_ACCESS_KEY", None),
     ("R2_ENDPOINT", "copy:R2_ENDPOINT", None),
     ("R2_DB_KEY", "copy:R2_DB_KEY", None),
+    ("VOGUE_HM_RESEARCH_AGGREGATE_R2_KEY", "copy:VOGUE_HM_RESEARCH_AGGREGATE_R2_KEY", None),
     ("R2_IMAGE_PREFIX", "copy:R2_IMAGE_PREFIX", None),
     ("# --- data profile: Neo4j Aura for the trend graph (fill these in yourself) ---", None, None),
     ("NEO4J_URI", "blank", None),

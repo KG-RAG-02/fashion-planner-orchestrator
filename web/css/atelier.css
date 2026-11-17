@@ -486,6 +486,23 @@ body[data-run="running"] .btn-cta::before { opacity: 1; transform: scaleX(var(--
 .state-waiting .look-empty { border-style: solid; border-color: rgba(229, 0, 16, 0.35); }
 .lookbook-note { margin: -8px 0 0; text-align: center; }
 
+/* P06 Draft stage: concise product definition and generated concept visuals. */
+.draft-stage-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr); align-items: center; gap: clamp(22px, 4vw, 56px); }
+.draft-stage-copy { min-width: 0; }
+.draft-stage-name { margin: 0; font-family: var(--serif); font-size: clamp(28px, 4vw, 48px); line-height: 1.12; }
+.draft-stage-definition { max-width: 760px; margin: 18px 0 0; color: var(--graphite); font-size: clamp(15px, 1.45vw, 19px); line-height: 1.75; white-space: pre-line; }
+.draft-profile { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 22px 0 0; list-style: none; }
+.draft-profile li { padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--graphite); font-size: 13px; }
+.draft-profile strong { color: var(--ink); font-weight: 600; }
+.draft-visuals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; min-width: 0; }
+.draft-visuals .look-frame { aspect-ratio: 2 / 3; background: #F1F1F0; }
+.draft-visuals .look-frame img { width: 100%; height: 100%; object-fit: contain; }
+.draft-visuals .look figcaption { font-size: 12px; }
+.draft-evidence { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); }
+.draft-evidence h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--graphite); }
+.draft-evidence ul { display: grid; gap: 7px; margin: 0; padding-left: 18px; color: var(--graphite); font-size: 14px; line-height: 1.55; }
+.draft-evidence li small { margin-left: 8px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+
 /* --- Entries (trend styles, stock slots) ----------------------------------------------------- */
 
 .entry-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 0 32px; }
@@ -543,6 +560,16 @@ body[data-run="running"] .btn-cta::before { opacity: 1; transform: scaleX(var(--
 .product-image { flex: 0 0 76px; width: 76px; height: 96px; object-fit: cover; border-radius: 12px; background: #E3E3E2; border: 1px solid rgba(255, 255, 255, 0.9); }
 .product-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .no-match { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: var(--radius-sm); border: 1px dashed var(--slate); color: var(--slate); font-size: 13px; }
+
+/* P07 sales and market values are shown from the producer response without inferred fallbacks. */
+.market-note { margin: -6px 0 0; }
+.market-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.market-value { min-width: 0; padding: 16px 18px; border: 1px solid var(--hair); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.58); }
+.market-value-label { margin: 0 0 8px; color: var(--graphite); font-size: 12px; }
+.market-value-number { display: block; font-size: clamp(18px, 2vw, 24px); line-height: 1.3; overflow-wrap: anywhere; }
+.market-value-note { margin: 7px 0 0; color: var(--graphite); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.market-status-note, .market-error-note { margin: 0; overflow-wrap: anywhere; }
+.market-error-note { color: var(--red-text); }
 
 /* --- Folded lists (the concept's run limitations) ------------------------------------------- */
 
@@ -752,7 +779,10 @@ pre.json, .ev-raw pre {
 
 @media (max-width: 860px) {
   .feature-intro { grid-template-columns: minmax(0, 1fr); }
+  .market-grid { grid-template-columns: minmax(0, 1fr); }
   .lookbook { grid-template-columns: minmax(0, 0.7fr) minmax(0, 2fr) minmax(0, 0.7fr); }
+  .draft-stage-main { grid-template-columns: minmax(0, 1fr); }
+  .draft-visuals { max-width: 620px; }
 }
 
 @media (max-width: 680px) {

@@ -33,9 +33,9 @@ def require(condition, code):
         raise ContractViolation(code)
 
 
-# P06 profile claim kinds P08 forwards to P07, per field ('*' = every other allowlisted field).
-FORWARDED_CLAIM_KINDS = {'*': frozenset({'user_requested', 'evidence_observation'}),
-                         'material': frozenset({'user_requested', 'evidence_observation', 'proposal'})}
+# P06 product profile fields forwarded to P07. Proposal claims are retained as review inputs.
+FORWARDED_CLAIM_KINDS = frozenset({'user_requested', 'evidence_observation', 'proposal'})
+P07_PRODUCT_FIELDS = ('product_type', 'gender', 'season', 'material')
 
 
 def p07_review_input(draft, request_id):
@@ -48,9 +48,9 @@ def p07_product_projection(draft):
     """The allowlisted product fields P07 receives, read from P06's validated draft.product_profile, and each
     field's provenance (kind, source_ref, evidence_ids).
 
-    Only values P06 marked user_requested or evidence_observation are sent, except the material: P06's proposed
-    material is also sent, with kind 'proposal' kept in its provenance, so P07 can look up fabric costs for the
-    proposed product (user decision 2026-11-16; P07 0.3 field_evidence accepts 'proposal')."""
+    Category, product type, gender, season, and material are always present. Existing supported claims retain
+    their values and provenance. Missing or non-forwardable profile values use deterministic review placeholders
+    with kind 'proposal'; P07 receives the provenance and must treat these as proposals, not confirmed facts."""
     require(isinstance(draft, dict), 'P06_DRAFT_REQUIRED')
     draft_body = draft.get('draft') if isinstance(draft.get('draft'), dict) else None
     require(draft_body is not None, 'P06_DRAFT_REQUIRED')
@@ -70,7 +70,7 @@ def p07_product_projection(draft):
         require(isinstance(evidence_ids, list) and all(isinstance(item, str) for item in evidence_ids),
                 'P06_PRODUCT_EVIDENCE_INVALID')
         require(set(evidence_ids).issubset(set(draft_evidence_ids)), 'P06_PRODUCT_EVIDENCE_REFERENCE_INVALID')
-        if value is None or kind not in FORWARDED_CLAIM_KINDS.get(field, FORWARDED_CLAIM_KINDS['*']):
+        if value is None or kind not in FORWARDED_CLAIM_KINDS:
             return None
         require(isinstance(value, str) and bool(value.strip()), 'P06_PRODUCT_CLAIM_INVALID')
         evidence[field] = {'kind': kind, 'source_ref': f'p06.draft.product_profile.{field}',
@@ -80,14 +80,28 @@ def p07_product_projection(draft):
     evidence = {}
     product = {'category': profile_value('category')}
     require(product['category'] and product['category'] == draft_body.get('category'), 'P06_PRODUCT_CATEGORY_REQUIRED')
-    for key in ('product_type', 'gender', 'season', 'material'):
+
+    # P07 requires a usable product definition. Preserve sourced/model proposals when present;
+    # fill missing fields deterministically and label each fallback as a proposal.
+    category = product['category']
+    fallbacks = {
+        'product_type': category,
+        'gender': 'unknown',
+        'season': (draft_body.get('season') if isinstance(draft_body.get('season'), str)
+                   and draft_body.get('season').strip() else '미정'),
+        'material': '혼방 소재',
+    }
+    for key in P07_PRODUCT_FIELDS:
+        claim = profile.get(key)
         value = profile_value(key)
-        if key == 'gender' and value is not None:
-            require(value in {'women', 'men', 'unisex', 'unknown'}, 'P06_PRODUCT_GENDER_INVALID')
-        if value:
-            product[key] = value
-        else:
-            evidence.pop(key, None)
+        if value is None:
+            fallback = fallbacks[key]
+            if key == 'gender' and fallback not in {'women', 'men', 'unisex', 'unknown'}:
+                fallback = 'unknown'
+            value = fallback
+            evidence[key] = {'kind': 'proposal', 'source_ref': f'p06.draft.product_profile.{key}',
+                             'evidence_ids': []}
+        product[key] = value
     return product, evidence
 
 

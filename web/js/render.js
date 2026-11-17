@@ -97,11 +97,12 @@ function foldList(title, items) {
 
 // Stages with a page section: their sidebar row scrolls to it.
 export const STAGE_TARGET = Object.freeze({
-  trend: 'trend-block', stock: 'stock-block', integration: 'concept', final_image: 'lookbook',
+  trend: 'trend-block', stock: 'stock-block', planning_draft: 'draft-block', sales_market_review: 'market-block', integration: 'concept', final_image: 'lookbook',
 });
 
 // Stages without a page section (03 Draft, 04 Review): once they have reported, their sidebar row opens the
 // side panel's JSON tab at that stage, where its errors and raw response are printed.
+// Keep these for raw JSON/error fallback rendering; both stages now have page sections.
 export const PANEL_STAGES = Object.freeze(['planning_draft', 'sales_market_review']);
 
 export function panelStageAnchor(stage) {
@@ -113,7 +114,7 @@ const SETTLED = new Set(['ok', 'partial', 'none', 'error']);
 function railLink(item, { linked, reported }) {
   if (!linked) return h('span', { class: 'stage-link' });
   if (STAGE_TARGET[item.key]) return h('a', { class: 'stage-link', href: `#${STAGE_TARGET[item.key]}` });
-  if (PANEL_STAGES.includes(item.key) && reported.has(item.key)) {
+  if (!STAGE_TARGET[item.key] && PANEL_STAGES.includes(item.key) && reported.has(item.key)) {
     return h('button', { type: 'button', class: 'stage-link', title: `${item.ko} 오류·원문을 패널에서 보기`,
       dataset: { panelTab: 'json', panelAnchor: panelStageAnchor(item.key) } });
   }
@@ -194,6 +195,33 @@ function visualFigure(view, item, side) {
           h('img', { src: artifactUrl(item.sha256), alt: `${view.title} — ${item.label} 시안 (P06)`, loading: 'lazy' }))
       : h('div', { class: 'look-frame look-empty' }, item.reason || '이미지 없음'),
     h('figcaption', {}, h('strong', {}, item.label), ` ${model.statusMeta(item.status).label}${item.model ? ` · ${item.model}` : ''}`));
+}
+
+export function renderDraftStage(section, draft, { errors = [] } = {}) {
+  const meta = model.statusMeta(draft?.status);
+  if (!draft) {
+    fill(section, sectionHead({ id: 'draft-title', n: '03', title: '새상품 생성' }), stageErrorList(errors),
+      emptyNote(errors.length ? 'P06 응답에 새상품 결과가 없습니다.' : 'P06 응답을 아직 받지 않았습니다.'));
+    return;
+  }
+  const profile = [
+    ['카테고리', draft.category], ['상품 종류', draft.productType], ['성별', draft.gender],
+    ['시즌', draft.season], ['소재', draft.material],
+  ].filter(([, value]) => typeof value === 'string' && value.trim());
+  const visuals = draft.visuals ?? [];
+  const evidence = (draft.evidenceClaims ?? []).map((item) => h('li', {},
+    h('span', {}, item.text), item.refs ? h('small', {}, `근거 ${item.refs}건`) : null));
+  fill(section,
+    sectionHead({ id: 'draft-title', n: '03', title: '새상품 생성', meta: `P06 · ${meta.label}` }),
+    stageErrorList(errors),
+    h('div', { class: 'draft-stage-main' },
+      h('div', { class: 'draft-stage-copy' },
+        h('p', { class: 'draft-stage-name' }, draft.title),
+        draft.concept ? h('p', { class: 'draft-stage-definition' }, draft.concept) : null,
+        profile.length ? h('ul', { class: 'draft-profile' }, profile.map(([label, value]) => h('li', {}, h('strong', {}, `${label} · `), value))) : null),
+      visuals.length ? h('div', { class: 'draft-visuals' }, visuals.map((item, index) => visualFigure(draft, item, index ? 'right' : 'left'))) : null),
+    evidence.length ? h('div', { class: 'draft-evidence' }, h('h3', {}, '근거'), h('ul', {}, evidence)) : null,
+    foldList('기획 한계', draft.limitations));
 }
 
 export function renderConcept(section, envelope, { retryEnabled = false, onRetry, errors = [], limitations = [], sheetLink = null, sheetWaiting = null } = {}) {
@@ -314,6 +342,33 @@ export function renderStock(section, slots, { errors = [] } = {}) {
   }
   fill(section, sectionHead({ id: 'stock-title', n: '02', title: '재고 매칭', meta: '스타일별 과잉 재고 후보' }),
     stageErrorList(errors), slots.length ? grid : emptyNote('재고 단계 결과가 없습니다.'));
+}
+
+function marketValueCard(section) {
+  return h('article', { class: 'market-value' },
+    h('p', { class: 'market-value-label' }, section.label),
+    h('strong', { class: 'market-value-number' }, section.value),
+    section.note ? h('p', { class: 'market-value-note' }, section.note) : null);
+}
+
+export function renderMarket(container, market, { errors = [] } = {}) {
+  if (!market) {
+    fill(container, sectionHead({ id: 'market-title', n: '04', title: '판매·시장 분석' }),
+      stageErrorList(errors), emptyNote(errors.length ? 'P07 응답에 판매·시장 결과가 없습니다.' : 'P07 응답을 아직 받지 않았습니다.'));
+    return;
+  }
+  const meta = model.statusMeta(market.status);
+  fill(container,
+    sectionHead({ id: 'market-title', n: '04', title: '판매·시장 분석', meta: `P07 · ${meta.label}` }),
+    h('p', { class: 'small muted market-note' }, 'P07 분석 핵심 요약 · 상세 응답은 근거·원문 패널에서 확인할 수 있습니다.'),
+    stageErrorList(errors),
+    market.sections.length
+      ? h('div', { class: 'market-grid' }, market.sections.map(marketValueCard))
+      : emptyNote('P07 응답에 표시할 요약 결과가 없습니다.'),
+    market.missingData.length ? h('p', { class: 'small muted market-status-note' }, `미확인 자료 ${market.missingData.length}개 · ${market.missingData.slice(0, 2).join(', ')}`) : null,
+    market.errors.length ? h('p', { class: 'small market-error-note' }, `P07 분석 오류 ${market.errors.length}건 · ${market.errors.slice(0, 2).join(', ')}`) : null,
+    market.limitations.length ? h('details', { class: 'limits' }, h('summary', {}, `분석 한계 ${market.limitations.length}건`),
+      h('ul', {}, market.limitations.map((item) => h('li', {}, item)))) : null);
 }
 
 // --- MD decision -------------------------------------------------------------

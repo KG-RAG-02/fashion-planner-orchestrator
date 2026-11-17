@@ -194,6 +194,26 @@ export function claimView(claim) {
 export function draftView(draftResult) {
   const draft = draftResult?.draft;
   if (!draft) return null;
+  const productDefinition = draft.product_definition ?? draft.concept?.product_definition;
+  const definitionText = typeof productDefinition === 'string' ? productDefinition
+    : typeof productDefinition?.value === 'string' ? productDefinition.value : null;
+  const profileValue = (key) => {
+    const value = draft.product_profile?.[key];
+    return typeof value === 'string' ? value : typeof value?.value === 'string' ? value.value : null;
+  };
+  const evidenceClaims = [
+    ...(Array.isArray(draft.opportunity_findings) ? draft.opportunity_findings.map((item) => ({
+      text: typeof item?.statement === 'string' ? item.statement : item?.statement?.value,
+      refs: Array.isArray(item?.evidence_refs) ? item.evidence_refs.length : Array.isArray(item?.evidence_ids) ? item.evidence_ids.length : 0,
+    })) : []),
+    ...(Array.isArray(draft.claims) ? draft.claims.map((item) => ({
+      text: item?.text,
+      refs: Array.isArray(item?.evidence_refs) ? item.evidence_refs.length : Array.isArray(item?.evidence_ids) ? item.evidence_ids.length : 0,
+    })) : []),
+  ].filter((item) => typeof item.text === 'string' && item.text.trim())
+    .filter((item, index, all) => all.findIndex((other) => other.text.trim() === item.text.trim()) === index)
+    .slice(0, 3)
+    .map((item) => ({ text: item.text.trim(), refs: item.refs }));
   // [key, label, preferred holder]: 'draft' reads result.draft first, 'result' reads the result first.
   const sourceFields = [
     ['product_profile', '제품 프로필', 'draft'],
@@ -227,7 +247,11 @@ export function draftView(draftResult) {
     identity: draftResult.draft_identity ?? null,
     visuals: draftVisuals(draft.visuals),
     imageCalls: Number.isInteger(draftResult.image_generation_calls) ? draftResult.image_generation_calls : null,
-    concept: typeof draft.concept?.product_definition?.value === 'string' ? draft.concept.product_definition.value : null,
+    concept: definitionText,
+    productType: profileValue('product_type'),
+    gender: profileValue('gender'),
+    material: profileValue('material'),
+    evidenceClaims,
     errors: Array.isArray(draftResult.errors) ? draftResult.errors : [],
     sections: sourceFields,
     // Where the lists live in the raw response, so a row can open them in the side panel.
@@ -313,6 +337,101 @@ export function reviewView(reviewResult, callRequest = null, callRequestArtifact
     listPaths: Object.fromEntries(['errors', 'missing_data', 'limitations'].map((key) => [key, result === reviewResult ? key : `result.${key}`])),
     missingData: Array.isArray(result.missing_data) ? result.missing_data : [],
     limitations: unique([...(Array.isArray(result.limitations) ? result.limitations : []), ...(Array.isArray(reviewResult.limitations) ? reviewResult.limitations : [])]),
+  };
+}
+
+function marketNumber(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return value.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+}
+
+function marketPrice(value, currency) {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  const shown = marketNumber(value);
+  if (!shown) return null;
+  return `${shown}${currency === 'KRW' ? '원' : currency === 'USD' ? ' USD' : currency ? ` ${currency}` : ''}`;
+}
+
+// P07 owns the source values. The workspace shows only a few decision-useful summaries;
+// the complete response stays available in the JSON panel.
+export function marketView(reviewResult) {
+  if (!reviewResult || typeof reviewResult !== 'object') return null;
+  const result = reviewResult.result && typeof reviewResult.result === 'object' ? reviewResult.result
+    : reviewResult.review && typeof reviewResult.review === 'object' ? reviewResult.review : reviewResult;
+  const sections = [];
+  const price = result.price_analysis && typeof result.price_analysis === 'object' ? result.price_analysis : {};
+  const priceRows = Array.isArray(result.category_price_comparison) ? result.category_price_comparison : [];
+  const priceRow = priceRows.find((row) => row && typeof row === 'object') ?? {};
+  const priceStats = priceRow.scaled_price_statistics ?? priceRow.price_statistics ?? {};
+  const sampleSize = price.sample_size ?? priceRow.sample_count;
+  const period = price.period ?? priceRow.period;
+  const periodText = typeof period === 'string' ? period.replace('/', '–')
+    : period && typeof period.start === 'string' ? `${period.start}${period.end && period.end !== period.start ? `–${period.end}` : ''}` : null;
+  const proposedPrice = marketPrice(price.proposed_price, price.currency ?? price.unit);
+  const historicalMedian = marketPrice(priceStats.median, priceStats.currency ?? priceStats.unit);
+  if (proposedPrice || historicalMedian || sampleSize != null) {
+    const note = [
+      proposedPrice ? 'P07 연구용 제안' : 'H&M 과거 거래 참고',
+      Number.isFinite(sampleSize) ? `표본 ${sampleSize.toLocaleString('ko-KR')}건` : null,
+      periodText,
+    ].filter(Boolean).join(' · ');
+    sections.push({ label: proposedPrice ? '제안 판매가' : '과거 거래가 참고', value: proposedPrice ?? historicalMedian ?? '자료 없음', note });
+  }
+
+  const fabric = result.fabric_cost_analysis && typeof result.fabric_cost_analysis === 'object' ? result.fabric_cost_analysis : {};
+  const materialRows = Array.isArray(result.material_cost_analysis) ? result.material_cost_analysis : [];
+  const materialRow = materialRows.find((row) => row && typeof row === 'object') ?? {};
+  const perMeter = materialRow.price_per_meter_krw_statistics ?? {};
+  const listingStats = materialRow.listed_price_statistics ?? {};
+  const unitCost = marketPrice(fabric.unit_cost, fabric.currency ?? fabric.unit);
+  const materialMedian = marketPrice(perMeter.median ?? listingStats.median, perMeter.unit ?? perMeter.currency ?? listingStats.currency ?? materialRow.original_unit);
+  const materialCount = materialRow.sample_count;
+  if (unitCost || materialMedian || materialCount != null || fabric.status) {
+    sections.push({
+      label: '원단 가격 참고',
+      value: unitCost ?? (materialMedian ? `중앙값 ${materialMedian}` : Number.isFinite(materialCount) ? `목록 ${materialCount.toLocaleString('ko-KR')}건` : '미제공'),
+      note: unitCost ? 'P07 응답의 원단 단가' : [Number.isFinite(materialCount) ? `공개 목록 ${materialCount.toLocaleString('ko-KR')}건` : null, '생산 원가 미확정'].filter(Boolean).join(' · '),
+    });
+  }
+
+  const margin = result.margin_analysis && typeof result.margin_analysis === 'object' ? result.margin_analysis : {};
+  const marginValue = marketNumber(margin.margin_rate_percent);
+  if (marginValue) {
+    const benchmark = margin.estimate_type === 'industry_average_gross_margin_benchmark'
+      || ['benchmark_only', 'benchmark_estimate'].includes(margin.status) || Boolean(margin.benchmark_source);
+    const region = margin.benchmark_region === 'US' ? '미국' : margin.benchmark_region === 'KR' ? '한국'
+      : margin.benchmark_region;
+    sections.push({
+      label: benchmark ? '업계 마진 참고치' : '마진율', value: `${marginValue}%`,
+      note: benchmark ? `${region ? `${region} ` : ''}업계 평균 · 상품 실제 마진 아님` : null,
+    });
+  }
+
+  const target = result.target_audience && typeof result.target_audience === 'object' ? result.target_audience : {};
+  const targetAnalysis = result.target_audience_analysis && typeof result.target_audience_analysis === 'object'
+    ? result.target_audience_analysis : {};
+  const cohort = target.age_cohort ?? targetAnalysis.age_cohort ?? {};
+  const cohortName = cohort.definition ?? cohort.age_band ?? null;
+  const share = marketNumber(typeof cohort.share_of_customers_with_known_age === 'number'
+    ? cohort.share_of_customers_with_known_age * 100 : null);
+  const proposal = target.proposal && typeof target.proposal === 'object' ? target.proposal : {};
+  const primarySegment = typeof proposal.primary_segment === 'string' ? proposal.primary_segment.trim() : '';
+  if (cohortName || primarySegment) {
+    sections.push({
+      label: '고객 분석', value: cohortName ?? primarySegment,
+      note: cohortName ? [share ? `연령 확인 고객 중 ${share}%` : null, 'H&M 과거 집계'].filter(Boolean).join(' · ')
+        : 'P07 LLM 타깃 가설',
+    });
+  }
+  const missingData = Array.isArray(result.missing_data) ? result.missing_data : [];
+  const errors = Array.isArray(result.errors) ? result.errors : [];
+  const limitations = Array.isArray(result.limitations) ? result.limitations.filter((item) => typeof item === 'string') : [];
+  return {
+    status: reviewResult.status ?? result.status ?? null,
+    sections,
+    missingData: missingData.map((item) => typeof item === 'string' ? item : item?.field ?? item?.reason ?? '자료 누락'),
+    errors: errors.map((item) => typeof item === 'string' ? item : item?.code ?? 'P07 분석 오류'),
+    limitations,
   };
 }
 

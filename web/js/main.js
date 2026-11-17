@@ -12,19 +12,20 @@ const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
 const el = {
   form: $('#brief-form'), brief: $('#brief'), counter: $('#brief-counter'), run: $('#run-button'), runLabel: $('#run-label'), notice: $('#notice'),
   rail: $('#rail'), progressCount: $('#progress-count'), progressState: $('#progress-state'),
-  results: $('#results'), concept: $('#concept'), trends: $('#trend-block'), stock: $('#stock-block'),
+  results: $('#results'), concept: $('#concept'), trends: $('#trend-block'), stock: $('#stock-block'), draft: $('#draft-block'), market: $('#market-block'),
   md: $('#md-card'), mdLink: $('#md-link'),
   evidenceButton: $('#evidence-button'), evidenceDialog: $('#evidence-dialog'), evidenceBody: $('#evidence-body'),
   systemButton: $('#system-button'), systemDot: $('#system-dot'), systemSummary: $('#system-summary'), systemDialog: $('#system-dialog'), systemBody: $('#system-body'),
   workspace: $('#workspace'), runsView: $('#runs'), runsList: $('#runs-list'), runsRefresh: $('#runs-refresh'),
 };
 
-// Section order on the page and the stage whose result each section prints. Stages 03 (Draft) and 04 (Review)
-// have no page section: the sidebar opens their errors and raw JSON in the side panel.
+// Page sections follow their execution stages; the lead concept card remains the integrated result.
 const SECTIONS = [
-  { el: el.concept, stage: 'planning_draft', head: { id: 'concept-title', title: '통합 기획안' } },
+  { el: el.concept, stage: 'integration', head: { id: 'concept-title', title: '통합 기획안' } },
   { el: el.trends, stage: 'trend', head: { id: 'trend-title', n: '01', title: '트렌드 근거' } },
   { el: el.stock, stage: 'stock', head: { id: 'stock-title', n: '02', title: '재고 매칭' } },
+  { el: el.draft, stage: 'planning_draft', head: { id: 'draft-title', n: '03', title: '새상품 생성' } },
+  { el: el.market, stage: 'sales_market_review', head: { id: 'market-title', n: '04', title: '판매·시장 분석' } },
 ];
 
 const state = {
@@ -145,6 +146,8 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
   }));
   section(1, (node) => view.renderTrends(node, model.trendCards(model.sourceResult(result, 'trend')), { errors: model.stageErrors(result, 'trend'), groups }));
   section(2, (node) => view.renderStock(node, model.stockSlots(model.sourceResult(result, 'stock')), { errors: model.stageErrors(result, 'stock') }));
+  section(3, (node) => view.renderDraftStage(node, model.draftView(model.sourceResult(result, 'planning_draft')), { errors: model.stageErrors(result, 'planning_draft') }));
+  section(4, (node) => view.renderMarket(node, model.marketView(model.sourceResult(result, 'sales_market_review')), { errors: model.stageErrors(result, 'sales_market_review') }));
   void loadP07CallRequest(result);
   setSectionState(el.md, 'settled');
   renderMd();

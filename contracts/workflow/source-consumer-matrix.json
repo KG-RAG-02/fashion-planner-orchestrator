@@ -70,7 +70,7 @@
       "to": "P07",
       "endpoint": "/v1/agents/sales-market-agent/reviews",
       "contract": "vogue-sales-market-review/0.3-proposal",
-      "input": "request_id, product (category required; product_type, gender, season, material optional) and product_evidence: per sent field kind, source_ref (p06.draft.product_profile.<field>) and evidence_ids",
+      "input": "request_id, product (category, product_type, gender, season, and material required, with per-field product_evidence) and product_evidence: per sent field kind, source_ref (p06.draft.product_profile.<field>) and evidence_ids",
       "result_schema": "sales-market-review/0.1-internal"
     },
     {

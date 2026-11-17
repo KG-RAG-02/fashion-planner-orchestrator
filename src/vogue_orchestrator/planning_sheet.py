@@ -236,19 +236,6 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
         if isinstance(finding.get('text'), str) and finding['text'].strip():
             claims.append(_claim(finding['text'].strip(), kinds.get(finding.get('kind'), 'producer_finding'),
                                  _evidence_ids(finding.get('evidence_refs'))))
-    # Price, fabric cost, margin and target are drawn from their own fields (_price_rows, _target_view).
-    if body.get('schema_version') == 'sales-market-review/0.1-internal':
-        for missing in _list(body.get('missing_data')):
-            missing = _mapping(missing)
-            label = missing.get('field') or missing.get('name') or missing.get('reason')
-            if isinstance(label, str) and label.strip():
-                reason = missing.get('reason')
-                message = missing.get('message')
-                detail = message.strip() if isinstance(message, str) and message.strip() else (
-                    reason.strip() if isinstance(reason, str) and reason.strip() else None
-                )
-                text = '미확인: ' + label.strip() + (f' — {detail}' if detail else '')
-                claims.append(_claim(text, 'to_validate', ()))
     groups: dict[str, list[Mapping[str, Any]]] = {}
     for metric in _list(review.get('metrics')):
         metric = _mapping(metric)
@@ -280,8 +267,84 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
         for metric in missing:
             reason = metric.get('missing_reason') if isinstance(metric.get('missing_reason'), str) else '원천 없음'
             claims.append(_claim(f'{label}: 미확인 — {reason}', 'to_validate', _evidence_ids(metric.get('evidence_refs'))))
-    return BoardSection('sales_market', tuple(claims),
-                        _unique((*_strings(review.get('limitations')), *_strings(body.get('limitations')))))
+    # P07 0.3 returns these native research summaries directly; it does not use the older review.findings/metrics
+    # shape above. Summarize the actual values so the Marketing panel contains the evidence P07 analyzed.
+    if body.get('schema_version') == 'sales-market-review/0.1-internal':
+        for row in (_mapping(item) for item in _list(body.get('category_price_comparison'))):
+            sample_count = row.get('sample_count')
+            period = _period_bounds(row.get('period'))
+            stats = _mapping(row.get('scaled_price_statistics')) or _mapping(row.get('price_statistics'))
+            unit = stats.get('currency') or stats.get('unit')
+            price_bits = []
+            if isinstance(sample_count, int) and not isinstance(sample_count, bool):
+                price_bits.append(f'거래 표본 {sample_count:,}건')
+            for key, label in (('median', '중앙값'), ('mean', '평균')):
+                value = stats.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    formatted = f'{value:,.2f}'.rstrip('0').rstrip('.') if not float(value).is_integer() else f'{int(value):,}'
+                    price_bits.append(f'{label} {formatted}{f" {unit}" if isinstance(unit, str) and unit else ""}')
+                    if key == 'median':
+                        break
+            if period:
+                price_bits.append(f'기간 {period[0]}–{period[1]}' if period[0] != period[1] else f'기간 {period[0]}')
+            if price_bits:
+                suffix = ' · ×590 연구 환산' if stats.get('scale_factor') == 590 else ''
+                ids = tuple(value for value in _list(row.get('evidence_ids')) if isinstance(value, str))
+                claims.append(_claim('H&M 과거 거래가 참고: ' + ' · '.join(price_bits) + suffix,
+                                     'producer_finding', ids))
+
+        for row in (_mapping(item) for item in _list(body.get('material_cost_analysis'))):
+            sample_count = row.get('sample_count')
+            per_meter_stats = _mapping(row.get('price_per_meter_krw_statistics'))
+            stats = per_meter_stats
+            if not stats:
+                stats = _mapping(row.get('listed_price_statistics'))
+            bits = []
+            if isinstance(sample_count, int) and not isinstance(sample_count, bool):
+                bits.append(f'공개 원단 목록 {sample_count:,}건')
+            median = stats.get('median')
+            unit = (stats.get('unit') or stats.get('currency') or
+                    ('KRW/m' if per_meter_stats else row.get('original_unit') or row.get('currency')))
+            if isinstance(median, (int, float)) and not isinstance(median, bool):
+                shown = f'{median:,.2f}'.rstrip('0').rstrip('.') if not float(median).is_integer() else f'{int(median):,}'
+                bits.append(f'중앙값 {shown}{f" {unit}" if isinstance(unit, str) and unit else ""}')
+            material = row.get('material_query') or row.get('source_category')
+            if isinstance(material, str) and material.strip():
+                bits.insert(0, f'{material.strip()} 참고')
+            if bits:
+                ids = tuple(value for value in _list(row.get('evidence_ids')) if isinstance(value, str))
+                claims.append(_claim('원단 공개 목록: ' + ' · '.join(bits), 'producer_finding', ids))
+
+        for row in (_mapping(item) for item in _list(body.get('customer_segment_analysis'))):
+            cohort = _mapping(row.get('target_age_cohort'))
+            denominator = row.get('unique_customer_denominator')
+            period = _period_bounds(row.get('period'))
+            bits = []
+            definition = _scalar_text(cohort.get('definition'))
+            if definition:
+                bits.append(f'최대 연령 코호트 {definition}')
+            if isinstance(denominator, int) and not isinstance(denominator, bool):
+                bits.append(f'연령 확인 고객 {denominator:,}명 기준')
+            if period:
+                bits.append(f'기간 {period[0]}–{period[1]}' if period[0] != period[1] else f'기간 {period[0]}')
+            if bits:
+                ids = tuple(value for value in _list(row.get('evidence_ids')) if isinstance(value, str))
+                claims.append(_claim('H&M 과거 고객 연령 집계: ' + ' · '.join(bits), 'producer_finding', ids))
+
+        for missing in _list(body.get('missing_data')):
+            missing = _mapping(missing)
+            label = missing.get('field') or missing.get('name') or missing.get('reason')
+            if isinstance(label, str) and label.strip():
+                reason = missing.get('reason')
+                message = missing.get('message')
+                detail = message.strip() if isinstance(message, str) and message.strip() else (
+                    reason.strip() if isinstance(reason, str) and reason.strip() else None
+                )
+                text = '미확인: ' + label.strip() + (f' — {detail}' if detail else '')
+                claims.append(_claim(text, 'to_validate', ()))
+
+    limitations = _unique((*_strings(review.get('limitations')), *_strings(body.get('limitations'))))
+    return BoardSection('sales_market', tuple(claims), limitations)
 
 
 def _draft_parts(result: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, Mapping[str, Any], str]:
@@ -648,8 +711,7 @@ def _price_rows(result: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
     units = {'KRW': '원', 'KRW/m': '원/m', 'USD': ' USD'}
     rows = []
     for key, field, label in (('price_analysis', 'proposed_price', '제안 판매가'),
-                              ('fabric_cost_analysis', 'unit_cost', '소재 원가'),
-                              ('margin_analysis', 'margin_rate_percent', '마진율')):
+                              ('fabric_cost_analysis', 'unit_cost', '소재 원가')):
         item = _mapping(body.get(key))
         value = item.get(field)
         if isinstance(value, bool) or value is None:
@@ -661,6 +723,19 @@ def _price_rows(result: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
             rows.append((label, shown + suffix))
         elif isinstance(value, str) and value.strip():
             rows.append((label, value.strip() + suffix))
+    margin = _mapping(body.get('margin_analysis'))
+    margin_rate = margin.get('margin_rate_percent')
+    if isinstance(margin_rate, (int, float, str)) and not isinstance(margin_rate, bool):
+        benchmark = (margin.get('estimate_type') == 'industry_average_gross_margin_benchmark'
+                     or margin.get('status') in {'benchmark_only', 'benchmark_estimate'}
+                     or bool(margin.get('benchmark_source')))
+        if benchmark:
+            label = '업계 평균 마진 참고치'
+        else:
+            label = '마진율'
+        suffix = '%' if isinstance(margin_rate, (int, float)) or '%' not in margin_rate else ''
+        shown = f'{margin_rate:,.2f}'.rstrip('0').rstrip('.') if isinstance(margin_rate, float) else str(margin_rate)
+        rows.append((label, shown + suffix))
     return tuple(rows)
 
 
@@ -1499,7 +1574,7 @@ def _marketing(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet,
     findings = [claim.text for claim in sales.claims]
     if findings:
         y = _bullets(c, x, y, w, findings, limit=5, scale=sc)
-        for note in sales.notes[:2]:
+        for note in sales.notes[:3]:
             y = _paragraph(c, x, y, w, '※ ' + note, size=9.5 * sc, lines=2, color='ink3') + 2
     else:
         y = _paragraph(c, x, y, w, sales.notes[0] if sales.notes else '판매·시장 분석 결과 없음', size=11 * sc, lines=3, color='ink3')
@@ -1510,7 +1585,7 @@ def _marketing(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet,
     c.rect(x, y, w, box_h, 'yellow_lt', 4, 'yellow')
     _label(c, x + 14, y + 10 * sc, 'PRICE', scale=sc)
     c.text(x + 14, y + 26 * sc, price or '미제공', 'bold', 20 * sc, 'ink' if price else 'ink3')
-    sub = 'sales-market-agent 제안값 · MD 확인 필요' if price else '판매가 근거 없음 · MD 판단 필요'
+    sub = 'P07 과거 거래가격을 참고한 연구용 제안 · MD 확인 필요' if price else '판매가 근거 없음 · MD 판단 필요'
     sub_s = 9.5 * sc
     c.text(x + w - 14 - c.width(sub, 'regular', sub_s), y + 34 * sc, sub, 'regular', sub_s, 'ink3')
     y += box_h + 12
