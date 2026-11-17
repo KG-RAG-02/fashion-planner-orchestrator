@@ -83,6 +83,14 @@ services:
     environment:
       <<: *r2
       VOGUE_R2_HM_DB_CACHE_DIR: /data/hm-cache
+      # P07 reads its H&M age, price and fabric research from one precomputed aggregate snapshot instead of
+      # aggregating the raw R2 objects per request (that path ran out of DuckDB memory in the 3g container).
+      # The key is content-addressed and must match P07's category mapping: this one was built 2026-11-17
+      # by P07's own builder (hm_research_aggregate.py) for mapping project07-hm-category-map/1.3
+      # (fingerprint b700a4be…), 53 profiles, 711,323 bytes. P07's own .env pointed at fec1bf1f…, a
+      # mapping-1.2 snapshot that P07 1.3 rejects (InvalidSnapshot). User decision 2026-11-17.
+      # Rebuild and update this key whenever P07's mapping or the H&M source objects change.
+      VOGUE_HM_RESEARCH_AGGREGATE_R2_KEY: <aggregate-snapshot-prefix>/34079ee933dfd4af89fa5f2e4d034bb0d80743f5d05054c2307a6069973a93c2.json
     volumes:
       # Writable: it also holds the H&M age query's DuckDB spill directory (P07 image default
       # VOGUE_HM_AGE_DUCKDB_TEMP_DIRECTORY=/data/hm-cache/duckdb-age-tmp; memory limit set in compose.yaml).
