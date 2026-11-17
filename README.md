@@ -42,7 +42,7 @@ deploy/bin/vogue stub
 
 stub UI 주소는 `http://127.0.0.1:18765`입니다. rehearsal/live는 `http://127.0.0.1:8765`를 사용합니다. 종료 방법과 프로필 차이는 [`deploy/README.md`](deploy/README.md)를 참고하세요. UI는 `POST /api/workflow/run`으로 실행하며 health 경로는 `GET /api/health`입니다.
 
-**현재 통합 상태:** P08 Compose에는 P07 healthcheck가 추가되어 있지만, 확인된 P07 `main`의 기본 컨테이너 실행은 HTTP 서버를 시작하지 않습니다. P07 서비스 진입점·bind 변경이 적용되기 전에는 전체 Docker workflow가 준비 상태에 도달하지 못합니다. 최신 상태와 담당 저장소별 조치는 [`deploy/README.md`](deploy/README.md)를 참고하세요.
+**현재 통합 상태:** P07 `main`은 Docker에서 HTTP 서버를 `0.0.0.0:8766`에 실행하며 P08 Compose의 `/api/health` 검사와 `service_healthy` 대기가 동작합니다. 2026-11-17 실연결 통합 실행(P08 `2d818e0`, P06 `96fc1a6`, P07 `3955fc2`)에서 P07 `/reviews`는 HTTP 200을 반환했습니다. 리뷰 상태는 R2/DuckDB 메모리 부족과 타깃 LLM 응답 검증 오류로 `partial`이었습니다. workflow baseline은 아직 `proposed`이므로 개발 실행에는 제안 계약 허용 설정이 필요합니다. 상세 내용은 [`deploy/README.md`](deploy/README.md)를 참고하세요.
 
 ## API
 

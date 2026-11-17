@@ -13,9 +13,9 @@ Agent 간 요청은 P08이 순차 전달합니다. P07 요청은 P08이 P06 Draf
 
 ## 현재 연결 상태
 
-P08 Compose는 P07에 `GET /api/health` healthcheck를 설정하고 orchestrator가 P07 `service_healthy` 상태를 기다리게 합니다. 그러나 확인한 P07 `main`의 Dockerfile 기본 명령은 `python -m market_research_agent.runtime`이며 이 모듈은 HTTP 서버를 시작하지 않고 대기합니다. P07 HTTP handler도 loopback 이외의 bind를 거부합니다. 따라서 P07 담당자가 Docker 서비스 진입점과 내부 bind를 지원하기 전에는 전체 Compose workflow가 준비되지 않습니다.
+P07 `main`의 Dockerfile은 `vogue-sales-market-review-http --service-mode --host 0.0.0.0 --port 8766`을 실행합니다. P08 Compose의 `GET /api/health` healthcheck와 `service_healthy` 의존 조건이 준비되어 있으며, P08의 bearer 인증 요청은 `POST /v1/agents/sales-market-agent/reviews`로 연결됩니다. 요청 계약은 `vogue-sales-market-review/0.3-proposal`입니다.
 
-P07 담당자 변경을 받은 뒤 서비스 진입점, `0.0.0.0:8766` bind, bearer 인증, healthcheck를 확인하고 아래 명령을 사용하세요. P07 API 계약은 `POST /v1/agents/sales-market-agent/reviews`이며 요청은 `vogue-sales-market-review/0.3-proposal`입니다.
+2026-11-17 실 DB/R2·LLM 통합 실행에서 P07 `/reviews`는 HTTP 200과 계약에 맞는 `partial` 응답을 반환했습니다. H&M 연령 집계는 DuckDB 메모리 부족으로 실패했고, 타깃 LLM 결과는 `secondary_segments` 검증을 통과하지 못했습니다. 이는 HTTP 연결이나 envelope/schema 불일치가 아니라 P07 내부 자료 처리·LLM 결과 오류였습니다. workflow 계약 baseline은 `proposed` 상태이므로 개발 실행에서만 `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`로 gate를 열었습니다.
 
 ## 프로필
 
@@ -25,7 +25,7 @@ P07 담당자 변경을 받은 뒤 서비스 진입점, `0.0.0.0:8766` bind, bea
 | `rehearsal` | stub 없는 Compose + `compose.data.yaml` | Aura·R2 데이터 사용, P06 이미지는 fixture 설정, 유료 모델 호출 없음 | `http://127.0.0.1:8765` |
 | `live` | rehearsal + `compose.paid.yaml` | 운영 계정과 유료 LLM/이미지 호출 가능, 1회 실행 guard 적용 | `http://127.0.0.1:8765` |
 
-비용이 발생할 수 있는 `live`를 실행하기 전에 입력, 연결된 실제 서비스, 예상 호출을 확인하세요. stub/rehearsal도 현재 P07 서비스 문제가 해결되기 전에는 완주하지 못합니다.
+비용이 발생할 수 있는 `live`를 실행하기 전에 입력, 연결된 실제 서비스, 예상 호출을 확인하세요. P07 HTTP 경로는 준비되어 있지만, 데이터 자료원 오류가 있으면 workflow 결과가 `partial`일 수 있습니다.
 
 ## 시작
 

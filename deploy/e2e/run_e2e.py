@@ -169,6 +169,20 @@ def main(argv=None):
                     limitations=result.get("limitations"), errors=result.get("errors"))
     check("stages run in contract order", names == STAGE_ORDER[: len(names)], names)
     check("every stage keeps the same request_id", all(s.get("request_id") == request_id for s in stages))
+    if args.profile == "rehearsal":
+        p07 = (((result.get("sources") or {}).get("sales_market_review") or {}).get("raw_response") or {})
+        p07_result = p07.get("result") if isinstance(p07, dict) else None
+        p07_result = p07_result if isinstance(p07_result, dict) else {}
+        age_rows = p07_result.get("customer_segment_analysis")
+        age_rows = age_rows if isinstance(age_rows, list) else []
+        p07_errors = p07_result.get("errors")
+        p07_errors = p07_errors if isinstance(p07_errors, list) else []
+        age_failure = any(isinstance(item, dict) and item.get("code") == "CUSTOMER_AGE_RESEARCH_FAILED"
+                          for item in p07_errors)
+        check("P07 customer-age aggregate returned", bool(age_rows),
+              {"row_count": len(age_rows), "age_error": age_failure})
+        check("P07 customer-age aggregate has no source failure", not age_failure,
+              [item.get("code") for item in p07_errors if isinstance(item, dict)])
     image = result.get("final_image", {})
     calls = image.get("provider_calls")
     check("at most one image provider call", isinstance(calls, int) and calls <= 1, calls)
