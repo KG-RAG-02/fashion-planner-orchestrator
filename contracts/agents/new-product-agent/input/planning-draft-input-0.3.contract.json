@@ -5,16 +5,28 @@
     "direction": "input",
     "method": "authored",
     "source_repo": "KG-RAG-02/new-product-agent",
-    "source_branch": "main",
-    "source_commit": "cdd11cdb1b24",
+    "source_branch": "feat/p06-images-prompt-budget-20261117",
+    "source_commit": "d05e74e701f6+uncommitted",
     "source_files": [
       {
-        "path": "src/vogue_npp/adapters/handoff.py",
-        "sha256": "c05e15149a1fc720b447bfdd08eeb660612edc9c5bdfd016a664d83cfc4362d1"
+        "path": "src/vogue_npp/adapters/draft_inputs.py",
+        "sha256": "60da5706dbb39b3ba08a5fd647f134b3222eca940fb73576d4e9c4c823b235da"
+      },
+      {
+        "path": "src/vogue_npp/workflows/planning_draft.py",
+        "sha256": "dc976d7e89f5c4dfed851949d3e26e7a981118bee9786236aa8e5796cd2b34bb"
+      },
+      {
+        "path": "src/vogue_npp/domain/context.py",
+        "sha256": "59157ad70eebcde506067c1a8786e69c8f6395ddc16100aeba0dac1ed32796ab"
+      },
+      {
+        "path": "src/vogue_npp/workflows/text_concept_generation.py",
+        "sha256": "25efb1ad5ef6c3c38b6a18954f40a004b0177e802213e30b0219c405f4cab029"
       },
       {
         "path": "src/vogue_npp/prototype/server.py",
-        "sha256": "f69262bf0271472c1f63ef01feea03bb16913f74a1ef991ee578b5556c68a648"
+        "sha256": "76475ed4b4f67bc89d44eb714e09947f9002d32b1eb31ab3fc7b571483607f94"
       }
     ],
     "handoff": {
@@ -29,7 +41,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "urn:vogue:orchestrator:snapshot:new-product-agent:input:handoff-0.3",
     "title": "new-product-agent /runs input (vogue-handoff/0.3)",
-    "description": "envelope의 input 객체. 요청 최상위는 정확히 {contract_version: \"vogue-handoff/0.3\", request_id, input}이고(아니면 422 INVALID_ENVELOPE·UNSUPPORTED_CONTRACT_VERSION, request_id가 빈 문자열이면 INVALID_REQUEST_ID), input은 정확히 아래 세 키를 가진다(아니면 422 INVALID_INPUT; 0.2의 sales_market_result는 더 이상 받지 않는다). 세 payload의 request_id는 모두 envelope request_id와 같아야 하고, server.py가 planning_request.request_id를 strip()[:160]한 값과 다시 비교하므로 앞뒤 공백 없이 160자 이하여야 한다 (JSON Schema로 표현 불가, adapters/handoff.py·prototype/server.py가 검사). 본문은 application/json, 1,000,000 bytes 이하. 실패 시 HTTP 4xx {error:{code,message}}. 성공은 입력 status가 no_results·error여도 HTTP 200. 각 payload의 '읽는 필드' 설명은 server.py가 실제로 꺼내 쓰는 값이며, 나머지는 input_evidence에 원본으로 보존된다.",
+    "description": "envelope의 input 객체. 요청 최상위는 정확히 {contract_version: \"vogue-handoff/0.3\", request_id, input}이고(아니면 422 INVALID_ENVELOPE·UNSUPPORTED_CONTRACT_VERSION, request_id가 빈 문자열이면 INVALID_REQUEST_ID), input은 정확히 아래 세 키를 가진다(아니면 422 INVALID_INPUT; 0.2의 sales_market_result는 더 이상 받지 않는다). 세 payload의 request_id는 모두 envelope request_id와 같아야 하고, server.py가 planning_request.request_id를 strip()[:160]한 값과 다시 비교하므로 앞뒤 공백 없이 160자 이하여야 한다 (JSON Schema로 표현 불가, adapters/handoff.py·prototype/server.py가 검사). 본문은 application/json, 1,000,000 bytes 이하. 실패 시 HTTP 4xx {error:{code,message}}. 성공은 입력 status가 no_results·error여도 HTTP 200. 각 payload의 '읽는 필드' 설명은 server.py가 실제로 꺼내 쓰는 값이며, 나머지는 받은 그대로 input_evidence에 보존된다. P08은 trend_result와 inventory_product_result를 원본이 아니라 등록 투영 p06-input/1로 보낸다: P06이 읽지 않는 필드만 빼고 나머지 값은 바꾸지 않으며, 전체 원본은 P08 런 기록(sources.trend·sources.stock의 raw_response)에 남는다. VOGUE_WORKFLOW_P06_INPUT_PROJECTION=raw이면 원본을 그대로 보낸다(배포 1단계).",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -300,7 +312,7 @@
       },
       "trend_result": {
         "type": "object",
-        "description": "trend-analysis-agent TrendAnalysisResult 1.1 원본. 1.1만 받고(422 UNSUPPORTED_PRODUCER_SCHEMA) 내부 사본에서만 schema_version을 1.0으로 바꾼다. 원본은 result.input_evidence.trend_result.payload에 그대로 남고, 읽지 않는 필드(예: trends[].style.example_images)도 보존된다.",
+        "description": "trend-analysis-agent TrendAnalysisResult 1.1의 등록 투영 p06-input/1. trends[].items[].similar_products와 evidence[].url·title만 빠지고 나머지 값과 배열 길이·순서·null 항목은 원본과 같다(quote가 남아 trend-result-1.1 스키마에 맞는다). 전체 원본은 P08 런 기록(sources.trend.raw_response)에 남는다. 1.1만 받고(422 UNSUPPORTED_PRODUCER_SCHEMA) 내부 사본에서만 schema_version을 1.0으로 바꾼다. 받은 payload는 result.input_evidence.trend_result.payload에 그대로 남고, 읽지 않는 필드(예: trends[].style.example_images)도 보존된다.",
         "required": [
           "request_id",
           "schema_version",
@@ -388,7 +400,7 @@
       },
       "inventory_product_result": {
         "type": "object",
-        "description": "stock-agent result 1.0 원본",
+        "description": "stock-agent result 1.0의 등록 투영 p06-input/1. url이 없는 products[].image(base64 data를 담은 객체)만 null로 바뀌고 나머지 값과 배열 길이·순서·null 슬롯은 원본과 같다(stock-result-1.0 스키마에 맞는다). 전체 원본은 P08 런 기록(sources.stock.raw_response)에 남는다.",
         "required": [
           "request_id",
           "schema_version",
