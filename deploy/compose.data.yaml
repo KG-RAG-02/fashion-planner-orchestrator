@@ -84,6 +84,8 @@ services:
       <<: *r2
       VOGUE_R2_HM_DB_CACHE_DIR: /data/hm-cache
     volumes:
+      # Writable: it also holds the H&M age query's DuckDB spill directory (P07 image default
+      # VOGUE_HM_AGE_DUCKDB_TEMP_DIRECTORY=/data/hm-cache/duckdb-age-tmp; memory limit set in compose.yaml).
       - type: volume
         source: p07_state
         target: /data/hm-cache
