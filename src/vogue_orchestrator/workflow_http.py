@@ -132,7 +132,7 @@ def draft_mode(env=None):
 
 def p06_input_projection(env=None):
     """VOGUE_WORKFLOW_P06_INPUT_PROJECTION: what P06 receives of the Trend/Stock results. A registered projection
-    key (default: the current one, p06-input/1) or raw (rollout stage 1: P08 already accepts the projections but
+    key (default: the current one, p06-input/2) or raw (rollout stage 1: P08 already accepts the projections but
     still sends the raw results); anything else is None (invalid)."""
     value = setting(env, 'VOGUE_WORKFLOW_P06_INPUT_PROJECTION').lower() or CURRENT_P06_INPUT_PROJECTION
     return value if p06_input_projection_valid(value) else None

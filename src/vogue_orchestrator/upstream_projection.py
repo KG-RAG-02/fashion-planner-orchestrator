@@ -52,11 +52,35 @@ def _p06_input_1_stock(stock_result):
     return view
 
 
+def _p06_input_2_stock(stock_result):
+    """p06-input/2, Stock side: each product's photo is sent once. P06's outfit image pairs the new product with
+    one stock item and sends that item's photo to the image edit call (VOGUE decision 2026-11-17), so photos
+    stay, but a later entry of a style_id already sent gets null: the same product fills several per-trend
+    slots (14 entries / 6 products in req-xxxxxxxx). Images with a url, and products without a string style_id,
+    are kept as they are. stock-result-1.0 allows a null image, so the 1.0 label stays true."""
+    view = copy.deepcopy(stock_result)
+    if not isinstance(view, dict):
+        return view
+    sent = set()
+    for product in view.get('products') or []:
+        if not isinstance(product, dict) or not isinstance(product.get('image'), dict) or 'url' in product['image']:
+            continue
+        style_id = product.get('style_id')
+        if not isinstance(style_id, str):
+            continue
+        if style_id in sent:
+            product['image'] = None
+        else:
+            sent.add(style_id)
+    return view
+
+
 # key -> (trend projection, stock projection). Append only: never edit or remove a registered version.
 P06_INPUT_PROJECTIONS = MappingProxyType({
     'p06-input/1': (_p06_input_1_trend, _p06_input_1_stock),
+    'p06-input/2': (_p06_input_1_trend, _p06_input_2_stock),
 })
-CURRENT_P06_INPUT_PROJECTION = 'p06-input/1'
+CURRENT_P06_INPUT_PROJECTION = 'p06-input/2'
 
 
 def p06_input_projection_valid(version):

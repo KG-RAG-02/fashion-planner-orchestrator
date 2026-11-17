@@ -20,7 +20,7 @@ AGENTS = {k: 'http://127.0.0.1:9' for k in ('VOGUE_TREND_AGENT_URL', 'VOGUE_STOC
                                             'VOGUE_NEW_PRODUCT_AGENT_URL', 'VOGUE_SALES_MARKET_AGENT_URL')}
 
 # Every key ever registered. Stored runs that sent one must stay verifiable, so none is ever removed.
-HISTORICAL_KEYS = ('p06-input/1',)
+HISTORICAL_KEYS = ('p06-input/1', 'p06-input/2')
 # The registered versions' output on upstream-projection.json (sha256 of canonical JSON). A registered version is
 # never edited in place: a changed projection is a new key with new golden hashes, and these stay as they are.
 FIXTURE_SHA256 = {'trend': '1f70fad1c24beaff6944178777181cba92c6a3e055482e13990f045f84b0e821',
@@ -28,6 +28,9 @@ FIXTURE_SHA256 = {'trend': '1f70fad1c24beaff6944178777181cba92c6a3e055482e13990f
 GOLDEN = {
     'p06-input/1': {'trend': '5a9daf39aa98a1a35200501d67e807abb66449a728e7e33e3cd152bf92adeb60',
                     'stock': '0f276a9dbd8a36c226f89ab2e1fdd1438a7e31c17e811c6f2e12686da0d15116'},
+    # The fixture's photos belong to different products, so p06-input/2 keeps its Stock side whole.
+    'p06-input/2': {'trend': '5a9daf39aa98a1a35200501d67e807abb66449a728e7e33e3cd152bf92adeb60',
+                    'stock': '31fc88164eec64e39bccda4b308532121133ad8a5f2e1e1a87f3ab68d601cdc0'},
 }
 
 
@@ -66,6 +69,47 @@ class RegistryTests(unittest.TestCase):
             with self.subTest(version=key):
                 trend_view, stock_view = p06_inputs(trend, stock, key)
                 self.assertEqual({'trend': digest(trend_view), 'stock': digest(stock_view)}, golden)
+
+
+class P06Input2Tests(unittest.TestCase):
+    """p06-input/2: p06-input/1's Trend side; on the Stock side each product's photo is sent once."""
+
+    @staticmethod
+    def stock():
+        def photo(tag):
+            return dict(data=tag, media_type='image/jpeg', encoding='base64', size_bytes=3, source='s',
+                        data_nature='sample')
+        return {'schema_version': '1.0', 'products': [
+            dict(style_id='0764600', image=photo('A')), None, dict(style_id='0838846', image=photo('B')),
+            dict(style_id='0764600', image=photo('A')), dict(style_id='0838846', image=None),
+            dict(style_id='0714927', image=dict(url='https://example.invalid/c.jpg', data='C')),
+            dict(style_id='0714927', image=dict(url='https://example.invalid/c.jpg', data='C')),
+            dict(image=photo('D')), dict(style_id='0838846', image=photo('B')),
+        ], 'trend_results': [dict(style_id='s1', product_index=3)]}
+
+    def test_each_products_photo_is_sent_once_in_its_first_entry(self):
+        stock = self.stock()
+        _trend_view, view = p06_inputs({}, stock, 'p06-input/2')
+        images = [None if product is None else product['image'] for product in view['products']]
+        self.assertEqual(images[0], stock['products'][0]['image'])  # 0764600, first entry
+        self.assertIsNone(images[3])                                 # 0764600 again
+        self.assertEqual(images[2], stock['products'][2]['image'])  # 0838846, first entry
+        self.assertIsNone(images[8])                                 # 0838846 again
+        self.assertEqual(images[5:7], [stock['products'][5]['image']] * 2)  # url images are kept as they are
+        self.assertEqual(images[7], stock['products'][7]['image'])  # no style_id: nothing to deduplicate by
+        self.assertIsNone(view['products'][1])
+        self.assertEqual(view['trend_results'], stock['trend_results'])
+        self.assertEqual(len(view['products']), len(stock['products']))
+
+    def test_the_trend_side_is_p06_input_1s(self):
+        trend, stock = upstream()
+        self.assertEqual(p06_inputs(trend, stock, 'p06-input/2')[0], p06_inputs(trend, stock, 'p06-input/1')[0])
+
+    def test_inputs_are_never_mutated(self):
+        stock = self.stock()
+        before = canonical(stock)
+        p06_inputs({}, stock, 'p06-input/2')
+        self.assertEqual(canonical(stock), before)
 
 
 class P06Input1Tests(unittest.TestCase):
@@ -158,7 +202,7 @@ class ModeAndViewTests(unittest.TestCase):
     def test_only_raw_and_registered_keys_are_valid(self):
         for value in (RAW, *P06_INPUT_PROJECTIONS):
             self.assertTrue(p06_input_projection_valid(value), value)
-        for value in ('p06-input/2', 'full', '', None, 'RAW'):
+        for value in ('p06-input/3', 'full', '', None, 'RAW'):
             with self.subTest(value=value):
                 self.assertFalse(p06_input_projection_valid(value))
                 with self.assertRaisesRegex(ValueError, 'P06_INPUT_PROJECTION_INVALID'):
@@ -180,9 +224,10 @@ class SettingTests(unittest.TestCase):
         for blank in (None, '', '   ', '\t'):
             with self.subTest(blank=repr(blank)):
                 env = {} if blank is None else {'VOGUE_WORKFLOW_P06_INPUT_PROJECTION': blank}
-                self.assertEqual(workflow_http.p06_input_projection(env), 'p06-input/1')
+                self.assertEqual(workflow_http.p06_input_projection(env), 'p06-input/2')
         for value, expected in (('raw', 'raw'), (' RAW ', 'raw'), ('p06-input/1', 'p06-input/1'),
-                                (' P06-Input/1 ', 'p06-input/1'), ('p06-input/2', None), ('full', None), ('none', None)):
+                                (' P06-Input/1 ', 'p06-input/1'), ('p06-input/2', 'p06-input/2'),
+                                ('p06-input/3', None), ('full', None), ('none', None)):
             with self.subTest(value=value):
                 self.assertEqual(workflow_http.p06_input_projection({'VOGUE_WORKFLOW_P06_INPUT_PROJECTION': value}), expected)
 
@@ -191,7 +236,7 @@ class SettingTests(unittest.TestCase):
         base = dict(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1',
                     VOGUE_WORKFLOW_STORE_DIR=str(real_tempdir(self) / 'store'),
                     VOGUE_AGENT_SERVICE_BEARER_TOKEN='synthetic-test-token', **AGENTS)
-        for extra, expected in (({}, 'p06-input/1'), ({'VOGUE_WORKFLOW_P06_INPUT_PROJECTION': 'raw'}, 'raw'),
+        for extra, expected in (({}, 'p06-input/2'), ({'VOGUE_WORKFLOW_P06_INPUT_PROJECTION': 'raw'}, 'raw'),
                                 ({'VOGUE_WORKFLOW_P06_INPUT_PROJECTION': 'p06-input/1'}, 'p06-input/1')):
             with self.subTest(extra=extra), environment(**base, **extra):
                 self.assertEqual(workflow_http.build_workflow().p06_input_projection, expected)

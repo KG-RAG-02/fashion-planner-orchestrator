@@ -729,9 +729,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(body['sources']['trend']['raw_response']['result'], trend_raw)
         self.assertEqual(body['sources']['stock']['raw_response']['result'], stock_raw)
         self.assertIn('data', body['sources']['stock']['raw_response']['result']['products'][0]['image'])
-        trend_view, stock_view = p06_inputs(trend_raw, stock_raw, 'p06-input/1')
+        trend_view, stock_view = p06_inputs(trend_raw, stock_raw, 'p06-input/2')
         self.assertEqual((sent[0]['input']['trend_result'], sent[0]['input']['inventory_product_result']), (trend_view, stock_view))
-        self.assertEqual(sent[0]['input']['inventory_product_result']['products'], [dict(stock_raw['products'][0], image=None), None])
+        # p06-input/2 (current): the product's photo reaches P06 once, for the outfit image with the stock item.
+        self.assertEqual(sent[0]['input']['inventory_product_result']['products'], [stock_raw['products'][0], None])
         self.assertEqual(json.loads(self.store.verify(body['sources']['planning_draft']['call_request_artifact'])), sent[0])
         raw_request = dict(sent[0], input=dict(sent[0]['input'], trend_result=trend_raw, inventory_product_result=stock_raw))
         self.assertLess(len(canonical(sent[0])), len(canonical(raw_request)))
