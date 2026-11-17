@@ -629,6 +629,16 @@ dialog {
 }
 dialog::backdrop { background: rgba(0, 0, 0, 0.22); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
 .popover { width: min(460px, calc(100vw - 32px)); }
+.sheet-viewer {
+  width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 14px 20px 20px;
+  overflow: hidden; border: 0; border-radius: 0; color: #fff; background: rgba(18, 18, 18, 0.97);
+}
+.sheet-viewer[open] { display: flex; flex-direction: column; gap: 10px; }
+.sheet-viewer::backdrop { background: rgba(0, 0, 0, 0.82); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.sheet-viewer-head { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; }
+.sheet-viewer-head h2 { margin: 0; font-size: 16px; font-weight: 500; }
+.sheet-viewer .icon-button { color: #fff; border-color: rgba(255, 255, 255, 0.32); }
+.sheet-viewer-image, .sheet-viewer > img { display: block; flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; object-fit: contain; }
 /* The panel keeps its head and tabs in place; only its body scrolls. */
 .drawer {
   width: min(780px, calc(100vw - 24px)); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px);

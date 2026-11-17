@@ -12,6 +12,7 @@ const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
 const el = {
   form: $('#brief-form'), brief: $('#brief'), counter: $('#brief-counter'), run: $('#run-button'), runLabel: $('#run-label'), notice: $('#notice'),
   rail: $('#rail'), progressCount: $('#progress-count'), progressState: $('#progress-state'),
+  sheetViewer: $('#sheet-viewer'), sheetViewerImage: $('#sheet-viewer-image'),
   results: $('#results'), concept: $('#concept'), trends: $('#trend-block'), stock: $('#stock-block'), draft: $('#draft-block'), market: $('#market-block'),
   md: $('#md-card'), mdLink: $('#md-link'),
   evidenceButton: $('#evidence-button'), evidenceDialog: $('#evidence-dialog'), evidenceBody: $('#evidence-body'),
@@ -293,6 +294,14 @@ function openPanel(tab, anchor = null) {
 // In-page links (sidebar stages, wordmark, skip link, MD) scroll without rewriting the hash, so the
 // workspace/runs routing keeps working; panel buttons open the side panel at their anchor.
 function onDocumentClick(event) {
+  const imageViewerLink = event.target.closest('[data-image-viewer]');
+  if (imageViewerLink) {
+    event.preventDefault();
+    el.sheetViewerImage.src = imageViewerLink.dataset.imageSrc;
+    el.sheetViewerImage.alt = imageViewerLink.dataset.imageAlt || '최종 기획안 원본';
+    openDialog(el.sheetViewer, imageViewerLink);
+    return;
+  }
   const panel = event.target.closest('[data-panel-tab]');
   if (panel) { openPanel(panel.dataset.panelTab, panel.dataset.panelAnchor || null); return; }
   const link = event.target.closest('a[href^="#"]');

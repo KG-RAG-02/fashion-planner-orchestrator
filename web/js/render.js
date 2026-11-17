@@ -176,7 +176,7 @@ function sheetFigure(image, draft, sheet, waiting) {
   if (image.status === 'generated' && image.artifact?.artifact_id) {
     const src = artifactUrl(image.artifact.artifact_id);
     return h('figure', { class: `look look-sheet${sheet ? ' is-sheet' : ''}` },
-      h('a', { class: 'look-frame', href: src, target: '_blank', rel: 'noopener', title: '원본 크기로 열기' },
+      h('a', { class: 'look-frame', href: src, title: '화면 전체로 보기', dataset: { imageViewer: '', imageSrc: src, imageAlt: sheet ? `${draft?.title ?? '기획'} — 최종 기획안` : `${draft?.title ?? '기획'} — 최종 생성 이미지` }, 'aria-haspopup': 'dialog' },
         h('img', { src, alt: sheet ? `${draft?.title ?? '기획'} — 기획안 사진 (P08 합성)` : `${draft?.title ?? '기획'} — 시장 검토 이후 생성한 최종 기획 이미지`, loading: 'lazy' })),
       h('figcaption', {}, h('strong', {}, '기획안 사진'), sheet ? ' P08 합성' : ' 최종 기획 이미지'));
   }
