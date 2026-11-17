@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+from .upstream_projection import p06_stock_views, p06_trend_views
 from .workflow_store import digest, strict_json
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -88,6 +89,15 @@ def p07_product_projection(draft):
         else:
             evidence.pop(key, None)
     return product, evidence
+
+
+def require_registered_p06_inputs(call_input, trend_result, stock_result):
+    """P06 received the stored raw Trend/Stock result or a registered projection of it (upstream_projection).
+
+    One rule for the check before the P06 call and for integrated(), so an omitted, altered or unregistered
+    projection fails with the same code in both places."""
+    require(call_input.get('trend_result') in p06_trend_views(trend_result), 'P06_TREND_RESULT_CHANGED')
+    require(call_input.get('inventory_product_result') in p06_stock_views(stock_result), 'P06_STOCK_RESULT_CHANGED')
 
 
 def walk(value):
@@ -402,8 +412,9 @@ class WorkflowContract:
                 require(call.get('contract_version') == P06_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'P06_CALL_ENVELOPE_INVALID')
                 inp = call.get('input', {})
                 require(inp.get('planning_request') == body['planning_request'], 'P06_PLANNING_REQUEST_CHANGED')
-                require(inp.get('trend_result') == sources['trend']['raw_response']['result'], 'P06_TREND_RESULT_CHANGED')
-                require(inp.get('inventory_product_result') == sources['stock']['raw_response']['result'], 'P06_STOCK_RESULT_CHANGED')
+                # The run keeps the raw results; P06 may have received them raw or as any registered projection.
+                require_registered_p06_inputs(inp, sources['trend']['raw_response']['result'],
+                                              sources['stock']['raw_response']['result'])
         if review:
             require(draft is not None, 'REVIEW_WITHOUT_DRAFT')
             review_body = review['raw_response']['result']

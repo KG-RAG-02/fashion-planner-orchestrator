@@ -199,6 +199,9 @@ services:
       # P06 generates two images inside the Draft call; only that read waits longer.
       VOGUE_WORKFLOW_DRAFT_MODE: draft_with_visuals
       VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS: "600"
+      # P06 receives the registered projection p06-input/1 of the Trend/Stock results (P08 keeps the raw ones in
+      # its run). Rollout stage 1 sets raw: P08 already accepts projections but still sends the raw results.
+      VOGUE_WORKFLOW_P06_INPUT_PROJECTION: ${VOGUE_WORKFLOW_P06_INPUT_PROJECTION:-p06-input/1}
       VOGUE_WORKFLOW_IMAGES_ENABLED: "1"
       # Stage 06 composes the planning sheet (기획안 사진) locally; P08 never calls an image model.
       VOGUE_WORKFLOW_IMAGE_PROVIDER: planning_sheet
