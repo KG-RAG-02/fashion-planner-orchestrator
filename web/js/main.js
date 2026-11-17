@@ -12,20 +12,19 @@ const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
 const el = {
   form: $('#brief-form'), brief: $('#brief'), counter: $('#brief-counter'), run: $('#run-button'), runLabel: $('#run-label'), notice: $('#notice'),
   rail: $('#rail'), progressCount: $('#progress-count'), progressState: $('#progress-state'),
-  results: $('#results'), concept: $('#concept'), trends: $('#trend-block'), stock: $('#stock-block'), draft: $('#draft-block'), review: $('#review-block'),
+  results: $('#results'), concept: $('#concept'), trends: $('#trend-block'), stock: $('#stock-block'),
   md: $('#md-card'), mdLink: $('#md-link'),
   evidenceButton: $('#evidence-button'), evidenceDialog: $('#evidence-dialog'), evidenceBody: $('#evidence-body'),
   systemButton: $('#system-button'), systemDot: $('#system-dot'), systemSummary: $('#system-summary'), systemDialog: $('#system-dialog'), systemBody: $('#system-body'),
   workspace: $('#workspace'), runsView: $('#runs'), runsList: $('#runs-list'), runsRefresh: $('#runs-refresh'),
 };
 
-// Section order on the page and the stage whose result each section prints.
+// Section order on the page and the stage whose result each section prints. Stages 03 (Draft) and 04 (Review)
+// have no page section: the sidebar opens their errors and raw JSON in the side panel.
 const SECTIONS = [
   { el: el.concept, stage: 'planning_draft', head: { id: 'concept-title', title: '통합 기획안' } },
   { el: el.trends, stage: 'trend', head: { id: 'trend-title', n: '01', title: '트렌드 근거' } },
   { el: el.stock, stage: 'stock', head: { id: 'stock-title', n: '02', title: '재고 매칭' } },
-  { el: el.draft, stage: 'planning_draft', head: { id: 'draft-title', n: '03', title: '기획 초안' } },
-  { el: el.review, stage: 'sales_market_review', head: { id: 'review-title', n: '04', title: '시장 검토' } },
 ];
 
 const state = {
@@ -96,7 +95,9 @@ function setSectionState(section, value) {
 
 function renderSpine(result, { inFlight = false } = {}) {
   const items = model.rail(result, { inFlight });
-  view.renderRail(el.rail, items, { linked: !el.results.hidden });
+  // A stage has something to open in the side panel once it has a stored response or a recorded error.
+  const reported = new Set([...Object.keys(result?.sources ?? {}), ...(Array.isArray(result?.errors) ? result.errors.map((error) => error?.stage) : [])]);
+  view.renderRail(el.rail, items, { linked: !el.results.hidden, reported });
   const progress = view.renderProgress({ count: el.progressCount, state: el.progressState, root: document.documentElement }, items,
     { status: inFlight ? null : result?.status ?? null, inFlight });
   if (state.inFlight) el.runLabel.textContent = progress.running ? `실행 중 · ${progress.running.n} ${progress.running.ko}` : '실행 중…';
@@ -106,21 +107,11 @@ function renderSpine(result, { inFlight = false } = {}) {
   return Object.fromEntries(items.map((item) => [item.key, item.status]));
 }
 
-function reviewViewFor(result) {
-  const source = result?.sources?.sales_market_review;
-  return model.reviewView(
-    source?.raw_response?.result ?? null,
-    state.p07CallRequest,
-    source?.call_request_artifact?.artifact_id ?? null,
-    state.p07CallRequestState,
-    model.sourceResult(result, 'planning_draft'),
-  );
-}
-
-// Producer limitations open from their section in the side panel; the concept lists only the run's own.
+// Producer limitations live in the side panel's raw JSON; the concept lists only the run's own.
 function runOnlyLimitations(result) {
   const draft = model.draftView(model.sourceResult(result, 'planning_draft'));
-  return model.firstOccurrences([draft?.limitations, reviewViewFor(result)?.limitations, result?.limitations])[2];
+  const review = model.reviewView(model.sourceResult(result, 'sales_market_review'));
+  return model.firstOccurrences([draft?.limitations, review?.limitations, result?.limitations])[2];
 }
 
 function renderEnvelope(envelope, { inFlight = false } = {}) {
@@ -154,30 +145,18 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
   }));
   section(1, (node) => view.renderTrends(node, model.trendCards(model.sourceResult(result, 'trend')), { errors: model.stageErrors(result, 'trend'), groups }));
   section(2, (node) => view.renderStock(node, model.stockSlots(model.sourceResult(result, 'stock')), { errors: model.stageErrors(result, 'stock') }));
-  section(3, (node) => view.renderDraft(node, model.draftView(model.sourceResult(result, 'planning_draft')), { errors: model.stageErrors(result, 'planning_draft') }));
-  renderReview();
   void loadP07CallRequest(result);
   setSectionState(el.md, 'settled');
   renderMd();
   if (el.evidenceDialog.open) renderEvidence();
 }
 
-function renderReview() {
-  const result = state.envelope?.result;
-  if (!result) return;
-  const { el: node, stage, head } = SECTIONS[4];
-  const status = model.rail(result, { inFlight: state.inFlight }).find((item) => item.key === stage)?.status;
-  if (status === 'running' || status === 'pending') { view.renderWaiting(node, head, status); setSectionState(node, status); return; }
-  view.renderReview(node, reviewViewFor(result), { errors: model.stageErrors(result, stage) });
-  setSectionState(node, 'settled');
-}
-
+// The P07 request is printed in the side panel's JSON tab ("P07 요청 원문").
 async function loadP07CallRequest(result) {
   const artifactId = result?.sources?.sales_market_review?.call_request_artifact?.artifact_id;
   if (!artifactId || artifactId !== state.p07CallRequestArtifactId || state.p07CallRequest || state.p07CallRequestState !== 'loading') return;
   if (!/^[a-f0-9]{64}$/.test(artifactId)) {
     state.p07CallRequestState = 'error';
-    renderReview();
     return;
   }
   const requestId = result?.request_id;
@@ -185,7 +164,6 @@ async function loadP07CallRequest(result) {
   if (state.requestId !== requestId || state.p07CallRequestArtifactId !== artifactId) return;
   state.p07CallRequest = response.ok && response.body && typeof response.body === 'object' && !Array.isArray(response.body) ? response.body : null;
   state.p07CallRequestState = state.p07CallRequest ? 'loaded' : 'error';
-  renderReview();
   if (el.evidenceDialog.open) renderEvidence();
 }
 

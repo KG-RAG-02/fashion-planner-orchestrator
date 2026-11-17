@@ -16,9 +16,11 @@ WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
 for _mime, _suffix in (("text/javascript", ".js"), ("text/javascript", ".mjs"), ("text/css", ".css"),
                        ("font/woff2", ".woff2"), ("font/woff", ".woff"), ("image/svg+xml", ".svg")):
     mimetypes.add_type(_mime, _suffix)
+# img-src also admits img.vogue.co.kr: the trend cards show the items' Vogue article photos, loaded by the browser
+# without a Referer (user decision 2026-11-17, a UI exception to the trend rule G-10 "links only").
 CONTENT_SECURITY_POLICY = ("default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; "
-                           "img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
-                           "frame-ancestors 'none'; form-action 'self'")
+                           "img-src 'self' data: blob: https://img.vogue.co.kr; connect-src 'self'; object-src 'none'; "
+                           "base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 
 ProviderFactory = Callable[[], tuple[Callable[[Any], Any], dict[str, Any]]]
 

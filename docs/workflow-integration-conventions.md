@@ -20,7 +20,7 @@ Current integration behavior and contract boundaries for the five repositories. 
 - **Unsupported versions** are rejected before any model, DB or network work:
   - new `vogue-workflow` endpoints: 422 `UNSUPPORTED_CONTRACT_VERSION`
   - malformed requests to workflow endpoints: the documented 400 response
-- **Trend 1.1** may carry `trends[].style.example_images` and `trends[].style.search_outlook`. Consumers preserve these fields; the UI links example images, and the planning poster (stage 06) downloads up to three of them from allowlisted hosts and embeds them (see Trend photos for the Planning Sheet below). `search_outlook` is a target-season search-interest outlook, not a sales forecast, and is not used for ranking, status or lineage. Stub values are synthetic and remain labelled as such.
+- **Trend 1.1** may carry `trends[].style.example_images` and `trends[].style.search_outlook`. Consumers preserve these fields; the UI links example images in its side panel and shows each cited item's `items[].image_urls` photos in the trend cards, loaded by the browser from `https://img.vogue.co.kr` without a Referer (CSP `img-src`; user decision 2026-11-17, a UI exception to the trend rule G-10), and the planning poster (stage 06) downloads up to three of them from allowlisted hosts and embeds them (see Trend photos for the Planning Sheet below). `search_outlook` is a target-season search-interest outlook, not a sales forecast, and is not used for ranking, status or lineage. Stub values are synthetic and remain labelled as such.
 
 ## 2. Containers: hostnames, ports, binds, health
 

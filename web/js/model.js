@@ -87,6 +87,30 @@ export function rail(result, { inFlight = false } = {}) {
 
 // --- Trend -----------------------------------------------------------------
 
+// The only photo origin the page's CSP admits (img-src); other URLs would be blocked, so they are not photos.
+export const TREND_PHOTO_ORIGIN = 'https://img.vogue.co.kr';
+
+export function trendPhotoUrl(value) {
+  const url = safeUrl(value);
+  return url && new URL(url).origin === TREND_PHOTO_ORIGIN ? url : null;
+}
+
+// Every item a style cites, in order, with its own article photos (items[].image_urls). Items with the same
+// name are one tile; a tile without a usable photo is kept, so no cited item is dropped.
+export function itemTiles(items) {
+  const tiles = new Map();
+  for (const item of Array.isArray(items) ? items : []) {
+    const name = typeof item?.name === 'string' && item.name.trim() ? item.name.trim() : '이름 없는 아이템';
+    const tile = tiles.get(name) ?? { name, photos: [] };
+    for (const url of Array.isArray(item?.image_urls) ? item.image_urls : []) {
+      const photo = trendPhotoUrl(url);
+      if (photo && !tile.photos.includes(photo)) tile.photos.push(photo);
+    }
+    tiles.set(name, tile);
+  }
+  return [...tiles.values()];
+}
+
 export function trendCards(trendResult) {
   if (!trendResult || !Array.isArray(trendResult.trends)) return [];
   const evidence = new Map((trendResult.evidence ?? []).map((e) => [e.evidence_id, e]));
@@ -103,9 +127,10 @@ export function trendCards(trendResult) {
       definition: style.definition ?? '',
       seasons: (style.seasons ?? []).map(seasonLabel).filter(Boolean).join(' · '),
       items: unique(items.map((item) => item.name)),
+      itemTiles: itemTiles(items),
       quotes,
       evidenceIds: ids.filter((id) => evidence.has(id)),
-      // The UI shows Vogue example images as links; only the planning poster (stage 06) downloads and embeds them.
+      // The style's example images stay links in the side panel; the cards show the items' own photos.
       exampleLinks: (style.example_images ?? []).slice(0, 5)
         .map((image) => ({ url: safeUrl(image.url), basis: image.basis ?? '' }))
         .filter((image) => image.url),
