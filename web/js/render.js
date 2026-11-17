@@ -97,7 +97,7 @@ function foldList(title, items) {
 
 // Stages with a page section: their sidebar row scrolls to it.
 export const STAGE_TARGET = Object.freeze({
-  trend: 'trend-block', stock: 'stock-block', integration: 'concept', final_image: 'lookbook',
+  trend: 'trend-block', stock: 'stock-block', sales_market_review: 'market-block', integration: 'concept', final_image: 'lookbook',
 });
 
 // Stages without a page section (03 Draft, 04 Review): once they have reported, their sidebar row opens the
@@ -314,6 +314,65 @@ export function renderStock(section, slots, { errors = [] } = {}) {
   }
   fill(section, sectionHead({ id: 'stock-title', n: '02', title: '재고 매칭', meta: '스타일별 과잉 재고 후보' }),
     stageErrorList(errors), slots.length ? grid : emptyNote('재고 단계 결과가 없습니다.'));
+}
+
+const MARKET_PATH_LABELS = Object.freeze({
+  proposed_price: '제안 판매가', currency: '통화', unit: '단위', unit_cost: '단위 원가',
+  margin_rate_percent: '마진율 (%)', lower_bound: '하한', upper_bound: '상한',
+  category: '카테고리', product_type: '상품 종류', gender: '성별', season: '시즌', material: '소재',
+  segment: '세그먼트', age_band: '연령대', definition: '정의', share: '비중',
+  share_of_customers_with_known_age: '연령 확인 고객 중 비중', primary_segment: '주요 고객군',
+  secondary_segments: '추가 고객군', proposal: '제안', summary: '요약', rationale: '근거',
+  source: '출처', source_name: '출처명', observation_date: '관측일', period: '기간', value: '값',
+  metric: '지표', name: '항목', status: '상태', suppressed: '소표본 비공개',
+});
+
+function marketRows(value, path = '') {
+  if (Array.isArray(value)) {
+    if (!value.length) return [{ path: path || '값', value: '자료 없음' }];
+    return value.flatMap((item, index) => marketRows(item, `${path}[${index + 1}]`));
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value);
+    if (!entries.length) return [{ path: path || '값', value: '자료 없음' }];
+    return entries.flatMap(([key, item]) => {
+      const label = MARKET_PATH_LABELS[key] ?? key.replaceAll('_', ' ');
+      return marketRows(item, path ? `${path} · ${label}` : label);
+    });
+  }
+  const shown = value === null || value === undefined ? '미제공'
+    : typeof value === 'boolean' ? (value ? '예' : '아니요')
+      : typeof value === 'number' ? value.toLocaleString('ko-KR') : String(value);
+  return [{ path: path || '값', value: shown }];
+}
+
+function marketValueCard(section) {
+  const rows = marketRows(section.value, section.label);
+  return h('article', { class: 'market-value' },
+    h('h3', {}, section.label),
+    h('dl', { class: 'market-rows' }, rows.map((row) => h('div', {}, h('dt', {}, row.path), h('dd', {}, row.value)))));
+}
+
+export function renderMarket(container, market, { errors = [] } = {}) {
+  if (!market) {
+    fill(container, sectionHead({ id: 'market-title', n: '04', title: '판매·시장 분석' }),
+      stageErrorList(errors), emptyNote(errors.length ? 'P07 응답에 판매·시장 결과가 없습니다.' : 'P07 응답을 아직 받지 않았습니다.'));
+    return;
+  }
+  const meta = model.statusMeta(market.status);
+  fill(container,
+    sectionHead({ id: 'market-title', n: '04', title: '판매·시장 분석', meta: `P07 · ${meta.label}` }),
+    h('p', { class: 'small muted market-note' }, 'P07 응답에 포함된 값만 표시합니다. 값이 없거나 원천 분석이 비어 있으면 미제공으로 표시됩니다.'),
+    stageErrorList(errors),
+    market.sections.length
+      ? h('div', { class: 'market-grid' }, market.sections.map(marketValueCard))
+      : emptyNote('P07 응답에 표시할 분석 항목이 없습니다.'),
+    market.missingData.length ? h('div', { class: 'market-notes' },
+      h('h3', {}, '누락 데이터'), h('ul', {}, market.missingData.map((item) => h('li', {}, typeof item === 'string' ? item : JSON.stringify(item))))) : null,
+    market.errors.length ? h('div', { class: 'market-notes is-error' },
+      h('h3', {}, 'P07 분석 오류'), h('ul', {}, market.errors.map((item) => h('li', {}, typeof item === 'string' ? item : JSON.stringify(item))))) : null,
+    market.limitations.length ? h('details', { class: 'limits' }, h('summary', {}, `분석 한계 ${market.limitations.length}건`),
+      h('ul', {}, market.limitations.map((item) => h('li', {}, item)))) : null);
 }
 
 // --- MD decision -------------------------------------------------------------

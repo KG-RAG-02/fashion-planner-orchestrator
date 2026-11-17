@@ -316,6 +316,34 @@ export function reviewView(reviewResult, callRequest = null, callRequestArtifact
   };
 }
 
+// P07 owns this response shape. Keep values as returned so the UI can render both current and legacy fields
+// without deriving or estimating missing business values.
+export function marketView(reviewResult) {
+  if (!reviewResult || typeof reviewResult !== 'object') return null;
+  const result = reviewResult.result && typeof reviewResult.result === 'object' ? reviewResult.result
+    : reviewResult.review && typeof reviewResult.review === 'object' ? reviewResult.review : reviewResult;
+  const fields = [
+    ['decision_support', '의사결정 지원'], ['price_analysis', '가격 분석'],
+    ['category_price_comparison', '카테고리 가격 비교'], ['fabric_cost_analysis', '원단 원가 분석'],
+    ['material_cost_analysis', '소재 원가 분석'], ['margin_analysis', '마진 분석'],
+    ['margin_estimate', '마진 참고치'], ['margin_price_range_analysis', '마진·가격 범위 분석'],
+    ['customer_segment_analysis', '고객 세그먼트 분석'], ['target_audience_analysis', '대상 고객 분석'],
+    ['target_audience', '대상 고객'], ['draft_context', '검토 대상 상품'],
+  ];
+  const sections = fields.filter(([key]) => Object.hasOwn(result, key) && result[key] !== null)
+    .map(([key, label]) => ({ key, label, value: result[key] }));
+  const missingData = Array.isArray(result.missing_data) ? result.missing_data : [];
+  const errors = Array.isArray(result.errors) ? result.errors : [];
+  const limitations = Array.isArray(result.limitations) ? result.limitations.filter((item) => typeof item === 'string') : [];
+  return {
+    status: reviewResult.status ?? result.status ?? null,
+    sections,
+    missingData,
+    errors,
+    limitations,
+  };
+}
+
 function p06ProductProvenance(p06Result, product) {
   const draft = p06Result?.draft;
   if (!draft || !product) return {};
