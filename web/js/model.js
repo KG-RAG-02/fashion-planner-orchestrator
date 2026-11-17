@@ -201,6 +201,19 @@ export function draftView(draftResult) {
     const value = draft.product_profile?.[key];
     return typeof value === 'string' ? value : typeof value?.value === 'string' ? value.value : null;
   };
+  const evidenceClaims = [
+    ...(Array.isArray(draft.opportunity_findings) ? draft.opportunity_findings.map((item) => ({
+      text: typeof item?.statement === 'string' ? item.statement : item?.statement?.value,
+      refs: Array.isArray(item?.evidence_refs) ? item.evidence_refs.length : Array.isArray(item?.evidence_ids) ? item.evidence_ids.length : 0,
+    })) : []),
+    ...(Array.isArray(draft.claims) ? draft.claims.map((item) => ({
+      text: item?.text,
+      refs: Array.isArray(item?.evidence_refs) ? item.evidence_refs.length : Array.isArray(item?.evidence_ids) ? item.evidence_ids.length : 0,
+    })) : []),
+  ].filter((item) => typeof item.text === 'string' && item.text.trim())
+    .filter((item, index, all) => all.findIndex((other) => other.text.trim() === item.text.trim()) === index)
+    .slice(0, 3)
+    .map((item) => ({ text: item.text.trim(), refs: item.refs }));
   // [key, label, preferred holder]: 'draft' reads result.draft first, 'result' reads the result first.
   const sourceFields = [
     ['product_profile', '제품 프로필', 'draft'],
@@ -238,6 +251,7 @@ export function draftView(draftResult) {
     productType: profileValue('product_type'),
     gender: profileValue('gender'),
     material: profileValue('material'),
+    evidenceClaims,
     errors: Array.isArray(draftResult.errors) ? draftResult.errors : [],
     sections: sourceFields,
     // Where the lists live in the raw response, so a row can open them in the side panel.

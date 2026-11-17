@@ -209,6 +209,8 @@ export function renderDraftStage(section, draft, { errors = [] } = {}) {
     ['시즌', draft.season], ['소재', draft.material],
   ].filter(([, value]) => typeof value === 'string' && value.trim());
   const visuals = draft.visuals ?? [];
+  const evidence = (draft.evidenceClaims ?? []).map((item) => h('li', {},
+    h('span', {}, item.text), item.refs ? h('small', {}, `근거 ${item.refs}건`) : null));
   fill(section,
     sectionHead({ id: 'draft-title', n: '03', title: '새상품 생성', meta: `P06 · ${meta.label}` }),
     stageErrorList(errors),
@@ -218,6 +220,7 @@ export function renderDraftStage(section, draft, { errors = [] } = {}) {
         draft.concept ? h('p', { class: 'draft-stage-definition' }, draft.concept) : null,
         profile.length ? h('ul', { class: 'draft-profile' }, profile.map(([label, value]) => h('li', {}, h('strong', {}, `${label} · `), value))) : null),
       visuals.length ? h('div', { class: 'draft-visuals' }, visuals.map((item, index) => visualFigure(draft, item, index ? 'right' : 'left'))) : null),
+    evidence.length ? h('div', { class: 'draft-evidence' }, h('h3', {}, '근거'), h('ul', {}, evidence)) : null,
     foldList('기획 한계', draft.limitations));
 }
 

@@ -498,6 +498,10 @@ body[data-run="running"] .btn-cta::before { opacity: 1; transform: scaleX(var(--
 .draft-visuals .look-frame { aspect-ratio: 2 / 3; background: #F1F1F0; }
 .draft-visuals .look-frame img { width: 100%; height: 100%; object-fit: contain; }
 .draft-visuals .look figcaption { font-size: 12px; }
+.draft-evidence { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); }
+.draft-evidence h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--graphite); }
+.draft-evidence ul { display: grid; gap: 7px; margin: 0; padding-left: 18px; color: var(--graphite); font-size: 14px; line-height: 1.55; }
+.draft-evidence li small { margin-left: 8px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 
 /* --- Entries (trend styles, stock slots) ----------------------------------------------------- */
 
