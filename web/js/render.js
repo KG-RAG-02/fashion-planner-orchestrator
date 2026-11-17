@@ -93,37 +93,34 @@ function foldList(title, items) {
     : null;
 }
 
-// Producer fields as readable rows; the JSON itself opens in the side panel. `lists` adds rows for the
-// producer's own lists (errors, missing data, limitations), which are printed only there too.
-function fieldRows(stage, sections, { withStatus = false, lists = [] } = {}) {
-  const listRows = lists.filter(({ count }) => count > 0).map(({ label, count, path }) => h('li', { class: 'is-list' },
-    h('span', { class: 'field-name' }, `${label} ${count}건`),
-    panelLink('원문', 'json', model.jsonAnchor(stage, path), { quiet: true })));
-  return sections.length || listRows.length
-    ? h('ul', { class: 'field-rows' }, sections.map(({ label, value, path }) => {
-        const empty = model.isEmptyValue(value);
-        const fieldStatus = withStatus && value && typeof value === 'object' && !Array.isArray(value) && value.status ? statusText(value.status) : null;
-        return h('li', { class: empty ? 'is-empty' : null },
-          h('span', { class: 'field-name' }, label),
-          fieldStatus,
-          empty ? h('span', { class: 'field-none' }, '없음')
-            // An evidence list is printed by the panel's evidence tab, so its row links there.
-            : path.endsWith('evidence') && Array.isArray(value) ? panelLink(`근거 ${value.length}건`, 'evidence', `ev-${stage}`, { quiet: true })
-              : panelLink('원문', 'json', model.jsonAnchor(stage, path), { quiet: true }));
-      }), listRows)
-    : null;
-}
-
 // --- Spine: progress bar and stage links -----------------------------------------
 
+// Stages with a page section: their sidebar row scrolls to it.
 export const STAGE_TARGET = Object.freeze({
-  trend: 'trend-block', stock: 'stock-block', planning_draft: 'draft-block',
-  sales_market_review: 'review-block', integration: 'concept', final_image: 'lookbook',
+  trend: 'trend-block', stock: 'stock-block', integration: 'concept', final_image: 'lookbook',
 });
+
+// Stages without a page section (03 Draft, 04 Review): once they have reported, their sidebar row opens the
+// side panel's JSON tab at that stage, where its errors and raw response are printed.
+export const PANEL_STAGES = Object.freeze(['planning_draft', 'sales_market_review']);
+
+export function panelStageAnchor(stage) {
+  return `json-stage-${stage}`;
+}
 
 const SETTLED = new Set(['ok', 'partial', 'none', 'error']);
 
-export function renderRail(list, items, { linked = false } = {}) {
+function railLink(item, { linked, reported }) {
+  if (!linked) return h('span', { class: 'stage-link' });
+  if (STAGE_TARGET[item.key]) return h('a', { class: 'stage-link', href: `#${STAGE_TARGET[item.key]}` });
+  if (PANEL_STAGES.includes(item.key) && reported.has(item.key)) {
+    return h('button', { type: 'button', class: 'stage-link', title: `${item.ko} 오류·원문을 패널에서 보기`,
+      dataset: { panelTab: 'json', panelAnchor: panelStageAnchor(item.key) } });
+  }
+  return h('span', { class: 'stage-link' });
+}
+
+export function renderRail(list, items, { linked = false, reported = new Set() } = {}) {
   const previous = new Map([...list.children].map((li) => [li.dataset.stage, li]));
   const rows = items.map((item) => {
     const li = previous.get(item.key) ?? h('li', { dataset: { stage: item.key, target: STAGE_TARGET[item.key] } });
@@ -137,15 +134,17 @@ export function renderRail(list, items, { linked = false } = {}) {
     li.dataset.tone = item.tone;
     // Update the link in place so keyboard focus survives the 1.5 s polling re-render.
     let link = li.firstElementChild;
-    const tag = linked ? 'A' : 'SPAN';
-    if (!link || link.tagName !== tag) {
-      link = linked ? h('a', { class: 'stage-link', href: `#${STAGE_TARGET[item.key]}` }) : h('span', { class: 'stage-link' });
+    const fresh = railLink(item, { linked, reported });
+    if (!link || link.tagName !== fresh.tagName) {
+      link = fresh;
       li.replaceChildren(link);
     }
+    const opensPanel = link.tagName === 'BUTTON';
     fill(link,
       h('span', { class: 'stage-n' }, item.n),
       h('span', { class: 'stage-name' }, item.ko),
-      h('span', { class: 'stage-status' }, statusIcon(item.tone), item.label));
+      h('span', { class: 'stage-status' }, statusIcon(item.tone), item.label),
+      opensPanel ? h('span', { class: 'stage-panel-arrow', 'aria-hidden': 'true' }) : null);
     return li;
   });
   fill(list, rows);
@@ -229,7 +228,51 @@ export function renderConcept(section, envelope, { retryEnabled = false, onRetry
 }
 
 // --- Trend -----------------------------------------------------------------
-// Cards carry the style; its quotes, articles and example images open in the side panel.
+// Cards carry the style and every item it cites, each with its Vogue article photos in a strip that scrolls
+// sideways inside the card; quotes, articles and the style's example-image links open in the side panel.
+// The browser loads the photos from img.vogue.co.kr directly (CSP img-src) without sending a Referer.
+
+function photoMissing(frame, text) {
+  frame.classList.add('is-missing');
+  fill(frame, h('span', {}, text));
+}
+
+function itemPhoto(name, url, index, total) {
+  const frame = h('a', { class: 'item-photo', href: url, target: '_blank', rel: 'noopener noreferrer', title: '원본 사진 새 탭에서 열기' });
+  const img = h('img', { src: url, alt: `${name} — Vogue 기사 사진${total > 1 ? ` ${index + 1}` : ''}`, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
+  img.addEventListener('error', () => photoMissing(frame, '사진을 불러오지 못했습니다'), { once: true });
+  frame.append(img);
+  return frame;
+}
+
+// Marks a strip that overflows its card (shows the hint and the right-edge fade) and whether it is scrolled to the end.
+const stripWatch = 'ResizeObserver' in window ? new ResizeObserver((entries) => entries.forEach((entry) => markStrip(entry.target))) : null;
+
+function markStrip(strip) {
+  const block = strip.parentElement;
+  if (!block) return;
+  const overflowing = strip.scrollWidth - strip.clientWidth > 2;
+  block.classList.toggle('is-overflowing', overflowing);
+  block.classList.toggle('at-end', !overflowing || strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 2);
+}
+
+function itemStrip(tiles) {
+  // The scroll container is a labelled region (keyboard-scrollable); the items inside stay a list.
+  const strip = h('div', { class: 'item-strip', role: 'region', tabindex: '0', 'aria-label': `인용 아이템 ${tiles.length}개` },
+    // An item without a photo is its name and a note, with no empty frame.
+    h('ul', { class: 'item-list' }, tiles.map((tile) => tile.photos.length
+      ? h('li', { class: 'item-tile' },
+          h('div', { class: 'item-photos' }, tile.photos.map((url, index) => itemPhoto(tile.name, url, index, tile.photos.length))),
+          h('span', { class: 'item-name' }, tile.name))
+      : h('li', { class: 'item-tile is-photoless' },
+          h('span', { class: 'item-name' }, tile.name),
+          h('span', { class: 'item-none' }, '관련 사진 없음')))));
+  strip.addEventListener('scroll', () => markStrip(strip), { passive: true });
+  stripWatch?.observe(strip);
+  return h('div', { class: 'item-block' },
+    h('p', { class: 'item-count', 'aria-hidden': 'true' }, h('span', {}, `인용 아이템 ${tiles.length}`), h('span', { class: 'item-hint' }, '옆으로 넘겨 보기 →')),
+    strip);
+}
 
 export function renderTrends(section, cards, { errors = [], groups = [] } = {}) {
   const grid = h('div', { class: 'entry-grid' });
@@ -243,7 +286,7 @@ export function renderTrends(section, cards, { errors = [], groups = [] } = {}) 
         card.seasons ? h('span', { class: 'muted small' }, card.seasons) : null),
       h('h3', {}, card.name),
       card.definition ? h('p', { class: 'muted small' }, card.definition) : null,
-      card.items.length ? h('ul', { class: 'pill-list', 'aria-label': '아이템' }, card.items.slice(0, 6).map((item) => h('li', {}, item))) : null,
+      card.itemTiles.length ? itemStrip(card.itemTiles) : null,
       label ? panelLink(label, 'evidence', group.anchor) : null));
   });
   fill(section, sectionHead({ id: 'trend-title', n: '01', title: '트렌드 근거', meta: 'Vogue Korea 기사 기반' }),
@@ -271,82 +314,6 @@ export function renderStock(section, slots, { errors = [] } = {}) {
   }
   fill(section, sectionHead({ id: 'stock-title', n: '02', title: '재고 매칭', meta: '스타일별 과잉 재고 후보' }),
     stageErrorList(errors), slots.length ? grid : emptyNote('재고 단계 결과가 없습니다.'));
-}
-
-// --- Draft / Review --------------------------------------------------------
-
-function claimList(claims) {
-  return h('ol', { class: 'claim-list' }, claims.map((claim) => h('li', {},
-    h('span', { class: 'tag tag-strong' }, claim.kind),
-    h('span', { class: 'claim-text' }, claim.text),
-    h('span', { class: 'muted small' }, `근거 ${claim.refs}건`))));
-}
-
-export function renderDraft(section, view, { errors = [] } = {}) {
-  const head = { id: 'draft-title', n: '03', title: '기획 초안' };
-  if (!view) { fill(section, sectionHead(head), stageErrorList(errors), emptyNote('이 실행에서는 초안이 만들어지지 않았습니다.')); return; }
-  // The Draft's title is the integrated plan's title, printed above.
-  fill(section,
-    sectionHead({ ...head, meta: [view.category, view.season].filter(Boolean).join(' · ') }),
-    stageErrorList(errors),
-    view.claims.length ? claimList(view.claims) : emptyNote('이 초안에는 근거가 연결된 주장이 없습니다.'),
-    view.openQuestions.length || view.mdRequired.length ? h('div', { class: 'open-questions' },
-      h('p', { class: 'eyebrow' }, 'OPEN QUESTIONS · MD'),
-      view.openQuestions.length ? h('ul', {}, view.openQuestions.map((q) => h('li', {}, q))) : null,
-      view.mdRequired.length ? h('p', { class: 'small muted' }, `MD 결정 필요: ${view.mdRequired.join(' · ')}`) : null) : null,
-    h('h3', { class: 'subhead' }, 'P06 초안 항목'),
-    fieldRows('planning_draft', view.sections, { lists: [
-      { label: 'P06 오류', count: model.withoutShownErrors(view.errors, errors).length, path: view.listPaths.errors },
-      { label: '제한', count: view.limitations.length, path: view.listPaths.limitations },
-    ] }));
-}
-
-export function renderReview(section, view, { errors = [] } = {}) {
-  const head = { id: 'review-title', n: '04', title: '시장 검토' };
-  if (!view) { fill(section, sectionHead(head), stageErrorList(errors), emptyNote('시장 검토 결과가 없습니다.')); return; }
-  if (view.format !== 'native') { fill(section, sectionHead(head), stageErrorList(errors), emptyNote('현재 P07 응답 계약과 일치하는 결과가 없습니다.')); return; }
-  let inputBlock;
-  if (view.inputEvidenceState === 'loading') {
-    inputBlock = h('div', { class: 'review-input' }, h('p', { class: 'small muted' }, 'P07에 전달한 입력과 필드별 근거를 불러오는 중입니다…'));
-  } else if (view.inputFields.length) {
-    const rows = view.inputFields.map((field) => h('tr', {},
-      h('th', { scope: 'row' }, field.label),
-      h('td', { class: 'review-input-value' }, field.value),
-      h('td', {}, h('span', { class: `tag review-origin origin-${field.kind ?? 'missing'}` }, field.kindLabel),
-        field.sourceRef ? h('code', { class: 'review-source-ref' }, field.sourceRef) : h('span', { class: 'small muted as-block' }, '출처 경로 미전달')),
-      h('td', {}, field.evidenceIds.length
-        ? h('ul', { class: 'review-evidence-ids' }, field.evidenceIds.map((id) => h('li', { class: 'mono small' }, id)))
-        : h('span', { class: 'small muted' }, field.kind === 'user_requested' ? '연결된 연구 Evidence ID 없음' : 'Evidence ID 없음'))));
-    inputBlock = h('div', { class: 'review-input' },
-      h('div', { class: 'review-input-head' },
-        h('h3', { class: 'subhead' }, 'P07에 전달한 입력'),
-        panelLink('요청 원문', 'json', 'json-p07-request', { quiet: true })),
-      h('p', { class: 'small muted' }, view.inputEvidenceSent ? '출처 표시는 P07 요청에 함께 보낸 product_evidence입니다.' : '이 실행의 P07 요청에는 product_evidence가 없어 출처는 P06 Draft 기준으로 표시합니다.'),
-      h('div', { class: 'table-scroll' }, h('table', { class: 'metric-table review-input-table' },
-        h('thead', {}, h('tr', {}, ['항목', '전달값', '출처 종류 · 경로', 'Evidence ID'].map((label) => h('th', { scope: 'col' }, label)))),
-        h('tbody', {}, rows))));
-  } else if (view.inputEvidenceState === 'missing') {
-    inputBlock = h('div', { class: 'review-input' },
-      h('strong', {}, '상품값의 출처 정보가 없습니다.'),
-      h('p', { class: 'small muted' }, '이 실행의 P07 요청에 product_evidence가 없고, P06 Draft에서도 전달값과 일치하는 출처를 찾지 못했습니다.'));
-  } else if (view.callRequestArtifactId) {
-    inputBlock = h('div', { class: 'review-input' },
-      h('p', { class: 'small muted' }, 'P07 요청 원문을 불러오지 못했습니다.'),
-      h('a', { class: 'link small', href: artifactUrl(view.callRequestArtifactId), target: '_blank', rel: 'noopener' }, 'P07 요청 원문 JSON 열기'));
-  } else {
-    inputBlock = h('div', { class: 'review-input' }, emptyNote('P07 호출 요청이 보존되지 않았습니다.'));
-  }
-  fill(section,
-    sectionHead(head),
-    stageErrorList(errors),
-    inputBlock,
-    h('h3', { class: 'subhead' }, 'P07 분석 항목'),
-    view.sections.length ? null : emptyNote('P07 응답에 분석 항목이 없습니다.'),
-    fieldRows('sales_market_review', view.sections, { withStatus: true, lists: [
-      { label: '누락 데이터', count: view.missingData.length, path: view.listPaths.missing_data },
-      { label: 'P07 오류', count: model.withoutShownErrors(view.errors, errors).length, path: view.listPaths.errors },
-      { label: '제한 사항', count: view.limitations.length, path: view.listPaths.limitations },
-    ] }));
 }
 
 // --- MD decision -------------------------------------------------------------
@@ -400,14 +367,24 @@ function evidenceEntry(item) {
 export function renderEvidence(container, { result, groups, p07Request, p07RequestId }, tab) {
   if (!result) { fill(container, emptyNote('실행 결과가 없습니다.')); return; }
   if (tab === 'json') {
-    const blocks = model.panelJson(result).map((stage) => {
+    // 03 and 04 keep a block when their call failed before a response was stored, so their errors stay reachable.
+    const stored = model.panelJson(result);
+    const stages = model.STAGES.map((def) => stored.find((stage) => stage.key === def.key)
+      ?? (PANEL_STAGES.includes(def.key) && model.stageErrors(result, def.key).length ? { ...def, fields: [], unstored: true } : null))
+      .filter(Boolean);
+    const blocks = stages.map((stage) => {
       const fields = stage.fields;
       const request = stage.key === 'sales_market_review' && p07Request
         ? jsonFold('json-p07-request', 'P07 요청 원문', p07Request) : null;
       const missingRequest = stage.key === 'sales_market_review' && !p07Request && p07RequestId
         ? h('p', { class: 'small muted', id: 'json-p07-request', tabindex: '-1' }, 'P07 요청 원문을 아직 불러오지 못했습니다.') : null;
-      return h('section', { class: 'json-stage' },
+      // 03 and 04 have no page section, so the errors the orchestrator recorded for them are printed here.
+      const panelOnly = PANEL_STAGES.includes(stage.key);
+      const errors = panelOnly ? model.stageErrors(result, stage.key) : [];
+      return h('section', { class: 'json-stage', id: panelStageAnchor(stage.key), tabindex: '-1' },
         h('h3', {}, h('span', { class: 'stage-mini' }, stage.n), stage.ko),
+        panelOnly ? stageErrorList(errors) ?? h('p', { class: 'small muted' }, '이 단계에 기록된 오류가 없습니다.') : null,
+        stage.unstored ? h('p', { class: 'small muted' }, '이 단계의 응답 원문은 보존되지 않았습니다.') : null,
         request, missingRequest,
         fields.map((field) => field.pointer
           ? h('p', { class: 'json-line', id: field.anchor, tabindex: '-1' }, h('span', { class: 'mono' }, field.path), ` ${field.count}건`,

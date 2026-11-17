@@ -69,7 +69,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - `no_results`: 0이 아니라 "찾지 못함"을 뜻함.
   - `partial`은 실제로 만들어지지 않습니다.
 - **Evidence ID**: `trend:<article>:<block>:<sha8(quote)>`.
-- **`style.example_images`**: 최대 5개 링크입니다. P08 UI는 링크로만 보여 줍니다. 기획안 포스터(6단계)는 허용 호스트(`VOGUE_TREND_PHOTO_HOSTS`)의 사진을 최대 3장 내려받아 P08 저장소에 두고 포스터에 넣습니다(아래 기획안 사진 항목).
+- **`style.example_images`**: 최대 5개 링크입니다. P08 UI는 근거·원문 패널에 링크로만 보여 줍니다. 트렌드 카드에는 인용 아이템마다 `items[].image_urls` 사진을 바로 보여 줍니다. 브라우저가 `https://img.vogue.co.kr`에서 Referer 없이 직접 불러오며, 이를 위해 CSP `img-src`가 그 호스트를 허용합니다(사용자 결정 2026-11-17, trend 규칙 G-10 '링크로만'에 대한 UI 예외). 기획안 포스터(6단계)는 허용 호스트(`VOGUE_TREND_PHOTO_HOSTS`)의 사진을 최대 3장 내려받아 P08 저장소에 두고 포스터에 넣습니다(아래 기획안 사진 항목).
 - **`style.search_outlook`** (2026-11-13 trend 작업 트리, 미커밋. `schema_version`은 1.1 그대로): 객체 또는 `null`입니다.
   - 내용: 그 트렌드를 이루는 키워드(아이템 명사, 속성 × 하분류)의 **목표 시즌 검색 전망**입니다. 네이버 검색에서 같은 카테고리 안 상대 관심의 방향이고 판매량 예측이 아닙니다.
   - 그래프에 키워드·전망이 없으면 `null`입니다(지금의 Aura 그래프가 이 상태입니다). stub 그래프에는 합성 값이 들어 있고 `source`가 `synthetic_fixture`입니다.

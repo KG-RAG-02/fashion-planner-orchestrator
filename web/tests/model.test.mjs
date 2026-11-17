@@ -69,6 +69,25 @@ test('trendCards resolves evidence quotes and keeps at most five http(s) example
   assert.equal(cards[0].quotes.length, 2);
   assert.equal(cards[0].exampleLinks.length, 4);
   assert.ok(cards[0].exampleLinks.every((link) => link.url.startsWith('https://')));
+  assert.deepEqual(cards[0].itemTiles, [{ name: '롱 스커트', photos: [] }]);
+});
+
+test('itemTiles keeps every cited item, with only img.vogue.co.kr https photos, once each', () => {
+  const photo = (n) => `https://img.vogue.co.kr/vogue/2026/01/style_${n}-933x1400.jpg`;
+  const items = Array.from({ length: 12 }, (_, i) => ({ name: `아이템 ${i + 1}`, image_urls: i % 3 === 0 ? [] : [photo(i)] }));
+  items.push({ name: '아이템 2', image_urls: [photo(1), photo(99)] });   // same name: merged into one tile, duplicate photo dropped
+  items.push({ name: '  ', image_urls: [photo(50)] });
+  items.push({ name: '외부 사진', image_urls: ['http://img.vogue.co.kr/x.jpg', 'https://www.vogue.co.kr/x.jpg', 'https://img.vogue.co.kr.evil.example/x.jpg', 'javascript:alert(1)', null] });
+  const tiles = m.itemTiles(items);
+  assert.equal(tiles.length, 14);
+  assert.deepEqual(tiles.slice(0, 3).map((tile) => tile.name), ['아이템 1', '아이템 2', '아이템 3']);
+  assert.deepEqual(tiles[0].photos, []);
+  assert.deepEqual(tiles[1].photos, [photo(1), photo(99)]);
+  assert.deepEqual(tiles[12], { name: '이름 없는 아이템', photos: [photo(50)] });
+  assert.deepEqual(tiles[13], { name: '외부 사진', photos: [] });
+  assert.deepEqual(m.itemTiles(undefined), []);
+  assert.equal(m.trendPhotoUrl('https://img.vogue.co.kr/a.jpg'), 'https://img.vogue.co.kr/a.jpg');
+  assert.equal(m.trendPhotoUrl('https://img.vogue.co.kr:8443/a.jpg'), null);
 });
 
 test('problemMessage maps known codes and falls back to the producer message', () => {
