@@ -29,6 +29,14 @@
       "schema": "sales-market-review-response.schema.json",
       "expected_schema": true,
       "expected_semantic": true
+    },
+    {
+      "id": "p07-response-v0.3-consumer-projection",
+      "file": "p07-review-v0.3.consumer-projection.response.json",
+      "schema": "sales-market-review-response.schema.json",
+      "expected_schema": true,
+      "expected_semantic": true,
+      "note": "P07 main c662d4d (+ d658b65) HTTP handler output for p07-review-v0.3.request.json: review builder and _p08_review_projection run offline on fabricated H&M/fabric/FX/LLM inputs (Korean limitations, no fabric unit_cost, compact evidence, target hypothesis without price_positioning)."
     }
   ]
 }

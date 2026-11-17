@@ -1,0 +1,545 @@
+{
+  "contract_version": "vogue-sales-market-review/0.3-proposal",
+  "request_id": "synthetic-p07-001",
+  "producer": {
+    "agent_id": "sales-market-agent",
+    "schema_version": "sales-market-review/0.1-internal"
+  },
+  "status": "ok",
+  "result": {
+    "schema_version": "sales-market-review/0.1-internal",
+    "request_id": "synthetic-p07-001",
+    "draft_id": null,
+    "producer_id": "sales-market-agent",
+    "status": "ok",
+    "draft_context": {
+      "category": "Outerwear",
+      "product_type": "Jacket",
+      "gender": "women",
+      "season": "winter",
+      "material": "wool"
+    },
+    "category_price_comparison": [
+      {
+        "source_id": "synthetic-hm-research",
+        "source_type": "historical_kaggle_transaction_price_aggregate",
+        "permission_status": "non_commercial_research_only",
+        "operational_eligible": false,
+        "category": "Outerwear",
+        "mapped_product_type_category": "Outerwear",
+        "product_type_filter": "Jacket",
+        "requested_product_type_context": "Jacket",
+        "product_type_filter_applied": true,
+        "product_type_fallback_applied": false,
+        "requested_season": "winter",
+        "season_filter_status": "unsupported_source_dimension",
+        "category_mapping": {
+          "mapped_category": "Outerwear",
+          "mapping_id": "project07-hm-product-taxonomy",
+          "mapping_version": "project07-hm-category-map/1.3",
+          "requested_category": "Outerwear",
+          "method": "explicit_alias",
+          "score": 1.0,
+          "threshold": 0.52,
+          "requested_product_type": "Jacket",
+          "product_type_mapping": {
+            "requested": "Jacket",
+            "mapped": "Jacket",
+            "mapped_category": "Outerwear",
+            "method": "exact",
+            "score": 1.0
+          }
+        },
+        "merchandise_segment": "ladieswear",
+        "requested_gender": "women",
+        "gender_mapping": {
+          "requested": "women",
+          "mapped": "women",
+          "merchandise_segment": "ladieswear",
+          "method": "exact_alias",
+          "filter_applied": true
+        },
+        "gender_filter_applied": true,
+        "gender_fallback_applied": false,
+        "sample_count": 1200,
+        "article_count": 85,
+        "period": {
+          "start": "2018-09-20",
+          "end": "2020-09-22"
+        },
+        "price_statistics": {
+          "mean": 0.08,
+          "median": 0.075,
+          "p25": 0.05,
+          "p75": 0.1,
+          "currency": null,
+          "unit": "normalized_source_price; currency not provided",
+          "statistic": "transaction_price_distribution; unweighted transaction rows"
+        },
+        "scaled_price_statistics": {
+          "mean": 47.2,
+          "median": 44.25,
+          "p25": 29.5,
+          "p75": 59.0,
+          "scale_factor": 590,
+          "currency": "USD",
+          "unit": "USD/transaction (×590 scaling convention; not an H&M-published currency label)",
+          "method_source": "user-selected USD interpretation of ×590 scaling convention"
+        },
+        "usd_krw_conversion": {
+          "rate": 1400.0,
+          "rate_date": "2026-11-13",
+          "provider": "synthetic-fixture",
+          "rate_type": "reference",
+          "fallback_used": false
+        },
+        "evidence_ids": [
+          "source:d65b7d8609a1defa91a04afb",
+          "source:5b1b92b307bb488627401351"
+        ]
+      }
+    ],
+    "material_cost_analysis": [
+      {
+        "material_query": "wool",
+        "source_category": "모직물",
+        "source_type": "owner_provided_public_fabric_listing_snapshot",
+        "source_grade": "public_sale",
+        "sample_count": 1,
+        "currency": "KRW",
+        "original_unit": [
+          "1마(90cm)"
+        ],
+        "listed_price_statistics": {
+          "minimum": 18000.0,
+          "median": 18000.0,
+          "maximum": 18000.0,
+          "currency": "KRW"
+        },
+        "price_per_meter_krw_statistics": {
+          "sample_count": 1,
+          "minimum": 20000.0,
+          "median": 20000.0,
+          "maximum": 20000.0,
+          "currency": "KRW",
+          "unit": "KRW/m",
+          "status": "estimated",
+          "confidence_counts": {
+            "low": 1
+          },
+          "method": "Source-provided unit-price values or listed price divided by the source/recognized cut length; see per-record status and method."
+        },
+        "estimated_price_per_meter_available": true,
+        "cost_per_meter_operational_eligible": false,
+        "category_mapping": {
+          "mapping_id": "project07-fabric-material-terms",
+          "mapping_version": "1.1",
+          "matched_source_categories": [
+            "모직물"
+          ],
+          "matched_terms": [
+            "wool",
+            "울",
+            "모직"
+          ]
+        },
+        "permission_status": "owner_provided_snapshot; source reuse terms not independently verified",
+        "operational_eligible": false,
+        "evidence_ids": [
+          "source:acb8111342561869ff0a3e93"
+        ]
+      },
+      {
+        "material_query": "wool",
+        "source_category": "울 플란넬",
+        "source_type": "owner_provided_public_fabric_listing_snapshot",
+        "source_grade": "public_sale",
+        "sample_count": 1,
+        "currency": "KRW",
+        "original_unit": [
+          "1m"
+        ],
+        "listed_price_statistics": {
+          "minimum": 26000.0,
+          "median": 26000.0,
+          "maximum": 26000.0,
+          "currency": "KRW"
+        },
+        "price_per_meter_krw_statistics": {
+          "sample_count": 1,
+          "minimum": 26000.0,
+          "median": 26000.0,
+          "maximum": 26000.0,
+          "currency": "KRW",
+          "unit": "KRW/m",
+          "status": "observed",
+          "confidence_counts": {
+            "high": 1
+          },
+          "method": "Source-provided unit-price values or listed price divided by the source/recognized cut length; see per-record status and method."
+        },
+        "estimated_price_per_meter_available": true,
+        "cost_per_meter_operational_eligible": false,
+        "category_mapping": {
+          "mapping_id": "project07-fabric-material-terms",
+          "mapping_version": "1.1",
+          "matched_source_categories": [
+            "울 플란넬"
+          ],
+          "matched_terms": [
+            "wool",
+            "울",
+            "모직"
+          ]
+        },
+        "permission_status": "owner_provided_snapshot; source reuse terms not independently verified",
+        "operational_eligible": false,
+        "evidence_ids": [
+          "source:acb8111342561869ff0a3e93"
+        ]
+      }
+    ],
+    "customer_segment_analysis": [
+      {
+        "source_id": "synthetic-hm-research",
+        "source_type": "historical_kaggle_customer_article_transaction_aggregate",
+        "permission_status": "non_commercial_research_only",
+        "operational_eligible": false,
+        "category": "Outerwear",
+        "category_mapping": {
+          "requested_category": "Outerwear",
+          "mapped_category": "Outerwear",
+          "method": "exact",
+          "score": 1.0,
+          "threshold": 0.52
+        },
+        "product_merchandise_segment": "ladieswear",
+        "target_age_cohort": {
+          "age_band": "20_39",
+          "definition": "20–39 (20s and 30s)",
+          "selection": "largest of the predefined <20, 20–39, and 40+ cohorts",
+          "share_of_customers_with_known_age": 0.5973,
+          "suppressed": false,
+          "unique_customer_count": 2389
+        },
+        "unique_customer_denominator": 4000,
+        "sample_size_suppressed": false,
+        "period": {
+          "start": "2018-09-20",
+          "end": "2020-09-22"
+        },
+        "age_semantics": "customer age recorded in the dataset snapshot; not age at each historical transaction date",
+        "aggregation": "distinct customer_id per mapped product category and age band",
+        "requested_product_type_context": "Jacket",
+        "requested_product_category": "Outerwear",
+        "requested_product_type": "Jacket",
+        "product_type_mapping": {
+          "requested": "Jacket",
+          "mapped": "Jacket",
+          "mapped_category": "Outerwear",
+          "method": "exact"
+        },
+        "requested_gender": "women",
+        "gender_mapping": {
+          "requested": "women",
+          "mapped": "women",
+          "merchandise_segment": "ladieswear",
+          "method": "exact_alias"
+        },
+        "gender_filter_applied": true,
+        "gender_fallback_applied": false,
+        "evidence_ids": [
+          "source:c837f6b51683f6403cbe0a99"
+        ]
+      }
+    ],
+    "target_audience_analysis": {
+      "status": "ok",
+      "age_cohort": {
+        "age_band": "20_39",
+        "definition": "20–39 (20s and 30s)",
+        "selection": "largest of the predefined <20, 20–39, and 40+ cohorts",
+        "share_of_customers_with_known_age": 0.5973,
+        "suppressed": false,
+        "unique_customer_count": 2389
+      },
+      "limitations": [],
+      "evidence_ids": [
+        "source:c837f6b51683f6403cbe0a99",
+        "source:d65b7d8609a1defa91a04afb",
+        "source:5b1b92b307bb488627401351",
+        "source:acb8111342561869ff0a3e93"
+      ]
+    },
+    "margin_estimate": {
+      "status": "benchmark_estimate",
+      "estimate_type": "industry_average_gross_margin_benchmark",
+      "basis": "nyu_stern_us_apparel_gross_margin_january_2026",
+      "benchmark_gross_margin_rate": 0.5688,
+      "benchmark_source": "NYU Stern Damodaran Margins by Sector (US), January 2026",
+      "benchmark_sample_size": 35,
+      "benchmark_region": "US",
+      "selling_price": 66000,
+      "currency": "KRW",
+      "evidence_ids": [
+        "source:0734512f658ef4699fbaf75d",
+        "source:d65b7d8609a1defa91a04afb",
+        "source:5b1b92b307bb488627401351",
+        "source:24e3c5d44d2c82e5940abfc2",
+        "source:acb8111342561869ff0a3e93"
+      ]
+    },
+    "evidence": [
+      {
+        "evidence_id": "source:c837f6b51683f6403cbe0a99",
+        "source_id": "synthetic-hm-research",
+        "source_type": "historical_kaggle_customer_article_transaction_aggregate",
+        "source_name": "H&M historical customer aggregate",
+        "locator": "synthetic/customers.csv",
+        "observed_at": null,
+        "as_of": "2020-09-22",
+        "permission_status": "non_commercial_research_only",
+        "supports_fields": [
+          "result.customer_segment_analysis",
+          "result.target_audience_analysis"
+        ],
+        "analysis": {
+          "interpretation": "Aggregated age-band counts only; this is historical research and not a current customer profile."
+        }
+      },
+      {
+        "evidence_id": "source:d65b7d8609a1defa91a04afb",
+        "source_id": "synthetic-hm-research",
+        "source_type": "historical_kaggle_transaction_price_aggregate",
+        "source_name": "H&M historical transaction price aggregate",
+        "locator": "synthetic/articles.parquet",
+        "observed_at": null,
+        "as_of": "2020-09-22",
+        "permission_status": "non_commercial_research_only",
+        "supports_fields": [
+          "result.category_price_comparison",
+          "result.price_analysis",
+          "result.target_audience_analysis",
+          "result.margin_estimate",
+          "result.margin_analysis",
+          "result.margin_price_range_analysis"
+        ],
+        "analysis": {
+          "interpretation": "Historical H&M transaction-price aggregate; the ×590 USD scale is a stated research assumption, not official currency metadata."
+        }
+      },
+      {
+        "evidence_id": "source:5b1b92b307bb488627401351",
+        "source_id": "synthetic-hm-research",
+        "source_type": "historical_kaggle_transaction_price_aggregate",
+        "source_name": "H&M historical transaction price aggregate",
+        "locator": "synthetic/transactions.parquet",
+        "observed_at": null,
+        "as_of": "2020-09-22",
+        "permission_status": "non_commercial_research_only",
+        "supports_fields": [
+          "result.category_price_comparison",
+          "result.price_analysis",
+          "result.target_audience_analysis",
+          "result.margin_estimate",
+          "result.margin_analysis",
+          "result.margin_price_range_analysis"
+        ],
+        "analysis": {
+          "interpretation": "Historical H&M transaction-price aggregate; the ×590 USD scale is a stated research assumption, not official currency metadata."
+        }
+      },
+      {
+        "evidence_id": "source:acb8111342561869ff0a3e93",
+        "source_id": "owner_provided_public_fabric_listing_snapshot",
+        "source_type": "owner_provided_public_fabric_listing_snapshot",
+        "source_name": "Owner-provided public fabric listing snapshot",
+        "locator": "synthetic/fabric-prices.csv",
+        "observed_at": "2026-11-14",
+        "as_of": "2026-11-14",
+        "permission_status": "owner_provided_snapshot; source reuse terms not independently verified",
+        "supports_fields": [
+          "result.material_cost_analysis",
+          "result.fabric_cost_analysis",
+          "result.target_audience_analysis",
+          "result.margin_estimate",
+          "result.margin_analysis",
+          "result.margin_price_range_analysis"
+        ],
+        "analysis": {
+          "interpretation": "Public listing reference only; it is not a verified purchase or production cost, and material composition is not inferred."
+        }
+      },
+      {
+        "evidence_id": "source:24e3c5d44d2c82e5940abfc2",
+        "source_id": "synthetic-fixture",
+        "source_type": "usd_krw_reference_rate",
+        "source_name": "synthetic-fixture",
+        "locator": "https://api.frankfurter.dev/v2/rate/usd/krw",
+        "observed_at": null,
+        "as_of": "2026-11-13",
+        "permission_status": "public_reference_data",
+        "supports_fields": [
+          "result.price_analysis",
+          "result.margin_estimate",
+          "result.margin_analysis",
+          "result.margin_price_range_analysis"
+        ],
+        "analysis": {
+          "interpretation": "Reference conversion rate used to express the historical research scale in KRW; not a price observation."
+        }
+      },
+      {
+        "evidence_id": "source:0734512f658ef4699fbaf75d",
+        "source_id": "nyu-stern-damodaran-us-apparel-margin-2026-01",
+        "source_type": "industry_gross_margin_benchmark",
+        "source_name": "NYU Stern Damodaran Margins by Sector (US), January 2026",
+        "locator": "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/margin.html",
+        "observed_at": null,
+        "as_of": "2026-01",
+        "permission_status": "public_reference_data",
+        "supports_fields": [
+          "result.margin_estimate",
+          "result.margin_analysis",
+          "result.margin_price_range_analysis"
+        ],
+        "analysis": {
+          "interpretation": "Sector-level benchmark scenario, not this product's observed margin or a Korea-specific forecast."
+        }
+      }
+    ],
+    "missing_data": [],
+    "errors": [],
+    "limitations": [
+      "[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.",
+      "[거래 가격 자료] H&M Kaggle 거래 가격은 과거 비상업 연구 참고치이며 현재 시장 판매가가 아닙니다.",
+      "[원단 자료] R2 공개 목록 가격은 참고치이며 검증된 구매 단가나 제품 생산 원가가 아닙니다.",
+      "[고객 연령 자료] H&M 과거 비상업 집계는 현재 VOGUE 고객 구성이나 수요를 나타내지 않습니다.",
+      "H&M 가격은 2018–2020년 비상업 연구 집계입니다. ×590 USD는 연구 환산 가정이며 원천 통화 표기가 아닙니다; 시즌 차원은 없습니다.",
+      "원단은 공개 listing 참고값이며 미터당 환산은 추정치입니다. 검증된 구매·생산 원가가 아닙니다.",
+      "고객 연령은 과거 집계이며 성별 필터는 고객 성별이 아닌 구매 상품 세그먼트 기준입니다."
+    ],
+    "decision_support": {
+      "recommendation": "review_required",
+      "ready_for_human_decision": true,
+      "evidence_areas": {
+        "category_price": true,
+        "material_cost": true,
+        "margin": false,
+        "customer_segments": true
+      },
+      "human_decision_required": true
+    },
+    "price_analysis": {
+      "status": "ok",
+      "hm_average_price_usd": 47.2,
+      "raw_normalized_mean": 0.08,
+      "currency": "KRW",
+      "source_currency": "USD",
+      "unit": "KRW",
+      "scale_factor": 590,
+      "converted_average_krw": 66080.0,
+      "exchange_rate": {
+        "base_currency": "USD",
+        "quote_currency": "KRW",
+        "rate": 1400.0,
+        "rate_date": "2026-11-13",
+        "provider": "synthetic-fixture",
+        "rate_type": "reference",
+        "fallback_used": false,
+        "fallback_age_days": 0,
+        "stale": false
+      },
+      "sample_size": 1200,
+      "period": {
+        "start": "2018-09-20",
+        "end": "2020-09-22"
+      },
+      "proposed_price": 66000,
+      "proposal_reason": "The ×590-to-USD interpretation is a user-selected research scale, not official Kaggle currency metadata.",
+      "evidence_ids": [
+        "source:d65b7d8609a1defa91a04afb",
+        "source:5b1b92b307bb488627401351",
+        "source:24e3c5d44d2c82e5940abfc2"
+      ]
+    },
+    "fabric_cost_analysis": {
+      "status": "reference_only",
+      "unit": "KRW/m",
+      "currency": "KRW",
+      "matched_material": "wool",
+      "limitations": [
+        "Fabric listing references are not verified purchase costs; no verified per-meter cost is asserted."
+      ],
+      "evidence_ids": [
+        "source:acb8111342561869ff0a3e93"
+      ]
+    },
+    "margin_analysis": {
+      "status": "benchmark_estimate",
+      "basis": "nyu_stern_us_apparel_gross_margin_january_2026",
+      "selling_price": 66000,
+      "currency": "KRW",
+      "margin_rate_percent": 56.88,
+      "estimate_type": "industry_average_gross_margin_benchmark",
+      "benchmark_source": "NYU Stern Damodaran Margins by Sector (US), January 2026",
+      "benchmark_sample_size": 35,
+      "benchmark_region": "US",
+      "limitations": [
+        "The 56.88% rate is an average for 35 US public apparel companies; it is not a Korea-specific or product-specific forecast.",
+        "A public fabric listing reference is not a verified purchasing cost.",
+        "This benchmark estimate represents US apparel sector economics; it is not a product-specific margin observation."
+      ],
+      "evidence_ids": [
+        "source:0734512f658ef4699fbaf75d",
+        "source:d65b7d8609a1defa91a04afb",
+        "source:5b1b92b307bb488627401351",
+        "source:24e3c5d44d2c82e5940abfc2",
+        "source:acb8111342561869ff0a3e93"
+      ]
+    },
+    "margin_price_range_analysis": null,
+    "target_audience": {
+      "status": "ok",
+      "proposal": {
+        "proposal": "합성 예시: 20–30대 여성 직장인을 위한 울 혼방 테일러드 재킷 가설입니다.",
+        "primary_segment": "합성 예시: 출퇴근과 주말을 함께 입는 20–30대 여성",
+        "secondary_segments": [
+          "합성 예시: 40대 초반 미니멀 스타일 선호 고객"
+        ],
+        "product_fit": {
+          "wearing_occasions": [
+            "출퇴근",
+            "주말 외출",
+            "격식 있는 모임"
+          ]
+        },
+        "channel_content_hypotheses": [
+          "합성 예시: 출근룩 코디 콘텐츠",
+          "합성 예시: 소재 클로즈업 이미지"
+        ],
+        "merchandising_actions": [
+          "합성 예시: 기본 컬러 2종 우선 검토",
+          "합성 예시: 사이즈 구간 검증"
+        ]
+      },
+      "age_cohort": {
+        "age_band": "20_39",
+        "definition": "20–39 (20s and 30s)",
+        "selection": "largest of the predefined <20, 20–39, and 40+ cohorts",
+        "share_of_customers_with_known_age": 0.5973,
+        "suppressed": false,
+        "unique_customer_count": 2389
+      },
+      "limitations": [],
+      "evidence_ids": [
+        "source:c837f6b51683f6403cbe0a99",
+        "source:d65b7d8609a1defa91a04afb",
+        "source:5b1b92b307bb488627401351",
+        "source:acb8111342561869ff0a3e93"
+      ],
+      "transfer_authorized": true,
+      "llm_call_status": "completed"
+    }
+  }
+}

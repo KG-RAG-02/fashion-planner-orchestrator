@@ -12,6 +12,15 @@ from vogue_orchestrator.workflow_contract import WorkflowContract
 from vogue_orchestrator.workflow_store import WorkflowStore, canonical, digest
 
 FIXTURES = Path(__file__).parent / 'fixtures/workflow'
+CONTRACT_FIXTURES = Path(__file__).resolve().parents[1] / 'tools/workflow_contract/fixtures'
+
+
+def consumer_projection_p07_review(request_id, product):
+    """P07 main c662d4d's response shape (its consumer projection; a fabricated fixture) for this run and product."""
+    value = json.loads((CONTRACT_FIXTURES / 'p07-review-v0.3.consumer-projection.response.json').read_bytes())
+    value['request_id'] = value['result']['request_id'] = request_id
+    value['result']['draft_context'] = copy.deepcopy(product)
+    return value
 
 
 def native_p07_review(request_id, product, status='ok'):
@@ -204,6 +213,45 @@ class WorkflowTests(unittest.TestCase):
             'product_evidence': {
                 'category': {'kind': 'user_requested', 'source_ref': 'p06.draft.product_profile.category', 'evidence_ids': []},
                 'material': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.material', 'evidence_ids': []}}})
+
+    def test_p06_trend_basis_and_the_p07_consumer_projection_pass_every_check(self):
+        """A Draft with draft.trend_basis (P06 rule, 2026-11-17) and P07 main c662d4d's response run end to end."""
+        from vogue_orchestrator.planning_sheet import build_sheet, focus_trend
+        style = self.sample['input']['trend_response']['raw_response']['result']['trends'][0]['style']
+        profile = {'category': {'value': 'Outerwear', 'kind': 'user_requested', 'evidence_ids': []},
+                   'material': {'value': 'wool', 'kind': 'proposal', 'evidence_ids': []},
+                   **{key: {'value': None, 'kind': 'unknown', 'evidence_ids': []} for key in ('product_type', 'gender', 'season')}}
+        draft = {'title': '검증용 Draft', 'category': 'Outerwear', 'product_profile': profile, 'limitations': [],
+                 'trend_basis': {'source_style_id': style['id'], 'name': style['name'],
+                                 'selection_rule': 'most_evidence_linked_design_attributes/1',
+                                 'evidence_ids': [], 'design_attributes': [], 'candidates_considered': 1}}
+        result = {'schema_version': '1.0', 'request_id': self.rid, 'status': 'ok', 'draft': draft, 'evidence_ids': [],
+                  'input_evidence': {}, 'limitations': [], 'errors': []}
+        sent = []
+
+        def p06(_payload):
+            self.trace.append('planning_draft')
+            return WireResponse(json.dumps({'contract_version': 'vogue-handoff/0.3', 'request_id': self.rid,
+                                            'producer': {'agent_id': 'new-product-agent', 'schema_version': '1.0'},
+                                            'status': 'ok', 'result': result}, ensure_ascii=False).encode())
+
+        def p07(payload):
+            self.trace.append('sales_market_review')
+            sent.append(copy.deepcopy(payload['input']['product']))
+            review = consumer_projection_p07_review(self.rid, payload['input']['product'])
+            return WireResponse(json.dumps(review, ensure_ascii=False).encode())
+
+        self.workflow.adapters['planning_draft'] = p06
+        self.workflow.adapters['sales_market_review'] = p07
+        envelope = self.run_flow()['envelope']
+        self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
+        self.assertEqual(sent, [{'category': 'Outerwear', 'material': 'wool'}])
+        self.contract.schema(envelope, 'integrated-result.schema.json')
+        self.contract.semantic(envelope, self.rid, self.store)
+        self.assertEqual(focus_trend(envelope['result'])['style']['id'], style['id'])
+        self.assertEqual(build_sheet(envelope).price_rows, (('제안 판매가', '66,000원'), ('마진율', '56.88%')))
+        self.assertIn('[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.',
+                      envelope['result']['integration']['limitations'])
 
     def test_user_category_season_and_partial_peer_results_are_preserved(self):
         scenario = json.loads((FIXTURES/'p06-p07-partial-handoff.json').read_bytes())

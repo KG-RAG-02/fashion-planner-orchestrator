@@ -236,6 +236,30 @@ test('evidenceGroups files each trend evidence under the first style citing it, 
   assert.deepEqual(m.evidenceGroups(null), []);
 });
 
+test('P07 consumer projection (P07 main c662d4d) keeps its sections, Korean limitations and compact evidence', () => {
+  const response = fixture('p07-review-v0.3.consumer-projection.response');
+  const view = m.reviewView(response);
+  assert.equal(view.format, 'native');
+  assert.equal(view.status, 'ok');
+  const sections = Object.fromEntries(view.sections.map(({ key, value }) => [key, value]));
+  for (const key of ['price_analysis', 'fabric_cost_analysis', 'material_cost_analysis', 'margin_analysis', 'target_audience', 'target_audience_analysis', 'evidence']) {
+    assert.ok(key in sections, `${key} reaches the review view`);
+  }
+  assert.ok(!('margin_price_range_analysis' in sections), 'a null section is not listed');
+  assert.equal(sections.fabric_cost_analysis.unit_cost, undefined);
+  assert.equal(sections.target_audience.proposal.price_positioning, undefined);
+  assert.deepEqual(view.limitations, response.result.limitations);
+  assert.equal(view.limitations[0], '[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.');
+  assert.deepEqual(view.missingData, []);
+  const p07 = m.evidenceGroups(envelopeWith({ sales_market_review: response.result })).find((g) => g.anchor === 'ev-sales_market_review');
+  assert.equal(p07.items.length, response.result.evidence.length);
+  const benchmark = p07.items.find((item) => item.raw.source_type === 'industry_gross_margin_benchmark');
+  assert.equal(benchmark.title, 'NYU Stern Damodaran Margins by Sector (US), January 2026');
+  assert.match(benchmark.text, /^Sector-level benchmark/);
+  assert.equal(benchmark.detail, 'https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/margin.html');
+  assert.equal(benchmark.url, null);  // P07 evidence carries a locator, not a url field
+});
+
 test('rawFields splits a raw result into anchored fields and points evidence to the evidence tab', () => {
   const result = envelopeWith({
     planning_draft: { draft: { title: 't', input_conflicts: [] }, input_statuses: { trend_result: 'ok' } },

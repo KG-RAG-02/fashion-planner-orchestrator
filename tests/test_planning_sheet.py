@@ -118,6 +118,7 @@ class BoardMappingTests(unittest.TestCase):
         p07 = json.loads((FIXTURES / 'p07-review-v0.3.response.json').read_text(encoding='utf-8'))
         body = p07['result']
         body['price_analysis'].update(proposed_price=59000, currency='KRW', unit='KRW')
+        # Runs recorded before P07 c662d4d may carry fabric_cost_analysis.unit_cost; their sheets still show it.
         body['fabric_cost_analysis'].update(unit_cost=12450.0, unit='KRW/m', currency='KRW')
         body['margin_analysis'].update(margin_rate_percent=56.88)
         body['target_audience'] = {
@@ -133,6 +134,25 @@ class BoardMappingTests(unittest.TestCase):
         self.assertEqual((target.age, target.age_note), ('20–39 (20s and 30s)', '연령 확인 고객의 59.7%'))
         self.assertEqual((target.primary, target.summary, target.secondary, target.occasions),
                          ('합성 주 타깃', '합성 타깃 가설 문장', ('보조 타깃',), ('출퇴근', '주말')))
+
+    def test_p07_consumer_projection_fills_the_market_column(self):
+        # P07 main c662d4d: Korean limitations, no fabric unit_cost (listing references are not verified costs, so
+        # the sheet shows no 소재 원가 row), compact evidence, target hypothesis without price_positioning.
+        envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
+        p07 = fixture('p07-review-v0.3.consumer-projection.response')
+        envelope['result']['sources']['sales_market_review']['raw_response'] = p07
+        sheet = build_sheet(envelope)
+        self.assertEqual(sheet.price_rows, (('제안 판매가', '66,000원'), ('마진율', '56.88%')))
+        target = sheet.target
+        self.assertEqual((target.age, target.age_note), ('20–39 (20s and 30s)', '연령 확인 고객의 59.7%'))
+        self.assertEqual((target.primary, target.summary), ('합성 예시: 출퇴근과 주말을 함께 입는 20–30대 여성',
+                                                           '합성 예시: 20–30대 여성 직장인을 위한 울 혼방 테일러드 재킷 가설입니다.'))
+        self.assertEqual((target.secondary, target.occasions),
+                         (('합성 예시: 40대 초반 미니멀 스타일 선호 고객',), ('출퇴근', '주말 외출', '격식 있는 모임')))
+        sales = {section.section_id: section for section in sheet.board.sections}['sales_market']
+        self.assertEqual(sales.claims, ())  # no findings, metrics or missing data in this response
+        self.assertEqual(sales.notes, tuple(p07['result']['limitations']))  # Korean, in P07's order
+        self.assertEqual(sales.notes[0], '[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.')
 
     def test_a_missing_target_stays_missing(self):
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
@@ -283,6 +303,14 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
             left, right = rgb.getpixel((300, 1070)), rgb.getpixel((800, 1070))  # the two photos under the trend
         self.assertEqual((left, right), (green, green))
         self.assertNotEqual(png, planning_sheet_png(envelope, load_artifact=lambda artifact: photo((200, 200, 200)), fonts=fonts))
+
+    def test_the_p07_consumer_projection_renders_deterministically(self):
+        fonts = self.fonts()
+        envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
+        envelope['result']['sources']['sales_market_review']['raw_response'] = fixture('p07-review-v0.3.consumer-projection.response')
+        png = planning_sheet_png(envelope, load_artifact=lambda artifact: red_png(), fonts=fonts)
+        self.assertTrue(png.startswith(PNG_SIGNATURE))
+        self.assertEqual(png, planning_sheet_png(envelope, load_artifact=lambda artifact: red_png(), fonts=fonts))
 
     def test_a_failed_image_is_never_loaded(self):
         fonts = self.fonts()
