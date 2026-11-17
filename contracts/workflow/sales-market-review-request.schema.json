@@ -39,7 +39,11 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "category"
+            "category",
+            "product_type",
+            "gender",
+            "season",
+            "material"
           ],
           "properties": {
             "category": {
@@ -67,7 +71,11 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "category"
+        "category",
+        "product_type",
+        "gender",
+        "season",
+        "material"
       ],
       "properties": {
         "category": {
@@ -77,10 +85,7 @@
           "pattern": ".*\\S.*"
         },
         "product_type": {
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": "string",
           "minLength": 1,
           "maxLength": 120,
           "pattern": ".*\\S.*"
@@ -95,19 +100,13 @@
           ]
         },
         "season": {
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": "string",
           "minLength": 1,
           "maxLength": 120,
           "pattern": ".*\\S.*"
         },
         "material": {
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": "string",
           "minLength": 1,
           "maxLength": 120,
           "pattern": ".*\\S.*"
