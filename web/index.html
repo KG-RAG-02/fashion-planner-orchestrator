@@ -100,11 +100,17 @@
   <dialog id="sheet-viewer" class="sheet-viewer" aria-labelledby="sheet-viewer-title">
     <div class="sheet-viewer-head">
       <h2 id="sheet-viewer-title">최종 기획안</h2>
-      <button type="button" class="icon-button" data-close aria-label="최종 기획안 닫기">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg>
-      </button>
+      <div class="sheet-viewer-actions">
+        <button type="button" class="btn btn-glass" id="sheet-viewer-toggle">원본 포스터 보기</button>
+        <button type="button" class="icon-button" data-close aria-label="최종 기획안 닫기">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg>
+        </button>
+      </div>
     </div>
-    <img id="sheet-viewer-image" alt="최종 기획안 원본" decoding="async">
+    <div id="sheet-viewer-content" class="sheet-viewer-content"></div>
+    <div id="sheet-viewer-poster" class="sheet-viewer-poster" hidden>
+      <img id="sheet-viewer-image" alt="최종 기획안 원본 포스터" decoding="async">
+    </div>
   </dialog>
 
   <!-- The one place evidence and JSON are printed. Sections link into it by anchor. -->
