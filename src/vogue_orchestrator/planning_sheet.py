@@ -5,9 +5,9 @@ agent is called, no producer value is recomputed or rewritten, a missing value s
 (미제공 / 미확인, never 0), and long lists are cut with an explicit "+N" count instead of silently.
 
 Layout: a one-product proposal poster. A header (title, season, category, run date) over three columns —
-Analysis (the first Trend style: description, colour swatches, material texture chips, article photos; the stock
-product matched to it: image, colour, material, fit, quantity, match reason; the LLM SWOT draft), Design
-(new-product-agent's product definition, LOOK visuals, specification, planning points) and Marketing (target,
+Analysis (the focus Trend style, see focus_trend: description, colour swatches, material texture chips, article
+photos; the stock product matched to it: image, colour, material, fit, quantity, match reason; the LLM SWOT draft),
+Design (new-product-agent's product definition, LOOK visuals, specification, planning points) and Marketing (target,
 sales & market, price, LLM promotion ideas, MD review points). Agent
 metadata (Evidence IDs, stage statuses, run trace) stays in the stored run and the UI, not on the poster.
 """
@@ -370,7 +370,7 @@ class PlanningSheet:
 
 @dataclass(frozen=True)
 class TrendFocus:
-    """The Trend style the poster is about (the first style of the Trend result)."""
+    """The Trend style the poster is about (focus_trend)."""
     name: str
     seasons: str
     definition: str | None
@@ -443,16 +443,35 @@ def draft_trend_citations(result: Mapping[str, Any]) -> dict[str, int]:
     return counts
 
 
-def focus_trend(result: Mapping[str, Any]) -> Mapping[str, Any]:
-    """The Trend style the one-product proposal is about.
+def draft_trend_basis_id(result: Mapping[str, Any]) -> str | None:
+    """The Trend style id new-product-agent's Draft names as the basis of its plan
+    (``draft.trend_basis.source_style_id``), or None when the Draft carries none (e.g. runs recorded before it)."""
+    _, body, _ = _draft_parts(result)
+    style_id = _mapping(_mapping(_mapping(body.get('draft')).get('trend_basis'))).get('source_style_id')
+    return style_id if isinstance(style_id, str) and style_id.strip() else None
 
-    The Trend result has no defined order (trend-analysis-agent R-4), so the focus is the style whose article
-    new-product-agent's Draft cites most; the first style when the Draft cites none (or on a tie).
+
+def focus_trend(result: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The Trend style the one-product proposal is about. Every reader of the focus style goes through this
+    function: the poster's Analysis column, its stock card (focus_stock), the trend photos and the SWOT input.
+
+    new-product-agent selects one primary trend by its rule and records it in the Draft as
+    ``draft.trend_basis.source_style_id`` (user decision 2026-11-17); the focus is the Trend style with that id.
+    A Draft without that id (runs recorded before it), or whose id matches no style of the stored Trend result,
+    keeps the earlier rule: the Trend result has no defined order (trend-analysis-agent R-4), so the focus is the
+    style whose article the Draft cites most; the first style when the Draft cites none (or on a tie).
     """
     raw = _raw(result, 'trend')
     trends = [_mapping(trend) for trend in _list(_mapping(raw.get('result')).get('trends'))] if raw else []
     if not trends:
         return {}
+    basis = draft_trend_basis_id(result)
+    if basis is not None:
+        # P06 keeps the style id as str(style['id']) (TrendCandidate.source_style_id); compare the same way.
+        named = next((trend for trend in trends if _mapping(trend.get('style')).get('id') is not None
+                      and str(_mapping(trend.get('style'))['id']) == basis), None)
+        if named is not None:
+            return named
     citations = draft_trend_citations(result)
 
     def article(trend: Mapping[str, Any]) -> str | None:
@@ -509,7 +528,11 @@ def focus_stock(result: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[s
         valid = isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(products)
         return _mapping(products[index]) if valid else {}
 
-    matched = [slot for slot in slots if {_mapping(slot.get('style')).get('id'), _mapping(slot.get('style')).get('name')} & wanted]
+    # The focus style's own slot first; a slot that only shares its name comes after it (two styles can share one,
+    # e.g. two '스커트' styles from different articles).
+    matched = sorted((slot for slot in slots
+                      if {_mapping(slot.get('style')).get('id'), _mapping(slot.get('style')).get('name')} & wanted),
+                     key=lambda slot: _mapping(slot.get('style')).get('id') != style.get('id'))
     slot = next((s for s in matched if product_of(s)), None) or next((s for s in slots if product_of(s)), None)
     return (slot, product_of(slot)) if slot is not None else None
 
