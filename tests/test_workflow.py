@@ -23,6 +23,26 @@ def consumer_projection_p07_review(request_id, product):
     return value
 
 
+def add_second_trend_style(sample, style_id='fixture:style-2', name='합성 블라우스'):
+    """Give the sample run a second Trend style and the stock slot stock-agent returns for it (products[i] ↔
+    trend_results[i]); the stock provenance hash follows the changed Trend result. Returns the new style."""
+    trend = sample['input']['trend_response']['raw_response']['result']
+    second = copy.deepcopy(trend['trends'][0])
+    second['style'].update(id=style_id, name=name)
+    for item in second['items']:
+        item['id'] += '-2'
+    trend['trends'].append(second)
+    stock = sample['input']['stock_response']['raw_response']['result']
+    evidence = dict(copy.deepcopy(stock['evidence'][0]), evidence_id=stock['evidence'][0]['evidence_id'] + '-2',
+                    style_id=style_id)
+    stock['evidence'].append(evidence)
+    stock['products'].append(dict(copy.deepcopy(stock['products'][0]), style_id=style_id, sku_ids=['fixture:sku-2']))
+    stock['trend_results'].append(dict(copy.deepcopy(stock['trend_results'][0]), style={'id': style_id, 'name': name},
+                                       product_index=len(stock['products']) - 1, evidence_ids=[evidence['evidence_id']]))
+    stock['input_provenance']['source_payload_sha256'] = digest(trend)
+    return second['style']
+
+
 def native_p07_review(request_id, product, status='ok'):
     return {
         'contract_version': 'vogue-sales-market-review/0.3-proposal',
@@ -216,15 +236,18 @@ class WorkflowTests(unittest.TestCase):
 
     def test_p06_trend_basis_and_the_p07_consumer_projection_pass_every_check(self):
         """A Draft with draft.trend_basis (P06 rule, 2026-11-17) and P07 main c662d4d's response run end to end."""
-        from vogue_orchestrator.planning_sheet import build_sheet, focus_trend
-        style = self.sample['input']['trend_response']['raw_response']['result']['trends'][0]['style']
+        from vogue_orchestrator.planning_sheet import build_sheet, draft_trend_citations, focus_stock, focus_trend
+        # Two Trend styles and a Draft that cites neither: without trend_basis the focus would be the first style,
+        # so the focus below is the basis's doing.
+        first = self.sample['input']['trend_response']['raw_response']['result']['trends'][0]['style']['id']
+        style = add_second_trend_style(self.sample)
         profile = {'category': {'value': 'Outerwear', 'kind': 'user_requested', 'evidence_ids': []},
                    'material': {'value': 'wool', 'kind': 'proposal', 'evidence_ids': []},
                    **{key: {'value': None, 'kind': 'unknown', 'evidence_ids': []} for key in ('product_type', 'gender', 'season')}}
         draft = {'title': '검증용 Draft', 'category': 'Outerwear', 'product_profile': profile, 'limitations': [],
                  'trend_basis': {'source_style_id': style['id'], 'name': style['name'],
                                  'selection_rule': 'most_evidence_linked_design_attributes/1',
-                                 'evidence_ids': [], 'design_attributes': [], 'candidates_considered': 1}}
+                                 'evidence_ids': [], 'design_attributes': [], 'candidates_considered': 2}}
         result = {'schema_version': '1.0', 'request_id': self.rid, 'status': 'ok', 'draft': draft, 'evidence_ids': [],
                   'input_evidence': {}, 'limitations': [], 'errors': []}
         sent = []
@@ -248,8 +271,16 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(sent, [{'category': 'Outerwear', 'material': 'wool'}])
         self.contract.schema(envelope, 'integrated-result.schema.json')
         self.contract.semantic(envelope, self.rid, self.store)
-        self.assertEqual(focus_trend(envelope['result'])['style']['id'], style['id'])
-        self.assertEqual(build_sheet(envelope).price_rows, (('제안 판매가', '66,000원'), ('마진율', '56.88%')))
+        body = envelope['result']
+        self.assertEqual([trend['style']['id'] for trend in body['sources']['trend']['raw_response']['result']['trends']],
+                         [first, style['id']])
+        self.assertEqual(draft_trend_citations(body), {})
+        self.assertEqual(focus_trend(body)['style']['id'], style['id'])
+        self.assertEqual(focus_stock(body)[1]['style_id'], style['id'])
+        sheet = build_sheet(envelope)
+        self.assertEqual(sheet.trend.name, '합성 블라우스')
+        self.assertEqual(sheet.stock.style_id, style['id'])
+        self.assertEqual(sheet.price_rows, (('제안 판매가', '66,000원'), ('마진율', '56.88%')))
         self.assertIn('[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.',
                       envelope['result']['integration']['limitations'])
 

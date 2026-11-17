@@ -149,8 +149,10 @@ services:
       VOGUE_PROJECT07_DISABLE_DOTENV: "1"
       # P07 (c662d4d) gives its H&M age query (hm_customer_age_source._configure_age_duckdb) a DuckDB
       # memory_limit of VOGUE_HM_AGE_DUCKDB_MEMORY_LIMIT, default 3GB: above this container's mem_limit
-      # (1536m), so the kernel would kill P07 before DuckDB spills. 1GB leaves ~0.5 GiB for the Python process
-      # and the price query that runs beside it; past 1GB DuckDB spills to VOGUE_HM_AGE_DUCKDB_TEMP_DIRECTORY
+      # (1536m), so the kernel would kill P07 before DuckDB spills. With 1GB the whole P07 process still peaked
+      # at ~1.2 GiB (up to 1213 MiB: the age query alone and beside the price query, H&M-sized local synthetic
+      # files, macOS; not measured in a Linux container or over R2), so only ~0.3 GiB of the 1536m is left.
+      # Past 1GB DuckDB spills to VOGUE_HM_AGE_DUCKDB_TEMP_DIRECTORY
       # (P07 image default /data/hm-cache/duckdb-age-tmp, writable where compose.data.yaml mounts /data/hm-cache;
       # without R2 settings, as in stub, the query does not run). Threads stay at P07's default (1).
       VOGUE_HM_AGE_DUCKDB_MEMORY_LIMIT: "1GB"

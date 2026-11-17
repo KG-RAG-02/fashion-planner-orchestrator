@@ -18,9 +18,11 @@ def style(style_id, name, article_id):
 
 def result(draft, trends=None):
     trends = trends or [style('990101-s0', '카우보이 스타일', '990101'), style('990107-s0', '윔지맥싱', '990107')]
+    # A stock-agent slot names its style by id and name (stock-agent-result-1.0: trend_result.style requires both),
+    # so focus_stock's name match runs here as it does on recorded runs.
     stock = {'products': [{'style_id': 'ABCDEFGH'[index]} for index in range(len(trends))],
-             'trend_results': [{'style': {'id': trend['style']['id']}, 'product_index': index}
-                               for index, trend in enumerate(trends)]}
+             'trend_results': [{'style': {'id': trend['style']['id'], 'name': trend['style']['name']},
+                                'product_index': index} for index, trend in enumerate(trends)]}
     return {'sources': {'trend': {'raw_response': {'result': {'trends': trends}}},
                         'stock': {'raw_response': {'result': stock}},
                         'planning_draft': {'raw_response': {'result': {'draft': draft}}}}}
@@ -78,12 +80,17 @@ class TrendBasisTests(unittest.TestCase):
         self.assertEqual(focus_stock(value)[1]['style_id'], 'B')
 
     def test_the_stock_card_is_the_slot_of_the_focus_style_when_two_styles_share_a_name(self):
-        # Recorded skirt runs: two '스커트' styles (877475-s0, 882345-s0); the basis names the second.
+        # Recorded skirt runs: two '스커트' styles (877475-s0, 882345-s0) whose stock slots both match the focus
+        # style's name; the focus style's own slot is the card, whichever of the two the basis names.
         trends = [style('877475-s0', '스커트', '877475'), style('882345-s0', '스커트', '882345')]
-        value = result({'trend_basis': basis('882345-s0', '스커트')}, trends)
-        self.assertEqual(focus_trend(value)['style']['id'], '882345-s0')
-        slot, product = focus_stock(value)
-        self.assertEqual((slot['style']['id'], product['style_id']), ('882345-s0', 'B'))
+        self.assertEqual([slot['style'] for slot in result({}, trends)['sources']['stock']['raw_response']['result']
+                          ['trend_results']], [{'id': '877475-s0', 'name': '스커트'}, {'id': '882345-s0', 'name': '스커트'}])
+        for style_id, product_id in (('882345-s0', 'B'), ('877475-s0', 'A')):
+            with self.subTest(basis=style_id):
+                value = result({'trend_basis': basis(style_id, '스커트')}, trends)
+                self.assertEqual(focus_trend(value)['style']['id'], style_id)
+                slot, product = focus_stock(value)
+                self.assertEqual((slot['style']['id'], product['style_id']), (style_id, product_id))
 
     def test_without_a_usable_basis_the_citation_rule_stays(self):
         # Absent, malformed, empty, non-string, or naming no style of the stored Trend result.
