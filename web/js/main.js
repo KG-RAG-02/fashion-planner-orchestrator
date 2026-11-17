@@ -6,10 +6,9 @@ import * as view from './render.js';
 const $ = (selector) => document.querySelector(selector);
 const LAST_RUN_KEY = 'vogue-atelier:last-request-id';
 const POLL_MS = 1500;
-const STAGE_READING_MS = 5200;
+const AUTO_SCROLL_PIXELS_PER_SECOND = 42;
 const SYSTEM_REFRESH_MS = 30000;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
-const AUTO_SCROLL_ORDER = ['trend', 'stock', 'planning_draft', 'sales_market_review'];
 
 const el = {
   form: $('#brief-form'), brief: $('#brief'), counter: $('#brief-counter'), run: $('#run-button'), runLabel: $('#run-label'), notice: $('#notice'),
@@ -23,19 +22,18 @@ const el = {
   workspace: $('#workspace'), runsView: $('#runs'), runsList: $('#runs-list'), runsRefresh: $('#runs-refresh'),
 };
 
-// Page sections follow their execution stages; the lead concept card remains the integrated result.
+// Page sections follow the workflow stage order so the automatic scroll can read them top to bottom.
 const SECTIONS = [
-  { el: el.concept, stage: 'integration', head: { id: 'concept-title', title: '통합 기획안' } },
   { el: el.trends, stage: 'trend', head: { id: 'trend-title', n: '01', title: '트렌드 근거' } },
   { el: el.stock, stage: 'stock', head: { id: 'stock-title', n: '02', title: '재고 매칭' } },
   { el: el.draft, stage: 'planning_draft', head: { id: 'draft-title', n: '03', title: '새상품 생성' } },
   { el: el.market, stage: 'sales_market_review', head: { id: 'market-title', n: '04', title: '판매·시장 분석' } },
+  { el: el.concept, stage: 'integration', head: { id: 'concept-title', title: '통합 기획안' } },
 ];
 
 const state = {
   envelope: null, requestId: null, inFlight: false, poller: null,
-  autoScrollActive: false, autoScrollStage: null, autoScrollQueue: [], autoScrollSeen: new Set(), autoScrollTimer: null,
-  returnToTopAfterQueue: false, completedScrollRequestId: null,
+  autoScrollActive: false, autoScrollFrame: null, autoScrollLastFrameAt: 0, autoScrollStage: null, autoScrollGateY: 0,
   p07CallRequest: null, p07CallRequestArtifactId: null, p07CallRequestState: 'unavailable',
   md: { decisions: [], integratedSha: null, selected: null, busy: false, message: '' },
   system: null, evidenceTab: 'evidence',
@@ -83,47 +81,61 @@ function markHere() {
   }
 }
 
-function stopAutoScrollQueue() {
-  if (state.autoScrollTimer) clearTimeout(state.autoScrollTimer);
-  state.autoScrollTimer = null;
-  state.autoScrollQueue = [];
+function stopAutoScroll() {
+  if (state.autoScrollFrame) cancelAnimationFrame(state.autoScrollFrame);
+  state.autoScrollFrame = null;
+  state.autoScrollActive = false;
+  state.autoScrollLastFrameAt = 0;
   state.autoScrollStage = null;
-  state.returnToTopAfterQueue = false;
 }
 
-function queueCompletedStages(items) {
+function scrollMaxY() {
+  return Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+}
+
+function autoScrollTick(timestamp) {
   if (!state.autoScrollActive) return;
-  const statusByStage = new Map(items.map((item) => [item.key, item.status]));
-  for (const stage of AUTO_SCROLL_ORDER) {
-    const status = statusByStage.get(stage);
-    if (['ok', 'partial', 'error', 'no_results'].includes(status) && !state.autoScrollSeen.has(stage)) {
-      state.autoScrollSeen.add(stage);
-      state.autoScrollQueue.push(stage);
-    }
-  }
-  advanceAutoScrollQueue();
-}
-
-function advanceAutoScrollQueue() {
-  if (!state.autoScrollActive || state.autoScrollTimer) return;
-  if (!state.autoScrollQueue.length) {
-    if (state.returnToTopAfterQueue) {
-      state.returnToTopAfterQueue = false;
-      state.autoScrollActive = false;
-      window.scrollTo({ top: 0, behavior: scrollBehavior() });
-    } else if (!state.inFlight) state.autoScrollActive = false;
+  const elapsed = state.autoScrollLastFrameAt ? Math.min(timestamp - state.autoScrollLastFrameAt, 80) : 0;
+  state.autoScrollLastFrameAt = timestamp;
+  const current = window.scrollY;
+  const maxY = scrollMaxY();
+  const gateY = state.autoScrollStage ? state.autoScrollGateY : maxY;
+  const next = Math.min(current + AUTO_SCROLL_PIXELS_PER_SECOND * elapsed / 1000, gateY, maxY);
+  window.scrollTo(0, next);
+  if (next >= gateY - 1 || next >= maxY - 1) {
+    state.autoScrollFrame = null;
+    state.autoScrollLastFrameAt = 0;
+    if (!state.inFlight && next >= maxY - 1) state.autoScrollActive = false;
     return;
   }
-  const stage = state.autoScrollQueue.shift();
-  const target = SECTIONS.find((section) => section.stage === stage)?.el;
-  if (!target) { advanceAutoScrollQueue(); return; }
+  state.autoScrollFrame = requestAnimationFrame(autoScrollTick);
+}
+
+function updateAutoScrollGate(items, { inFlight = false } = {}) {
+  if (!state.autoScrollActive) return;
+  const active = inFlight ? items.find((item) => item.status === 'running') : null;
+  const stage = active?.key ?? null;
+  const target = stage === 'final_image' ? document.getElementById('lookbook')
+    : SECTIONS.find((section) => section.stage === stage)?.el;
   state.autoScrollStage = stage;
-  target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
-  state.autoScrollTimer = setTimeout(() => {
-    state.autoScrollTimer = null;
-    state.autoScrollStage = null;
-    advanceAutoScrollQueue();
-  }, STAGE_READING_MS);
+  if (target) {
+    const margin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+    const targetY = target.getBoundingClientRect().top + window.scrollY - margin;
+    state.autoScrollGateY = Math.max(window.scrollY, targetY);
+  } else state.autoScrollGateY = scrollMaxY();
+
+  if (!state.autoScrollFrame && state.autoScrollGateY > window.scrollY + 1) {
+    state.autoScrollLastFrameAt = 0;
+    state.autoScrollFrame = requestAnimationFrame(autoScrollTick);
+  }
+}
+
+function beginAutoScroll() {
+  stopAutoScroll();
+  if (REDUCED.matches) return;
+  state.autoScrollActive = true;
+  state.autoScrollGateY = 0;
+  window.scrollTo(0, 0);
 }
 const spy = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
   for (const entry of entries) if (entry.isIntersecting) { here = entry.target; markHere(); }
@@ -151,7 +163,7 @@ function renderSpine(result, { inFlight = false } = {}) {
   const progress = view.renderProgress({ count: el.progressCount, state: el.progressState, root: document.documentElement }, items,
     { status: inFlight ? null : result?.status ?? null, inFlight });
   if (state.inFlight) el.runLabel.textContent = progress.running ? `실행 중 · ${progress.running.n} ${progress.running.ko}` : '실행 중…';
-  queueCompletedStages(items);
+  updateAutoScrollGate(items, { inFlight });
   el.mdLink.hidden = el.results.hidden;
   el.evidenceButton.hidden = el.results.hidden || !result;
   markHere();
@@ -188,24 +200,17 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
     if (wait) view.renderWaiting(node, head, wait); else render(node);
     setSectionState(node, wait ?? 'settled');
   };
-  section(0, (node) => view.renderConcept(node, envelope, {
+  section(0, (node) => view.renderTrends(node, model.trendCards(model.sourceResult(result, 'trend')), { errors: model.stageErrors(result, 'trend'), groups }));
+  section(1, (node) => view.renderStock(node, model.stockSlots(model.sourceResult(result, 'stock')), { errors: model.stageErrors(result, 'stock') }));
+  section(2, (node) => view.renderDraftStage(node, model.draftView(model.sourceResult(result, 'planning_draft')), { errors: model.stageErrors(result, 'planning_draft') }));
+  section(3, (node) => view.renderMarket(node, model.marketView(model.sourceResult(result, 'sales_market_review')), { errors: model.stageErrors(result, 'sales_market_review') }));
+  section(4, (node) => view.renderConcept(node, envelope, {
     retryEnabled: Boolean(state.system?.image?.retry_enabled), onRetry: retryImage,
     errors: model.stageErrors(result, ['integration', 'final_image']), limitations: runLimits,
     sheetLink: model.planningSheetLink({ requestId: result.request_id ?? envelope.request_id, status: result.status }, { inFlight }),
     sheetWaiting: waiting('final_image'),
   }));
-  section(1, (node) => view.renderTrends(node, model.trendCards(model.sourceResult(result, 'trend')), { errors: model.stageErrors(result, 'trend'), groups }));
-  section(2, (node) => view.renderStock(node, model.stockSlots(model.sourceResult(result, 'stock')), { errors: model.stageErrors(result, 'stock') }));
-  section(3, (node) => view.renderDraftStage(node, model.draftView(model.sourceResult(result, 'planning_draft')), { errors: model.stageErrors(result, 'planning_draft') }));
-  section(4, (node) => view.renderMarket(node, model.marketView(model.sourceResult(result, 'sales_market_review')), { errors: model.stageErrors(result, 'sales_market_review') }));
-  if (result.stages?.some((item) => item.stage === 'integration' && ['ok', 'partial', 'error', 'no_results'].includes(item.status))) {
-    const runId = result.request_id ?? envelope.request_id;
-    if (runId && runId !== state.completedScrollRequestId) {
-      state.completedScrollRequestId = runId;
-      state.returnToTopAfterQueue = true;
-      advanceAutoScrollQueue();
-    }
-  }
+  updateAutoScrollGate(model.rail(result, { inFlight }), { inFlight });
   void loadP07CallRequest(result);
   setSectionState(el.md, 'settled');
   renderMd();
@@ -384,10 +389,7 @@ async function startRun(event) {
 
   const requestId = model.newRequestId();
   state.requestId = requestId;
-  stopAutoScrollQueue();
-  state.autoScrollSeen = new Set();
-  state.autoScrollActive = true;
-  state.completedScrollRequestId = null;
+  beginAutoScroll();
   state.envelope = null;
   state.md = { decisions: [], integratedSha: null, selected: null, busy: false, message: '' };
   setRunning(true);
@@ -413,7 +415,6 @@ async function startRun(event) {
   if (response.body?.result) {
     renderEnvelope(response.body);
     await loadDecisions(requestId);
-    el.concept.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   } else if (state.envelope) {
     renderEnvelope(state.envelope);
   } else {
