@@ -30,6 +30,7 @@ const SECTIONS = [
 
 const state = {
   envelope: null, requestId: null, inFlight: false, poller: null,
+  autoScrollStage: null, completedScrollRequestId: null,
   p07CallRequest: null, p07CallRequestArtifactId: null, p07CallRequestState: 'unavailable',
   md: { decisions: [], integratedSha: null, selected: null, busy: false, message: '' },
   system: null, evidenceTab: 'evidence',
@@ -42,6 +43,7 @@ function showNotice(text) {
 
 function setRunning(running) {
   state.inFlight = running;
+  if (!running) state.autoScrollStage = null;
   el.run.disabled = running;
   el.runLabel.textContent = running ? '실행 중…' : '기획 시작';
   el.brief.readOnly = running;
@@ -102,6 +104,18 @@ function renderSpine(result, { inFlight = false } = {}) {
   const progress = view.renderProgress({ count: el.progressCount, state: el.progressState, root: document.documentElement }, items,
     { status: inFlight ? null : result?.status ?? null, inFlight });
   if (state.inFlight) el.runLabel.textContent = progress.running ? `실행 중 · ${progress.running.n} ${progress.running.ko}` : '실행 중…';
+  if (state.inFlight) {
+    const active = items.find((item) => item.status === 'running');
+    const activeSection = SECTIONS.find((section) => section.stage === active?.key);
+    if (activeSection && activeSection.stage !== state.autoScrollStage) {
+      state.autoScrollStage = activeSection.stage;
+      requestAnimationFrame(() => {
+        if (state.inFlight && state.autoScrollStage === activeSection.stage) {
+          activeSection.el.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+        }
+      });
+    }
+  }
   el.mdLink.hidden = el.results.hidden;
   el.evidenceButton.hidden = el.results.hidden || !result;
   markHere();
@@ -148,6 +162,14 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
   section(2, (node) => view.renderStock(node, model.stockSlots(model.sourceResult(result, 'stock')), { errors: model.stageErrors(result, 'stock') }));
   section(3, (node) => view.renderDraftStage(node, model.draftView(model.sourceResult(result, 'planning_draft')), { errors: model.stageErrors(result, 'planning_draft') }));
   section(4, (node) => view.renderMarket(node, model.marketView(model.sourceResult(result, 'sales_market_review')), { errors: model.stageErrors(result, 'sales_market_review') }));
+  if (result.stages?.some((item) => item.stage === 'integration' && ['ok', 'partial', 'error', 'no_results'].includes(item.status))) {
+    const runId = result.request_id ?? envelope.request_id;
+    if (runId && runId !== state.completedScrollRequestId) {
+      state.completedScrollRequestId = runId;
+      state.autoScrollStage = null;
+      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: scrollBehavior() }));
+    }
+  }
   void loadP07CallRequest(result);
   setSectionState(el.md, 'settled');
   renderMd();
@@ -314,6 +336,8 @@ async function startRun(event) {
 
   const requestId = model.newRequestId();
   state.requestId = requestId;
+  state.autoScrollStage = null;
+  state.completedScrollRequestId = null;
   state.envelope = null;
   state.md = { decisions: [], integratedSha: null, selected: null, busy: false, message: '' };
   setRunning(true);
