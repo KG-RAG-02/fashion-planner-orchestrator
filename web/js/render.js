@@ -316,41 +316,11 @@ export function renderStock(section, slots, { errors = [] } = {}) {
     stageErrorList(errors), slots.length ? grid : emptyNote('재고 단계 결과가 없습니다.'));
 }
 
-const MARKET_PATH_LABELS = Object.freeze({
-  proposed_price: '제안 판매가', currency: '통화', unit: '단위', unit_cost: '단위 원가',
-  margin_rate_percent: '마진율 (%)', lower_bound: '하한', upper_bound: '상한',
-  category: '카테고리', product_type: '상품 종류', gender: '성별', season: '시즌', material: '소재',
-  segment: '세그먼트', age_band: '연령대', definition: '정의', share: '비중',
-  share_of_customers_with_known_age: '연령 확인 고객 중 비중', primary_segment: '주요 고객군',
-  secondary_segments: '추가 고객군', proposal: '제안', summary: '요약', rationale: '근거',
-  source: '출처', source_name: '출처명', observation_date: '관측일', period: '기간', value: '값',
-  metric: '지표', name: '항목', status: '상태', suppressed: '소표본 비공개',
-});
-
-function marketRows(value, path = '') {
-  if (Array.isArray(value)) {
-    if (!value.length) return [{ path: path || '값', value: '자료 없음' }];
-    return value.flatMap((item, index) => marketRows(item, `${path}[${index + 1}]`));
-  }
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value);
-    if (!entries.length) return [{ path: path || '값', value: '자료 없음' }];
-    return entries.flatMap(([key, item]) => {
-      const label = MARKET_PATH_LABELS[key] ?? key.replaceAll('_', ' ');
-      return marketRows(item, path ? `${path} · ${label}` : label);
-    });
-  }
-  const shown = value === null || value === undefined ? '미제공'
-    : typeof value === 'boolean' ? (value ? '예' : '아니요')
-      : typeof value === 'number' ? value.toLocaleString('ko-KR') : String(value);
-  return [{ path: path || '값', value: shown }];
-}
-
 function marketValueCard(section) {
-  const rows = marketRows(section.value, section.label);
   return h('article', { class: 'market-value' },
-    h('h3', {}, section.label),
-    h('dl', { class: 'market-rows' }, rows.map((row) => h('div', {}, h('dt', {}, row.path), h('dd', {}, row.value)))));
+    h('p', { class: 'market-value-label' }, section.label),
+    h('strong', { class: 'market-value-number' }, section.value),
+    section.note ? h('p', { class: 'market-value-note' }, section.note) : null);
 }
 
 export function renderMarket(container, market, { errors = [] } = {}) {
@@ -362,15 +332,13 @@ export function renderMarket(container, market, { errors = [] } = {}) {
   const meta = model.statusMeta(market.status);
   fill(container,
     sectionHead({ id: 'market-title', n: '04', title: '판매·시장 분석', meta: `P07 · ${meta.label}` }),
-    h('p', { class: 'small muted market-note' }, 'P07 응답에 포함된 값만 표시합니다. 값이 없거나 원천 분석이 비어 있으면 미제공으로 표시됩니다.'),
+    h('p', { class: 'small muted market-note' }, 'P07 분석 핵심 요약 · 상세 응답은 근거·원문 패널에서 확인할 수 있습니다.'),
     stageErrorList(errors),
     market.sections.length
       ? h('div', { class: 'market-grid' }, market.sections.map(marketValueCard))
-      : emptyNote('P07 응답에 표시할 분석 항목이 없습니다.'),
-    market.missingData.length ? h('div', { class: 'market-notes' },
-      h('h3', {}, '누락 데이터'), h('ul', {}, market.missingData.map((item) => h('li', {}, typeof item === 'string' ? item : JSON.stringify(item))))) : null,
-    market.errors.length ? h('div', { class: 'market-notes is-error' },
-      h('h3', {}, 'P07 분석 오류'), h('ul', {}, market.errors.map((item) => h('li', {}, typeof item === 'string' ? item : JSON.stringify(item))))) : null,
+      : emptyNote('P07 응답에 표시할 요약 결과가 없습니다.'),
+    market.missingData.length ? h('p', { class: 'small muted market-status-note' }, `미확인 자료 ${market.missingData.length}개 · ${market.missingData.slice(0, 2).join(', ')}`) : null,
+    market.errors.length ? h('p', { class: 'small market-error-note' }, `P07 분석 오류 ${market.errors.length}건 · ${market.errors.slice(0, 2).join(', ')}`) : null,
     market.limitations.length ? h('details', { class: 'limits' }, h('summary', {}, `분석 한계 ${market.limitations.length}건`),
       h('ul', {}, market.limitations.map((item) => h('li', {}, item)))) : null);
 }
