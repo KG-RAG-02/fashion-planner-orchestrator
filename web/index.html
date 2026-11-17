@@ -97,6 +97,16 @@
     <p class="small muted">응답 여부는 각 서비스의 liveness 확인입니다. 데이터·모델 품질을 뜻하지 않습니다.</p>
   </dialog>
 
+  <dialog id="sheet-viewer" class="sheet-viewer" aria-labelledby="sheet-viewer-title">
+    <div class="sheet-viewer-head">
+      <h2 id="sheet-viewer-title">최종 기획안</h2>
+      <button type="button" class="icon-button" data-close aria-label="최종 기획안 닫기">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg>
+      </button>
+    </div>
+    <img id="sheet-viewer-image" alt="최종 기획안 원본" decoding="async">
+  </dialog>
+
   <!-- The one place evidence and JSON are printed. Sections link into it by anchor. -->
   <dialog id="evidence-dialog" class="drawer" aria-labelledby="evidence-title">
     <div class="dialog-head">
