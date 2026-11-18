@@ -55,11 +55,11 @@ class AliasDataMatchesSnapshotTests(unittest.TestCase):
 
     def test_provenance_matches_the_snapshot(self):
         provenance = self.snapshot["_provenance"]
-        self.assertEqual(alias_data.PROVENANCE["source_repo"], "trend-analysis-agent")  # until the snapshot is re-exported from fashion-planner-trend
-        self.assertEqual(alias_data.PROVENANCE["source_ref"], provenance["source_ref"])
+        self.assertEqual(alias_data.PROVENANCE["source_repo"], "fashion-planner-trend")
+        self.assertEqual(alias_data.PROVENANCE["source_repo"], provenance["source_repo"])
         self.assertEqual(alias_data.PROVENANCE["content_sha256"], provenance["content_sha256"])
-        self.assertEqual(provenance["source_ref"], f"{provenance['source_branch']}@{provenance['source_commit']}")
-        self.assertFalse(provenance["source_dirty"], "snapshot was exported from uncommitted trend files")
+        # the snapshot names the repository and the content hash only (commit SHAs change when history is rewritten)
+        self.assertFalse({"source_branch", "source_commit", "source_ref", "source_dirty"} & set(provenance))
 
     def test_snapshot_covers_the_eleven_attributes_and_text_guard(self):
         self.assertEqual(set(self.snapshot["attributes"]), set(alias_data.ATTRIBUTES))

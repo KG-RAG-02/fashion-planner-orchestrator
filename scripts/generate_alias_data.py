@@ -1,7 +1,7 @@
 """Regenerate src/fashion_planner_orchestrator/query/alias_data.py from the alias-map snapshot.
 
 The snapshot (contracts/agents/trend/vocabulary/alias-map.snapshot.json) is a read-only copy of the alias dictionary
-owned by trend-analysis-agent (configs/alias_map/*.yaml). It is produced by
+owned by fashion-planner-trend (configs/alias_map/*.yaml). It is produced by
 scripts/export_alias_snapshot.py. This script turns it into plain Python constants so the query
 module needs neither the docs folder nor pyyaml at run time.
 
@@ -38,14 +38,14 @@ LIST_SECTIONS = ("null_values", "modifiers")
 
 HEADER = '''"""GENERATED FILE - do not edit by hand.
 
-Alias dictionary of trend-analysis-agent (configs/alias_map/*.yaml), generated from the read-only
-snapshot contracts/agents/trend/vocabulary/alias-map.snapshot.json. The dictionary is owned by trend-analysis-agent;
-changes follow its rule D-29 and arrive here only through a new snapshot.
+Alias dictionary of fashion-planner-trend (configs/alias_map/*.yaml), generated from the read-only
+snapshot contracts/agents/trend/vocabulary/alias-map.snapshot.json. The dictionary is owned by the trend
+service; changes arrive here only through a new snapshot.
 
 Entry order inside each section is the YAML order (the original code depends on it: the first
 alias wins when two values share a spelling).
 
-Regenerate:  <trend .venv python> scripts/export_alias_snapshot.py --trend-repo <path>
+Regenerate:  <trend python> scripts/export_alias_snapshot.py --trend-repo <path>
              py scripts/generate_alias_data.py
 Drift check: tests/test_query_lexicon.py (fails when this file and the snapshot disagree)
 """
@@ -135,7 +135,6 @@ def render(snapshot: Mapping[str, Any]) -> str:
     parts = [HEADER]
     prov = {
         "source_repo": provenance["source_repo"],
-        "source_ref": provenance["source_ref"],
         "content_sha256": provenance["content_sha256"],
         "generated_from": "contracts/agents/trend/vocabulary/alias-map.snapshot.json",
     }

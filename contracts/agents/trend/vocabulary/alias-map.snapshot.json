@@ -1,11 +1,6 @@
 {
   "_provenance": {
-    "source_repo": "trend-analysis-agent",
-    "source_branch": "feature/extraction-prompt-experiments",
-    "source_commit": "7b525c4",
-    "source_ref": "feature/extraction-prompt-experiments@7b525c4",
-    "files_last_commit": "8eb3a30",
-    "source_dirty": false,
+    "source_repo": "fashion-planner-trend",
     "files": [
       "configs/alias_map/body_length.yaml",
       "configs/alias_map/category.yaml",
@@ -19,9 +14,9 @@
       "configs/alias_map/shape.yaml",
       "configs/alias_map/sleeve_length.yaml",
       "configs/alias_map/text_guard.yaml",
-      "src/trend_agent/ingestion/normalization/alias_map.py",
-      "src/trend_agent/ingestion/normalization/text_match.py",
-      "src/trend_agent/schemas/vocabulary.py"
+      "src/fashion_planner_trend/ingestion/normalization/alias_map.py",
+      "src/fashion_planner_trend/ingestion/normalization/text_match.py",
+      "src/fashion_planner_trend/schemas/vocabulary.py"
     ],
     "excluded_files": [
       "configs/alias_map/category_otpensource.yaml",
@@ -30,7 +25,7 @@
     ],
     "content_sha256": "3be44539d7737c320a4bf425336a2ef5cd876b3ed87abf27146fc7e456593fe7",
     "generated_by": "scripts/export_alias_snapshot.py",
-    "note": "생성물이다. 직접 고치지 않는다. 원본은 trend-analysis-agent configs/alias_map/*.yaml이고 이 파일은 읽기 전용 복사본이다. 사전 변경은 trend 저장소에서 D-29 규칙으로만 한다."
+    "note": "생성물이다. 직접 고치지 않는다. 원본은 fashion-planner-trend의 configs/alias_map/*.yaml이고 이 파일은 읽기 전용 복사본이다. 사전은 trend 레포에서만 바꾼다."
   },
   "attributes": {
     "body_length": {

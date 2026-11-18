@@ -1,13 +1,13 @@
 """GENERATED FILE - do not edit by hand.
 
-Alias dictionary of trend-analysis-agent (configs/alias_map/*.yaml), generated from the read-only
-snapshot contracts/agents/trend/vocabulary/alias-map.snapshot.json. The dictionary is owned by trend-analysis-agent;
-changes follow its rule D-29 and arrive here only through a new snapshot.
+Alias dictionary of fashion-planner-trend (configs/alias_map/*.yaml), generated from the read-only
+snapshot contracts/agents/trend/vocabulary/alias-map.snapshot.json. The dictionary is owned by the trend
+service; changes arrive here only through a new snapshot.
 
 Entry order inside each section is the YAML order (the original code depends on it: the first
 alias wins when two values share a spelling).
 
-Regenerate:  <trend .venv python> scripts/export_alias_snapshot.py --trend-repo <path>
+Regenerate:  <trend python> scripts/export_alias_snapshot.py --trend-repo <path>
              py scripts/generate_alias_data.py
 Drift check: tests/test_query_lexicon.py (fails when this file and the snapshot disagree)
 """
@@ -18,8 +18,7 @@ from typing import Any
 
 
 PROVENANCE: dict[str, str] = {
-    "source_repo": "trend-analysis-agent",
-    "source_ref": "feature/extraction-prompt-experiments@7b525c4",
+    "source_repo": "fashion-planner-trend",
     "content_sha256": "3be44539d7737c320a4bf425336a2ef5cd876b3ed87abf27146fc7e456593fe7",
     "generated_from": "contracts/agents/trend/vocabulary/alias-map.snapshot.json",
 }

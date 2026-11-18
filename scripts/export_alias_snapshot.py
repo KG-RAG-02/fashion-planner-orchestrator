@@ -1,21 +1,22 @@
-"""Export the trend-analysis-agent alias dictionary as a JSON snapshot plus golden expectations.
+"""Export the fashion-planner-trend alias dictionary as a JSON snapshot plus golden expectations.
 
 Writes (in this repository):
   contracts/agents/trend/vocabulary/alias-map.snapshot.json  dictionary data of configs/alias_map/*.yaml (11 attributes +
                                           text_guard) with standard values and provenance
-  contracts/agents/trend/vocabulary/alias-map.golden.json    outputs of the ORIGINAL trend code (AliasMap.normalize,
-                                          normalize_tokens, normalize_color, split_tokens, norm_key and
-                                          TextMatcher text matching) used to verify the port
+  contracts/agents/trend/vocabulary/alias-map.golden.json    a deterministic sample of outputs of the ORIGINAL trend
+                                          code (AliasMap.normalize, normalize_tokens, normalize_color,
+                                          split_tokens, norm_key) used to verify the port
   src/fashion_planner_orchestrator/query/alias_data.py  regenerated from the snapshot (scripts/generate_alias_data.py)
 
-This is the only step that needs the trend repository, its code and pyyaml. Run it with the trend
-virtual environment, from the root of this repository:
+This is the only step that needs the trend repository, its code and pyyaml. Run it with a Python
+environment that has the trend dependencies, from the root of this repository:
 
-  PYTHONDONTWRITEBYTECODE=1 <trend>/.venv/Scripts/python.exe scripts/export_alias_snapshot.py \
-      --trend-repo ../trend-analysis-agent [--check]
+  PYTHONDONTWRITEBYTECODE=1 <trend python> scripts/export_alias_snapshot.py \
+      --trend-repo ../fashion-planner-trend [--check]
 
---check exits 1 when any of the three files would change. The trend repository is only read
-(read-only git commands; `--no-optional-locks` so no index refresh is written).
+The exported trend files must be committed (a dirty checkout is refused), and the provenance names
+the repository and the content hash only, not a branch or commit. --check exits 1 when any of the
+three files would change. The trend repository is only read (`--no-optional-locks` git commands).
 Description of the files: contracts/agents/trend/vocabulary/alias-map.md
 """
 
@@ -33,7 +34,6 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = Path(__file__).resolve().parent
 SNAPSHOT_PATH = ROOT / "contracts" / "agents" / "trend" / "vocabulary" / "alias-map.snapshot.json"
 GOLDEN_PATH = ROOT / "contracts" / "agents" / "trend" / "vocabulary" / "alias-map.golden.json"
-QUERIES_PATH = ROOT / "data" / "query-structuring-eval" / "dev.json"
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 import generate_alias_data as gen  # noqa: E402  (stdlib-only sibling script)
@@ -42,14 +42,18 @@ ATTRIBUTES = gen.ATTRIBUTES
 EXCLUDED_FILES = ("category_otpensource", "set_components", "set_overrides")
 ALIAS_DIR = Path("configs") / "alias_map"
 CODE_FILES = (
-    "src/trend_agent/ingestion/normalization/alias_map.py",
-    "src/trend_agent/ingestion/normalization/text_match.py",
-    "src/trend_agent/schemas/vocabulary.py",
+    "src/fashion_planner_trend/ingestion/normalization/alias_map.py",
+    "src/fashion_planner_trend/ingestion/normalization/text_match.py",
+    "src/fashion_planner_trend/schemas/vocabulary.py",
 )
+SOURCE_REPO = "fashion-planner-trend"
 NOTE = (
-    "생성물이다. 직접 고치지 않는다. 원본은 trend-analysis-agent configs/alias_map/*.yaml이고 "
-    "이 파일은 읽기 전용 복사본이다. 사전 변경은 trend 저장소에서 D-29 규칙으로만 한다."
+    "생성물이다. 직접 고치지 않는다. 원본은 fashion-planner-trend의 configs/alias_map/*.yaml이고 "
+    "이 파일은 읽기 전용 복사본이다. 사전은 trend 레포에서만 바꾼다."
 )
+# The golden file keeps a deterministic sample of every case list (the full lists are about 1 MB): the hand
+# written inputs, the first case of every distinct outcome, and every STEP-th of the rest.
+SAMPLE_STEP = {"normalize": 40, "normalize_tokens": 4, "normalize_color": 20, "split_tokens": 1, "norm_key": 4}
 
 # ---------------------------------------------------------------- golden inputs
 UNKNOWN_WORDS = (
@@ -80,40 +84,6 @@ COLOR_INPUTS: tuple[Any, ...] = (
     "UNKNOWN", "핑크색", "빨간색", "베이지색", "그레이시", "라벤더 퍼플", "민트그린", "스카이",
     "sky blue", "Sky-Blue", "골드/실버", "",
 )
-EXTRA_SENTENCES = (
-    "겨울 코트",
-    "비즈니스 캐주얼",
-    "빈티지 브라운 니트",
-    "오버핏 후드 티셔츠 보여줘",
-    "루즈핏 슬랙스",
-    "숏패딩 말고 롱패딩",
-    "블랙 말고 네이비 코트",
-    "다크 네이비 울 코트",
-    "차콜 그레이 슬랙스 추천",
-    "버터옐로우 가디건",
-    "체크셔츠랑 데님 팬츠",
-    "드롭 숄더 니트",
-    "라쿤퍼 트리밍 패딩",
-    "A-LINE 스커트",
-    "STUDDED 데님 재킷",
-    "POCKETS 많은 카고 팬츠",
-    "PUFFER JACKET",
-    "무지개 스트라이프 티셔츠",
-    "원피스 추천해줘",
-    "모자랑 가방 빼고 상의만",
-    "울/캐시미어 코트",
-    "시퀸 글리터 드레스",
-    "트래블러 플리스 짚업",
-    "커스터드 크림 니트",
-    "3만원대 반팔 티셔츠",
-    "20대 여성 크롭 가디건",
-    "브이넥 니트 베스트",
-    "슬림핏 청바지",
-    "로고 맨투맨",
-    "후드 티셔츠, 후드티셔츠, 후드티",
-    "",
-)
-
 
 # ---------------------------------------------------------------- trend access
 def _git(trend_repo: Path, *args: str) -> str:
@@ -126,12 +96,12 @@ def _git(trend_repo: Path, *args: str) -> str:
 
 def _load_trend(trend_repo: Path):
     src = trend_repo / "src"
-    if not (src / "trend_agent").is_dir():
-        raise SystemExit(f"not a trend-analysis-agent checkout: {trend_repo}")
+    if not (src / "fashion_planner_trend").is_dir():
+        raise SystemExit(f"not a fashion-planner-trend checkout: {trend_repo}")
     sys.path.insert(0, str(src))
-    import yaml  # noqa: F401  (fails early when not run with the trend venv)
-    from trend_agent.ingestion.normalization import alias_map, otpensource, text_match
-    return alias_map, text_match, otpensource
+    import yaml  # noqa: F401  (fails early without the trend dependencies)
+    from fashion_planner_trend.ingestion.normalization import alias_map
+    return alias_map
 
 
 # ---------------------------------------------------------------- snapshot
@@ -171,17 +141,10 @@ def build_snapshot(trend_repo: Path, alias_map) -> dict[str, Any]:
         "text_guard": text_guard,
     }
     files += list(CODE_FILES)
-    head = _git(trend_repo, "rev-parse", "--short", "HEAD")
-    branch = _git(trend_repo, "rev-parse", "--abbrev-ref", "HEAD")
-    last = _git(trend_repo, "log", "-1", "--format=%h", "--", *files)
-    dirty = bool(_git(trend_repo, "status", "--porcelain", "--", *files))
+    if _git(trend_repo, "status", "--porcelain", "--", *files):
+        raise SystemExit("the exported trend files have uncommitted changes; commit them first")
     provenance = {
-        "source_repo": "trend-analysis-agent",
-        "source_branch": branch,
-        "source_commit": head,
-        "source_ref": f"{branch}@{head}",
-        "files_last_commit": last,
-        "source_dirty": dirty,
+        "source_repo": SOURCE_REPO,
         "files": files,
         "excluded_files": [(ALIAS_DIR / f"{name}.yaml").as_posix() for name in EXCLUDED_FILES],
         "content_sha256": gen.content_sha256(data),
@@ -240,7 +203,7 @@ def _as_dict(normalized) -> list[Any]:
     return [fields[name] for name in NORMALIZED_FIELDS]
 
 
-def build_golden(snapshot: dict[str, Any], alias_dir: Path, alias_map, text_match, otpensource) -> dict[str, Any]:
+def build_golden(snapshot: dict[str, Any], alias_dir: Path, alias_map) -> dict[str, Any]:
     amap = alias_map.AliasMap(alias_dir)  # the original loader reads the trend YAML, not the snapshot
     attrs = snapshot["attributes"]
     guards = snapshot["text_guard"]["guards"]
@@ -299,63 +262,51 @@ def build_golden(snapshot: dict[str, Any], alias_dir: Path, alias_map, text_matc
         "normalize_color": normalize_color,
         "split_tokens": split_tokens,
         "norm_key": norm_key,
-        "text_match": build_text_match(amap, text_match, otpensource, guards),
     }
 
 
-def build_text_match(amap, text_match, otpensource, guards) -> dict[str, Any]:
-    """Expected TextMatcher outputs for the query scanner (plan S3). Not used by T1 tests."""
-    queries = json.loads(QUERIES_PATH.read_text(encoding="utf-8"))["items"]
-    sentences = [{"id": item["id"], "text": item["query"]} for item in queries]
-    sentences += [{"id": f"x{index:03d}", "text": text} for index, text in enumerate(EXTRA_SENTENCES, 1)]
+def _signature(expected: Any) -> str:
+    """The kind of outcome a case shows: for a Normalized row its matched_by and which of approx, route_to and
+    hint are set; for a list of rows the same per row; otherwise the shape of the value."""
+    def row(value: Any) -> Any:
+        if isinstance(value, list) and len(value) == len(NORMALIZED_FIELDS):
+            fields = dict(zip(NORMALIZED_FIELDS, value))
+            return [fields["matched_by"], bool(fields["approx"]), fields["route_to"] is not None, bool(fields["hint"])]
+        return None
+    if row(expected) is not None:
+        return json.dumps(row(expected))
+    if isinstance(expected, list) and all(row(item) is not None for item in expected):
+        return json.dumps([row(item) for item in expected])
+    return json.dumps([type(expected).__name__, len(expected) if isinstance(expected, (list, str)) else None])
 
-    full = {
-        name: text_match.TextMatcher(
-            [(key, value, kind == "approx") for key, (value, kind) in amap._index[name].items()], guards,
-        )
-        for name in ATTRIBUTES
-    }
-    otpen = otpensource.OtpenNormalizer(alias=amap).matchers
 
-    cases = []
-    for sentence in sentences:
-        text = sentence["text"]
-        toks = text_match.tokenize(text)
-        norms = [text_match.norm_key(tok) for tok in toks]
-        key_hits = {}
-        for name in ATTRIBUTES:
-            hits = []
-            for key, value, approx in full[name].keys:
-                raw = full[name].match_key(key, toks, norms)
-                if raw is not None:
-                    hits.append([key, value, approx, raw])
-            key_hits[name] = hits
-        cases.append({
-            "id": sentence["id"],
-            "text": text,
-            "tokens": toks,
-            "token_keys": norms,
-            "find_all_keys": {name: [list(hit) for hit in full[name].find(text)] for name in ATTRIBUTES},
-            "key_hits": key_hits,
-            "find_otpensource": {name: [list(hit) for hit in matcher.find(text)] for name, matcher in otpen.items()},
-        })
-    return {
-        "about": (
-            "find_all_keys: TextMatcher over every index key of the attribute (standard, aliases, approx; "
-            "no length filter) with text_guard. key_hits: every key whose match_key is not None, in the "
-            "matcher's key order, as [key, value, approx, raw]. find_otpensource: OtpenNormalizer's own "
-            "matchers (pattern/detail/shape, keys of 2+ chars, skip keywords)."
-        ),
-        "matcher_config": {
-            "split_pattern": text_match._SPLIT.pattern,
-            "hangul_pattern": text_match._HANGUL.pattern,
-            "en_suffixes": list(text_match.EN_SUFFIXES),
-            "otpensource_attributes": sorted(otpen),
-            "otpensource_min_key_length": 2,
-            "otpensource_skip_keywords": sorted(otpensource._SKIP_KEYWORDS),
-        },
-        "cases": cases,
-    }
+def sample_golden(golden: dict[str, Any]) -> dict[str, Any]:
+    """A deterministic subset of every case list: hand-written inputs, the first case of each outcome kind,
+    and every SAMPLE_STEP-th case of the rest, in the original order."""
+    def marks(*groups: Iterable[Any]) -> set[str]:
+        return {json.dumps(raw, ensure_ascii=False) for group in groups for raw in group}
+
+    # hand-written inputs kept in full, per list (normalize_tokens repeats the same inputs for every attribute,
+    # so there the step and the outcome kinds decide)
+    special = {"normalize": marks(UNKNOWN_WORDS), "normalize_tokens": set(),
+               "normalize_color": marks(COLOR_INPUTS, UNKNOWN_WORDS), "split_tokens": set(), "norm_key": set()}
+
+    def sample(name: str, cases: list[Any]) -> list[Any]:
+        seen: set[str] = set()
+        out = []
+        for index, (raw, expected) in enumerate(cases):
+            kind = _signature(expected)
+            if index % SAMPLE_STEP[name] == 0 or kind not in seen or json.dumps(raw, ensure_ascii=False) in special[name]:
+                out.append([raw, expected])
+            seen.add(kind)
+        return out
+
+    out = dict(golden)
+    for name in ("normalize", "normalize_tokens"):
+        out[name] = {attr: sample(name, cases) for attr, cases in golden[name].items()}
+    for name in ("normalize_color", "split_tokens", "norm_key"):
+        out[name] = sample(name, golden[name])
+    return out
 
 
 # ---------------------------------------------------------------- output
@@ -377,14 +328,6 @@ def _dump_golden(golden: dict[str, Any], provenance: dict[str, Any]) -> str:
         body = ",\n".join(f"{indent}  {line(name)}: {case_list(cases, indent + '  ')}" for name, cases in mapping.items())
         return "{\n" + body + f"\n{indent}}}"
 
-    tm = golden["text_match"]
-    text_match_block = (
-        "{\n"
-        f"    \"about\": {line(tm['about'])},\n"
-        f"    \"matcher_config\": {line(tm['matcher_config'])},\n"
-        f"    \"cases\": {case_list(tm['cases'], '    ')}\n"
-        "  }"
-    )
     parts = [
         f"  \"_provenance\": {line(provenance)}",
         f"  \"format\": {line(golden['format'])}",
@@ -394,7 +337,6 @@ def _dump_golden(golden: dict[str, Any], provenance: dict[str, Any]) -> str:
         f"  \"normalize_color\": {case_list(golden['normalize_color'], '  ')}",
         f"  \"split_tokens\": {case_list(golden['split_tokens'], '  ')}",
         f"  \"norm_key\": {case_list(golden['norm_key'], '  ')}",
-        f"  \"text_match\": {text_match_block}",
     ]
     return "{\n" + ",\n".join(parts) + "\n}\n"
 
@@ -406,23 +348,21 @@ def _current(path: Path) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--trend-repo", required=True, type=Path, help="path of the trend-analysis-agent checkout")
+    parser.add_argument("--trend-repo", required=True, type=Path, help="path of the fashion-planner-trend checkout")
     parser.add_argument("--check", action="store_true", help="exit 1 if any output file would change")
     args = parser.parse_args(argv)
 
     trend_repo = args.trend_repo.resolve()
-    alias_map, text_match, otpensource = _load_trend(trend_repo)
+    alias_map = _load_trend(trend_repo)
     snapshot = build_snapshot(trend_repo, alias_map)
-    if snapshot["_provenance"]["source_dirty"]:
-        print("warning: the exported trend files have uncommitted changes (source_dirty = true)")
 
-    golden = build_golden(snapshot, trend_repo / ALIAS_DIR, alias_map, text_match, otpensource)
+    golden = sample_golden(build_golden(snapshot, trend_repo / ALIAS_DIR, alias_map))
     golden_provenance = {
         "source_repo": snapshot["_provenance"]["source_repo"],
-        "source_ref": snapshot["_provenance"]["source_ref"],
-        "source_dirty": snapshot["_provenance"]["source_dirty"],
         "snapshot_content_sha256": snapshot["_provenance"]["content_sha256"],
-        "generated_by": "scripts/export_alias_snapshot.py (original trend code: AliasMap, TextMatcher)",
+        "generated_by": "scripts/export_alias_snapshot.py (original trend code: AliasMap)",
+        "sampling": "hand-written inputs, the first case of each outcome kind, and every n-th of the rest "
+                    f"(n per list: {SAMPLE_STEP})",
         "note": "생성물이다. 직접 고치지 않는다. 기대값은 trend 원본 코드의 실행 결과다.",
     }
 
@@ -437,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
         for path in changed:
             print(f"out of date: {path.relative_to(ROOT).as_posix()}")
         if changed:
-            print("run: <trend .venv python> scripts/export_alias_snapshot.py --trend-repo <path>")
+            print("run: <trend python> scripts/export_alias_snapshot.py --trend-repo <path>")
             return 1
         print("alias snapshot, golden data and alias_data.py are up to date")
         return 0
