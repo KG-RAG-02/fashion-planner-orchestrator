@@ -405,7 +405,8 @@ class DraftVisual:
 class SheetVisual:
     status: str | None
     artifact: Mapping[str, Any] | None
-    # 0.2.0: the P06 visuals shown in the visual panel; empty for earlier runs (then the final image is shown).
+    # The novelty visuals shown in the visual panel; empty when the draft carries none (then one image panel
+    # shows the final image, or a placeholder saying why there is none).
     draft_visuals: tuple[DraftVisual, ...] = ()
     draft_fixture: bool = False
 
@@ -1440,7 +1441,7 @@ def _design(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet, imag
             (' · 로컬 fixture 이미지 — 생성된 컨셉 아님' if visual.draft_fixture else '')
         c.text(x, y, note, 'regular', 9.5, 'red' if any(i.status == 'failed' for i in visual.draft_visuals) else 'ink3')
         y += 24
-    else:  # earlier runs: the final image
+    else:  # a draft without visuals: the final image or a placeholder
         ph = round(w * 1.1)
         headline = '시안 이미지를 읽지 못했습니다' if final_unreadable else \
             {'failed': '시안 이미지 생성 실패', 'skipped': '시안 이미지 생략'}.get(visual.status or '', '시안 이미지 없음')
@@ -1675,8 +1676,8 @@ def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_
 def planning_sheet_png(envelope: Mapping[str, Any], *, load_artifact: Callable[[Mapping[str, Any]], bytes] | None = None,
                        fonts: Fonts | None = None,
                        trend_photos: Sequence[tuple[bytes, str]] = (), swot: Mapping[str, Any] | None = None) -> bytes:
-    """PNG bytes for a run. ``load_artifact`` returns verified bytes for an image reference: the P06 visuals
-    (workflow-contract 0.2.0) or, for earlier runs, the final image. ``trend_photos`` are the Trend article photos
+    """PNG bytes for a run. ``load_artifact`` returns verified bytes for an image reference: the novelty visuals,
+    or the final image when the draft carries none. ``trend_photos`` are the Trend article photos
     stage 06 stored for this run, as (bytes, source URL); ``swot`` is the SWOT draft it kept (swot.py), or None."""
     sheet = build_sheet(envelope)
     image_bytes, unreadable = None, False
