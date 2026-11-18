@@ -77,7 +77,7 @@ class ContainerImageTests(unittest.TestCase):
                      'deploy/service-manifest.json', 'docs/workflow-integration-conventions.md', 'data/user_queries.v3.json',
                      'scripts/local_servers.py', 'compose.yaml', 'README.md',
                      'src/vogue_orchestrator/server 2.py', 'web/app 2.js', 'contracts/workflow/baseline 3.json',
-                     'prompts/query_structuring/v6/meta 2.json',
+                     'prompts/query_structuring/v6/examples 2.json',
                      'src/vogue_orchestrator/__pycache__/server.cpython-312.pyc'):
             with self.subTest(path=path):
                 self.assertTrue(excluded(self.rules, path))

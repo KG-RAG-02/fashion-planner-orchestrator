@@ -1,11 +1,9 @@
-"""The StructuredQuery path (query/structured.py, prompt v6: flat draft v4 grouped per item by code) and its
+"""The StructuredQuery path (query/structured.py: the model's flat draft, grouped per item by code) and its
 datasets. No model call.
 
-The rule tests write drafts in the grouped draft v3 shape (easier to read) and `run_path` feeds them to the
-current draft_v4 prompt through draft_v4.from_draft_v3, so the grouping code runs in every test.
-
-The path is NOT wired into the UI server or `structure_query` yet (plan U4); these tests also pin that
-the running path still uses prompt v1. Words in the rule tests are not from the evaluation data (W-10).
+The rule tests write drafts in the grouped shape (easier to read) and `run_path` feeds them to the path in
+the model's flat shape through draft.flatten_draft, so the grouping code runs in every test. Words in the
+rule tests are not from the evaluation data.
 """
 
 import importlib
@@ -47,11 +45,11 @@ class StructuredPathTests(unittest.TestCase):
         cls.structured = importlib.import_module("vogue_orchestrator.query.structured")
         cls.errors = importlib.import_module("vogue_orchestrator.query.errors")
         cls.config = importlib.import_module("vogue_orchestrator.query.config")
-        cls.draft_v4 = importlib.import_module("vogue_orchestrator.query.draft_v4")
+        cls.draft = importlib.import_module("vogue_orchestrator.query.draft")
 
     def run_path(self, produced, query, as_written=False, **kwargs):
-        if not as_written and isinstance(produced, dict) and "common" in produced and "prompt_version" not in kwargs:
-            produced = self.draft_v4.from_draft_v3(produced)
+        if not as_written and isinstance(produced, dict) and "common" in produced:
+            produced = self.draft.flatten_draft(produced)
         return self.structured.structure_query(
             query, request_id="r-1", draft_provider=lambda bundle: produced, today=date(2026, 11, 10), **kwargs)
 
@@ -242,20 +240,16 @@ class StructuredPathTests(unittest.TestCase):
         none = self.run_path(draft(items=[item("점퍼", "점퍼")]), "점퍼").structured_query.model_dump(mode="json")
         self.assertEqual([s["origin"] for s in none["trend_terms"]["seasons"]], ["default_next"])
 
-    def test_a_prompt_without_items_is_refused(self):
-        for version in ("v1", "v3"):
-            with self.subTest(version=version):
-                with self.assertRaises(self.config.QueryConfigError):
-                    self.run_path({}, "셔츠", prompt_version=version)
+    def test_an_unknown_prompt_version_is_refused(self):
+        with self.assertRaises(self.config.QueryConfigError):
+            self.run_path({}, "셔츠", prompt_version="v999")
 
-    def test_the_archived_nested_prompt_still_runs(self):
-        # prompt v4 (draft_v3): the model writes the grouped draft itself; kept so its reports can be replayed
-        result = self.run_path(draft(items=[item("점퍼", "점퍼", [c("네이비", "color", "네이비")])]), "네이비 점퍼",
-                               prompt_version="v4")
-        self.assertEqual(result.prompt_version, "query-structuring-prompt/v4")
-        self.assertEqual(self.items_of(result)[0]["attributes"]["include"]["color"][0]["value"], "네이비")
+    def test_a_grouped_draft_written_by_the_model_is_rejected(self):
+        # The model writes the flat shape; the grouped shape is only what the code builds from it.
+        with self.assertRaises(self.errors.QueryStructuringError):
+            self.run_path(draft(items=[item("점퍼", "점퍼")]), "점퍼", as_written=True)
 
-    # --- FL-1: flat draft v4, grouped by the `item` field (words not from the dataset, W-10) ---------------
+    # --- the flat draft, grouped by the `item` field (words not from the dataset) ---------------------
 
     def flat(self, items, conditions=(), unsupported=()):
         return {"seasons": [], "style_names": [], "product_model_names": [],
@@ -312,11 +306,11 @@ class ContractExamplesAreProducedByTheCodeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.structured = importlib.import_module("vogue_orchestrator.query.structured")
-        cls.draft_v3 = importlib.import_module("vogue_orchestrator.query.draft_v3")
+        cls.draft = importlib.import_module("vogue_orchestrator.query.draft")
         cls.examples = importlib.import_module("test_query_structured_models")
 
     def assemble(self, produced, query, request_id):
-        parsed = self.draft_v3.QueryDraftV3.model_validate(produced)
+        parsed = self.draft.GroupedQueryDraft.model_validate(produced)
         return self.structured.assemble_structured_query(
             parsed, request_id=request_id, original_query=query, today=date(2026, 11, 10)).structured_query
 
@@ -352,18 +346,17 @@ class DatasetTests(unittest.TestCase):
         dev = [i["query"] for i in self.data["items"]]
         held = [i["query"] for i in self.holdout["items"]]
         self.assertEqual((len(dev), len(set(dev)), len(held), len(set(held))), (30, 30, 20, 20))
-        examples = {e["query"] for v in ("v2", "v3", "v4", "v5", "v6") for e in self.prompt.load_prompt(v).examples}
+        examples = {e["query"] for e in self.prompt.load_prompt().examples}
         self.assertEqual(set(dev) & examples, set())  # overlap would inflate accuracy
         self.assertEqual(set(held) & (set(dev) | examples), set())
 
     def test_code_part_reproduces_every_label(self):
-        # v6: the labels written flat go through the grouping code; v4: the grouped labels as they are
-        for version in ("v6", "v4"):
-            for name, data, size in (("dev", self.data, 30), ("holdout", self.holdout, 20)):
-                with self.subTest(dataset=name, prompt=version):
-                    report = self.evaluator.run(data, "fixture", None, version)
-                    self.assertEqual(report["summary"]["exact_with_match"], size,
-                                     [r for r in report["items"] if not r["exact_with_match"]])
+        # the grouped labels are written flat and go through the grouping code
+        for name, data, size in (("dev", self.data, 30), ("holdout", self.holdout, 20)):
+            with self.subTest(dataset=name):
+                report = self.evaluator.run(data, "fixture", None, self.prompt.load_prompt().version)
+                self.assertEqual(report["summary"]["exact_with_match"], size,
+                                 [r for r in report["items"] if not r["exact_with_match"]])
 
     def test_comparison_puts_a_condition_on_the_wrong_item_as_missing_and_extra(self):
         entry = next(i for i in self.data["items"] if i["id"] == "q029")  # 스키니 청바지랑 루즈핏 셔츠

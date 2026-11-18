@@ -31,7 +31,7 @@ class SkippedAndConfigurationTests(unittest.TestCase):
 
 
 def flat_draft(items, conditions=(), seasons=()):
-    """A draft in the format of the current StructuredQuery prompt (draft_v4: flat conditions + `item`)."""
+    """A draft in the model's format (draft.QueryDraft: flat conditions with an `item` field)."""
     return {"seasons": list(seasons), "style_names": [], "product_model_names": [],
             "items": [{"raw": raw, "suggestion": suggestion} for raw, suggestion in items],
             "conditions": list(conditions), "unsupported": []}

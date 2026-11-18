@@ -2,8 +2,6 @@
 
 The rendered file is for reading and reviewing only (templates + vocabulary + examples put
 together). The code never reads it; it renders from the templates at import time.
-Every version folder is rendered or checked, whatever its draft format or status (meta.json), so an
-archived version stays reviewable and a broken meta.json fails here as well.
 
 Usage (from the repository root; needs pydantic only because the package is imported):
   PYTHONPATH=src python scripts/render_query_prompt.py            # every version folder

@@ -1,17 +1,16 @@
-"""Evaluate the StructuredQuery path (prompt v6, flat conditions with `item`) on data/user_queries.v3.json.
+"""Evaluate the StructuredQuery path (the current prompt, flat conditions with `item`) on data/user_queries.v3.json.
 
 Each query is run through `structured.structure_query` and the produced StructuredQuery is compared
-with the item's `expected_structured_query` as a set of facts. Since 2026-11-11 (decisions IT-1..IT-7) the
-condition facts carry the ITEM they belong to (its position i in `items`, which follows the query order):
+with the item's `expected_structured_query` as a set of facts. Condition facts carry the ITEM they belong to
+(its position i in `items`, which follows the query order):
 
   category  (i, "item", major, minor) = the item itself; (i, "exclude", major, minor) = an excluded category
   gender / attributes  (i, side, kind, value) - an unresolved value compares by its raw text
   unsupported (i, type, polarity, raw)      out_of_scope (raw)
   season    (year, season, origin), one per entry of `seasons`   style_names / product_model_names  (raw)
 
-Brands are NOT scored (decision BR-1, 2026-11-11): unsupported facts of type brand are dropped from both
-sides, and so is a produced raw-text fact containing a labelled brand ("<브랜드> 스타일" as a style name).
-The labels still hold the brands (W-11).
+Brands are NOT scored: unsupported facts of type brand are dropped from both sides, and so is a produced
+raw-text fact containing a labelled brand ("<브랜드> 스타일" as a style name). The labels still hold the brands.
 
 So a condition put on the wrong item counts as one missing and one extra fact. `match` is compared
 separately (same fact, different provenance). A query is "exact" when it has no missing and no extra
@@ -19,14 +18,13 @@ fact; "exact+match" also needs every match to agree.
 
 Providers:
   fixture  the item's expected_draft is returned as the LLM output -> measures the CODE part only
-           (resolver + assembly); should be 100 % unless code and labels disagree. Labels are draft v3
-           (grouped); for a draft_v4 prompt (v5) they are written flat first (draft_v4.from_draft_v3), so
-           the grouping code is measured too.
+           (resolver + assembly); should be 100 % unless code and labels disagree. Labels are grouped
+           drafts; they are written in the model's flat shape first (draft.flatten_draft), so the
+           grouping code is measured too.
   llm      the real model from .env (LLM_MODEL / LLM_API_KEY, src/vogue_orchestrator/llm_provider.py).
-           Sends every query to the external provider: run only with the user's approval (W-4).
+           Sends every query to the external provider (paid): run it only on purpose.
   replay   the model outputs saved in an earlier report (--replay <report.json>) are fed in again, so a
-           CODE change can be measured on the same LLM answers without any external call. Only reports
-           made with a draft_v3 or draft_v4 prompt (v4 and later) can be replayed, with the same --prompt-version.
+           CODE change can be measured on the same LLM answers without any external call.
 
 Usage (repository root):
   PYTHONPATH=src py scripts/evaluate_query_structuring.py --provider fixture
@@ -128,9 +126,9 @@ def compare(expected: dict[tuple, str | None], produced: dict[tuple, str | None]
 
 def _provider(name: str, item: dict[str, Any], replayed: dict[str, Any] | None = None):
     if name == "fixture":
-        from vogue_orchestrator.query.draft_v4 import DRAFT_FORMAT as FLAT, from_draft_v3
+        from vogue_orchestrator.query.draft import flatten_draft
 
-        return lambda bundle: from_draft_v3(item["expected_draft"]) if bundle.format == FLAT else item["expected_draft"]
+        return lambda bundle: flatten_draft(item["expected_draft"])
     if name == "replay":
         row = (replayed or {}).get(item["id"])
         if row is None:
@@ -259,7 +257,7 @@ def main(argv=None) -> int:
     parser.add_argument("--replay", type=Path, help="report whose saved model outputs --provider replay uses")
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
     parser.add_argument("--ids", nargs="*", help="only these item ids")
-    parser.add_argument("--prompt-version", default="v6", help="prompt folder (draft_v4, or draft_v3 for v4)")
+    parser.add_argument("--prompt-version", default="v6", help="prompt folder")
     parser.add_argument("--out", type=Path, help="write the JSON report here")
     args = parser.parse_args(argv)
     data = json.loads(args.data.read_text(encoding="utf-8"))

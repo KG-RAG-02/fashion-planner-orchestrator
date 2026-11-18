@@ -26,8 +26,7 @@ from .assembly_rules import (
     GENERIC_UNSUPPORTED_REASON, UNSUPPORTED_REASONS, WARN_NO_CONDITIONS_EXTRACTED,
     WARN_RAW_NOT_IN_QUERY, WARN_SEASON_YEAR_INFERRED,
 )
-from .draft import DraftUnsupported
-from .draft_v3 import QueryDraftV3
+from .draft import DraftUnsupported, GroupedQueryDraft
 from .lexicon import Lexicon, norm_key
 from .models import (
     ATTRIBUTE_REF_TYPES, AttributeFilter, AttributeValues, CategoryRef, GenderFilter, GenderRef,
@@ -66,7 +65,7 @@ class _ItemSpec:
 
 
 def assemble_structured_query(
-    draft: QueryDraftV3,
+    draft: GroupedQueryDraft,
     *,
     request_id: str,
     original_query: str,
