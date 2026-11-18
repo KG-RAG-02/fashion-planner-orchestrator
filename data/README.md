@@ -4,7 +4,7 @@ This directory contains synthetic development and holdout cases for evaluating h
 
 | Path | Purpose |
 |---|---|
-| `user_queries.v2.json`, `user_queries.v3.json` | Versioned development/evaluation cases |
-| `user_queries.holdout.v1.json`–`user_queries.holdout.v3.json` | Holdout sets used to check prompt changes |
+| `user_queries.v3.json` | Development cases (30, synthetic, labels unverified) |
+| `user_queries.holdout.v3.json` | Holdout cases (20, synthetic, labels unverified) |
 
 The active UI path uses prompt v6 from `prompts/query_structuring/v6/`. Evaluation scripts compare structured fields and warnings against these datasets; changing an evaluation file does not change the runtime prompt or select a workflow mode.

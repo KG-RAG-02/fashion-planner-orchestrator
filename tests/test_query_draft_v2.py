@@ -165,7 +165,7 @@ class DraftV2Tests(unittest.TestCase):
 @unittest.skipUnless(HAS_PYDANTIC, SKIP_REASON)
 class LabelRepairTests(unittest.TestCase):
     """Decision OQ-12: only the two closed label sets are repaired, never the structure.
-    Cases use words that are not in data/user_queries.v2.json (the rules are about labels, not words)."""
+    Cases use words that are not in the evaluation sets (the rules are about labels, not words)."""
 
     @classmethod
     def setUpClass(cls):

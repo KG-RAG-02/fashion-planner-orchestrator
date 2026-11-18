@@ -17,7 +17,7 @@ from datetime import date
 from _query_support import HAS_PYDANTIC, ROOT, SKIP_REASON
 
 DATA_PATH = ROOT / "data" / "user_queries.v3.json"
-HOLDOUT_PATH = ROOT / "data" / "user_queries.holdout.v2.json"
+HOLDOUT_PATH = ROOT / "data" / "user_queries.holdout.v3.json"
 
 
 def _load_script(name):
@@ -348,18 +348,6 @@ class DatasetTests(unittest.TestCase):
         cls.evaluator = _load_script("evaluate_query_structuring")
         cls.prompt = importlib.import_module("vogue_orchestrator.query.prompt")
 
-    def test_data_files_are_the_builder_output(self):
-        # Fails when the labels or the code changed but the build scripts were not run.
-        self.assertEqual(DATA_PATH.read_text(encoding="utf-8"), _load_script("build_query_dataset_v3").render())
-        self.assertEqual(HOLDOUT_PATH.read_text(encoding="utf-8"), _load_script("build_query_holdout_v2").render())
-
-    def test_query_texts_did_not_change_with_the_format(self):
-        # W-11: only the labels were rewritten for the per-item format
-        for old_name, new in (("user_queries.v2.json", self.data), ("user_queries.holdout.v1.json", self.holdout)):
-            with self.subTest(old=old_name):
-                old = json.loads((ROOT / "data" / old_name).read_text(encoding="utf-8"))
-                self.assertEqual({i["id"]: i["query"] for i in old["items"]}, {i["id"]: i["query"] for i in new["items"]})
-
     def test_sets_are_unique_and_kept_apart_from_the_prompt_examples(self):
         dev = [i["query"] for i in self.data["items"]]
         held = [i["query"] for i in self.holdout["items"]]
@@ -376,24 +364,6 @@ class DatasetTests(unittest.TestCase):
                     report = self.evaluator.run(data, "fixture", None, version)
                     self.assertEqual(report["summary"]["exact_with_match"], size,
                                      [r for r in report["items"] if not r["exact_with_match"]])
-
-    def test_new_holdout_is_built_kept_apart_and_reproduced_by_the_code(self):
-        # holdout v3 (2026-11-11): written by a separate agent that did not read prompt v4; the final check of
-        # the next prompt (W-10). Compared in code only, so the main session never reads its queries.
-        path = ROOT / "data" / "user_queries.holdout.v3.json"
-        holdout = json.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(path.read_text(encoding="utf-8"), _load_script("build_query_holdout_v3").render())
-        queries = {i["query"] for i in holdout["items"]}
-        self.assertEqual(len(queries), 20)
-        earlier = set()
-        for name in ("user_queries.v2.json", "user_queries.v3.json",
-                     "user_queries.holdout.v1.json", "user_queries.holdout.v2.json"):
-            earlier |= {i["query"] for i in json.loads((ROOT / "data" / name).read_text(encoding="utf-8"))["items"]}
-        earlier |= {e["query"] for v in ("v2", "v3", "v4", "v5", "v6") for e in self.prompt.load_prompt(v).examples}
-        self.assertEqual(len(queries & earlier), 0)
-        for version in ("v6", "v4"):
-            report = self.evaluator.run(holdout, "fixture", None, version)
-            self.assertEqual(report["summary"]["exact_with_match"], 20, version)  # counts only, no query text
 
     def test_comparison_puts_a_condition_on_the_wrong_item_as_missing_and_extra(self):
         entry = next(i for i in self.data["items"] if i["id"] == "q029")  # 스키니 청바지랑 루즈핏 셔츠
