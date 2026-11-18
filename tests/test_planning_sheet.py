@@ -142,7 +142,7 @@ class BoardMappingTests(unittest.TestCase):
         p07 = fixture('p07-review-v0.3.consumer-projection.response')
         envelope['result']['sources']['sales_market_review']['raw_response'] = p07
         sheet = build_sheet(envelope)
-        self.assertEqual(sheet.price_rows, (('제안 판매가', '66,000원'), ('마진율', '56.88%')))
+        self.assertEqual(sheet.price_rows, (('제안 판매가', '66,000원'), ('업계 평균 마진 참고치', '56.88%')))
         target = sheet.target
         self.assertEqual((target.age, target.age_note), ('20–39 (20s and 30s)', '연령 확인 고객의 59.7%'))
         self.assertEqual((target.primary, target.summary), ('합성 예시: 출퇴근과 주말을 함께 입는 20–30대 여성',
@@ -150,7 +150,14 @@ class BoardMappingTests(unittest.TestCase):
         self.assertEqual((target.secondary, target.occasions),
                          (('합성 예시: 40대 초반 미니멀 스타일 선호 고객',), ('출퇴근', '주말 외출', '격식 있는 모임')))
         sales = {section.section_id: section for section in sheet.board.sections}['sales_market']
-        self.assertEqual(sales.claims, ())  # no findings, metrics or missing data in this response
+        # The market column reads the consumer projection's comparison summaries as producer findings.
+        self.assertEqual([(claim.text, claim.kind) for claim in sales.claims], [
+            ('H&M 과거 거래가 참고: 거래 표본 1,200건 · 중앙값 44.25 USD · 기간 2018-09-20–2020-09-22 · ×590 연구 환산',
+             'producer_finding'),
+            ('원단 공개 목록: wool 참고 · 공개 원단 목록 1건 · 중앙값 20,000 KRW/m', 'producer_finding'),
+            ('원단 공개 목록: wool 참고 · 공개 원단 목록 1건 · 중앙값 26,000 KRW/m', 'producer_finding'),
+            ('H&M 과거 고객 연령 집계: 최대 연령 코호트 20–39 (20s and 30s) · 연령 확인 고객 4,000명 기준 · '
+             '기간 2018-09-20–2020-09-22', 'producer_finding')])
         self.assertEqual(sales.notes, tuple(p07['result']['limitations']))  # Korean, in P07's order
         self.assertEqual(sales.notes[0], '[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.')
 

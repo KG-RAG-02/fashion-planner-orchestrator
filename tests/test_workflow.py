@@ -214,7 +214,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(calls[0]['input'], {
             'request_id': self.rid,
             'product': {'category': 'Outerwear', 'product_type': 'Outerwear', 'gender': 'unknown',
-                        'season': '미정', 'material': 'wool blend'},
+                        'season': 'winter', 'material': 'wool blend'},
             'product_evidence': {
                 'category': {'kind': 'user_requested', 'source_ref': 'p06.draft.product_profile.category', 'evidence_ids': []},
                 'product_type': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.product_type', 'evidence_ids': []},
@@ -289,7 +289,7 @@ class WorkflowTests(unittest.TestCase):
         sheet = build_sheet(envelope)
         self.assertEqual(sheet.trend.name, '합성 블라우스')
         self.assertEqual(sheet.stock.style_id, style['id'])
-        self.assertEqual(sheet.price_rows, (('제안 판매가', '66,000원'), ('마진율', '56.88%')))
+        self.assertEqual(sheet.price_rows, (('제안 판매가', '66,000원'), ('업계 평균 마진 참고치', '56.88%')))
         self.assertIn('[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.',
                       envelope['result']['integration']['limitations'])
 
@@ -320,8 +320,10 @@ class WorkflowTests(unittest.TestCase):
 
         self.assertEqual(calls['p06']['input']['planning_request'], request['planning_request'])
         self.assertEqual(calls['p06']['input']['planning_request']['context'], scenario['planning_context'])
-        # P06's proposed material ('니트', kind proposal) is forwarded too (user decision 2026-11-16).
-        self.assertEqual(calls['p07']['input']['product'], {'category': '니트웨어', 'season': '2027SS', 'material': '니트'})
+        # P06's proposed material ('니트', kind proposal) is forwarded too; product_type and gender are always sent,
+        # filled with labelled 'proposal' placeholders when the profile has no value.
+        self.assertEqual(calls['p07']['input']['product'], {'category': '니트웨어', 'product_type': '니트웨어',
+                                                            'gender': 'unknown', 'season': '2027SS', 'material': '니트'})
         self.assertEqual(calls['p07']['input']['product_evidence']['material']['kind'], 'proposal')
         self.assertEqual(body['status'], 'partial')
         self.assertEqual(body['sources']['planning_draft']['raw_response'], p06_raw)
