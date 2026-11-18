@@ -23,8 +23,9 @@
 
 ## 준비
 
-- Docker Engine과 Docker Compose v2 플러그인. Compose 파일이 named volume의 `subpath` 마운트를 쓴다. 이 기능은 Docker
-  Engine 26부터라고 알려져 있다(추정, 공식 릴리스 노트로 확인하지 않음). 이 레포는 Docker Engine 29.8.2, Compose 5.6.0에서 확인했다.
+- Docker Engine 26.0 이상과 Docker Compose v2 플러그인. Compose 파일이 named volume의 `subpath` 마운트를 쓰는데, 이 기능은
+  Engine 26.0에서 추가됐다([릴리스 노트](https://docs.docker.com/engine/release-notes/26.0/): `VolumeOptions.Subpath`,
+  `--mount volume-subpath`). Compose 쪽 최소 버전은 확인하지 못했다. 확인한 환경: Docker Engine 29.8.2, Compose 5.6.0.
 - Python 3.11 이상(`init-env`, `preflight`, 종단 간 검사 스크립트), `curl`.
 - 디스크 여유 약 10 GB(서비스 이미지 다섯 개와 Neo4j 이미지).
 

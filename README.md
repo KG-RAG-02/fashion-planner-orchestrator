@@ -69,7 +69,7 @@ MD가 "2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하
 ### 전체 시스템 (Docker, 오프라인 stub)
 
 stub 프로필은 합성 데이터로 다섯 서비스를 모두 띄운다. 계정과 API 키가 필요 없고, 이미지를 빌드한 뒤에는 네트워크도
-필요 없다. Docker Engine과 Compose v2, Python 3.11 이상, 디스크 여유 약 10 GB가 필요하다([deploy/README.md](deploy/README.md#준비)).
+필요 없다. Docker Engine 26.0 이상과 Compose v2, Python 3.11 이상, 디스크 여유 약 10 GB가 필요하다([deploy/README.md](deploy/README.md#준비)).
 
 ```bash
 mkdir fashion-planner && cd fashion-planner
