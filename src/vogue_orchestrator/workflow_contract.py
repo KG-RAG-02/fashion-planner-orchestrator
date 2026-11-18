@@ -417,29 +417,19 @@ class WorkflowContract:
             require(source is None or key in names, 'UNTRACED_SOURCE')
         draft, review = sources['planning_draft'], sources['sales_market_review']
         if draft:
-            draft_body = draft['raw_response']['result']
-            if draft_body.get('schema_version') == 'planning-draft/1.0' and 'source_request' in draft_body:
-                origin = draft_body['source_request']['input']
-                require(origin['trend_response'] == sources['trend'] and origin['stock_response'] == sources['stock'], 'UPSTREAM_RAW_REWRITTEN')
-                require(origin['user_input'] == body['user_input'] and origin['planning_request'] == body['planning_request'], 'INPUT_RAW_REWRITTEN')
-            else:
-                call = strict_json(store.verify(draft['call_request_artifact']))
-                require(call.get('contract_version') == NOVELTY_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'P06_CALL_ENVELOPE_INVALID')
-                inp = call.get('input', {})
-                require(inp.get('planning_request') == body['planning_request'], 'P06_PLANNING_REQUEST_CHANGED')
-                # The run keeps the raw results; P06 may have received them raw or as any registered projection.
-                require_registered_p06_inputs(inp, sources['trend']['raw_response']['result'],
-                                              sources['stock']['raw_response']['result'])
+            call = strict_json(store.verify(draft['call_request_artifact']))
+            require(call.get('contract_version') == NOVELTY_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'P06_CALL_ENVELOPE_INVALID')
+            inp = call.get('input', {})
+            require(inp.get('planning_request') == body['planning_request'], 'P06_PLANNING_REQUEST_CHANGED')
+            # The run keeps the raw results; P06 may have received them raw or as any registered projection.
+            require_registered_p06_inputs(inp, sources['trend']['raw_response']['result'],
+                                          sources['stock']['raw_response']['result'])
         if review:
             require(draft is not None, 'REVIEW_WITHOUT_DRAFT')
-            review_body = review['raw_response']['result']
-            if review_body.get('schema_version') == 'sales-market-review/1.0' and 'review' in review_body:
-                require(review_body['review']['draft_response_sha256'] == draft['content_sha256'], 'REVIEW_DRAFT_HASH_MISMATCH')
-            else:
-                call = strict_json(store.verify(review['call_request_artifact']))
-                require(call.get('contract_version') == RESEARCH_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'P07_CALL_ENVELOPE_INVALID')
-                draft_value = draft['raw_response']['result']
-                require(call.get('input') == p07_review_input(draft_value, body['request_id']), 'P07_PRODUCT_PROJECTION_MISMATCH')
+            call = strict_json(store.verify(review['call_request_artifact']))
+            require(call.get('contract_version') == RESEARCH_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'P07_CALL_ENVELOPE_INVALID')
+            draft_value = draft['raw_response']['result']
+            require(call.get('input') == p07_review_input(draft_value, body['request_id']), 'P07_PRODUCT_PROJECTION_MISMATCH')
         if sources['trend'] and sources['trend']['raw_response']['status'] == 'no_results':
             require(body['status'] == 'no_results', 'TREND_NO_RESULTS_HIDDEN')
         if draft and draft['raw_response']['status'] == 'no_results':
