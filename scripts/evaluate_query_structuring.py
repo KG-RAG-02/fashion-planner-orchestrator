@@ -1,4 +1,4 @@
-"""Evaluate the StructuredQuery path (the current prompt, flat conditions with `item`) on data/user_queries.v3.json.
+"""Evaluate the StructuredQuery path (the current prompt, flat conditions with `item`) on data/query-structuring-eval/dev.json.
 
 Each query is run through `structured.structure_query` and the produced StructuredQuery is compared
 with the item's `expected_structured_query` as a set of facts. Condition facts carry the ITEM they belong to
@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATA = ROOT / "data" / "user_queries.v3.json"
+DEFAULT_DATA = ROOT / "data" / "query-structuring-eval" / "dev.json"
 
 GROUPS = ("category", "gender", "color", "material", "pattern", "detail", "fit", "body_length", "sleeve_length",
           "unsupported", "out_of_scope", "season", "style", "product_model")

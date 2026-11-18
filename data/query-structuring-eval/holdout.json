@@ -1,9 +1,7 @@
 {
- "_about": "홀드아웃 질의 20개(합성, 새 질의 h201~h220). 2026-11-11 프롬프트 v4를 읽지 않은 별도 Claude Agent가 질의와 라벨을 작성했다(라벨 근거: draft_v3.py 형식, contracts/agents/orchestrator/output/structured-query.md). 프롬프트 v4의 최종 확인용(튜닝에 쓰지 않은 세트). label_status=silver: 사용자 확인 전. 생성: scripts/build_query_holdout_v3.py",
- "dataset": "user_queries_holdout",
- "version": "v3",
+ "_about": "홀드아웃 질의 20개(합성, 개발용 질의·프롬프트 예시와 겹치지 않음). 프롬프트를 보지 않은 별도 AI 에이전트가 질의와 라벨을 작성했다. 라벨은 사람이 검증하지 않았다(label_status=silver). 설명: data/query-structuring-eval/README.md",
+ "dataset": "query_structuring_holdout",
  "created": "2026-11-11",
- "prompt_version": "query-structuring-prompt/v4",
  "reference_today": "2026-11-10",
  "items": [
   {

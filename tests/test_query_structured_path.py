@@ -14,8 +14,8 @@ from datetime import date
 
 from _query_support import HAS_PYDANTIC, ROOT, SKIP_REASON
 
-DATA_PATH = ROOT / "data" / "user_queries.v3.json"
-HOLDOUT_PATH = ROOT / "data" / "user_queries.holdout.v3.json"
+DATA_PATH = ROOT / "data" / "query-structuring-eval" / "dev.json"
+HOLDOUT_PATH = ROOT / "data" / "query-structuring-eval" / "holdout.json"
 
 
 def _load_script(name):

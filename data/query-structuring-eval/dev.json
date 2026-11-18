@@ -1,9 +1,7 @@
 {
- "_about": "예상 사용자 질의 30개(합성, data/user_queries.v2.json과 같은 질의). expected_draft = 프롬프트 v4 규칙대로 LLM이 내야 할 출력(품목별 묶음 draft v3, 손으로 씀), expected_structured_query = 그 draft를 코드로 조립한 기대 결과. label_status=silver: Claude 작성, 사용자 확인 전. 생성: scripts/build_query_dataset_v3.py. 설명: data/README.md",
- "dataset": "user_queries",
- "version": "v3",
+ "_about": "개발용 질의 30개(합성). expected_draft는 품목별로 묶은 기대 draft(손으로 씀), expected_structured_query는 그 draft를 코드로 조립한 기대 결과. 라벨은 AI가 작성했고 사람이 검증하지 않았다(label_status=silver). 설명: data/query-structuring-eval/README.md",
+ "dataset": "query_structuring_dev",
  "created": "2026-11-11",
- "prompt_version": "query-structuring-prompt/v4",
  "reference_today": "2026-11-10",
  "items": [
   {
