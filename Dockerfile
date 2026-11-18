@@ -6,11 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/src \
     HOME=/tmp \
-    VOGUE_ORCHESTRATOR_HOST=0.0.0.0 \
-    VOGUE_ORCHESTRATOR_PORT=8765 \
-    VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND=1 \
-    VOGUE_ORCHESTRATOR_RUNTIME=container \
-    VOGUE_WORKFLOW_STORE_DIR=/app/.local/workflow
+    ORCHESTRATOR_HOST=0.0.0.0 \
+    ORCHESTRATOR_PORT=8765 \
+    ORCHESTRATOR_ALLOW_REMOTE_BIND=1 \
+    ORCHESTRATOR_RUNTIME=container \
+    ORCHESTRATOR_WORKFLOW_STORE_DIR=/app/.local/workflow
 
 WORKDIR /app
 
@@ -35,7 +35,7 @@ COPY web ./web
 COPY configs ./configs
 COPY prompts ./prompts
 COPY contracts ./contracts
-# Offline query structuring (VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture) reads these fixtures.
+# Offline query structuring (ORCHESTRATOR_QUERY_STRUCTURING_MODE=synthetic_fixture) reads these fixtures.
 COPY examples/fixtures/query ./examples/fixtures/query
 
 # Some contract files are 0600 in the checkout (atomic writers use mkstemp): make the code world-readable,
@@ -51,6 +51,6 @@ EXPOSE 8765
 
 # Liveness only (no external calls); GET /api/health is never gated.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/api/health' % os.environ.get('VOGUE_ORCHESTRATOR_PORT', '8765'), timeout=2).read()"]
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/api/health' % os.environ.get('ORCHESTRATOR_PORT', '8765'), timeout=2).read()"]
 
 CMD ["python", "app.py"]

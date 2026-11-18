@@ -30,7 +30,7 @@ services:
     environment:
       <<: *r2
       HOME: /tmp
-      STOCK_CACHE_DIR: /cache
+      INVENTORY_CACHE_DIR: /cache
       # Optional: with R2_CLIP_INDEX_KEY, --prepare-cache also caches the stock CLIP index next to the DB.
       R2_CLIP_INDEX_KEY: ${R2_CLIP_INDEX_KEY:-}
     command: ["python", "-m", "stock_agent.server", "--prepare-cache"]
@@ -42,7 +42,7 @@ services:
   stock:
     environment:
       <<: *r2
-      STOCK_CACHE_DIR: /cache
+      INVENTORY_CACHE_DIR: /cache
       # CLIP filter (stock README): the cached index, Musinsa snap photos on R2, and the open_clip weights
       # (HF hub, ~350 MB) kept on a volume because /tmp is a 128 MB tmpfs. Empty keys leave CLIP off.
       R2_CLIP_INDEX_KEY: ${R2_CLIP_INDEX_KEY:-}
@@ -58,13 +58,13 @@ services:
   sales-market:
     environment:
       <<: *r2
-      VOGUE_R2_HM_DB_CACHE_DIR: /data/hm-cache
+      RESEARCH_CACHE_DIR: /data/hm-cache
       # research reads its H&M age, price and fabric research from one precomputed aggregate snapshot;
       # the env file supplies its content-addressed R2 key.
-      VOGUE_HM_RESEARCH_AGGREGATE_R2_KEY: ${VOGUE_HM_RESEARCH_AGGREGATE_R2_KEY:?P07 aggregate snapshot key is required for rehearsal/live}
+      RESEARCH_AGGREGATE_SNAPSHOT_KEY: ${RESEARCH_AGGREGATE_SNAPSHOT_KEY:?P07 aggregate snapshot key is required for rehearsal/live}
     volumes:
       # Writable: it also holds the H&M age query's DuckDB spill directory (P07 image default
-      # VOGUE_HM_AGE_DUCKDB_TEMP_DIRECTORY=/data/hm-cache/duckdb-age-tmp; memory limit set in compose.yaml).
+      # RESEARCH_AGE_DUCKDB_TEMP_DIRECTORY=/data/hm-cache/duckdb-age-tmp; memory limit set in compose.yaml).
       - type: volume
         source: p07_state
         target: /data/hm-cache

@@ -50,7 +50,7 @@ def _synthetic_fixture_provider_factory() -> tuple[Callable[[Any], Any], dict[st
 
 
 def _query_provider_factory() -> tuple[Callable[[Any], Any], dict[str, Any]]:
-    if os.environ.get("VOGUE_QUERY_STRUCTURING_MODE", "").strip() == "synthetic_fixture":
+    if os.environ.get("ORCHESTRATOR_QUERY_STRUCTURING_MODE", "").strip() == "synthetic_fixture":
         return _synthetic_fixture_provider_factory()
     return _default_provider_factory()
 
@@ -124,15 +124,15 @@ RUNTIME_MODES = {"host", "container"}
 
 
 def runtime_mode(environ: Mapping[str, str] | None = None) -> str:
-    """`container` when VOGUE_ORCHESTRATOR_RUNTIME=container; unknown values fail closed to container."""
-    value = str((os.environ if environ is None else environ).get("VOGUE_ORCHESTRATOR_RUNTIME") or "").strip().lower()
+    """`container` when ORCHESTRATOR_RUNTIME=container; unknown values fail closed to container."""
+    value = str((os.environ if environ is None else environ).get("ORCHESTRATOR_RUNTIME") or "").strip().lower()
     return "host" if value in {"", "host"} else "container"
 
 
 def trusted_peer_networks(environ: Mapping[str, str] | None = None) -> tuple[list[Any], bool]:
-    """Parse VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS; an invalid list trusts nothing beyond loopback."""
+    """Parse ORCHESTRATOR_TRUSTED_PEER_CIDRS; an invalid list trusts nothing beyond loopback."""
     networks = []
-    for item in str((os.environ if environ is None else environ).get("VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS") or "").split(","):
+    for item in str((os.environ if environ is None else environ).get("ORCHESTRATOR_TRUSTED_PEER_CIDRS") or "").split(","):
         item = item.strip()
         if not item:
             continue
@@ -148,14 +148,14 @@ def _server_port(handler: BaseHTTPRequestHandler) -> int:
     if isinstance(port, int):
         return port
     try:
-        return int(os.environ.get("VOGUE_ORCHESTRATOR_PORT", "8765"))
+        return int(os.environ.get("ORCHESTRATOR_PORT", "8765"))
     except ValueError:
         return 8765
 
 
 def allowed_hosts(handler: BaseHTTPRequestHandler, environ: Mapping[str, str] | None = None) -> set[str]:
-    """VOGUE_ORCHESTRATOR_ALLOWED_HOSTS, default 127.0.0.1:<port> and localhost:<port>."""
-    raw = str((os.environ if environ is None else environ).get("VOGUE_ORCHESTRATOR_ALLOWED_HOSTS") or "")
+    """ORCHESTRATOR_ALLOWED_HOSTS, default 127.0.0.1:<port> and localhost:<port>."""
+    raw = str((os.environ if environ is None else environ).get("ORCHESTRATOR_ALLOWED_HOSTS") or "")
     configured = {item.strip().lower() for item in raw.split(",") if item.strip()}
     if configured:
         return configured
@@ -172,8 +172,8 @@ def _single_header(handler: BaseHTTPRequestHandler, name: str) -> tuple[bool, st
 
 
 def _request_is_trusted_local(handler: BaseHTTPRequestHandler) -> bool:
-    """Conventions section 5: (loopback peer or peer in VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS)
-    and Host in VOGUE_ORCHESTRATOR_ALLOWED_HOSTS and (no Origin or Origin == http://<Host>)."""
+    """Conventions section 5: (loopback peer or peer in ORCHESTRATOR_TRUSTED_PEER_CIDRS)
+    and Host in ORCHESTRATOR_ALLOWED_HOSTS and (no Origin or Origin == http://<Host>)."""
     try:
         peer = ipaddress.ip_address(handler.client_address[0])
     except (ValueError, IndexError, TypeError, AttributeError):
@@ -298,13 +298,13 @@ class OrchestratorHandler(BaseHTTPRequestHandler):
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
-    host = (os.environ.get("VOGUE_ORCHESTRATOR_HOST") or "").strip() or host
-    port = int((os.environ.get("VOGUE_ORCHESTRATOR_PORT") or "").strip() or port)
-    runtime = str(os.environ.get("VOGUE_ORCHESTRATOR_RUNTIME") or "").strip().lower()
+    host = (os.environ.get("ORCHESTRATOR_HOST") or "").strip() or host
+    port = int((os.environ.get("ORCHESTRATOR_PORT") or "").strip() or port)
+    runtime = str(os.environ.get("ORCHESTRATOR_RUNTIME") or "").strip().lower()
     if runtime and runtime not in RUNTIME_MODES:
-        raise ValueError("VOGUE_ORCHESTRATOR_RUNTIME must be 'host' or 'container'.")
-    if host not in {"127.0.0.1", "localhost"} and os.environ.get("VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND") != "1":
-        raise ValueError("Binding outside loopback requires VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND=1.")
+        raise ValueError("ORCHESTRATOR_RUNTIME must be 'host' or 'container'.")
+    if host not in {"127.0.0.1", "localhost"} and os.environ.get("ORCHESTRATOR_ALLOW_REMOTE_BIND") != "1":
+        raise ValueError("Binding outside loopback requires ORCHESTRATOR_ALLOW_REMOTE_BIND=1.")
     server = ThreadingHTTPServer((host, port), OrchestratorHandler)
     print(f"VOGUE workflow UI: http://{host}:{port}")
     try:

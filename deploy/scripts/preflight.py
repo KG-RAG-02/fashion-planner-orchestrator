@@ -29,12 +29,12 @@ REPOS = ("trend-analysis-agent", "stock-agent", "new-product-agent", "sales-mark
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "data", "__pycache__", ".pytest_cache", ".local", "build"}
 SF_DATALESS = 0x40000000
 REQUIRED = {
-    "stub": ("VOGUE_AGENT_SERVICE_BEARER_TOKEN", "NEO4J_STUB_PASSWORD"),
-    "rehearsal": ("VOGUE_AGENT_SERVICE_BEARER_TOKEN", "R2_ACCOUNT_ID", "R2_BUCKET", "R2_ACCESS_KEY_ID",
-                  "R2_SECRET_ACCESS_KEY", "R2_DB_KEY", "VOGUE_HM_RESEARCH_AGGREGATE_R2_KEY",
+    "stub": ("FASHION_PLANNER_SERVICE_TOKEN", "NEO4J_STUB_PASSWORD"),
+    "rehearsal": ("FASHION_PLANNER_SERVICE_TOKEN", "R2_ACCOUNT_ID", "R2_BUCKET", "R2_ACCESS_KEY_ID",
+                  "R2_SECRET_ACCESS_KEY", "R2_DB_KEY", "RESEARCH_AGGREGATE_SNAPSHOT_KEY",
                   "NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD"),
 }
-REQUIRED["live"] = REQUIRED["rehearsal"] + ("VOGUE_OPENAI_API_KEY", "VOGUE_P08_LLM_MODEL", "VOGUE_STOCK_LLM_MODEL")
+REQUIRED["live"] = REQUIRED["rehearsal"] + ("FASHION_PLANNER_OPENAI_API_KEY", "FASHION_PLANNER_ORCHESTRATOR_LLM_MODEL")
 FILES = {
     "stub": ("compose.yaml", "compose.stub.yaml"),
     "rehearsal": ("compose.yaml", "compose.data.yaml"),
@@ -85,7 +85,7 @@ def default_image_model():
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--profile", choices=sorted(FILES), required=True)
-    parser.add_argument("--env-file", type=Path, default=Path(os.environ.get("VOGUE_ENV_FILE", Path.home() / ".config/vogue/vogue.env")))
+    parser.add_argument("--env-file", type=Path, default=Path(os.environ.get("FASHION_PLANNER_ENV_FILE", Path.home() / ".config/vogue/vogue.env")))
     parser.add_argument("--skip-network", action="store_true", help="skip OpenAI/Aura reachability checks")
     args = parser.parse_args(argv)
     results = []
@@ -128,7 +128,7 @@ def main(argv=None) -> int:
     for name in FILES[args.profile]:
         compose += ["-f", str(DEPLOY / name)]
     config = subprocess.run(compose + ["config", "--quiet"], capture_output=True, text=True, cwd=DEPLOY,
-                            env={**os.environ, "VOGUE_UI_PORT": str(port)})
+                            env={**os.environ, "FASHION_PLANNER_UI_PORT": str(port)})
     check("docker compose config is valid", config.returncode == 0, config.stderr.strip()[:200])
 
     if args.profile in ("rehearsal", "live") and not args.skip_network and env.get("NEO4J_URI"):
@@ -139,14 +139,14 @@ def main(argv=None) -> int:
         except OSError:
             reachable = False
         check("Neo4j host reachable over TCP", reachable, f"scheme {target.scheme}")
-    if args.profile == "live" and not args.skip_network and env.get("VOGUE_OPENAI_API_KEY"):
-        # A blank VOGUE_IMAGE_MODEL means the service default; check that model too (it was never checked before).
-        image_model = env.get("VOGUE_IMAGE_MODEL") or default_image_model()
-        for label, model in (("query model", env.get("VOGUE_P08_LLM_MODEL")), ("stock model", env.get("VOGUE_STOCK_LLM_MODEL")), ("image model", image_model)):
+    if args.profile == "live" and not args.skip_network and env.get("FASHION_PLANNER_OPENAI_API_KEY"):
+        # A blank FASHION_PLANNER_NOVELTY_IMAGE_MODEL means the service default; check that model too (it was never checked before).
+        image_model = env.get("FASHION_PLANNER_NOVELTY_IMAGE_MODEL") or default_image_model()
+        for label, model in (("query model", env.get("FASHION_PLANNER_ORCHESTRATOR_LLM_MODEL")), ("image model", image_model)):
             if not model:
                 check(f"OpenAI {label} available", True, "using the service default (not checked)")
                 continue
-            request = urllib.request.Request(f"https://api.openai.com/v1/models/{model}", headers={"Authorization": f"Bearer {env['VOGUE_OPENAI_API_KEY']}"})
+            request = urllib.request.Request(f"https://api.openai.com/v1/models/{model}", headers={"Authorization": f"Bearer {env['FASHION_PLANNER_OPENAI_API_KEY']}"})
             try:
                 with urllib.request.urlopen(request, timeout=15) as response:
                     ok = response.status == 200

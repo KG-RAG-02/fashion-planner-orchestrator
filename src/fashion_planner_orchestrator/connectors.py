@@ -21,13 +21,13 @@ PRIVATE_HOST_PATTERN = re.compile(r"[a-z][a-z0-9-]{0,62}")
 def private_http_hosts(env: Mapping[str, str]) -> frozenset[str]:
     """Return exact single-label hosts allowed to receive bearer-authenticated HTTP."""
     hosts = set()
-    for item in str(env.get("VOGUE_AGENT_HTTP_PRIVATE_HOSTS") or "").split(","):
+    for item in str(env.get("ORCHESTRATOR_HTTP_PRIVATE_HOSTS") or "").split(","):
         item = item.strip()
         if not item:
             continue
         if not PRIVATE_HOST_PATTERN.fullmatch(item):
             raise ConnectorConfigurationError(
-                "VOGUE_AGENT_HTTP_PRIVATE_HOSTS must list single-label lowercase hostnames")
+                "ORCHESTRATOR_HTTP_PRIVATE_HOSTS must list single-label lowercase hostnames")
         hosts.add(item)
     return frozenset(hosts)
 
@@ -73,13 +73,13 @@ def _service_url(env: Mapping[str, str], variable: str, route: str) -> str:
         parts.port
     except ValueError:
         raise ConnectorConfigurationError(f"{variable} has an invalid port") from None
-    dev_mode = env.get("VOGUE_AGENT_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
+    dev_mode = env.get("FASHION_PLANNER_HTTP_DEV_MODE", "").lower() in {"1", "true", "yes"}
     if parts.scheme == "http":
         hostname = parts.hostname.lower()
         if hostname in private_http_hosts(env):
-            if not str(env.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN") or "").strip():
+            if not str(env.get("FASHION_PLANNER_SERVICE_TOKEN") or "").strip():
                 raise ConnectorConfigurationError(
-                    f"{variable} uses plain HTTP to a private host; VOGUE_AGENT_SERVICE_BEARER_TOKEN is required")
+                    f"{variable} uses plain HTTP to a private host; FASHION_PLANNER_SERVICE_TOKEN is required")
             return base.rstrip("/") + route
         try:
             loopback = ipaddress.ip_address(hostname).is_loopback

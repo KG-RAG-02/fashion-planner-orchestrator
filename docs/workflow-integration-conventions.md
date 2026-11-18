@@ -26,10 +26,10 @@ Current integration behavior and contract boundaries for the five repositories. 
 
 | Service | Compose host | Port | Container mode | Liveness |
 |---|---|---|---|---|
-| orchestrator | `orchestrator` | 8765 | bind `0.0.0.0`; `VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND=1`; `VOGUE_ORCHESTRATOR_RUNTIME=container` | `GET /api/health` |
+| orchestrator | `orchestrator` | 8765 | bind `0.0.0.0`; `ORCHESTRATOR_ALLOW_REMOTE_BIND=1`; `ORCHESTRATOR_RUNTIME=container` | `GET /api/health` |
 | trend | `trend` | 8768 | `--mode service --host 0.0.0.0` | `GET /health` |
 | stock | `stock` | 8002 | `python -m stock_agent.server --host 0.0.0.0` | `GET /health/live`; readiness `GET /health/ready` |
-| new-product | `new-product` | 8767 | `VOGUE_HTTP_MODE=private` (new; plain HTTP, any bind, bearer on every route) | `GET /api/health` with bearer |
+| new-product | `new-product` | 8767 | `NOVELTY_HTTP_MODE=private` (new; plain HTTP, any bind, bearer on every route) | `GET /api/health` with bearer |
 | sales-market | `sales-market` | 8766 | `--service-mode --host 0.0.0.0` | `GET /api/health` |
 
 - **Every app container:**
@@ -40,7 +40,7 @@ Current integration behavior and contract boundaries for the five repositories. 
 
 ## 3. Authentication
 
-- One shared bearer token: `VOGUE_AGENT_SERVICE_BEARER_TOKEN`.
+- One shared bearer token: `FASHION_PLANNER_SERVICE_TOKEN`.
   - The deployment generates a fresh value; never copy old `.env` values into code, logs or commits.
   - Compare with `hmac.compare_digest`. Check auth before reading the body.
   - 401 on a missing or wrong token. Never echo the token.
@@ -48,25 +48,25 @@ Current integration behavior and contract boundaries for the five repositories. 
 
 ## 4. Outbound HTTP from P08 (S1)
 
-- **Private-host allowlist.** `VOGUE_AGENT_HTTP_PRIVATE_HOSTS` is a comma list of exact single-label hostnames (`^[a-z][a-z0-9-]{0,62}$`).
+- **Private-host allowlist.** `ORCHESTRATOR_HTTP_PRIVATE_HOSTS` is a comma list of exact single-label hostnames (`^[a-z][a-z0-9-]{0,62}$`).
   - Plain `http://` is allowed only to those hosts, and only with a non-empty bearer token.
   - Everything else keeps today's policy: HTTPS with CA verification, or plain HTTP to loopback in dev mode.
-  - The allowlist is independent of `VOGUE_AGENT_HTTP_DEV_MODE`.
+  - The allowlist is independent of `FASHION_PLANNER_HTTP_DEV_MODE`.
 - **Base URLs in compose:**
-  - `VOGUE_TREND_AGENT_URL=http://trend:8768`
-  - `VOGUE_STOCK_AGENT_URL=http://stock:8002`
-  - `VOGUE_NEW_PRODUCT_AGENT_URL=http://new-product:8767`
-  - `VOGUE_SALES_MARKET_AGENT_URL=http://sales-market:8766`
+  - `ORCHESTRATOR_TREND_URL=http://trend:8768`
+  - `ORCHESTRATOR_INVENTORY_URL=http://stock:8002`
+  - `ORCHESTRATOR_NOVELTY_URL=http://new-product:8767`
+  - `ORCHESTRATOR_RESEARCH_URL=http://sales-market:8766`
 - **Trend photos for the Planning Sheet:** with the `planning_sheet` provider, stage 06 downloads up to three example photos of the poster's focus Trend style (`planning_sheet.focus_trend`: the style P06's `draft.trend_basis.source_style_id` names; for runs without it, the style the Draft cites most), from `style.example_images`, then its items' `image_urls`.
-  - HTTPS with CA verification only, to hosts in `VOGUE_TREND_PHOTO_HOSTS` (default `vogue.co.kr` and its subdomains); at most two redirects, each on the allowlist.
+  - HTTPS with CA verification only, to hosts in `ORCHESTRATOR_TREND_PHOTO_HOSTS` (default `vogue.co.kr` and its subdomains); at most two redirects, each on the allowlist.
   - At most 5 MiB and 6 megapixels per photo (the pixel count is read from the header before decoding), PNG/JPEG/WebP only, with the same decode checks as uploaded images; 10-second timeout; no retries.
   - A rejected, unreachable or malformed-URL photo is skipped and never fails the run. The photos and the SWOT draft are gathered before stage 06 records that it started, so a crash while waiting for them does not stop a retry from composing the sheet. The photos are kept in the P08 store under `trend-photos:<request_id>`; the integrated envelope does not change.
-  - `GET /api/workflow/runs/{id}/planning-sheet.png` renders from the stored photos and makes no network call. `VOGUE_TREND_PHOTOS_ENABLED=0` turns the download off.
+  - `GET /api/workflow/runs/{id}/planning-sheet.png` renders from the stored photos and makes no network call. `ORCHESTRATOR_TREND_PHOTOS_ENABLED=0` turns the download off.
 - **SWOT and promotion draft for the Planning Sheet:** with the `planning_sheet` provider and `LLM_MODEL`/`LLM_API_KEY` configured, stage 06 makes one call to the query-structuring LLM provider (`swot.py`, prompt `prompts/swot/v3`).
   - The request holds a compact summary of the stored run: the focus Trend style (as on the poster), the stock product matched to it with stock-agent's indicators (sell-through, stock value, recent trend, score and their data nature), new-product-agent's concept and specification, sales-market-agent's price, fabric cost, margin, target, channel/content hypotheses and merchandising actions, and the run limitations. It does not hold the user's raw request text or any image.
   - The answer must be 0–4 items per SWOT quadrant, 0–3 promotion ideas (title and one line) and 0–3 differentiation points (new product vs the matched stock product and the trend), each with its basis (`trend`, `stock`, `product`, `market`); anything else is discarded. The prompt forbids invented numbers (discount rates, budgets, targets) and price decisions. The valid draft is kept under `swot:<request_id>` and the poster labels it as an LLM hypothesis for MD review. The differentiation points appear only while new-product-agent's `draft.differentiation` is empty.
-  - A failed or invalid answer leaves the SWOT slot empty and never fails the run; a stage-06 retry asks again only when no valid draft was kept. `GET /api/workflow/runs/{id}/planning-sheet.png` renders the stored draft without calling the model. `VOGUE_SWOT_ENABLED=0` turns the call off.
-- **Timeouts:** `VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS` (default 3) and `VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS` (default 75). No automatic retries.
+  - A failed or invalid answer leaves the SWOT slot empty and never fails the run; a stage-06 retry asks again only when no valid draft was kept. `GET /api/workflow/runs/{id}/planning-sheet.png` renders the stored draft without calling the model. `ORCHESTRATOR_SWOT_ENABLED=0` turns the call off.
+- **Timeouts:** `ORCHESTRATOR_WORKFLOW_CONNECT_TIMEOUT_SECONDS` (default 3) and `ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS` (default 75). No automatic retries.
 - **Safe latency telemetry:** P08 emits one JSON log event per Agent call, workflow stage, and completed run. Events include `request_id`, stage/Agent, status, elapsed time, retryable/fatal flags, and (for HTTP calls) upstream transport time versus P08 call overhead. They must never include payloads, raw responses, prompts, credentials, or artifact contents.
 - **Retry and idempotency:** P08 does not automatically repeat Agent calls. A repeated workflow request with the same ID replays the stored outcome; a checkpoint marked started but without a known result fails closed as `STAGE_OUTCOME_UNKNOWN`. `retryable` reports a transient dependency condition; it does not mean reposting the same request will issue another Agent call. Image generation uses its separate idempotent retry key and never reruns upstream Agents.
 - **Partial outcomes:** Producer `partial` and nonfatal source errors are retained verbatim in `sources.*.raw_response`; P08 copies their error code/message/retryable flag into the integrated error list and keeps the overall status `partial`. A producer `error`, invalid contract, authentication failure, or failed integrity check is terminal and stops later Agents. A `no_results` outcome follows the stage-specific workflow rules below; it is never coerced to an empty-success result.
@@ -83,10 +83,10 @@ Current integration behavior and contract boundaries for the five repositories. 
 ## 5. Inbound trust at P08 (S1)
 
 - `_request_is_trusted_local` passes only if all three hold:
-  - the peer is loopback, **or** the peer IP is in `VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS`;
-  - **and** the `Host` header is in `VOGUE_ORCHESTRATOR_ALLOWED_HOSTS` (default `127.0.0.1:<port>`, `localhost:<port>`);
+  - the peer is loopback, **or** the peer IP is in `ORCHESTRATOR_TRUSTED_PEER_CIDRS`;
+  - **and** the `Host` header is in `ORCHESTRATOR_ALLOWED_HOSTS` (default `127.0.0.1:<port>`, `localhost:<port>`);
   - **and** `Origin` is absent, or exactly `http://<Host>`, port included.
-- **Container mode** (`VOGUE_ORCHESTRATOR_RUNTIME=container`):
+- **Container mode** (`ORCHESTRATOR_RUNTIME=container`):
   - The check applies to every route except `GET /api/health` and static assets, including mutating workflow routes.
   - `/api/local-services/*` returns 404.
 - **Host mode** keeps today's loopback-only gating for workflow routes, and the Origin check now includes the port.
@@ -141,7 +141,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 - **P08** mints content-addressed `artifact://p08/blobs/<sha256>`.
   - The same bytes always give the same URI.
   - Bytes live at `<store>/blobs/<sha256>`.
-  - Store root is `VOGUE_WORKFLOW_STORE_DIR` (default `<repo>/.local/workflow`; container `/app/.local/workflow`).
+  - Store root is `ORCHESTRATOR_WORKFLOW_STORE_DIR` (default `<repo>/.local/workflow`; container `/app/.local/workflow`).
 - **P07** mints `artifact://p07/reviews/<sha256>.json` under `VOGUE_P07_REVIEW_ARTIFACT_DIR` (container `/data/reviews`).
 - **P06** owns its native artifact contract. The current P08 `/runs` input does not request P08 visual references.
 - **Read-only mounts in compose:**
@@ -149,7 +149,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   | Reader | Env | Mount |
   |---|---|---|
   | P06 and P07 | `VOGUE_UPSTREAM_ARTIFACT_ROOT=/artifacts` | P08 blobs at `/artifacts/p08/blobs` |
-  | P08 | `VOGUE_PEER_ARTIFACT_ROOT=/peer` | P07 reviews at `/peer/p07/reviews` |
+  | P08 | `ORCHESTRATOR_PEER_ARTIFACT_ROOT=/peer` | P07 reviews at `/peer/p07/reviews` |
 
   P08 imports peer artifacts through the store's `import_verified`.
 - **Error codes:**
@@ -165,20 +165,20 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 
 | Service | Env | Meaning |
 |---|---|---|
-| P08 | `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture` | Offline query structuring (existing) |
-| P08 | `VOGUE_WORKFLOW_IMAGE_PROVIDER=planning_sheet\|fixture` (default `planning_sheet`) | `planning_sheet` composes the planning poster from the run; `fixture` renders a deterministic local PNG. Any other value is refused with 409 `IMAGE_PROVIDER_INVALID`. Images still need `VOGUE_WORKFLOW_IMAGES_ENABLED=1` |
-| P08 | `VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=0\|1` (default 0) | Gates `POST /v1/orchestrations/image-retries` |
-| P08 | `VOGUE_WORKFLOW_ALLOW_PROPOSED=1` | Run with a `proposed` contract baseline; adds a limitation to the result |
-| P08 | `VOGUE_WORKFLOW_CONTRACT_BASELINE=<path>` | Overrides `contracts/workflow/baseline.json` |
+| P08 | `ORCHESTRATOR_QUERY_STRUCTURING_MODE=synthetic_fixture` | Offline query structuring (existing) |
+| P08 | `ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=planning_sheet\|fixture` (default `planning_sheet`) | `planning_sheet` composes the planning poster from the run; `fixture` renders a deterministic local PNG. Any other value is refused with 409 `IMAGE_PROVIDER_INVALID`. Images still need `ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED=1` |
+| P08 | `ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED=0\|1` (default 0) | Gates `POST /v1/orchestrations/image-retries` |
+| P08 | `ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED=1` | Run with a `proposed` contract baseline; adds a limitation to the result |
+| P08 | `ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE=<path>` | Overrides `contracts/workflow/baseline.json` |
 | stock | `STOCK_LLM_PROVIDER=policy\|openai` (default `openai`) | `policy` = the existing deterministic `PolicyLLM` |
-| stock | `STOCK_DB_PATH=/path/file.duckdb` | Local-file DB mode: skips R2 HEAD; readiness reports `db: local-file` |
+| stock | `INVENTORY_DB_PATH=/path/file.duckdb` | Local-file DB mode: skips R2 HEAD; readiness reports `db: local-file` |
 | trend | `NEO4J_URI/USER/PASSWORD` | The stub uses a seeded `neo4j-stub` |
 | P07 | `VOGUE_P07_REVIEW_SOURCE=synthetic_local_fixture` | Bundled synthetic sources; output labelled synthetic |
 | P06 | `VOGUE_EXECUTION_PROFILE=draft_only`, `VOGUE_WORKFLOW_DRAFT_ENABLED=true` | Draft-only producer (rule-based) |
 
 **Contract gate** (P08, `contracts/workflow/baseline.json`):
 - Run when `state == "frozen"`, `producer_consumer_validated` is true, `snapshot_sha256` matches the current `snapshot.json` bytes, the files map matches, and evidence shows 0 failures.
-- Otherwise, with `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`, run and add the limitation `"workflow-contract/0.5.0 not frozen; development run"`.
+- Otherwise, with `ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED=1`, run and add the limitation `"workflow-contract/0.5.0 not frozen; development run"`.
 - Otherwise return 409 `CONTRACT_NOT_FROZEN`.
 - No code may read anything under `../_workflow`.
 

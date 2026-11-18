@@ -20,10 +20,10 @@ PROBE_TIMEOUT_SECONDS = 2.0
 MAX_PROBE_BODY_BYTES = 4096
 # (id, base URL variable, liveness path, bearer required): conventions section 2.
 AGENTS = (
-    ('trend', 'VOGUE_TREND_AGENT_URL', '/health', False),
-    ('stock', 'VOGUE_STOCK_AGENT_URL', '/health/live', False),
-    ('new-product', 'VOGUE_NEW_PRODUCT_AGENT_URL', '/api/health', True),
-    ('sales-market', 'VOGUE_SALES_MARKET_AGENT_URL', '/api/health', False),
+    ('trend', 'ORCHESTRATOR_TREND_URL', '/health', False),
+    ('stock', 'ORCHESTRATOR_INVENTORY_URL', '/health/live', False),
+    ('new-product', 'ORCHESTRATOR_NOVELTY_URL', '/api/health', True),
+    ('sales-market', 'ORCHESTRATOR_RESEARCH_URL', '/api/health', False),
 )
 
 
@@ -45,7 +45,7 @@ def probe_agent(env: Mapping[str, str], agent_id: str, variable: str, health_pat
         return result
     parts = urlsplit(url)
     headers = {'Accept': 'application/json'}
-    token = str(env.get('VOGUE_AGENT_SERVICE_BEARER_TOKEN') or '').strip()
+    token = str(env.get('FASHION_PLANNER_SERVICE_TOKEN') or '').strip()
     if bearer_required and token:
         headers['Authorization'] = 'Bearer ' + token
         result['bearer_sent'] = True
@@ -92,7 +92,7 @@ def system_status(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     except ConnectorConfigurationError:
         hosts, hosts_valid = [], False
     networks, cidrs_valid = trusted_peer_networks(env)
-    structuring = str(env.get('VOGUE_QUERY_STRUCTURING_MODE') or '').strip()
+    structuring = str(env.get('ORCHESTRATOR_QUERY_STRUCTURING_MODE') or '').strip()
     return dict(
         checked_at=datetime.now(timezone.utc).isoformat(timespec='seconds'),
         runtime=runtime_mode(env),
@@ -106,8 +106,8 @@ def system_status(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         draft=dict(mode=draft_mode(env) or 'invalid'),
         query_structuring=dict(mode='synthetic_fixture' if structuring == 'synthetic_fixture' else 'llm'),
         outbound=dict(private_hosts=hosts, private_hosts_valid=hosts_valid,
-                      dev_mode=str(env.get('VOGUE_AGENT_HTTP_DEV_MODE') or '').lower() in {'1', 'true', 'yes'},
-                      service_token_configured=bool(str(env.get('VOGUE_AGENT_SERVICE_BEARER_TOKEN') or '').strip())),
+                      dev_mode=str(env.get('FASHION_PLANNER_HTTP_DEV_MODE') or '').lower() in {'1', 'true', 'yes'},
+                      service_token_configured=bool(str(env.get('FASHION_PLANNER_SERVICE_TOKEN') or '').strip())),
         inbound=dict(trusted_peer_cidrs=[str(network) for network in networks], trusted_peer_cidrs_valid=cidrs_valid),
-        artifacts=dict(peer_reader_configured=bool(str(env.get('VOGUE_PEER_ARTIFACT_ROOT') or '').strip())),
+        artifacts=dict(peer_reader_configured=bool(str(env.get('ORCHESTRATOR_PEER_ARTIFACT_ROOT') or '').strip())),
     )

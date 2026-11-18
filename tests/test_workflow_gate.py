@@ -15,7 +15,7 @@ from fashion_planner_orchestrator.workflow_contract import (CONTRACT_ROOT, basel
 
 ROOT = Path(__file__).resolve().parents[1]
 DEV_LIMITATION = 'workflow-contract not frozen; development run'
-GATE_KEYS = ('VOGUE_WORKFLOW_ALLOW_PROPOSED', 'VOGUE_WORKFLOW_CONTRACT_BASELINE')
+GATE_KEYS = ('ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED', 'ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE')
 
 
 def _freeze_script():
@@ -62,11 +62,11 @@ class ContractGateTests(unittest.TestCase):
         from fashion_planner_orchestrator.workflow_http import ensure_live_contract
         for value in ('1', 'true', 'YES', 'on'):
             with self.subTest(value=value):
-                self.assertEqual(contract_gate_status({'VOGUE_WORKFLOW_ALLOW_PROPOSED': value})['gate'], 'development')
-                self.assertEqual(ensure_live_contract(env={'VOGUE_WORKFLOW_ALLOW_PROPOSED': value}), [DEV_LIMITATION])
+                self.assertEqual(contract_gate_status({'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': value})['gate'], 'development')
+                self.assertEqual(ensure_live_contract(env={'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': value}), [DEV_LIMITATION])
         for value in ('', '0', 'false', 'no'):
             with self.subTest(value=value):
-                self.assertEqual(contract_gate_status({'VOGUE_WORKFLOW_ALLOW_PROPOSED': value})['gate'], 'closed')
+                self.assertEqual(contract_gate_status({'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': value})['gate'], 'closed')
 
     def test_closed_gate_raises_contract_not_frozen_409(self):
         from fashion_planner_orchestrator.workflow_http import WorkflowUnavailable, ensure_live_contract
@@ -76,10 +76,10 @@ class ContractGateTests(unittest.TestCase):
 
     def test_frozen_validated_matching_baseline_runs_without_limitation(self):
         from fashion_planner_orchestrator.workflow_http import ensure_live_contract
-        env = {'VOGUE_WORKFLOW_CONTRACT_BASELINE': self.write(frozen(self.baseline))}
+        env = {'ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE': self.write(frozen(self.baseline))}
         status = contract_gate_status(env)
         self.assertEqual((status['gate'], status['source'], status['problems']),
-                         ('open', 'VOGUE_WORKFLOW_CONTRACT_BASELINE', []))
+                         ('open', 'ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE', []))
         self.assertEqual(ensure_live_contract(env=env), [])
 
     def test_frozen_baseline_drift_or_failures_close_the_gate(self):
@@ -95,18 +95,18 @@ class ContractGateTests(unittest.TestCase):
         }
         for problem, value in cases.items():
             with self.subTest(problem=problem):
-                status = contract_gate_status({'VOGUE_WORKFLOW_CONTRACT_BASELINE': self.write(value, problem + '.json')})
+                status = contract_gate_status({'ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE': self.write(value, problem + '.json')})
                 self.assertIn(problem, status['problems'])
                 self.assertEqual(status['gate'], 'closed')
-                self.assertEqual(contract_gate_status({'VOGUE_WORKFLOW_CONTRACT_BASELINE': str(self.tmp / (problem + '.json')),
-                                                       'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1'})['gate'], 'development')
+                self.assertEqual(contract_gate_status({'ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE': str(self.tmp / (problem + '.json')),
+                                                       'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': '1'})['gate'], 'development')
 
     def test_missing_or_invalid_override_fails_closed(self):
-        missing = contract_gate_status({'VOGUE_WORKFLOW_CONTRACT_BASELINE': str(self.tmp / 'absent.json')})
+        missing = contract_gate_status({'ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE': str(self.tmp / 'absent.json')})
         self.assertEqual((missing['state'], missing['gate']), ('missing', 'closed'))
         broken = self.tmp / 'broken.json'
         broken.write_bytes(b'{"state":"frozen","state":"frozen"}')
-        invalid = contract_gate_status({'VOGUE_WORKFLOW_CONTRACT_BASELINE': str(broken)})
+        invalid = contract_gate_status({'ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE': str(broken)})
         self.assertEqual((invalid['state'], invalid['gate']), ('invalid', 'closed'))
 
     def test_problems_are_at_least_as_strict_as_the_freeze_script(self):
@@ -139,13 +139,13 @@ class ContractGateTests(unittest.TestCase):
     def test_build_workflow_carries_the_development_limitation(self):
         from fashion_planner_orchestrator import workflow_http
         from fashion_planner_orchestrator.workflow_store import WorkflowStore
-        env = {'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_AGENT_HTTP_DEV_MODE': '1',
-               'VOGUE_AGENT_SERVICE_BEARER_TOKEN': 'synthetic-test-token',
-               'VOGUE_TREND_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_STOCK_AGENT_URL': 'http://127.0.0.1:9',
-               'VOGUE_NEW_PRODUCT_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_SALES_MARKET_AGENT_URL': 'http://127.0.0.1:9'}
+        env = {'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': '1', 'FASHION_PLANNER_HTTP_DEV_MODE': '1',
+               'FASHION_PLANNER_SERVICE_TOKEN': 'synthetic-test-token',
+               'ORCHESTRATOR_TREND_URL': 'http://127.0.0.1:9', 'ORCHESTRATOR_INVENTORY_URL': 'http://127.0.0.1:9',
+               'ORCHESTRATOR_NOVELTY_URL': 'http://127.0.0.1:9', 'ORCHESTRATOR_RESEARCH_URL': 'http://127.0.0.1:9'}
         store = WorkflowStore(Path(os.path.realpath(self.tmp)) / 'store')
         with patch.dict(os.environ, env), patch.object(workflow_http, 'store', return_value=store):
-            os.environ.pop('VOGUE_WORKFLOW_CONTRACT_BASELINE', None)
+            os.environ.pop('ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE', None)
             workflow = workflow_http.build_workflow()
         self.assertEqual(workflow.limitations, (DEV_LIMITATION,))
 
@@ -153,9 +153,9 @@ class ContractGateTests(unittest.TestCase):
     def test_build_workflow_requires_p07_bearer_even_in_loopback_development_mode(self):
         from fashion_planner_orchestrator import workflow_http
         from fashion_planner_orchestrator.connectors import ConnectorConfigurationError
-        env = {'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_AGENT_HTTP_DEV_MODE': '1',
-               'VOGUE_TREND_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_STOCK_AGENT_URL': 'http://127.0.0.1:9',
-               'VOGUE_NEW_PRODUCT_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_SALES_MARKET_AGENT_URL': 'http://127.0.0.1:9'}
+        env = {'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': '1', 'FASHION_PLANNER_HTTP_DEV_MODE': '1',
+               'ORCHESTRATOR_TREND_URL': 'http://127.0.0.1:9', 'ORCHESTRATOR_INVENTORY_URL': 'http://127.0.0.1:9',
+               'ORCHESTRATOR_NOVELTY_URL': 'http://127.0.0.1:9', 'ORCHESTRATOR_RESEARCH_URL': 'http://127.0.0.1:9'}
         with patch.dict(os.environ, env), self.assertRaisesRegex(ConnectorConfigurationError, 'required by P07 /reviews'):
             workflow_http.build_workflow()
 

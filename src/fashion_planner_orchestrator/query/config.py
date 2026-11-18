@@ -5,8 +5,8 @@ prompt text lives in prompts/<name>/<version>/. Both folders sit at the reposito
 
 Default locations assume a source checkout (src/ layout). To use the package from elsewhere
 (another repository, a non-editable install), point to the folders explicitly:
-  VOGUE_QUERY_CONFIG       path to a query_structuring.json
-  VOGUE_QUERY_PROMPTS_DIR  path to a prompts/ folder
+  ORCHESTRATOR_QUERY_CONFIG       path to a query_structuring.json
+  ORCHESTRATOR_QUERY_PROMPTS_DIR  path to a prompts/ folder
 The configuration is read once, at import, and validated; a broken file fails loudly.
 """
 
@@ -42,11 +42,11 @@ class QueryConfig:
 
 
 def config_path() -> Path:
-    return Path(os.environ.get("VOGUE_QUERY_CONFIG", DEFAULT_CONFIG_PATH))
+    return Path(os.environ.get("ORCHESTRATOR_QUERY_CONFIG", DEFAULT_CONFIG_PATH))
 
 
 def prompts_dir() -> Path:
-    return Path(os.environ.get("VOGUE_QUERY_PROMPTS_DIR", DEFAULT_PROMPTS_DIR))
+    return Path(os.environ.get("ORCHESTRATOR_QUERY_PROMPTS_DIR", DEFAULT_PROMPTS_DIR))
 
 
 def _require(mapping: Any, key: str, kind: type, where: str) -> Any:

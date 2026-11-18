@@ -90,8 +90,7 @@ services:
 
   stock:
     environment:
-      STOCK_DB_PATH: /fixture/fixture.duckdb
-      STOCK_LLM_PROVIDER: policy
+      INVENTORY_DB_PATH: /fixture/fixture.duckdb
     volumes:
       - stock_fixture:/fixture:ro
     depends_on:
@@ -99,14 +98,16 @@ services:
 
   sales-market:
     environment:
-      VOGUE_P07_REVIEW_SOURCE: synthetic_local_fixture
+      # research answers from its bundled synthetic review data (no R2, DuckDB, FX API or LLM); the
+      # result is labelled synthetic.
+      RESEARCH_REVIEW_SOURCE: synthetic
 
   orchestrator:
     environment:
-      VOGUE_QUERY_STRUCTURING_MODE: synthetic_fixture
+      ORCHESTRATOR_QUERY_STRUCTURING_MODE: synthetic_fixture
       # Stub is the integration-test profile: until the baseline is frozen the gate runs in
       # development mode and every result carries the 'not frozen; development run' limitation.
-      VOGUE_WORKFLOW_ALLOW_PROPOSED: "1"
+      ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED: "1"
 
 volumes:
   stock_fixture:

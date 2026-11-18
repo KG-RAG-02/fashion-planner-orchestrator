@@ -7,17 +7,17 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-# In-repo host-mode manifest (vendored by the integrator); VOGUE_SERVICE_MANIFEST overrides it.
+# In-repo host-mode manifest (vendored by the integrator); FASHION_PLANNER_SERVICE_MANIFEST overrides it.
 DEFAULT_MANIFEST = ROOT / 'deploy/service-manifest.json'
 
 
 def venv_root():
-    """Shared venvs live outside iCloud: ${VOGUE_VENV_ROOT:-~/.cache/vogue-venvs}/<service>."""
-    return Path((os.environ.get('VOGUE_VENV_ROOT') or '').strip() or '~/.cache/vogue-venvs').expanduser()
+    """Shared venvs live outside iCloud: ${FASHION_PLANNER_VENV_ROOT:-~/.cache/vogue-venvs}/<service>."""
+    return Path((os.environ.get('FASHION_PLANNER_VENV_ROOT') or '').strip() or '~/.cache/vogue-venvs').expanduser()
 
 
 def _python(name, repo, version):
-    key = 'VOGUE_PYTHON_' + name.upper().replace('-', '_')
+    key = 'FASHION_PLANNER_PYTHON_' + name.upper().replace('-', '_')
     explicit = os.environ.get(key)
     candidates = [Path(explicit)] if explicit else [repo / '.venv/bin/python', venv_root() / name / 'bin/python', Path(sys.executable)]
     found = shutil.which('python' + version)
@@ -37,11 +37,11 @@ def _python(name, repo, version):
 
 def services(manifest_path=None, *, require_runtime=True):
     """Return the manifest's services; [] (unconfigured) when the default manifest is absent."""
-    configured = manifest_path or (os.environ.get('VOGUE_SERVICE_MANIFEST') or '').strip()
+    configured = manifest_path or (os.environ.get('FASHION_PLANNER_SERVICE_MANIFEST') or '').strip()
     path = Path(configured).expanduser() if configured else DEFAULT_MANIFEST
     if not path.is_file():
         if configured:
-            raise RuntimeError('The configured service manifest was not found; check VOGUE_SERVICE_MANIFEST.')
+            raise RuntimeError('The configured service manifest was not found; check FASHION_PLANNER_SERVICE_MANIFEST.')
         return []
     value = json.loads(path.read_text(encoding='utf-8'))
     entries = value.get('services')
@@ -67,12 +67,12 @@ def services(manifest_path=None, *, require_runtime=True):
         args = ['127.0.0.1' if x == '0.0.0.0' else x for x in args]
         python = _python(name, repo, entry['python']) if require_runtime else None
         if require_runtime and python is None:
-            raise RuntimeError('Python ' + entry['python'] + ' required for ' + name + '; set VOGUE_PYTHON_' + name.upper().replace('-','_'))
+            raise RuntimeError('Python ' + entry['python'] + ' required for ' + name + '; set FASHION_PLANNER_PYTHON_' + name.upper().replace('-','_'))
         env = {'PYTHONDONTWRITEBYTECODE':'1'}
         if name == 'orchestrator':
-            env.update(VOGUE_ORCHESTRATOR_HOST='127.0.0.1', VOGUE_ORCHESTRATOR_PORT=str(port))
+            env.update(ORCHESTRATOR_HOST='127.0.0.1', ORCHESTRATOR_PORT=str(port))
         elif name == 'new-product':
-            env.update(VOGUE_HTTP_MODE='local', VOGUE_HOST='127.0.0.1', VOGUE_PORT=str(port))
+            env.update(NOVELTY_HTTP_MODE='local', NOVELTY_HOST='127.0.0.1', NOVELTY_PORT=str(port))
         elif name == 'trend':
             env.update(TREND_API_HOST='127.0.0.1', TREND_API_PORT=str(port))
         health = entry['health']['path']

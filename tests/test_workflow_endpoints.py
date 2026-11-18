@@ -27,7 +27,7 @@ class EndpointTestBase(LiveServerMixin):
         self.store = WorkflowStore(self.store_dir)
 
     def call(self, method, path, body=None, **kwargs):
-        with environment(VOGUE_WORKFLOW_STORE_DIR=str(self.store_dir)):
+        with environment(ORCHESTRATOR_WORKFLOW_STORE_DIR=str(self.store_dir)):
             return self.request(method, path, body, **kwargs)[:2]
 
     def run_record(self, rid, text, *, final='ok'):
@@ -202,12 +202,12 @@ class SystemStatusTests(EndpointTestBase, unittest.TestCase):
         refused.bind(('127.0.0.1', 0))
         closed_port = refused.getsockname()[1]
         refused.close()
-        env = dict(VOGUE_WORKFLOW_STORE_DIR=str(self.store_dir), VOGUE_AGENT_HTTP_DEV_MODE='1', VOGUE_AGENT_SERVICE_BEARER_TOKEN=TOKEN,
-                   VOGUE_TREND_AGENT_URL='http://127.0.0.1:%d' % trend, VOGUE_STOCK_AGENT_URL='http://127.0.0.1:%d' % stock,
-                   VOGUE_NEW_PRODUCT_AGENT_URL='http://127.0.0.1:%d' % new_product,
-                   VOGUE_SALES_MARKET_AGENT_URL='http://127.0.0.1:%d' % closed_port,
-                   VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_WORKFLOW_IMAGES_ENABLED='1', VOGUE_WORKFLOW_IMAGE_PROVIDER='fixture',
-                   VOGUE_QUERY_STRUCTURING_MODE='synthetic_fixture', OPENAI_API_KEY='dummy-openai-key')
+        env = dict(ORCHESTRATOR_WORKFLOW_STORE_DIR=str(self.store_dir), FASHION_PLANNER_HTTP_DEV_MODE='1', FASHION_PLANNER_SERVICE_TOKEN=TOKEN,
+                   ORCHESTRATOR_TREND_URL='http://127.0.0.1:%d' % trend, ORCHESTRATOR_INVENTORY_URL='http://127.0.0.1:%d' % stock,
+                   ORCHESTRATOR_NOVELTY_URL='http://127.0.0.1:%d' % new_product,
+                   ORCHESTRATOR_RESEARCH_URL='http://127.0.0.1:%d' % closed_port,
+                   ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED='1', ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED='1', ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER='fixture',
+                   ORCHESTRATOR_QUERY_STRUCTURING_MODE='synthetic_fixture', OPENAI_API_KEY='dummy-openai-key')
         with environment(**env):
             status, body, _ = self.request('GET', '/api/system/status')
         self.assertEqual(status, 200)
@@ -232,9 +232,9 @@ class SystemStatusTests(EndpointTestBase, unittest.TestCase):
         silent.bind(('127.0.0.1', 0))
         silent.listen(1)
         self.addCleanup(silent.close)
-        env = dict(VOGUE_WORKFLOW_STORE_DIR=str(self.store_dir), VOGUE_TREND_AGENT_URL='http://trend:8768',
-                   VOGUE_STOCK_AGENT_URL='http://127.0.0.1:%d' % silent.getsockname()[1], VOGUE_AGENT_HTTP_DEV_MODE='1',
-                   VOGUE_ORCHESTRATOR_RUNTIME='container')
+        env = dict(ORCHESTRATOR_WORKFLOW_STORE_DIR=str(self.store_dir), ORCHESTRATOR_TREND_URL='http://trend:8768',
+                   ORCHESTRATOR_INVENTORY_URL='http://127.0.0.1:%d' % silent.getsockname()[1], FASHION_PLANNER_HTTP_DEV_MODE='1',
+                   ORCHESTRATOR_RUNTIME='container')
         with environment(**env), patch('fashion_planner_orchestrator.system_status.PROBE_TIMEOUT_SECONDS', 0.3):
             status, body, _ = self.request('GET', '/api/system/status')
         self.assertEqual(status, 200)

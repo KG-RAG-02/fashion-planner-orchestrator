@@ -400,7 +400,7 @@ class WorkflowStore:
 
 
 class PeerArtifactReader:
-    """Resolve peer artifacts (artifact://research/...) under a read-only root (VOGUE_PEER_ARTIFACT_ROOT).
+    """Resolve peer artifacts (artifact://research/...) under a read-only root (ORCHESTRATOR_PEER_ARTIFACT_ROOT).
 
     artifact://<namespace>/<path> maps to <root>/<namespace>/<path>. Every component below the root
     is opened with O_NOFOLLOW relative to its parent, so escapes and symlinks are refused; the file

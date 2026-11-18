@@ -10,8 +10,8 @@ from fashion_planner_orchestrator.server import serve
 class ServerConfigurationTests(unittest.TestCase):
     def test_remote_bind_requires_explicit_opt_in(self):
         with patch.dict(os.environ, {
-            "VOGUE_ORCHESTRATOR_HOST": "0.0.0.0",
-            "VOGUE_ORCHESTRATOR_PORT": "8765",
+            "ORCHESTRATOR_HOST": "0.0.0.0",
+            "ORCHESTRATOR_PORT": "8765",
         }, clear=True):
             with self.assertRaisesRegex(ValueError, "ALLOW_REMOTE_BIND"):
                 serve()
@@ -20,9 +20,9 @@ class ServerConfigurationTests(unittest.TestCase):
         fake_server = unittest.mock.Mock()
         fake_server.serve_forever.side_effect = KeyboardInterrupt
         with patch.dict(os.environ, {
-            "VOGUE_ORCHESTRATOR_HOST": "0.0.0.0",
-            "VOGUE_ORCHESTRATOR_PORT": "9876",
-            "VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND": "1",
+            "ORCHESTRATOR_HOST": "0.0.0.0",
+            "ORCHESTRATOR_PORT": "9876",
+            "ORCHESTRATOR_ALLOW_REMOTE_BIND": "1",
         }, clear=True):
             with patch("fashion_planner_orchestrator.server.ThreadingHTTPServer", return_value=fake_server) as server_factory:
                 with contextlib.redirect_stdout(io.StringIO()):

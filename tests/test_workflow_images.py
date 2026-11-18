@@ -12,15 +12,15 @@ HAVE_WORKFLOW_EXTRA = bool(importlib.util.find_spec('jsonschema') and importlib.
 LINEAGE = dict(draft_identity={'draft_id': 'd', 'revision': 1, 'content_sha256': 'a' * 64}, draft_response_sha256='b' * 64,
                review_identity={'review_id': 'r', 'revision': 1, 'content_sha256': 'c' * 64}, review_response_sha256='d' * 64,
                integration_input_sha256='e' * 64)
-AGENTS = {k: 'http://127.0.0.1:9' for k in ('VOGUE_TREND_AGENT_URL', 'VOGUE_STOCK_AGENT_URL',
-                                            'VOGUE_NEW_PRODUCT_AGENT_URL', 'VOGUE_SALES_MARKET_AGENT_URL')}
+AGENTS = {k: 'http://127.0.0.1:9' for k in ('ORCHESTRATOR_TREND_URL', 'ORCHESTRATOR_INVENTORY_URL',
+                                            'ORCHESTRATOR_NOVELTY_URL', 'ORCHESTRATOR_RESEARCH_URL')}
 
 
 @unittest.skipUnless(HAVE_WORKFLOW_EXTRA, 'workflow extra (jsonschema, Pillow) required')
 class FixtureImageProviderTests(unittest.TestCase):
     def test_fixture_png_is_deterministic_valid_and_offline(self):
         from PIL import Image
-        with environment(VOGUE_WORKFLOW_IMAGES_ENABLED='1'), \
+        with environment(ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED='1'), \
                 patch('socket.socket.connect', side_effect=AssertionError('no network')):
             first, mime = workflow_http.fixture_image({'request_id': 'r-1', 'lineage': LINEAGE})
             again, _ = workflow_http.fixture_image({'request_id': 'r-1', 'lineage': LINEAGE})
@@ -36,17 +36,17 @@ class FixtureImageProviderTests(unittest.TestCase):
             workflow_http.fixture_image({'lineage': LINEAGE})
 
     def test_build_workflow_selects_the_provider(self):
-        base = dict(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1',
-                    VOGUE_AGENT_SERVICE_BEARER_TOKEN='synthetic-test-token', **AGENTS)
+        base = dict(ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED='1', FASHION_PLANNER_HTTP_DEV_MODE='1',
+                    FASHION_PLANNER_SERVICE_TOKEN='synthetic-test-token', **AGENTS)
         store_dir = str(real_tempdir(self) / 'store')
-        cases = [({}, None, False), ({'VOGUE_WORKFLOW_IMAGE_PROVIDER': 'fixture'}, None, False),
-                 ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1', 'VOGUE_WORKFLOW_IMAGE_PROVIDER': 'fixture'}, 'fixture_image', True),
-                 ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1', 'VOGUE_WORKFLOW_IMAGE_PROVIDER': 'FIXTURE'}, 'fixture_image', True),
+        cases = [({}, None, False), ({'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER': 'fixture'}, None, False),
+                 ({'ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED': '1', 'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER': 'fixture'}, 'fixture_image', True),
+                 ({'ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED': '1', 'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER': 'FIXTURE'}, 'fixture_image', True),
                  # 0.2.0: the default stage 06 provider composes the planning sheet; a key never selects an image model.
-                 ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}, 'planning_sheet_image', False),
-                 ({'VOGUE_WORKFLOW_IMAGES_ENABLED': '1', 'OPENAI_API_KEY': 'dummy-not-a-key'}, 'planning_sheet_image', False)]
+                 ({'ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED': '1'}, 'planning_sheet_image', False),
+                 ({'ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED': '1', 'OPENAI_API_KEY': 'dummy-not-a-key'}, 'planning_sheet_image', False)]
         for extra, expected, labelled in cases:
-            with self.subTest(extra=extra), environment(VOGUE_WORKFLOW_STORE_DIR=store_dir, **base, **extra):
+            with self.subTest(extra=extra), environment(ORCHESTRATOR_WORKFLOW_STORE_DIR=store_dir, **base, **extra):
                 workflow = workflow_http.build_workflow()
                 self.assertEqual(getattr(workflow.image, '__name__', None), expected)
                 self.assertEqual(workflow_http.FIXTURE_IMAGE_LIMITATION in workflow.limitations, labelled)
@@ -58,9 +58,9 @@ class FixtureImageProviderTests(unittest.TestCase):
             with self.subTest(provider=provider):
                 handler = Mock()
                 request = dict(contract_version='fashion-planner-workflow', request_id='r-1', input=dict(user_input=dict(text='t', images=[])))
-                with environment(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1', VOGUE_WORKFLOW_IMAGES_ENABLED='1',
-                                 VOGUE_WORKFLOW_IMAGE_PROVIDER=provider, VOGUE_WORKFLOW_STORE_DIR=str(real_tempdir(self)),
-                                 VOGUE_AGENT_SERVICE_BEARER_TOKEN='synthetic-test-token', **AGENTS):
+                with environment(ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED='1', FASHION_PLANNER_HTTP_DEV_MODE='1', ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED='1',
+                                 ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=provider, ORCHESTRATOR_WORKFLOW_STORE_DIR=str(real_tempdir(self)),
+                                 FASHION_PLANNER_SERVICE_TOKEN='synthetic-test-token', **AGENTS):
                     workflow_http.dispatch(handler, request)
                 status, body = handler._json.call_args.args
                 self.assertEqual((status, body['error']['code']), (409, 'IMAGE_PROVIDER_INVALID'))
@@ -78,7 +78,7 @@ class ImageRetrySwitchTests(LiveServerMixin, unittest.TestCase):
         with patch.object(workflow_http, 'build_workflow', side_effect=AssertionError('no work')):
             for value in (None, '0', 'false'):
                 with self.subTest(value=value):
-                    env = {} if value is None else {'VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED': value}
+                    env = {} if value is None else {'ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED': value}
                     status, body, _ = self.retry(**env)
                     self.assertEqual((status, body['error']['code'], body['error']['retryable']), (409, 'IMAGE_RETRY_DISABLED', False))
 
@@ -86,7 +86,7 @@ class ImageRetrySwitchTests(LiveServerMixin, unittest.TestCase):
         fake = Mock()
         fake.retry_image.return_value = {'http_status': 200, 'envelope': {'status': 'partial'}}
         with patch.object(workflow_http, 'build_workflow', return_value=fake), \
-                environment(VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED='1'):
+                environment(ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED='1'):
             status, body, _ = self.request('POST', '/v1/orchestrations/image-retries', {'request_id': 'r-1', 'retry_key': 'k-1'})
             wrong = self.request('POST', '/v1/orchestrations/image-retries',
                                  {'contract_version': 'old-workflow', 'request_id': 'r-1', 'retry_key': 'k-2'})

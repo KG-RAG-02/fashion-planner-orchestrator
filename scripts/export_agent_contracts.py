@@ -24,8 +24,8 @@ Usage
   py scripts/export_agent_contracts.py            # write copy/pydantic snapshots (pinned/authored untouched)
   py scripts/export_agent_contracts.py --check    # exit 1 if a snapshot or a workflow contract copy is out of date
 
-Sibling roots default to ../<repo-name>; override with VOGUE_<NAME>_ROOT (TREND, STOCK, SALES_MARKET,
-NEW_PRODUCT). The trend Python defaults to <trend root>/.venv; override with VOGUE_TREND_PYTHON.
+Sibling roots default to ../<repo-name>; override with FASHION_PLANNER_<NAME>_ROOT (TREND, INVENTORY,
+NOVELTY, RESEARCH). The trend Python defaults to <trend root>/.venv; override with FASHION_PLANNER_TREND_PYTHON.
 Standard library only.
 """
 
@@ -52,10 +52,10 @@ AUTHORED_NOTE = ("소유 레포에 JSON Schema가 없어 코드를 읽고 이 �
 
 SELF = "orchestrator"  # this repository: its entries read files under ROOT, not a sibling checkout
 REPOS = {
-    "trend": ("VOGUE_TREND_ROOT", "fashion-planner-trend"),
-    "inventory": ("VOGUE_STOCK_ROOT", "fashion-planner-inventory"),
-    "research": ("VOGUE_SALES_MARKET_ROOT", "fashion-planner-research"),
-    "novelty": ("VOGUE_NEW_PRODUCT_ROOT", "fashion-planner-novelty"),
+    "trend": ("FASHION_PLANNER_TREND_ROOT", "fashion-planner-trend"),
+    "inventory": ("FASHION_PLANNER_INVENTORY_ROOT", "fashion-planner-inventory"),
+    "research": ("FASHION_PLANNER_RESEARCH_ROOT", "fashion-planner-research"),
+    "novelty": ("FASHION_PLANNER_NOVELTY_ROOT", "fashion-planner-novelty"),
 }
 
 
@@ -193,13 +193,13 @@ def sha256_normalized(path: Path) -> str:
 
 
 def trend_python(root: Path) -> str:
-    override = os.environ.get("VOGUE_TREND_PYTHON")
+    override = os.environ.get("FASHION_PLANNER_TREND_PYTHON")
     if override:
         return override
     for candidate in (root / ".venv" / "Scripts" / "python.exe", root / ".venv" / "bin" / "python"):
         if candidate.exists():
             return str(candidate)
-    raise SystemExit(f"trend Python not found under {root / '.venv'}; set VOGUE_TREND_PYTHON")
+    raise SystemExit(f"trend Python not found under {root / '.venv'}; set FASHION_PLANNER_TREND_PYTHON")
 
 
 def pydantic_schema(agent_root: Path, spec: str) -> dict[str, Any]:

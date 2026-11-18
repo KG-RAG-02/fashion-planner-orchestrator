@@ -34,7 +34,7 @@ class BoundaryTests(unittest.TestCase):
                    'input': {'user_input': {'text': 'test', 'images': []}}}
         handler = self.handler(request)
         with patch.dict(os.environ), patch('fashion_planner_orchestrator.server.structure_query_for_ui') as structurer:
-            for key in ('VOGUE_WORKFLOW_ALLOW_PROPOSED', 'VOGUE_WORKFLOW_CONTRACT_BASELINE'):
+            for key in ('ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED', 'ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE'):
                 os.environ.pop(key, None)
             dispatch(handler, request)
         self.assertEqual(handler._json.call_args.args[0], 409)
@@ -91,7 +91,7 @@ class BoundaryTests(unittest.TestCase):
         if missing:
             self.skipTest('sibling checkouts not present: ' + ', '.join(missing))
         with patch.dict(os.environ):
-            os.environ.pop('VOGUE_SERVICE_MANIFEST', None)
+            os.environ.pop('FASHION_PLANNER_SERVICE_MANIFEST', None)
             entries = services(require_runtime=False)
         self.assertEqual(next(entry for entry in entries if entry['name'] == 'stock')['port'], 8002)
         self.assertTrue(all('0.0.0.0' not in entry['args'] for entry in entries))

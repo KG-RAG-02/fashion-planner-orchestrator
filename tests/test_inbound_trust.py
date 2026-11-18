@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from fashion_planner_orchestrator.server import OrchestratorHandler, _request_is_trusted_local, runtime_mode, serve
 
-TRUST_KEYS = ('VOGUE_ORCHESTRATOR_RUNTIME', 'VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS', 'VOGUE_ORCHESTRATOR_ALLOWED_HOSTS')
+TRUST_KEYS = ('ORCHESTRATOR_RUNTIME', 'ORCHESTRATOR_TRUSTED_PEER_CIDRS', 'ORCHESTRATOR_ALLOWED_HOSTS')
 
 
 @contextlib.contextmanager
@@ -57,24 +57,24 @@ class TrustedLocalTests(unittest.TestCase):
         good = dict(Host='127.0.0.1:18799', Origin='http://127.0.0.1:18799')
         with environment():
             self.assertFalse(_request_is_trusted_local(handler('172.30.231.1', **good)))
-        with environment(VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS='172.30.231.0/28',
-                         VOGUE_ORCHESTRATOR_ALLOWED_HOSTS='127.0.0.1:18799, localhost:18799'):
+        with environment(ORCHESTRATOR_TRUSTED_PEER_CIDRS='172.30.231.0/28',
+                         ORCHESTRATOR_ALLOWED_HOSTS='127.0.0.1:18799, localhost:18799'):
             self.assertTrue(_request_is_trusted_local(handler('172.30.231.1', **good)))
             self.assertTrue(_request_is_trusted_local(handler('172.30.231.14', Host='localhost:18799')))
             self.assertFalse(_request_is_trusted_local(handler('172.30.231.17', **good)))  # outside the /28
             self.assertFalse(_request_is_trusted_local(handler('172.30.231.1', Host='127.0.0.1:8765')))
             self.assertFalse(_request_is_trusted_local(handler('127.0.0.1', Host='127.0.0.1:8765')))
-        with environment(VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS='172.30.231.0/28,not-a-cidr',
-                         VOGUE_ORCHESTRATOR_ALLOWED_HOSTS='127.0.0.1:18799'):
+        with environment(ORCHESTRATOR_TRUSTED_PEER_CIDRS='172.30.231.0/28,not-a-cidr',
+                         ORCHESTRATOR_ALLOWED_HOSTS='127.0.0.1:18799'):
             self.assertFalse(_request_is_trusted_local(handler('172.30.231.1', **good)))  # invalid list: loopback only
             self.assertTrue(_request_is_trusted_local(handler('127.0.0.1', **good)))
 
     def test_runtime_mode_and_startup_validation(self):
         self.assertEqual(runtime_mode({}), 'host')
-        self.assertEqual(runtime_mode({'VOGUE_ORCHESTRATOR_RUNTIME': 'host'}), 'host')
-        self.assertEqual(runtime_mode({'VOGUE_ORCHESTRATOR_RUNTIME': 'container'}), 'container')
-        self.assertEqual(runtime_mode({'VOGUE_ORCHESTRATOR_RUNTIME': 'contianer'}), 'container')  # fails closed
-        with environment(VOGUE_ORCHESTRATOR_RUNTIME='docker'), self.assertRaisesRegex(ValueError, 'RUNTIME'):
+        self.assertEqual(runtime_mode({'ORCHESTRATOR_RUNTIME': 'host'}), 'host')
+        self.assertEqual(runtime_mode({'ORCHESTRATOR_RUNTIME': 'container'}), 'container')
+        self.assertEqual(runtime_mode({'ORCHESTRATOR_RUNTIME': 'contianer'}), 'container')  # fails closed
+        with environment(ORCHESTRATOR_RUNTIME='docker'), self.assertRaisesRegex(ValueError, 'RUNTIME'):
             serve()
 
 
@@ -117,7 +117,7 @@ class LiveServerTests(unittest.TestCase):
 
     def test_container_mode_gates_api_routes_but_keeps_health_and_static_files(self):
         evil = {'Host': 'evil.example:%d' % self.port}
-        with environment(VOGUE_ORCHESTRATOR_RUNTIME='container'):
+        with environment(ORCHESTRATOR_RUNTIME='container'):
             self.assertEqual(self.request('GET', '/api/health', **evil),
                              (200, {'status': 'ok', 'mode': 'workflow'}))
             self.assertEqual(self.request('GET', '/', **evil)[0], 200)

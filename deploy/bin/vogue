@@ -14,10 +14,10 @@
 set -euo pipefail
 
 DEPLOY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${VOGUE_ENV_FILE:-$HOME/.config/vogue/vogue.env}"
-PY="${VOGUE_PYTHON:-python3}"
-EVIDENCE_DIR="${VOGUE_EVIDENCE_DIR:-$HOME/VOGUE-archive/e2e}"
-LIVE_GUARD="${VOGUE_LIVE_GUARD:-$HOME/.config/vogue/live-run.done}"
+ENV_FILE="${FASHION_PLANNER_ENV_FILE:-$HOME/.config/vogue/vogue.env}"
+PY="${FASHION_PLANNER_PYTHON:-python3}"
+EVIDENCE_DIR="${FASHION_PLANNER_EVIDENCE_DIR:-$HOME/VOGUE-archive/e2e}"
+LIVE_GUARD="${FASHION_PLANNER_LIVE_GUARD:-$HOME/.config/vogue/live-run.done}"
 STUB_QUERY="2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하고 싶어"
 
 die() { echo "vogue: $*" >&2; exit 1; }
@@ -38,13 +38,13 @@ compose() {
   local args=(-p "$PROJECT" --project-directory "$DEPLOY" --env-file "$ENV_FILE")
   local file
   for file in "${FILES[@]}"; do args+=(-f "$DEPLOY/$file"); done
-  VOGUE_UI_PORT="$PORT" VOGUE_RUN_LABEL="$LABEL" docker compose "${args[@]}" "$@"
+  FASHION_PLANNER_UI_PORT="$PORT" FASHION_PLANNER_RUN_LABEL="$LABEL" docker compose "${args[@]}" "$@"
 }
 
 wait_ready() {
   local profile="$1"
   profile_settings "$profile"
-  local deadline=$(( $(date +%s) + ${VOGUE_WAIT_SECONDS:-900} ))
+  local deadline=$(( $(date +%s) + ${FASHION_PLANNER_WAIT_SECONDS:-900} ))
   echo "waiting for http://127.0.0.1:$PORT/api/health (all agents must be healthy first)…"
   while :; do
     if curl -fsS -o /dev/null --max-time 3 "http://127.0.0.1:$PORT/api/health"; then
@@ -104,7 +104,7 @@ case "$cmd" in
     probe rehearsal
     mkdir -p "$EVIDENCE_DIR"
     "$PY" "$DEPLOY/e2e/run_e2e.py" --base "http://127.0.0.1:8765" --profile rehearsal \
-      --trend-query "${VOGUE_REHEARSAL_TREND_QUERY:-$DEPLOY/e2e/queries/rehearsal-trend-query.json}" \
+      --trend-query "${FASHION_PLANNER_REHEARSAL_TREND_QUERY:-$DEPLOY/e2e/queries/rehearsal-trend-query.json}" \
       --out "$EVIDENCE_DIR/rehearsal-$(stamp).json" "$@" ;;
   live)
     query="${1:?usage: vogue live \"<planning brief>\"}"; shift
@@ -132,18 +132,18 @@ case "$cmd" in
     [ "$profile" = live ] && die "image-retry needs no paid profile: use rehearsal (the live run's store is the same volume)."
     [[ "$rid" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$ ]] || die "invalid request id: $rid"
     profile_settings "$profile"
-    VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=1 "$0" up "$profile"
+    ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED=1 "$0" up "$profile"
     mkdir -p "$EVIDENCE_DIR"
     out="$EVIDENCE_DIR/$profile-$rid-image-retry-$(stamp)"
     status=0
     "$PY" "$DEPLOY/e2e/image_retry.py" --base "http://127.0.0.1:$PORT" --request-id "$rid" --out "$out.json" || status=$?
-    VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=0 "$0" up "$profile"
+    ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED=0 "$0" up "$profile"
     exit "$status" ;;
   ps)
     compose "${1:?profile}" ps -a ;;
   logs)
     profile="${1:?profile}"; shift
-    compose "$profile" logs --no-color --tail "${VOGUE_LOG_TAIL:-200}" "$@" ;;
+    compose "$profile" logs --no-color --tail "${FASHION_PLANNER_LOG_TAIL:-200}" "$@" ;;
   down)
     compose "${1:?profile}" down --remove-orphans ;;
   help|-h|--help)

@@ -25,12 +25,12 @@ class ServiceManifestTests(unittest.TestCase):
 
     def test_missing_default_manifest_is_unconfigured_not_a_crash(self):
         with patch.dict(os.environ), patch.object(service_manifest, 'DEFAULT_MANIFEST', self.tmp / 'absent.json'):
-            os.environ.pop('VOGUE_SERVICE_MANIFEST', None)
+            os.environ.pop('FASHION_PLANNER_SERVICE_MANIFEST', None)
             self.assertEqual(services(require_runtime=False), [])
 
     def test_explicitly_configured_missing_manifest_is_an_error(self):
-        with patch.dict(os.environ, {'VOGUE_SERVICE_MANIFEST': str(self.tmp / 'absent.json')}):
-            with self.assertRaisesRegex(RuntimeError, 'VOGUE_SERVICE_MANIFEST'):
+        with patch.dict(os.environ, {'FASHION_PLANNER_SERVICE_MANIFEST': str(self.tmp / 'absent.json')}):
+            with self.assertRaisesRegex(RuntimeError, 'FASHION_PLANNER_SERVICE_MANIFEST'):
                 services(require_runtime=False)
 
     def test_python_candidates_use_the_shared_venv_root(self):
@@ -40,12 +40,12 @@ class ServiceManifestTests(unittest.TestCase):
         fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
         repo = self.tmp / 'repo'
         repo.mkdir()
-        with patch.dict(os.environ, {'VOGUE_VENV_ROOT': str(self.tmp / 'venvs')}):
-            os.environ.pop('VOGUE_PYTHON_ORCHESTRATOR', None)
+        with patch.dict(os.environ, {'FASHION_PLANNER_VENV_ROOT': str(self.tmp / 'venvs')}):
+            os.environ.pop('FASHION_PLANNER_PYTHON_ORCHESTRATOR', None)
             self.assertEqual(_python('orchestrator', repo, '3.99'), fake)
             self.assertEqual(service_manifest.venv_root(), self.tmp / 'venvs')
         with patch.dict(os.environ):
-            os.environ.pop('VOGUE_VENV_ROOT', None)
+            os.environ.pop('FASHION_PLANNER_VENV_ROOT', None)
             self.assertEqual(service_manifest.venv_root(), Path('~/.cache/vogue-venvs').expanduser())
 
 

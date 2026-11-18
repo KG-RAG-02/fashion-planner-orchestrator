@@ -3,7 +3,7 @@
 
 Default target: ~/.config/vogue/vogue.env (outside the iCloud-synced project folder, mode 0600).
 
-* Generates a fresh VOGUE_AGENT_SERVICE_BEARER_TOKEN and NEO4J_STUB_PASSWORD (never reuses old tokens).
+* Generates a fresh FASHION_PLANNER_SERVICE_TOKEN and NEO4J_STUB_PASSWORD (never reuses old tokens).
 * Copies Cloudflare R2 and OpenAI values from the sibling service .env files when they exist
   (new-product-agent/.env, then sales-market-agent/.env) — values are read, never echoed.
 * Leaves NEO4J_URI / NEO4J_USER / NEO4J_PASSWORD empty for the operator to fill (Neo4j Aura).
@@ -28,7 +28,7 @@ SOURCES = (WORKSPACE / "new-product-agent" / ".env", WORKSPACE / "sales-market-a
 # (key, origin, default) — origin: "generate" | "copy:<SOURCE_KEY>" | "blank" | "default"
 LAYOUT = (
     ("# --- every profile -------------------------------------------------------", None, None),
-    ("VOGUE_AGENT_SERVICE_BEARER_TOKEN", "generate", None),
+    ("FASHION_PLANNER_SERVICE_TOKEN", "generate", None),
     ("NEO4J_STUB_PASSWORD", "generate", None),
     ("# --- data profile (rehearsal, live): Cloudflare R2, copied from the service .env files ---", None, None),
     ("R2_ACCOUNT_ID", "copy:R2_ACCOUNT_ID", None),
@@ -37,17 +37,16 @@ LAYOUT = (
     ("R2_SECRET_ACCESS_KEY", "copy:R2_SECRET_ACCESS_KEY", None),
     ("R2_ENDPOINT", "copy:R2_ENDPOINT", None),
     ("R2_DB_KEY", "copy:R2_DB_KEY", None),
-    ("VOGUE_HM_RESEARCH_AGGREGATE_R2_KEY", "copy:VOGUE_HM_RESEARCH_AGGREGATE_R2_KEY", None),
+    ("RESEARCH_AGGREGATE_SNAPSHOT_KEY", "copy:RESEARCH_AGGREGATE_SNAPSHOT_KEY", None),
     ("R2_IMAGE_PREFIX", "copy:R2_IMAGE_PREFIX", None),
     ("# --- data profile: Neo4j Aura for the trend graph (fill these in yourself) ---", None, None),
     ("NEO4J_URI", "blank", None),
     ("NEO4J_USER", "blank", None),
     ("NEO4J_PASSWORD", "blank", None),
     ("# --- paid profile (live only): OpenAI ---", None, None),
-    ("VOGUE_OPENAI_API_KEY", "copy:LLM_API_KEY", None),
-    ("VOGUE_P08_LLM_MODEL", "default", "gpt-4o-mini"),
-    ("VOGUE_STOCK_LLM_MODEL", "default", "gpt-4o-mini"),
-    ("VOGUE_IMAGE_MODEL", "blank", None),
+    ("FASHION_PLANNER_OPENAI_API_KEY", "copy:LLM_API_KEY", None),
+    ("FASHION_PLANNER_ORCHESTRATOR_LLM_MODEL", "default", "gpt-4o-mini"),
+    ("FASHION_PLANNER_NOVELTY_IMAGE_MODEL", "blank", None),
 )
 
 
@@ -70,7 +69,7 @@ def parse_env(path: Path) -> dict[str, str]:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--out", type=Path, default=Path(os.environ.get("VOGUE_ENV_FILE", DEFAULT_TARGET)))
+    parser.add_argument("--out", type=Path, default=Path(os.environ.get("FASHION_PLANNER_ENV_FILE", DEFAULT_TARGET)))
     parser.add_argument("--force", action="store_true", help="regenerate tokens and recopy values (keeps nothing)")
     args = parser.parse_args(argv)
 

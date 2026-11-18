@@ -191,25 +191,25 @@ def baseline_problems(baseline, snapshot, snapshot_sha, file_errors):
 
 
 def baseline_path(env=None, root=CONTRACT_ROOT):
-    """`VOGUE_WORKFLOW_CONTRACT_BASELINE` overrides contracts/workflow/baseline.json (relative = repo root)."""
+    """`ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE` overrides contracts/workflow/baseline.json (relative = repo root)."""
     env = os.environ if env is None else env
-    override = str(env.get('VOGUE_WORKFLOW_CONTRACT_BASELINE') or '').strip()
+    override = str(env.get('ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE') or '').strip()
     if not override:
         return Path(root) / 'baseline.json', 'contracts/workflow/baseline.json'
     path = Path(override).expanduser()
-    return (path if path.is_absolute() else REPO_ROOT / path), 'VOGUE_WORKFLOW_CONTRACT_BASELINE'
+    return (path if path.is_absolute() else REPO_ROOT / path), 'ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE'
 
 
 def contract_gate_status(env=None, root=None):
     """Observe the in-repo contract gate (no network, never reads outside the configured paths).
 
     gate: `open` (frozen, validated, snapshot and files match, no recorded failures),
-    `development` (anything else, with VOGUE_WORKFLOW_ALLOW_PROPOSED) or `closed`.
+    `development` (anything else, with ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED) or `closed`.
     """
     env = os.environ if env is None else env
     root = Path(root) if root else CONTRACT_ROOT
     path, source = baseline_path(env, root)
-    allow = truthy(env.get('VOGUE_WORKFLOW_ALLOW_PROPOSED'))
+    allow = truthy(env.get('ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED'))
     status = dict(source=source, state='unknown', contract_version=None, consistent=False, frozen=False,
                   problems=[], allow_proposed=allow, gate='closed')
     snapshot = None

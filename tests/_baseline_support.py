@@ -3,7 +3,7 @@
 contracts/workflow/baseline.json is written only by scripts/freeze_workflow_contract.py and is
 `frozen` once the contract is accepted. Tests that exercise the closed/development gate must not
 depend on that live state, so they resolve the default baseline to a temporary proposed copy with
-the same snapshot hash and files map. An explicit VOGUE_WORKFLOW_CONTRACT_BASELINE still wins.
+the same snapshot hash and files map. An explicit ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE still wins.
 """
 import copy
 import json

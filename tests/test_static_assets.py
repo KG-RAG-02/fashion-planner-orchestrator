@@ -27,7 +27,7 @@ class StaticAssetTests(LiveServerMixin, unittest.TestCase):
                     '/img/logo.svg': 'image/svg+xml', '/': 'text/html; charset=utf-8'}
         for container in ('', 'container'):
             for path, kind in expected.items():
-                with self.subTest(path=path, runtime=container or 'host'), environment(VOGUE_ORCHESTRATOR_RUNTIME=container):
+                with self.subTest(path=path, runtime=container or 'host'), environment(ORCHESTRATOR_RUNTIME=container):
                     status, _, response = self.request('GET', path, Host='evil.example')  # static files are never gated
                     self.assertEqual((status, response.getheader('Content-Type')), (200, kind))
                     self.assertEqual(response.getheader('X-Content-Type-Options'), 'nosniff')

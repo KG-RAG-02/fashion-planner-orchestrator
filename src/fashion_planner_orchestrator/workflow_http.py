@@ -38,8 +38,8 @@ def _repo_path(value):
 
 
 def store_root(env=None):
-    """VOGUE_WORKFLOW_STORE_DIR (default <repo>/.local/workflow; container /app/.local/workflow)."""
-    value = setting(env, 'VOGUE_WORKFLOW_STORE_DIR')
+    """ORCHESTRATOR_WORKFLOW_STORE_DIR (default <repo>/.local/workflow; container /app/.local/workflow)."""
+    value = setting(env, 'ORCHESTRATOR_WORKFLOW_STORE_DIR')
     return _repo_path(value) if value else ROOT / '.local/workflow'
 
 
@@ -48,15 +48,15 @@ def store():
 
 
 def peer_artifact_reader(env=None):
-    """PeerArtifactReader rooted at VOGUE_PEER_ARTIFACT_ROOT (p07 reviews, p06 visuals), or None when unset."""
-    value = setting(env, 'VOGUE_PEER_ARTIFACT_ROOT')
+    """PeerArtifactReader rooted at ORCHESTRATOR_PEER_ARTIFACT_ROOT (p07 reviews, p06 visuals), or None when unset."""
+    value = setting(env, 'ORCHESTRATOR_PEER_ARTIFACT_ROOT')
     return PeerArtifactReader(_repo_path(value), namespaces=PEER_NAMESPACES) if value else None
 
 
 def ensure_live_contract(contract=None, env=None):
     """Return the run limitations the contract gate requires, or raise 409 CONTRACT_NOT_FROZEN.
 
-    Reads only contracts/workflow (or VOGUE_WORKFLOW_CONTRACT_BASELINE); see conventions section 9.
+    Reads only contracts/workflow (or ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE); see conventions section 9.
     """
     status = contract_gate_status(env, getattr(contract, 'root', None))
     if status['gate'] == 'open':
@@ -99,9 +99,9 @@ def post_wire(url, payload, token=None, *, connect_timeout=WORKFLOW_CONNECT_TIME
 # (outfit) images are P06's Draft visuals; stage 06 composes the planning sheet (기획안 사진) from the run.
 IMAGE_PROVIDERS = ('planning_sheet', 'fixture')
 FIXTURE_IMAGE_LIMITATION = ('Final image comes from the deterministic local fixture provider '
-                            '(VOGUE_WORKFLOW_IMAGE_PROVIDER=fixture): a placeholder, not a generated concept.')
+                            '(ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=fixture): a placeholder, not a generated concept.')
 PLANNING_SHEET_LIMITATION = ('The final image (stage 06) is the planning sheet composed by P08 from this run '
-                             '(VOGUE_WORKFLOW_IMAGE_PROVIDER=planning_sheet); P08 calls no image model. '
+                             '(ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=planning_sheet); P08 calls no image model. '
                              'The product and outfit images are P06 Draft visuals.')
 # P06 makes two images inside the Draft call when draft_with_visuals is requested; its reads may take minutes.
 DRAFT_WITH_VISUALS_READ_TIMEOUT_SECONDS = 600.0
@@ -113,23 +113,23 @@ def setting(env, name):
 
 
 def images_enabled(env=None):
-    return (os.environ if env is None else env).get('VOGUE_WORKFLOW_IMAGES_ENABLED') == '1'
+    return (os.environ if env is None else env).get('ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED') == '1'
 
 
 def image_provider_name(env=None):
-    """VOGUE_WORKFLOW_IMAGE_PROVIDER: planning_sheet (default) or fixture; anything else (openai included) is None."""
-    value = setting(env, 'VOGUE_WORKFLOW_IMAGE_PROVIDER').lower() or 'planning_sheet'
+    """ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER: planning_sheet (default) or fixture; anything else (openai included) is None."""
+    value = setting(env, 'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER').lower() or 'planning_sheet'
     return value if value in IMAGE_PROVIDERS else None
 
 
 def draft_mode(env=None):
-    """VOGUE_WORKFLOW_DRAFT_MODE: draft_with_visuals (default) or draft_only; anything else is None (invalid)."""
-    value = setting(env, 'VOGUE_WORKFLOW_DRAFT_MODE').lower() or 'draft_with_visuals'
+    """ORCHESTRATOR_WORKFLOW_DRAFT_MODE: draft_with_visuals (default) or draft_only; anything else is None (invalid)."""
+    value = setting(env, 'ORCHESTRATOR_WORKFLOW_DRAFT_MODE').lower() or 'draft_with_visuals'
     return value if value in DRAFT_MODES else None
 
 
 def image_retry_enabled(env=None):
-    return truthy((os.environ if env is None else env).get('VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED'))
+    return truthy((os.environ if env is None else env).get('ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED'))
 
 
 def fixture_image(payload):
@@ -176,24 +176,24 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
     env = os.environ
     if artifact_reader is _FROM_ENV:
         artifact_reader = peer_artifact_reader(env)
-    token = setting(env, 'VOGUE_AGENT_SERVICE_BEARER_TOKEN') or None
+    token = setting(env, 'FASHION_PLANNER_SERVICE_TOKEN') or None
     if not token:
-        raise ConnectorConfigurationError('VOGUE_AGENT_SERVICE_BEARER_TOKEN is required by P07 /reviews.')
-    specs = [('trend','VOGUE_TREND_AGENT_URL','trend/runs'),
-             ('stock','VOGUE_STOCK_AGENT_URL','inventory/runs'),
-             ('draft','VOGUE_NEW_PRODUCT_AGENT_URL','novelty/runs'),
-             ('review','VOGUE_SALES_MARKET_AGENT_URL','research/reviews')]
-    connect_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS', WORKFLOW_CONNECT_TIMEOUT_SECONDS)
-    read_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS', WORKFLOW_READ_TIMEOUT_SECONDS)
+        raise ConnectorConfigurationError('FASHION_PLANNER_SERVICE_TOKEN is required by P07 /reviews.')
+    specs = [('trend','ORCHESTRATOR_TREND_URL','trend/runs'),
+             ('stock','ORCHESTRATOR_INVENTORY_URL','inventory/runs'),
+             ('draft','ORCHESTRATOR_NOVELTY_URL','novelty/runs'),
+             ('review','ORCHESTRATOR_RESEARCH_URL','research/reviews')]
+    connect_timeout = timeout_seconds(env, 'ORCHESTRATOR_WORKFLOW_CONNECT_TIMEOUT_SECONDS', WORKFLOW_CONNECT_TIMEOUT_SECONDS)
+    read_timeout = timeout_seconds(env, 'ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS', WORKFLOW_READ_TIMEOUT_SECONDS)
     mode = draft_mode(env)
     if mode is None:
-        raise WorkflowUnavailable('DRAFT_MODE_INVALID', 409, 'VOGUE_WORKFLOW_DRAFT_MODE must be draft_with_visuals or draft_only.')
+        raise WorkflowUnavailable('DRAFT_MODE_INVALID', 409, 'ORCHESTRATOR_WORKFLOW_DRAFT_MODE must be draft_with_visuals or draft_only.')
     # P06 generates its two images inside the Draft call, so that one read may take minutes.
-    draft_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS',
+    draft_timeout = timeout_seconds(env, 'ORCHESTRATOR_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS',
                                     max(read_timeout, DRAFT_WITH_VISUALS_READ_TIMEOUT_SECONDS) if mode == 'draft_with_visuals' else read_timeout)
     # Stock works through the trends one after another (about 10 s each with its LLM agent). Keep this read
-    # above the stock agent's own deadline (STOCK_HANDOFF_TIMEOUT_SECONDS) so its TIMEOUT envelope arrives first.
-    stock_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS', read_timeout)
+    # above the stock agent's own deadline (INVENTORY_HANDOFF_TIMEOUT_SECONDS) so its TIMEOUT envelope arrives first.
+    stock_timeout = timeout_seconds(env, 'ORCHESTRATOR_WORKFLOW_INVENTORY_READ_TIMEOUT_SECONDS', read_timeout)
     stage_timeouts = {'draft': draft_timeout, 'stock': stock_timeout}
     adapters = {}
     for key, variable, route in specs:
@@ -208,7 +208,7 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
         provider = image_provider_name(env)
         if provider is None:
             raise WorkflowUnavailable('IMAGE_PROVIDER_INVALID', 409,
-                                      'VOGUE_WORKFLOW_IMAGE_PROVIDER must be planning_sheet or fixture (P08 calls no image model).')
+                                      'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER must be planning_sheet or fixture (P08 calls no image model).')
         if provider == 'fixture':
             image = fixture_image
             limitations = [*limitations, FIXTURE_IMAGE_LIMITATION]
@@ -449,7 +449,7 @@ def _upload_image(handler):
 
 def _retry_image(handler):
     if not image_retry_enabled():
-        problem(handler, 409, 'IMAGE_RETRY_DISABLED', 'Image retries are disabled (VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED).')
+        problem(handler, 409, 'IMAGE_RETRY_DISABLED', 'Image retries are disabled (ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED).')
         return
     value = _read_json(handler, 8388608)
     if value is _INVALID:
@@ -634,10 +634,10 @@ ROUTE_HANDLERS = {
 
 def readiness():
     """Configuration observations only. Never equate env presence to live readiness."""
-    urls = ['VOGUE_TREND_AGENT_URL','VOGUE_STOCK_AGENT_URL','VOGUE_NEW_PRODUCT_AGENT_URL','VOGUE_SALES_MARKET_AGENT_URL']
+    urls = ['ORCHESTRATOR_TREND_URL','ORCHESTRATOR_INVENTORY_URL','ORCHESTRATOR_NOVELTY_URL','ORCHESTRATOR_RESEARCH_URL']
     gate = contract_gate_status()
     return dict(configured=all(bool(os.environ.get(key)) for key in urls), ready=False,
                 endpoint_health='not_checked', authentication='not_verified', schema_compatibility='not_verified',
                 data_verified=False, end_to_end=False, baseline_state=gate['state'], contract_gate=gate['gate'],
-                service_token_configured=bool(os.environ.get('VOGUE_AGENT_SERVICE_BEARER_TOKEN')),
+                service_token_configured=bool(os.environ.get('FASHION_PLANNER_SERVICE_TOKEN')),
                 description='Trend → Stock → P06 Draft-only → P07 full Draft Review → P08 final image; MD pending.')

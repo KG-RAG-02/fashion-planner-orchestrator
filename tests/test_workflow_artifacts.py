@@ -122,9 +122,9 @@ class ContentAddressedStoreTests(unittest.TestCase):
 
     def test_store_root_follows_the_environment(self):
         self.assertEqual(workflow_http.store_root({}), workflow_http.ROOT / '.local' / 'workflow')
-        self.assertEqual(workflow_http.store_root({'VOGUE_WORKFLOW_STORE_DIR': str(self.root / 'x')}), self.root / 'x')
-        self.assertEqual(workflow_http.store_root({'VOGUE_WORKFLOW_STORE_DIR': 'rel/store'}), workflow_http.ROOT / 'rel' / 'store')
-        with environment(VOGUE_WORKFLOW_STORE_DIR=str(self.root / 'env-store')):
+        self.assertEqual(workflow_http.store_root({'ORCHESTRATOR_WORKFLOW_STORE_DIR': str(self.root / 'x')}), self.root / 'x')
+        self.assertEqual(workflow_http.store_root({'ORCHESTRATOR_WORKFLOW_STORE_DIR': 'rel/store'}), workflow_http.ROOT / 'rel' / 'store')
+        with environment(ORCHESTRATOR_WORKFLOW_STORE_DIR=str(self.root / 'env-store')):
             private = workflow_http.store()
         self.assertEqual(private.root, self.root / 'env-store')
         self.assertTrue((self.root / 'env-store' / 'blobs').is_dir())
@@ -192,12 +192,12 @@ class PeerArtifactReaderTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
     def test_build_workflow_wires_the_reader_from_the_environment(self):
         self.assertIsNone(workflow_http.peer_artifact_reader({}))
-        reader = workflow_http.peer_artifact_reader({'VOGUE_PEER_ARTIFACT_ROOT': str(self.root)})
+        reader = workflow_http.peer_artifact_reader({'ORCHESTRATOR_PEER_ARTIFACT_ROOT': str(self.root)})
         self.assertEqual(reader(self.reference), self.data)
-        env = dict(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1', VOGUE_PEER_ARTIFACT_ROOT=str(self.root),
-                   VOGUE_WORKFLOW_STORE_DIR=str(self.root.parent / 'wf'), VOGUE_AGENT_SERVICE_BEARER_TOKEN='test-token',
-                   **{k: 'http://127.0.0.1:9' for k in ('VOGUE_TREND_AGENT_URL', 'VOGUE_STOCK_AGENT_URL',
-                                                       'VOGUE_NEW_PRODUCT_AGENT_URL', 'VOGUE_SALES_MARKET_AGENT_URL')})
+        env = dict(ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED='1', FASHION_PLANNER_HTTP_DEV_MODE='1', ORCHESTRATOR_PEER_ARTIFACT_ROOT=str(self.root),
+                   ORCHESTRATOR_WORKFLOW_STORE_DIR=str(self.root.parent / 'wf'), FASHION_PLANNER_SERVICE_TOKEN='test-token',
+                   **{k: 'http://127.0.0.1:9' for k in ('ORCHESTRATOR_TREND_URL', 'ORCHESTRATOR_INVENTORY_URL',
+                                                       'ORCHESTRATOR_NOVELTY_URL', 'ORCHESTRATOR_RESEARCH_URL')})
         with environment(**env):
             self.assertEqual(workflow_http.build_workflow().artifact_reader.root, self.root)
             self.assertIsNone(workflow_http.build_workflow(artifact_reader=None).artifact_reader)
@@ -212,7 +212,7 @@ class ArtifactRouteTests(LiveServerMixin, unittest.TestCase):
         self.store = WorkflowStore(self.store_dir)
 
     def get(self, artifact_id):
-        with environment(VOGUE_WORKFLOW_STORE_DIR=str(self.store_dir)):
+        with environment(ORCHESTRATOR_WORKFLOW_STORE_DIR=str(self.store_dir)):
             return self.request('GET', '/api/workflow/artifacts/' + artifact_id)
 
     @unittest.skipIf(Image is None, 'Pillow (workflow extra) required')
@@ -250,7 +250,7 @@ class ArtifactRouteTests(LiveServerMixin, unittest.TestCase):
     @unittest.skipIf(Image is None, 'Pillow (workflow extra) required')
     def test_upload_returns_the_same_reference_for_the_same_bytes(self):
         image = png((1, 2, 3))
-        with environment(VOGUE_WORKFLOW_STORE_DIR=str(self.store_dir)):
+        with environment(ORCHESTRATOR_WORKFLOW_STORE_DIR=str(self.store_dir)):
             first = self.request('POST', '/v1/input-images', raw=image, content_type='image/png', **{'X-Request-ID': 'req-1'})
             second = self.request('POST', '/v1/input-images', raw=image, content_type='image/png', **{'X-Request-ID': 'req-2'})
         self.assertEqual((first[0], second[0]), (201, 201))

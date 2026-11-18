@@ -28,6 +28,6 @@ If structuring fails or yields no searchable item, the workflow returns an input
 
 Prompt versions v2–v5 and their evaluation files remain for reproducible historical measurements. They do not select a server execution path. The UI and `/v1/orchestrations` use the same workflow input and structuring function.
 
-Install the `query` optional dependency with `pip install -e '.[query]'`. For offline exact-match provider fixtures, set `VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture`; normal requests use the configured provider in `llm_provider.py`.
+Install the `query` optional dependency with `pip install -e '.[query]'`. For offline exact-match provider fixtures, set `ORCHESTRATOR_QUERY_STRUCTURING_MODE=synthetic_fixture`; normal requests use the configured provider in `llm_provider.py`.
 
 The workflow may return `partial` or `no_results` from downstream producers while preserving the query and stage trace. Query structuring does not access networks, data sources, or agent services by itself.

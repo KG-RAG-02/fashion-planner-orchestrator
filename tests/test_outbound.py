@@ -13,8 +13,8 @@ from fashion_planner_orchestrator.connectors import (ConnectorConfigurationError
 from fashion_planner_orchestrator.workflow import StageFailure, stage_failure
 
 TOKEN = 'dummy-test-token'
-PRIVATE = {'VOGUE_AGENT_HTTP_PRIVATE_HOSTS': 'trend,stock,new-product,sales-market',
-           'VOGUE_AGENT_SERVICE_BEARER_TOKEN': TOKEN}
+PRIVATE = {'ORCHESTRATOR_HTTP_PRIVATE_HOSTS': 'trend,stock,new-product,sales-market',
+           'FASHION_PLANNER_SERVICE_TOKEN': TOKEN}
 
 
 def url(value, **env):
@@ -27,12 +27,12 @@ class PrivateHostAllowlistTests(unittest.TestCase):
         self.assertEqual(url('http://new-product:8767/', **PRIVATE), 'http://new-product:8767/v1/agents/x')
         for token in ('', '   '):
             with self.subTest(token=repr(token)), self.assertRaisesRegex(ConnectorConfigurationError, 'TOKEN'):
-                url('http://trend:8768', **dict(PRIVATE, VOGUE_AGENT_SERVICE_BEARER_TOKEN=token))
+                url('http://trend:8768', **dict(PRIVATE, FASHION_PLANNER_SERVICE_TOKEN=token))
 
     def test_allowlist_is_exact_and_independent_of_dev_mode(self):
         with self.assertRaises(ConnectorConfigurationError):
-            url('http://trend:8768', VOGUE_AGENT_HTTP_DEV_MODE='1', VOGUE_AGENT_SERVICE_BEARER_TOKEN=TOKEN)
-        self.assertEqual(url('http://stock:8002', VOGUE_AGENT_HTTP_DEV_MODE='1', **PRIVATE),
+            url('http://trend:8768', FASHION_PLANNER_HTTP_DEV_MODE='1', FASHION_PLANNER_SERVICE_TOKEN=TOKEN)
+        self.assertEqual(url('http://stock:8002', FASHION_PLANNER_HTTP_DEV_MODE='1', **PRIVATE),
                          'http://stock:8002/v1/agents/x')
         for target in ('http://trends:8768', 'http://trend.internal:8768', 'http://172.30.231.2:8768',
                        'http://evil:80'):
@@ -40,16 +40,16 @@ class PrivateHostAllowlistTests(unittest.TestCase):
                 url(target, **PRIVATE)
 
     def test_allowlist_entries_must_be_single_label_lowercase_hostnames(self):
-        self.assertEqual(private_http_hosts({'VOGUE_AGENT_HTTP_PRIVATE_HOSTS': ' a , new-product,,' + 'b' * 63}),
+        self.assertEqual(private_http_hosts({'ORCHESTRATOR_HTTP_PRIVATE_HOSTS': ' a , new-product,,' + 'b' * 63}),
                          frozenset({'a', 'new-product', 'b' * 63}))
         for bad in ('Trend', 'trend.local', '10.0.0.1', '-x', '1abc', 'b' * 64, 'tr_end', 'trend:8768'):
             with self.subTest(bad=bad), self.assertRaises(ConnectorConfigurationError):
-                private_http_hosts({'VOGUE_AGENT_HTTP_PRIVATE_HOSTS': bad})
+                private_http_hosts({'ORCHESTRATOR_HTTP_PRIVATE_HOSTS': bad})
 
     def test_existing_policy_is_unchanged_for_other_hosts(self):
         self.assertEqual(url('https://agents.example.invalid'), 'https://agents.example.invalid/v1/agents/x')
-        self.assertEqual(url('http://127.0.0.1:8768', VOGUE_AGENT_HTTP_DEV_MODE='1'), 'http://127.0.0.1:8768/v1/agents/x')
-        for target, env in (('http://127.0.0.1:8768', {}), ('http://example.com', {'VOGUE_AGENT_HTTP_DEV_MODE': '1'}),
+        self.assertEqual(url('http://127.0.0.1:8768', FASHION_PLANNER_HTTP_DEV_MODE='1'), 'http://127.0.0.1:8768/v1/agents/x')
+        for target, env in (('http://127.0.0.1:8768', {}), ('http://example.com', {'FASHION_PLANNER_HTTP_DEV_MODE': '1'}),
                             ('http://user:pw@trend:8768', PRIVATE), ('http://trend:8768/prefix', PRIVATE),
                             ('http://trend:99999', PRIVATE)):
             with self.subTest(target=target), self.assertRaises(ConnectorConfigurationError):
@@ -67,15 +67,15 @@ class TimeoutConfigurationTests(unittest.TestCase):
     def test_build_workflow_uses_private_hosts_and_configured_timeouts(self):
         from fashion_planner_orchestrator import workflow_http
         from fashion_planner_orchestrator.workflow_store import WorkflowStore
-        env = {**PRIVATE, 'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_TREND_AGENT_URL': 'http://trend:8768',
-               'VOGUE_STOCK_AGENT_URL': 'http://stock:8002', 'VOGUE_NEW_PRODUCT_AGENT_URL': 'http://new-product:8767',
-               'VOGUE_SALES_MARKET_AGENT_URL': 'http://sales-market:8766',
-               'VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS': '1.5', 'VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS': '9'}
+        env = {**PRIVATE, 'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': '1', 'ORCHESTRATOR_TREND_URL': 'http://trend:8768',
+               'ORCHESTRATOR_INVENTORY_URL': 'http://stock:8002', 'ORCHESTRATOR_NOVELTY_URL': 'http://new-product:8767',
+               'ORCHESTRATOR_RESEARCH_URL': 'http://sales-market:8766',
+               'ORCHESTRATOR_WORKFLOW_CONNECT_TIMEOUT_SECONDS': '1.5', 'ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS': '9'}
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env), \
                 patch.object(workflow_http, 'store', return_value=WorkflowStore(Path(os.path.realpath(tmp)) / 's')), \
                 patch.object(workflow_http, 'post_wire', return_value='sent') as wire:
-            os.environ.pop('VOGUE_AGENT_HTTP_DEV_MODE', None)
-            os.environ.pop('VOGUE_WORKFLOW_CONTRACT_BASELINE', None)
+            os.environ.pop('FASHION_PLANNER_HTTP_DEV_MODE', None)
+            os.environ.pop('ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE', None)
             workflow = workflow_http.build_workflow()
             self.assertEqual(workflow.adapters['stock']({'p': 1}), 'sent')
         wire.assert_called_once_with('http://stock:8002/v1/agents/inventory/runs', {'p': 1}, TOKEN,
@@ -88,13 +88,13 @@ class TimeoutConfigurationTests(unittest.TestCase):
         from fashion_planner_orchestrator.workflow_http import dispatch
         handler = object.__new__(OrchestratorHandler)
         handler._json = Mock()
-        env = {**PRIVATE, 'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_TREND_AGENT_URL': 'http://trend:8768',
-               'VOGUE_STOCK_AGENT_URL': 'http://stock:8002', 'VOGUE_NEW_PRODUCT_AGENT_URL': 'http://new-product:8767',
-               'VOGUE_SALES_MARKET_AGENT_URL': 'http://sales-market:8766', 'VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS': 'never'}
+        env = {**PRIVATE, 'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': '1', 'ORCHESTRATOR_TREND_URL': 'http://trend:8768',
+               'ORCHESTRATOR_INVENTORY_URL': 'http://stock:8002', 'ORCHESTRATOR_NOVELTY_URL': 'http://new-product:8767',
+               'ORCHESTRATOR_RESEARCH_URL': 'http://sales-market:8766', 'ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS': 'never'}
         request = dict(contract_version='fashion-planner-workflow', request_id='r-1',
                        input=dict(user_input=dict(text='t', images=[])))
         with patch.dict(os.environ, env):
-            os.environ.pop('VOGUE_WORKFLOW_CONTRACT_BASELINE', None)
+            os.environ.pop('ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE', None)
             dispatch(handler, request)
         self.assertEqual(handler._json.call_args.args[0], 409)
 

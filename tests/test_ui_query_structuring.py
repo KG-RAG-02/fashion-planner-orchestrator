@@ -96,7 +96,7 @@ class StructuringTests(unittest.TestCase):
         self.assertEqual([(u["type"], u["raw"]) for u in tq["unsupported"]], [("sleeve_length", "반팔")])
 
     def test_synthetic_fixtures_give_the_trend_query_of_the_v1_path(self):
-        # main's offline E2E mode (VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture) serves each fixture's
+        # main's offline E2E mode (ORCHESTRATOR_QUERY_STRUCTURING_MODE=synthetic_fixture) serves each fixture's
         # `structured_draft`; the first-item TrendQuery must match the fixture's expected_trend_query
         # (categories, gender, attributes, user-named season), except the three documented differences.
         from _query_support import load_fixtures

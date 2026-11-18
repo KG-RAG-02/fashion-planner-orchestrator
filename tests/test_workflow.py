@@ -536,14 +536,14 @@ class WorkflowTests(unittest.TestCase):
         from unittest.mock import patch
         from fashion_planner_orchestrator.workflow_http import fixture_image
         self.workflow.image = fixture_image
-        with patch.dict(os.environ, {'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}), \
+        with patch.dict(os.environ, {'ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED': '1'}), \
                 patch('socket.socket.connect', side_effect=AssertionError('no network')):
             result = self.run_flow()
         self.assertEqual(result['envelope']['status'], 'ok', result)
         image = result['envelope']['result']['final_image']
         self.assertEqual((image['status'], image['provider_calls'], image['artifact']['media_type']), ('generated', 1, 'image/png'))
         self.assertEqual(image['artifact']['uri'], 'artifact://orchestrator/blobs/' + image['artifact']['sha256'])
-        with patch.dict(os.environ, {'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}):
+        with patch.dict(os.environ, {'ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED': '1'}):
             expected, _ = fixture_image({'lineage': image['lineage']})
         self.assertEqual(self.store.verify(image['artifact']), expected)
         self.contract.schema(result['envelope'], 'integrated-result.schema.json')
@@ -993,7 +993,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
                             image=image or planning_sheet_image, store=self.store, contract=self.contract,
                             artifact_reader=self.reader if reader else None, trend_photos=trend_photos, swot=swot)
         request = self.sample['input']
-        with patch.dict(os.environ, {'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}):
+        with patch.dict(os.environ, {'ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED': '1'}):
             return workflow.run(request_id=self.rid, user_input=request['user_input'], planning_request=request['planning_request'],
                                 trend_query=dict(request_id=self.rid, original_query=request['user_input']['text']))
 

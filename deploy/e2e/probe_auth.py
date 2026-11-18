@@ -15,12 +15,12 @@ import sys
 import urllib.error
 import urllib.request
 
-TOKEN = os.environ.get("VOGUE_AGENT_SERVICE_BEARER_TOKEN", "")
+TOKEN = os.environ.get("FASHION_PLANNER_SERVICE_TOKEN", "")
 AGENTS = {
-    "trend": (os.environ.get("VOGUE_TREND_AGENT_URL", "http://trend:8768"), "/v1/agents/trend/runs", "/health", False),
-    "stock": (os.environ.get("VOGUE_STOCK_AGENT_URL", "http://stock:8002"), "/v1/agents/inventory/runs", "/health/live", False),
-    "new-product": (os.environ.get("VOGUE_NEW_PRODUCT_AGENT_URL", "http://new-product:8767"), "/v1/agents/novelty/runs", "/api/health", True),
-    "sales-market": (os.environ.get("VOGUE_SALES_MARKET_AGENT_URL", "http://sales-market:8766"), "/v1/agents/research/reviews", "/api/health", False),
+    "trend": (os.environ.get("ORCHESTRATOR_TREND_URL", "http://trend:8768"), "/v1/agents/trend/runs", "/health", False),
+    "stock": (os.environ.get("ORCHESTRATOR_INVENTORY_URL", "http://stock:8002"), "/v1/agents/inventory/runs", "/health/live", False),
+    "new-product": (os.environ.get("ORCHESTRATOR_NOVELTY_URL", "http://new-product:8767"), "/v1/agents/novelty/runs", "/api/health", True),
+    "sales-market": (os.environ.get("ORCHESTRATOR_RESEARCH_URL", "http://sales-market:8766"), "/v1/agents/research/reviews", "/api/health", False),
 }
 
 

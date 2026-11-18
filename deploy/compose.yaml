@@ -28,7 +28,7 @@ x-env: &env
   HOME: /tmp
   PYTHONDONTWRITEBYTECODE: "1"
   PYTHONUNBUFFERED: "1"
-  VOGUE_AGENT_SERVICE_BEARER_TOKEN: ${VOGUE_AGENT_SERVICE_BEARER_TOKEN:?run deploy/bin/vogue init-env first}
+  FASHION_PLANNER_SERVICE_TOKEN: ${FASHION_PLANNER_SERVICE_TOKEN:?run deploy/bin/vogue init-env first}
 
 networks:
   backend:
@@ -36,16 +36,16 @@ networks:
   edge:
     ipam:
       config:
-        - subnet: ${VOGUE_EDGE_SUBNET:-172.30.231.0/28}
+        - subnet: ${FASHION_PLANNER_EDGE_SUBNET:-172.30.231.0/28}
   egress: {}
 
 volumes:
   p08_state:
-    name: vogue_${VOGUE_RUN_LABEL:-default}_p08_state
+    name: vogue_${FASHION_PLANNER_RUN_LABEL:-default}_p08_state
   p06_data:
-    name: vogue_${VOGUE_RUN_LABEL:-default}_p06_data
+    name: vogue_${FASHION_PLANNER_RUN_LABEL:-default}_p06_data
   p07_state:
-    name: vogue_${VOGUE_RUN_LABEL:-default}_p07_state
+    name: vogue_${FASHION_PLANNER_RUN_LABEL:-default}_p07_state
 
 services:
   volume-init:
@@ -94,12 +94,11 @@ services:
     build: { context: ../../stock-agent }
     environment:
       <<: *env
-      STOCK_CACHE_DIR: /cache
-      STOCK_IMAGE_CACHE_DIR: /tmp/stock-images
-      STOCK_LLM_PROVIDER: policy
+      INVENTORY_CACHE_DIR: /cache
+      INVENTORY_IMAGE_CACHE_DIR: /tmp/stock-images
       # Whole-request deadline of the stock routes (default 60 s): trends are processed one after another,
       # about 10 s each with the LLM agent; 2026-11-13: 60 -> 90 s after an 11-trend run timed out, then 3 minutes.
-      STOCK_HANDOFF_TIMEOUT_SECONDS: "180"
+      INVENTORY_HANDOFF_TIMEOUT_SECONDS: "180"
     networks: [backend]
     mem_limit: 2g
 
@@ -109,28 +108,20 @@ services:
     build: { context: ../../new-product-agent }
     environment:
       <<: *env
-      VOGUE_HTTP_MODE: private
-      VOGUE_HOST: 0.0.0.0
-      VOGUE_PORT: "8767"
-      VOGUE_EXECUTION_PROFILE: draft_only
-      VOGUE_WORKFLOW_DRAFT_ENABLED: "true"
-      VOGUE_UPSTREAM_ARTIFACT_ROOT: /artifacts
+      NOVELTY_HTTP_MODE: private
+      NOVELTY_HOST: 0.0.0.0
+      NOVELTY_PORT: "8767"
       # draft_with_visuals (workflow-contract 0.2.0): P06 makes the product and worn images.
       # fixture = deterministic offline PNGs (no key, no cost); compose.paid.yaml switches to openai.
-      VOGUE_DRAFT_IMAGE_PROVIDER: fixture
-      VOGUE_DRAFT_ARTIFACT_DIR: /app/data/local/p06-artifacts
+      NOVELTY_DRAFT_IMAGE_PROVIDER: fixture
+      NOVELTY_DRAFT_ARTIFACT_DIR: /app/data/local/p06-artifacts
     volumes:
       - p06_data:/app/data/local
-      - type: volume
-        source: p08_state
-        target: /artifacts/p08/blobs
-        read_only: true
-        volume: { subpath: workflow/blobs }
     networks: [backend]
     mem_limit: 512m
     # The P06 image has no HEALTHCHECK; in private mode /api/health also needs the bearer token.
     healthcheck:
-      test: ["CMD", "python3", "-c", "import os,sys,urllib.request as u; r=u.Request('http://127.0.0.1:8767/api/health', headers={'Authorization': 'Bearer ' + os.environ['VOGUE_AGENT_SERVICE_BEARER_TOKEN']}); sys.exit(0 if u.build_opener(u.ProxyHandler({})).open(r, timeout=3).status == 200 else 1)"]
+      test: ["CMD", "python3", "-c", "import os,sys,urllib.request as u; r=u.Request('http://127.0.0.1:8767/api/health', headers={'Authorization': 'Bearer ' + os.environ['FASHION_PLANNER_SERVICE_TOKEN']}); sys.exit(0 if u.build_opener(u.ProxyHandler({})).open(r, timeout=3).status == 200 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -144,28 +135,21 @@ services:
     build: { context: ../../sales-market-agent }
     environment:
       <<: *env
-      VOGUE_UPSTREAM_ARTIFACT_ROOT: /artifacts
-      VOGUE_P07_REVIEW_ARTIFACT_DIR: /data/reviews
-      VOGUE_PROJECT07_DISABLE_DOTENV: "1"
+      RESEARCH_DISABLE_DOTENV: "1"
       # P07 (c662d4d) gives its H&M age query (hm_customer_age_source._configure_age_duckdb) a DuckDB
-      # memory_limit of VOGUE_HM_AGE_DUCKDB_MEMORY_LIMIT, default 3GB. In the live Linux container over R2,
+      # memory_limit of RESEARCH_AGE_DUCKDB_MEMORY_LIMIT, default 3GB. In the live Linux container over R2,
       # 1GB was too small: req-xxxxxxxx (2026-11-17) failed with DuckDB OutOfMemoryException after 38 s and the
       # container's memory.peak reached its 1536m limit. User decision 2026-11-17: P07's memory limit is 3 GB,
       # so mem_limit is 3g and DuckDB gets 2GB of it, leaving room for the Python process and the price query
-      # before the kernel limit. Past 2GB DuckDB spills to VOGUE_HM_AGE_DUCKDB_TEMP_DIRECTORY
+      # before the kernel limit. Past 2GB DuckDB spills to RESEARCH_AGE_DUCKDB_TEMP_DIRECTORY
       # (P07 image default /data/hm-cache/duckdb-age-tmp, writable where compose.data.yaml mounts /data/hm-cache;
       # without R2 settings, as in stub, the query does not run). Threads stay at P07's default (1).
-      VOGUE_HM_AGE_DUCKDB_MEMORY_LIMIT: "2GB"
+      RESEARCH_AGE_DUCKDB_MEMORY_LIMIT: "2GB"
     volumes:
       - type: volume
         source: p07_state
         target: /data/reviews
         volume: { subpath: reviews }
-      - type: volume
-        source: p08_state
-        target: /artifacts/p08/blobs
-        read_only: true
-        volume: { subpath: workflow/blobs }
       # DuckDB spills to "<cwd>/.tmp" (= /app/.tmp) when an R2 aggregate exceeds its memory limit; the
       # read-only root filesystem refuses that directory (IOException), so give it a writable disk path.
       - type: volume
@@ -189,33 +173,33 @@ services:
     build: { context: .., dockerfile: Dockerfile }
     environment:
       <<: *env
-      VOGUE_ORCHESTRATOR_HOST: 0.0.0.0
-      VOGUE_ORCHESTRATOR_PORT: "8765"
-      VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND: "1"
-      VOGUE_ORCHESTRATOR_RUNTIME: container
-      VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS: ${VOGUE_EDGE_SUBNET:-172.30.231.0/28}
-      VOGUE_ORCHESTRATOR_ALLOWED_HOSTS: 127.0.0.1:${VOGUE_UI_PORT:-8765},localhost:${VOGUE_UI_PORT:-8765}
-      VOGUE_AGENT_HTTP_PRIVATE_HOSTS: trend,stock,new-product,sales-market
-      VOGUE_TREND_AGENT_URL: http://trend:8768
-      VOGUE_STOCK_AGENT_URL: http://stock:8002
-      VOGUE_NEW_PRODUCT_AGENT_URL: http://new-product:8767
-      VOGUE_SALES_MARKET_AGENT_URL: http://sales-market:8766
-      VOGUE_WORKFLOW_STORE_DIR: /app/.local/workflow
-      VOGUE_PEER_ARTIFACT_ROOT: /peer
-      VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS: "75"
+      ORCHESTRATOR_HOST: 0.0.0.0
+      ORCHESTRATOR_PORT: "8765"
+      ORCHESTRATOR_ALLOW_REMOTE_BIND: "1"
+      ORCHESTRATOR_RUNTIME: container
+      ORCHESTRATOR_TRUSTED_PEER_CIDRS: ${FASHION_PLANNER_EDGE_SUBNET:-172.30.231.0/28}
+      ORCHESTRATOR_ALLOWED_HOSTS: 127.0.0.1:${FASHION_PLANNER_UI_PORT:-8765},localhost:${FASHION_PLANNER_UI_PORT:-8765}
+      ORCHESTRATOR_HTTP_PRIVATE_HOSTS: trend,stock,new-product,sales-market
+      ORCHESTRATOR_TREND_URL: http://trend:8768
+      ORCHESTRATOR_INVENTORY_URL: http://stock:8002
+      ORCHESTRATOR_NOVELTY_URL: http://new-product:8767
+      ORCHESTRATOR_RESEARCH_URL: http://sales-market:8766
+      ORCHESTRATOR_WORKFLOW_STORE_DIR: /app/.local/workflow
+      ORCHESTRATOR_PEER_ARTIFACT_ROOT: /peer
+      ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS: "75"
       # Above the stock deadline (180 s) so the stock TIMEOUT envelope arrives before P08 gives up.
-      VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS: "210"
+      ORCHESTRATOR_WORKFLOW_INVENTORY_READ_TIMEOUT_SECONDS: "210"
       # P06 generates two images inside the Draft call; only that read waits longer.
-      VOGUE_WORKFLOW_DRAFT_MODE: draft_with_visuals
-      VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS: "600"
-      VOGUE_WORKFLOW_IMAGES_ENABLED: "1"
+      ORCHESTRATOR_WORKFLOW_DRAFT_MODE: draft_with_visuals
+      ORCHESTRATOR_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS: "600"
+      ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED: "1"
       # Stage 06 composes the planning sheet (기획안 사진) locally; P08 never calls an image model.
-      VOGUE_WORKFLOW_IMAGE_PROVIDER: planning_sheet
+      ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER: planning_sheet
       # Off by default; `vogue image-retry <profile> <request_id>` turns it on for one re-composition.
-      VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED: ${VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED:-0}
-      VOGUE_QUERY_STRUCTURING_MODE: synthetic_fixture
+      ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED: ${ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED:-0}
+      ORCHESTRATOR_QUERY_STRUCTURING_MODE: synthetic_fixture
     ports:
-      - "127.0.0.1:${VOGUE_UI_PORT:-8765}:8765"
+      - "127.0.0.1:${FASHION_PLANNER_UI_PORT:-8765}:8765"
     volumes:
       - p08_state:/app/.local
       - type: volume

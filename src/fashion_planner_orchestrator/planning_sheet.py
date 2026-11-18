@@ -65,9 +65,9 @@ SHEET_FORMAT = 'evidence-linked-planning-board/png-1'
 REVIEW_LABEL = 'MD 검토용 초안 · 자동 승인 아님'
 FOOTER_NOTE = '검토용 초안 · 근거 미연결 값은 확정 사실이 아닙니다 · 승인·발주·생산 가능성 확정이 아닙니다.'
 # P08 writes this limitation itself when the deterministic fixture image provider is used.
-FIXTURE_IMAGE_MARKER = 'VOGUE_WORKFLOW_IMAGE_PROVIDER=fixture'
+FIXTURE_IMAGE_MARKER = 'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=fixture'
 # P06 writes this limitation into the Draft when its visuals come from the offline fixture provider.
-DRAFT_FIXTURE_MARKER = 'VOGUE_DRAFT_IMAGE_PROVIDER=fixture'
+DRAFT_FIXTURE_MARKER = 'NOVELTY_DRAFT_IMAGE_PROVIDER=fixture'
 # workflow-contract 0.2.0: the two P06 visuals of a Draft (draft.visuals), in display order.
 DRAFT_VISUALS = (('product', '신상품 · Product'), ('outfit', '착장 · Outfit'))
 MAX_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024
@@ -860,8 +860,8 @@ class Fonts:
         from PIL import ImageFont
         environ = os.environ if environ is None else environ
         self._truetype = ImageFont.truetype
-        self.regular = _pick(_REGULAR, environ.get('VOGUE_PLANNING_SHEET_FONT'))
-        self.bold = _pick(_BOLD, environ.get('VOGUE_PLANNING_SHEET_FONT_BOLD')) or self.regular
+        self.regular = _pick(_REGULAR, environ.get('ORCHESTRATOR_PLANNING_SHEET_FONT'))
+        self.bold = _pick(_BOLD, environ.get('ORCHESTRATOR_PLANNING_SHEET_FONT_BOLD')) or self.regular
         if not self.regular:
             raise PlanningSheetError('PLANNING_SHEET_FONT_MISSING')
         self.display = None
@@ -1746,7 +1746,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument('--input', type=Path, help='integrated-result envelope JSON (GET /api/workflow/runs/{id} body)')
     source.add_argument('--request-id', help='read the run from a P08 store directory (opened read-only)')
-    parser.add_argument('--store-dir', type=Path, default=Path(os.environ.get('VOGUE_WORKFLOW_STORE_DIR', '.local/workflow')))
+    parser.add_argument('--store-dir', type=Path, default=Path(os.environ.get('ORCHESTRATOR_WORKFLOW_STORE_DIR', '.local/workflow')))
     parser.add_argument('--image', type=Path, help='final image bytes to embed when reading --input (optional)')
     parser.add_argument('--output', required=True, help="PNG path, or '-' for stdout")
     args = parser.parse_args(argv)

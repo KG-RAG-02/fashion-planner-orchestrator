@@ -30,8 +30,8 @@ UI ─POST /api/workflow/run─► orchestrator(P08)
 ## 공통
 
 **인증과 네트워크**
-- 서비스끼리는 `Authorization: Bearer $VOGUE_AGENT_SERVICE_BEARER_TOKEN`으로 인증합니다. 토큰은 본문을 읽기 전에 확인하고, 없거나 틀리면 401입니다.
-- 컨테이너 사이는 내부 `backend` 네트워크에서 평문 HTTP로 통신합니다. P08은 `VOGUE_AGENT_HTTP_PRIVATE_HOSTS`에 등록된 호스트에만 연결합니다.
+- 서비스끼리는 `Authorization: Bearer $FASHION_PLANNER_SERVICE_TOKEN`으로 인증합니다. 토큰은 본문을 읽기 전에 확인하고, 없거나 틀리면 401입니다.
+- 컨테이너 사이는 내부 `backend` 네트워크에서 평문 HTTP로 통신합니다. P08은 `ORCHESTRATOR_HTTP_PRIVATE_HOSTS`에 등록된 호스트에만 연결합니다.
 
 **오류 본문**
 - 새 워크플로 경로(P06 `/runs`, P07 `/reviews`, P08 workflow)는 `common.schema.json#/$defs/problem` 형식으로 답합니다: `{contract_version, request_id|null, status:"error", error{code,message,stage,fatal,retryable}}`.
@@ -69,7 +69,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - `no_results`: 0이 아니라 "찾지 못함"을 뜻함.
   - `partial`은 실제로 만들어지지 않습니다.
 - **Evidence ID**: `trend:<article>:<block>:<sha8(quote)>`.
-- **`style.example_images`**: 최대 5개 링크입니다. P08 UI는 근거·원문 패널에 링크로만 보여 줍니다. 트렌드 카드에는 인용 아이템마다 `items[].image_urls` 사진을 바로 보여 줍니다. 브라우저가 `https://img.vogue.co.kr`에서 Referer 없이 직접 불러오며, 이를 위해 CSP `img-src`가 그 호스트를 허용합니다(사용자 결정 2026-11-17, trend 규칙 G-10 '링크로만'에 대한 UI 예외). 기획안 포스터(6단계)는 허용 호스트(`VOGUE_TREND_PHOTO_HOSTS`)의 사진을 최대 3장 내려받아 P08 저장소에 두고 포스터에 넣습니다(아래 기획안 사진 항목).
+- **`style.example_images`**: 최대 5개 링크입니다. P08 UI는 근거·원문 패널에 링크로만 보여 줍니다. 트렌드 카드에는 인용 아이템마다 `items[].image_urls` 사진을 바로 보여 줍니다. 브라우저가 `https://img.vogue.co.kr`에서 Referer 없이 직접 불러오며, 이를 위해 CSP `img-src`가 그 호스트를 허용합니다(사용자 결정 2026-11-17, trend 규칙 G-10 '링크로만'에 대한 UI 예외). 기획안 포스터(6단계)는 허용 호스트(`ORCHESTRATOR_TREND_PHOTO_HOSTS`)의 사진을 최대 3장 내려받아 P08 저장소에 두고 포스터에 넣습니다(아래 기획안 사진 항목).
 - **`style.search_outlook`** (2026-11-13 trend 작업 트리, 미커밋. `schema_version`은 1.1 그대로): 객체 또는 `null`입니다.
   - 내용: 그 트렌드를 이루는 키워드(아이템 명사, 속성 × 하분류)의 **목표 시즌 검색 전망**입니다. 네이버 검색에서 같은 카테고리 안 상대 관심의 방향이고 판매량 예측이 아닙니다.
   - 그래프에 키워드·전망이 없으면 `null`입니다(지금의 Aura 그래프가 이 상태입니다). stub 그래프에는 합성 값이 들어 있고 `source`가 `synthetic_fixture`입니다.
@@ -81,7 +81,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - 401, 404
   - 500: `invalid_search_result`
   - 503: `search_unavailable`
-- **환경변수**: `VOGUE_AGENT_SERVICE_BEARER_TOKEN`, `NEO4J_URI/USER/PASSWORD`, `TREND_API_MODE/HOST/PORT`
+- **환경변수**: `FASHION_PLANNER_SERVICE_TOKEN`, `NEO4J_URI/USER/PASSWORD`, `TREND_API_MODE/HOST/PORT`
 - **증거**
   - `tests/test_api_config.py`, `tests/test_api_handler.py`, `tests/test_style_example_images.py`, `tests/test_search_market.py`
   - stub 요청·결과: `examples/stub/trend-request.json` → `ok` (trend 1개, evidence 4개)
@@ -93,7 +93,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | 이미지 · 포트 · 호스트 | `vogue/stock:dev` · 8002 · `stock` |
 | 실행 | `python -m stock_agent.server --host 0.0.0.0` (FastAPI/uvicorn, uid 10001) |
 | liveness / readiness | `GET /health/live` / `GET /health/ready`(별칭 `/health`, 200 또는 503). readiness는 `db`, `db_version`, `llm_provider`, `synthetic_fixture`를 보고 |
-| 데이터 | R2의 DuckDB 캐시(`--prepare-cache`가 sidecar sha256과 함께 채움). stub은 `STOCK_DB_PATH` fixture DB를 씀 |
+| 데이터 | R2의 DuckDB 캐시(`--prepare-cache`가 sidecar sha256과 함께 채움). stub은 `INVENTORY_DB_PATH` fixture DB를 씀 |
 
 | 메서드 · 경로 | 입력 | 출력 |
 |---|---|---|
@@ -106,16 +106,16 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - 400 `INVALID_REQUEST`, 401
   - 500 `INTERNAL_ERROR`
   - 503 `SOURCE_UNAVAILABLE`: DB, `no_llm`, `llm_unavailable`, 이미지
-  - 504 `TIMEOUT`: 요청 전체 deadline. 기본 60초, `STOCK_HANDOFF_TIMEOUT_SECONDS`로 조정하며 통합 배포는 180초입니다(2026-11-13: 트렌드 11개 요청이 60초를 넘어 504 → 90초 → 사용자 결정으로 3분). 트렌드는 차례로 처리하고 LLM 사용 시 트렌드당 약 10초입니다(live 실측 8.8·11.0초)
+  - 504 `TIMEOUT`: 요청 전체 deadline. 기본 60초, `INVENTORY_HANDOFF_TIMEOUT_SECONDS`로 조정하며 통합 배포는 180초입니다(2026-11-13: 트렌드 11개 요청이 60초를 넘어 504 → 90초 → 사용자 결정으로 3분). 트렌드는 차례로 처리하고 LLM 사용 시 트렌드당 약 10초입니다(live 실측 8.8·11.0초)
   - 처리는 전역 lock 하나로 한 번에 한 건씩입니다.
 - **재고 값**: H&M 기반 가상 재고 스냅샷(2020-09-22, `data_nature: sample`)입니다. 현재 자사 재고가 아닙니다.
 - **환경변수**
-  - `VOGUE_AGENT_SERVICE_BEARER_TOKEN`
-  - `STOCK_DB_PATH`: local-file 모드
+  - `FASHION_PLANNER_SERVICE_TOKEN`
+  - `INVENTORY_DB_PATH`: local-file 모드
   - `STOCK_LLM_PROVIDER`: `policy` 또는 `openai`. 알 수 없는 값이면 실패로 닫힘
   - `LLM_API_KEY`, `LLM_MODEL`
-  - `STOCK_CACHE_DIR`, `STOCK_IMAGE_CACHE_DIR`
-  - `STOCK_HANDOFF_TIMEOUT_SECONDS`: 요청 전체 deadline(기본 60, 0 초과 600 이하)
+  - `INVENTORY_CACHE_DIR`, `INVENTORY_IMAGE_CACHE_DIR`
+  - `INVENTORY_HANDOFF_TIMEOUT_SECONDS`: 요청 전체 deadline(기본 60, 0 초과 600 이하)
   - `R2_*`
 - **기존 경로**: `POST /v1/inventory-products`(bearer 필요).
 - **증거**
@@ -127,7 +127,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | 항목 | 값 |
 |---|---|
 | 이미지 · 포트 · 호스트 | `vogue/new-product:dev` · 8767 · `new-product` |
-| 실행 | `VOGUE_HTTP_MODE=private`: 평문 HTTP이며 모든 경로에 bearer 필요. TLS가 필요하면 `service` 모드를 씀 |
+| 실행 | `NOVELTY_HTTP_MODE=private`: 평문 HTTP이며 모든 경로에 bearer 필요. TLS가 필요하면 `service` 모드를 씀 |
 | liveness | `GET /api/health`. private·service 모드에서는 bearer 필요 |
 | 쓰기 경로 | `/app/data/local`(초안 revision ledger SQLite, 시안 이미지 `p06-artifacts/images/<sha256>.<ext>`). 이 경로가 없으면 시작하지 않음 |
 
@@ -147,7 +147,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - 503: `PROPOSED_CONTRACT_DISABLED`, `SERVICE_BUSY`, `ARTIFACT_READER_REQUIRED`, `ARTIFACT_UNAVAILABLE`, `VISUALS_PROVIDER_REQUIRED`
   - 504, 500
 - **계약 출처**: P06 native 계약은 P06 저장소가 소유합니다. P08 workflow의 call-side snapshot은 `contracts/workflow/snapshot.json`이며 P06 계약 원본과 구분합니다.
-- **환경변수**: `VOGUE_HTTP_MODE`, `VOGUE_HOST/PORT`, `VOGUE_AGENT_SERVICE_BEARER_TOKEN`, P06-owned native `/runs` settings
+- **환경변수**: `NOVELTY_HTTP_MODE`, `NOVELTY_HOST/PORT`, `FASHION_PLANNER_SERVICE_TOKEN`, P06-owned native `/runs` settings
 - P08의 현재 workflow 경로는 위 native `/runs` 한 개입니다. 과거 `/drafts` 설계는 현재 P08 호출 계약이 아닙니다.
 - **증거**: 테스트 155건(`tests/test_draft_only.py`, `tests/test_draft_visuals.py`, `tests/test_private_mode.py`, `tests/test_healthcheck.py`)
 
@@ -173,8 +173,8 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - 503: `SERVICE_UNAVAILABLE`; 500: `REVIEW_FAILED`
 - **합성 source**: `VOGUE_P07_REVIEW_SOURCE=synthetic_local_fixture`이면 고정된 합성 발췌를 씁니다. 결과는 `SYNTHETIC TEST DATA ONLY`로 표기되며, Draft의 카테고리·시즌과 연결되지 않습니다.
 - **계약 고정**: `resources/workflow_contract/snapshot.json`. 불일치하면 import 단계에서 `SCHEMA_SNAPSHOT_CHANGED`로 막힙니다.
-- **환경변수**: `VOGUE_AGENT_SERVICE_BEARER_TOKEN`, `VOGUE_UPSTREAM_ARTIFACT_ROOT`, `VOGUE_P07_REVIEW_ARTIFACT_DIR`, `VOGUE_R2_HM_DB_CACHE_DIR`, `VOGUE_P07_REVIEW_SOURCE`, `R2_*`, `VOGUE_PROJECT07_DISABLE_DOTENV=1`
-- **배포 차이**: P07 `main`의 Dockerfile은 `vogue-sales-market-review-http --service-mode --host 0.0.0.0 --port 8766`을 실행합니다. P08 Compose의 `GET /api/health` healthcheck와 `service_healthy` 의존 조건이 동작합니다. 2026-11-17 P08/P06/P07 실연결 통합 실행에서 P07 `/reviews`는 HTTP 200과 이 계약에 맞는 `partial` 응답을 반환했습니다. P07은 DuckDB 메모리 부족과 타깃 LLM 출력 검증 오류를 보고했습니다. workflow baseline은 `proposed`라 개발 실행에만 `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`을 사용했습니다.
+- **환경변수**: `FASHION_PLANNER_SERVICE_TOKEN`, `VOGUE_UPSTREAM_ARTIFACT_ROOT`, `VOGUE_P07_REVIEW_ARTIFACT_DIR`, `RESEARCH_CACHE_DIR`, `VOGUE_P07_REVIEW_SOURCE`, `R2_*`, `RESEARCH_DISABLE_DOTENV=1`
+- **배포 차이**: P07 `main`의 Dockerfile은 `vogue-sales-market-review-http --service-mode --host 0.0.0.0 --port 8766`을 실행합니다. P08 Compose의 `GET /api/health` healthcheck와 `service_healthy` 의존 조건이 동작합니다. 2026-11-17 P08/P06/P07 실연결 통합 실행에서 P07 `/reviews`는 HTTP 200과 이 계약에 맞는 `partial` 응답을 반환했습니다. P07은 DuckDB 메모리 부족과 타깃 LLM 출력 검증 오류를 보고했습니다. workflow baseline은 `proposed`라 개발 실행에만 `ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED=1`을 사용했습니다.
 - **증거**: 테스트 191 / 17 / 19건(DuckDB 포함, skip 0)
 
 ## 5. vogue-orchestrator (P08 · 오케스트레이터와 UI)
@@ -182,7 +182,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | 항목 | 값 |
 |---|---|
 | 이미지 · 포트 | `vogue/orchestrator:dev` · 8765. 공개 주소는 `127.0.0.1:8765`, stub은 `18765` |
-| 인바운드 정책 | loopback 또는 `VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS`(edge 서브넷)에서 오고, Host와 Origin이 허용 목록과 정확히 일치해야 함. 컨테이너 모드에서는 `/api/health`와 정적 파일을 뺀 모든 경로에 적용 |
+| 인바운드 정책 | loopback 또는 `ORCHESTRATOR_TRUSTED_PEER_CIDRS`(edge 서브넷)에서 오고, Host와 Origin이 허용 목록과 정확히 일치해야 함. 컨테이너 모드에서는 `/api/health`와 정적 파일을 뺀 모든 경로에 적용 |
 | 저장소 | `/app/.local/workflow`. checkpoint SQLite와 내용주소 blob `artifact://p08/blobs/<sha256>`을 저장 |
 
 | 메서드 · 경로 | 용도 |
@@ -193,7 +193,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | `GET`/`POST /api/workflow/runs/{rid}/md-decision` | append-only MD 결정 → `agents/vogue-orchestrator/input/md-decision-request-2.0.contract.json`. GET은 `integrated_response_sha256`과 결정 이력을 반환 |
 | `GET /api/workflow/artifacts/{sha256}` | 저장된 private artifact(기획안 사진, 가져온 P06 시안 이미지 등) |
 | `GET /api/workflow/runs/{rid}/planning-sheet.png` | 끝난 실행의 기획서 PNG(3200 px 폭, `image/png`, attachment). 저장된 integrated envelope, 검증된 P06 시안 이미지(0.2.0 이전 실행은 최종 이미지), 6단계가 저장한 Trend 기사 사진·SWOT 초안으로 신제품 1개 기획안 포스터를 그림: 헤더(기획안 제목·시즌·카테고리·생성일), Analysis(초점 Trend 스타일 — P06 Draft의 `trend_basis.source_style_id`가 가리키는 스타일, 그 값이 없는 이전 실행은 Draft가 가장 많이 인용한 스타일 — 의 설명·색상 견본·소재 무늬 칩·기사 사진, 그 트렌드에 매칭된 재고 상품의 이미지·색상·소재·핏·수량·매칭 이유, LLM SWOT 초안), Design(new-product-agent 상품 정의·기획 기회·LOOK 시안·상품 프로필(`product_profile`)·차별화 포인트·자사 상품과의 관계·기획 포인트(`planning_analysis`)), Marketing(타깃 연령대·타깃 가설, 판매·시장 분석, 가격(sales-market-agent 제안가·마진율, 원단가는 P07이 `fabric_cost_analysis.unit_cost`를 보낸 이전 실행만), LLM 프로모션 아이디어, MD 검토 포인트). 실행 기록에 없는 값은 그리지 않음. 표시 전용이며 agent를 부르지 않고 저장값을 바꾸지 않음. 진행 중 409 `RUN_NOT_FINISHED`, 없음 404, 한글 글꼴 없음 503 `PLANNING_SHEET_FONT_MISSING` |
-| `POST /v1/orchestrations/image-retries` | 6단계(기획안 사진 합성)만 다시 실행. 무료이며 P06 이미지는 다시 만들지 않음. `VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED=1`일 때만 동작, 기본은 409 |
+| `POST /v1/orchestrations/image-retries` | 6단계(기획안 사진 합성)만 다시 실행. 무료이며 P06 이미지는 다시 만들지 않음. `ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED=1`일 때만 동작, 기본은 409 |
 | `GET /api/system/status` · `GET /api/health` | agent liveness 집계, 계약 gate 상태, 이미지·구조화 설정 / liveness |
 
 **출력** — `integrated-result/2.0` → `agents/vogue-orchestrator/output/integrated-result-2.0.contract.json`
@@ -205,8 +205,8 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 - `md_review{status: pending, choices: adopt|revise|hold}`
 
 **호출자로서의 정책**
-- **연결 대상**: `VOGUE_AGENT_HTTP_PRIVATE_HOSTS`에 있는 호스트에만 평문 HTTP로 연결합니다.
-- **timeout**: connect 3초, read 75초. P06 Draft 호출은 read 600초(`VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS`, P06이 이미지 2장을 만드는 시간), Stock 호출은 read 210초(`VOGUE_WORKFLOW_STOCK_READ_TIMEOUT_SECONDS`, Stock deadline 180초보다 길게)입니다. 자동 재시도는 없습니다.
+- **연결 대상**: `ORCHESTRATOR_HTTP_PRIVATE_HOSTS`에 있는 호스트에만 평문 HTTP로 연결합니다.
+- **timeout**: connect 3초, read 75초. P06 Draft 호출은 read 600초(`ORCHESTRATOR_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS`, P06이 이미지 2장을 만드는 시간), Stock 호출은 read 210초(`ORCHESTRATOR_WORKFLOW_INVENTORY_READ_TIMEOUT_SECONDS`, Stock deadline 180초보다 길게)입니다. 자동 재시도는 없습니다.
 - **peer artifact**: `artifact://p07/…`(Review)와 `artifact://p06/…`(Draft 시안 이미지)를 `/peer/<ns>`에서 크기·sha256으로 검증해 저장소로 가져옵니다.
 - **실패 매핑**
 
@@ -222,14 +222,14 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
   - Trend나 Draft가 `no_results` → 그 자리에서 멈추고 결과를 `no_results`로 둡니다.
   - 어느 단계든 `error` → 즉시 멈추고 이미지는 0회입니다.
   - Review가 `no_results` → 결과는 `partial`이고 이미지는 0회입니다.
-- **기획안 사진 (6단계, `VOGUE_WORKFLOW_IMAGE_PROVIDER=planning_sheet`)** (2026-11-13 결정)
+- **기획안 사진 (6단계, `ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=planning_sheet`)** (2026-11-13 결정)
   - P08의 이미지 코드는 기획안 사진만 만듭니다. 이미지 모델을 부르지 않습니다. 트렌드 반영 신상품 이미지와 착장 이미지는 P06이 만듭니다.
   - 리뷰가 끝난 실행 기록(1–5단계)과 가져온 P06 시안 이미지로 `planning_sheet.py`가 PNG를 그립니다.
-  - 포스터의 초점 Trend 스타일(`planning_sheet.focus_trend`)의 기사 사진을 최대 3장 내려받아 저장소(`trend-photos:<request_id>`)에 두고 포스터에 넣습니다(`trend_photos.py`). HTTPS, 허용 호스트(`VOGUE_TREND_PHOTO_HOSTS`, 기본 `vogue.co.kr`)만 받고, 실패한 사진은 건너뛰며 실행을 실패시키지 않습니다. integrated envelope는 바뀌지 않습니다.
+  - 포스터의 초점 Trend 스타일(`planning_sheet.focus_trend`)의 기사 사진을 최대 3장 내려받아 저장소(`trend-photos:<request_id>`)에 두고 포스터에 넣습니다(`trend_photos.py`). HTTPS, 허용 호스트(`ORCHESTRATOR_TREND_PHOTO_HOSTS`, 기본 `vogue.co.kr`)만 받고, 실패한 사진은 건너뛰며 실행을 실패시키지 않습니다. integrated envelope는 바뀌지 않습니다.
   - 같은 단계에서 질의 구조화와 같은 LLM 설정(`LLM_MODEL`, `LLM_API_KEY`)으로 SWOT 초안, 프로모션 아이디어(0~3개), 차별화 포인트(0~3개)를 1번에 요청해 저장소(`swot:<request_id>`)에 두고, SWOT은 포스터 Analysis 열 맨 아래, 프로모션은 Marketing 열 가격 전략 다음에 넣습니다(`swot.py`, `prompts/swot/v3`). 차별화 포인트는 new-product-agent의 `draft.differentiation`이 비어 있을 때만 Design 열에 "vogue-orchestrator LLM 가설"로 표시합니다. 입력은 실행 기록 요약(트렌드·재고와 stock-agent 재고 지표·new-product-agent 컨셉·sales-market-agent 가격·타깃·채널/콘텐츠 가설·상품 운영 제안)이며, 항목마다 근거 종류를 붙이고 형식이 맞지 않으면 버립니다. 실패해도 실행은 실패하지 않습니다.
   - lineage·hash 규약은 0.1.1과 같습니다.
-  - `VOGUE_WORKFLOW_IMAGE_PROVIDER`는 `planning_sheet`(기본)와 `fixture`만 받습니다. 그 밖의 값(`openai` 포함)은 409 `IMAGE_PROVIDER_INVALID`로 거부합니다.
-- **계약 gate**: `contracts/workflow/baseline.json`이 frozen이어야 실행합니다. 아니면 409 `CONTRACT_NOT_FROZEN`입니다. stub은 `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`로 development 모드로 돌며, 이때 결과에 limitation이 붙습니다.
+  - `ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER`는 `planning_sheet`(기본)와 `fixture`만 받습니다. 그 밖의 값(`openai` 포함)은 409 `IMAGE_PROVIDER_INVALID`로 거부합니다.
+- **계약 gate**: `contracts/workflow/baseline.json`이 frozen이어야 실행합니다. 아니면 409 `CONTRACT_NOT_FROZEN`입니다. stub은 `ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED=1`로 development 모드로 돌며, 이때 결과에 limitation이 붙습니다.
 
 **증거**
 - Python 테스트 스위트(`tests/`)와 UI 테스트(`web/tests/`)

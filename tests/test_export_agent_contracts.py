@@ -93,7 +93,7 @@ class ReadConstantTests(unittest.TestCase):
             source = Path(tmp) / 'src' / 'reviews.py'
             source.parent.mkdir()
             source.write_text("VERSION = 'old-workflow'\n", encoding='utf-8')
-            with patch.dict(os.environ, {'VOGUE_SALES_MARKET_ROOT': tmp}):
+            with patch.dict(os.environ, {'FASHION_PLANNER_RESEARCH_ROOT': tmp}):
                 found = eac.envelope_version('research', envelope)
         self.assertEqual(found, {'route': '/v1/agents/research/reviews',
                                  'contract_version': 'old-workflow', 'detected_from': 'src/reviews.py:VERSION'})
@@ -177,7 +177,7 @@ class WorkflowCopyCheckTests(unittest.TestCase):
 
     def test_an_absent_checkout_is_skipped_with_the_reason(self):
         absent = self.tmp / 'absent'
-        with patch.dict(os.environ, {'VOGUE_NEW_PRODUCT_ROOT': str(absent)}):
+        with patch.dict(os.environ, {'FASHION_PLANNER_NOVELTY_ROOT': str(absent)}):
             lines, problems = eac.vendored_check()
         self.assertEqual(problems, [])
         self.assertEqual(lines, ['OK     orchestrator/contracts/workflow (2 files)'])

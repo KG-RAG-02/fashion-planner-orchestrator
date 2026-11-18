@@ -60,7 +60,7 @@ class ContainerImageTests(unittest.TestCase):
 
     def test_every_copy_source_is_in_the_build_context(self):
         sources = [line.split()[1] for line in self.dockerfile.splitlines() if line.startswith('COPY ')]
-        self.assertIn('examples/fixtures/query', sources)  # VOGUE_QUERY_STRUCTURING_MODE=synthetic_fixture
+        self.assertIn('examples/fixtures/query', sources)  # ORCHESTRATOR_QUERY_STRUCTURING_MODE=synthetic_fixture
         for source in sources:
             files = [source] if (ROOT / source).is_file() else [str(p.relative_to(ROOT)) for p in (ROOT / source).rglob('*')
                                                                 if p.is_file() and '__pycache__' not in p.parts]
@@ -83,9 +83,9 @@ class ContainerImageTests(unittest.TestCase):
                 self.assertTrue(excluded(self.rules, path))
 
     def test_runtime_user_store_and_healthcheck(self):
-        for fragment in ('USER 10001:10001', 'PYTHONPATH=/app/src', 'HOME=/tmp', 'VOGUE_ORCHESTRATOR_RUNTIME=container',
+        for fragment in ('USER 10001:10001', 'PYTHONPATH=/app/src', 'HOME=/tmp', 'ORCHESTRATOR_RUNTIME=container',
                          'mkdir -p /app/.local/workflow/blobs', 'chown -R 10001:10001 /app/.local',
-                         'VOGUE_WORKFLOW_STORE_DIR=/app/.local/workflow'):
+                         'ORCHESTRATOR_WORKFLOW_STORE_DIR=/app/.local/workflow'):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.dockerfile)
         healthcheck = next(line for line in self.dockerfile.splitlines() if 'urlopen' in line)

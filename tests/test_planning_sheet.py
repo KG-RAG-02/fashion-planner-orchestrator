@@ -346,7 +346,7 @@ class PlanningSheetRouteTests(FontMixin, LiveServerMixin, unittest.TestCase):
         self.store = WorkflowStore(self.store_dir)
 
     def call(self, method, path):
-        with environment(VOGUE_WORKFLOW_STORE_DIR=str(self.store_dir)):
+        with environment(ORCHESTRATOR_WORKFLOW_STORE_DIR=str(self.store_dir)):
             return self.request(method, path)
 
     def save(self, rid, envelope, *, final=True):

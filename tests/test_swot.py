@@ -80,7 +80,7 @@ class InputTests(unittest.TestCase):
 
     def test_enabled_unless_set_to_zero(self):
         self.assertTrue(enabled({}))
-        self.assertFalse(enabled({'VOGUE_SWOT_ENABLED': '0'}))
+        self.assertFalse(enabled({'ORCHESTRATOR_SWOT_ENABLED': '0'}))
 
 
 class ParseTests(unittest.TestCase):

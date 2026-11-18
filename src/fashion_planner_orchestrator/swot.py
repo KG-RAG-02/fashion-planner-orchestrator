@@ -46,7 +46,7 @@ class SwotRejected(Exception):
 
 
 def enabled(env: Mapping[str, str] | None = None) -> bool:
-    return str((os.environ if env is None else env).get('VOGUE_SWOT_ENABLED') or '1').strip() != '0'
+    return str((os.environ if env is None else env).get('ORCHESTRATOR_SWOT_ENABLED') or '1').strip() != '0'
 
 
 def checkpoint_key(request_id: str) -> str:
