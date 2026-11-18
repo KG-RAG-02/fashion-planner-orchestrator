@@ -44,7 +44,7 @@ fashion-planner-novelty와 공동 항목입니다(같은 ID로 서비스 쪽 내
   `tests/test_workflow.py`가 저장된 호출이 투영과 같은지 확인합니다.
 - **교훈.** 전송 오류가 진짜 응답을 가릴 수 있습니다. 요청을 쓰는 도중에 호출이 실패하면 서비스를 의심하기
   전에 요청 크기부터 확인하세요. 각 서비스에는 그 서비스가 읽는 것만 보내세요.
-- **커밋.** {{commit:7463058}}, {{commit:cefc61f}}
+- **커밋.** [`0f7a3e2`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/0f7a3e24e0aa77dc2008e9cd83ceed6d6393ca6a), [`13381f0`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/13381f0d686c39172296fcfe6083d4164af90807)
 
 <a id="t-http-02"></a>
 ## T-HTTP-02 서비스의 503·504가 502로 바뀜
@@ -57,7 +57,7 @@ fashion-planner-novelty와 공동 항목입니다(같은 ID로 서비스 쪽 내
   non-2xx는 `502`, `401`·`403`은 `UPSTREAM_AUTH`입니다. 거부된 응답 본문은 그대로 저장합니다.
 - **검증.** `tests/test_outbound.py`, `tests/test_workflow.py`.
 - **교훈.** 오류 매핑도 계약입니다. 표를 한 번 정하고 모든 행을 테스트하세요.
-- **커밋.** {{commit:3afd346}}
+- **커밋.** [`55d23e1`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/55d23e170c83dd6e72161a08d9ff9b032db2dba5)
 
 <a id="t-http-03"></a>
 ## T-HTTP-03 컨테이너끼리 연결하지 못하고, 타임아웃이 장애처럼 보임
@@ -70,7 +70,7 @@ fashion-planner-novelty와 공동 항목입니다(같은 ID로 서비스 쪽 내
   때만 허용합니다. 타임아웃은 `OSError`보다 먼저 확인해 `504 UPSTREAM_TIMEOUT`으로 보고합니다.
 - **검증.** `tests/test_outbound.py`, `tests/test_workflow.py`.
 - **교훈.** 예외 처리는 가장 구체적인 클래스부터 순서대로 쓰세요. Python의 `TimeoutError`는 `OSError`입니다.
-- **커밋.** {{commit:bdc8cba}}
+- **커밋.** [`d836ebb`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/d836ebb37a11460a70c7235294a2e30c91e2a442)
 
 <a id="t-http-04"></a>
 ## T-HTTP-04 알 수 없는 POST 경로가 실행을 시작함
@@ -81,7 +81,7 @@ fashion-planner-novelty와 공동 항목입니다(같은 ID로 서비스 쪽 내
   알려진 경로에 다른 메서드로 오면 `Allow` 헤더가 붙은 `405` problem으로 답합니다.
 - **검증.** `tests/test_workflow_routes.py`.
 - **교훈.** 비용이 드는 경로는 정확히 일치할 때만 받으세요.
-- **커밋.** {{commit:188414a}}
+- **커밋.** [`9fbfff9`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/9fbfff902654914d5cd141273fc9673bfa79adc4)
 
 <a id="t-ui-01"></a>
 ## T-UI-01 일부 호스트에서 모듈 UI가 로드되지 않음
@@ -93,7 +93,7 @@ fashion-planner-novelty와 공동 항목입니다(같은 ID로 서비스 쪽 내
   등록하고, `'self'`로 제한한 Content-Security-Policy를 보냅니다.
 - **검증.** `tests/test_static_assets.py`.
 - **교훈.** 직접 배포하는 파일의 MIME 형식을 호스트 설정에 맡기지 마세요.
-- **커밋.** {{commit:5a7c768}}
+- **커밋.** [`9c7b0b9`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/9c7b0b9976bc835b00c54de50a1507313340d6a7)
 
 <a id="t-deploy-01"></a>
 ## T-DEPLOY-01 inventory 마감과 orchestrator 읽기 타임아웃
@@ -104,7 +104,7 @@ fashion-planner-novelty와 공동 항목입니다(같은 ID로 서비스 쪽 내
   쓰는 210초 읽기 타임아웃을 두어 inventory의 타임아웃 응답이 orchestrator가 포기하기 전에 도착하게 했습니다.
 - **검증.** `tests/test_blank_settings.py`가 단계별 읽기 타임아웃 설정을 다룹니다. 값은 `deploy/compose.yaml`에 있습니다.
 - **교훈.** 호출하는 쪽의 타임아웃은 호출받는 쪽의 마감보다 길어야 합니다. 그래야 상대의 설명을 받을 수 있습니다.
-- **커밋.** {{commit:8b435a0}}, {{commit:4ffa2c5}}
+- **커밋.** [`6b80ff6`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/6b80ff660f0306dbdd381e4c5c62d7f5289cd2dd), [`01c7096`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/01c70967d6dd578e124ffb158ed717a37880f1ab)
 
 <a id="t-deploy-02"></a>
 ## T-DEPLOY-02 통합 스택이 기동하지 않음
@@ -116,7 +116,7 @@ fashion-planner-novelty와 공동 항목입니다(같은 ID로 서비스 쪽 내
 - **해결.** 토큰을 보내는 Compose health check, DuckDB 넘침 디렉터리용 쓰기 가능한 볼륨 subpath, `LLM_API_KEY` 이름으로 키 전달.
 - **검증.** stub 종단 간 검사(`deploy/e2e/run_e2e.py`).
 - **교훈.** 읽기 전용 루트 파일 시스템은 숨은 쓰기를 모두 드러냅니다. 쓰는 곳은 하나하나 명시적으로 마운트하세요.
-- **커밋.** {{commit:c10d35d}}
+- **커밋.** [`c7e1848`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/c7e1848b735db6fa1e6f65f1229eef98ae45e9f2)
 
 <a id="t-deploy-03"></a>
 ## T-DEPLOY-03 stub 프로필이 두 번째 실행에서 실패함
@@ -128,7 +128,7 @@ fashion-planner-novelty와 공동 항목입니다(같은 ID로 서비스 쪽 내
   동결되기 전이라 stub이 계약 게이트를 개발 모드로 실행했습니다. 지금은 동결된 기준선으로 실행합니다.)
 - **검증.** 같은 변경에서 stub 종단 간 검사(`deploy/e2e/run_e2e.py`)를 고쳤습니다.
 - **교훈.** 상태를 만드는 작업은 두 번째 실행까지 확인하세요.
-- **커밋.** {{commit:f50f13f}}
+- **커밋.** [`d225e21`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/d225e216fc91aecd31856a02a659822edc8783db)
 
 <a id="t-deploy-04"></a>
 ## T-DEPLOY-04 research의 메모리 부족
@@ -141,7 +141,7 @@ fashion-planner-research와 공동 항목입니다.
 - **해결.** 컨테이너 한도는 3 GB, DuckDB 한도는 2 GB로 하고 쓰기 가능한 넘침 디렉터리를 줬습니다.
 - **검증.** 이 레포에는 자동 검사가 없습니다(실제 데이터가 필요). 질의 자체는 fashion-planner-research가 다룹니다.
 - **교훈.** 프로세스 안의 메모리 한도는 컨테이너 한도보다 낮게 잡고, 넘칠 곳을 마련하세요.
-- **커밋.** {{commit:d440a3f}}, {{commit:de996a4}}
+- **커밋.** [`21f6389`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/21f63890470c066f08aac7cd37b341388a565f27), [`171694c`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/171694c0784117631be602e2a2eaf3d946495ac3)
 
 <a id="t-config-01"></a>
 ## T-CONFIG-01 설정하지 않은 값이 빈 문자열로 들어옴
@@ -151,7 +151,7 @@ fashion-planner-research와 공동 항목입니다.
 - **해결.** 모든 선택 설정에서 빈 값(빈 문자열이나 공백)은 "기본값" 또는 "설정 없음"을 뜻합니다.
 - **검증.** `tests/test_blank_settings.py`.
 - **교훈.** 설정을 읽는 경계에서 빈 값을 없는 값으로 다루세요.
-- **커밋.** {{commit:66797fc}}
+- **커밋.** [`bb4a64c`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/bb4a64c26b1690ca20e3520efd6294a081d4e147)
 
 <a id="t-sheet-01"></a>
 ## T-SHEET-01 기획서가 두 트렌드를 섞어 보여 줌
@@ -162,7 +162,7 @@ fashion-planner-research와 공동 항목입니다.
 - **해결.** 초안이 인용한 트렌드 스타일(`trend_basis.source_style_id`)을 초점으로 삼습니다.
 - **검증.** `tests/test_focus_trend.py`.
 - **교훈.** 계약이 순서를 정하지 않았다면 목록의 위치에 의미를 두지 마세요.
-- **커밋.** {{commit:118bc39}}
+- **커밋.** [`7a797da`](https://github.com/KG-RAG-02/fashion-planner-orchestrator/commit/7a797dabee8bff10724d7b479639caa7bc600b5c)
 
 ---
 
