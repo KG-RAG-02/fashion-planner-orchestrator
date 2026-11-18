@@ -2,8 +2,6 @@
 
 Project 08 (P08) is the coordinator and UI for the VOGUE product-planning workflow. It structures the user's request, calls the producer agents in sequence, validates and records their responses, then presents one integrated result. Agents do not call one another directly.
 
-시스템 아키텍처와 단계별 입출력은 [docs/architecture/index.html](docs/architecture/index.html)(PNG·SVG·[PDF](output/pdf/vogue-integrated-architecture.pdf))에 정리되어 있습니다. 2026-11-13 `main · b259b97` 시점의 스냅샷이므로 현재 계약 상태는 [workflow-contract](contracts/workflow/workflow-contract.md)를 확인하세요.
-
 ```text
 사용자 요청(텍스트·이미지)
   → 질의 구조화
@@ -30,7 +28,7 @@ Project 08 (P08) is the coordinator and UI for the VOGUE product-planning workfl
 - `web/`: 단일 workflow API를 사용하는 UI
 - `deploy/`: Compose 배포, stub 기반 E2E, 사전 점검과 런처
 
-현재 실행 구조는 [`docs/current-state.md`](docs/current-state.md), 호출 계약은 [`contracts/workflow/workflow-contract.md`](contracts/workflow/workflow-contract.md)에서 확인하세요. 계약 baseline은 현재 `proposed` 상태이며, producer/consumer 독립 검증이 끝난 frozen 계약으로 취급하지 않습니다.
+호출 계약은 [`contracts/workflow/workflow-contract.md`](contracts/workflow/workflow-contract.md)에서 확인하세요.
 
 ## 로컬 UI
 
@@ -41,8 +39,6 @@ deploy/bin/vogue stub
 ```
 
 stub UI 주소는 `http://127.0.0.1:18765`입니다. rehearsal/live는 `http://127.0.0.1:8765`를 사용합니다. 종료 방법과 프로필 차이는 [`deploy/README.md`](deploy/README.md)를 참고하세요. UI는 `POST /api/workflow/run`으로 실행하며 health 경로는 `GET /api/health`입니다.
-
-**현재 통합 상태:** P07 `main`은 Docker에서 HTTP 서버를 `0.0.0.0:8766`에 실행하며 P08 Compose의 `/api/health` 검사와 `service_healthy` 대기가 동작합니다. 2026-11-17 실연결 통합 실행(P08 `2d818e0`, P06 `96fc1a6`, P07 `3955fc2`)에서 P07 `/reviews`는 HTTP 200을 반환했습니다. 리뷰 상태는 R2/DuckDB 메모리 부족과 타깃 LLM 응답 검증 오류로 `partial`이었습니다. workflow baseline은 아직 `proposed`이므로 개발 실행에는 제안 계약 허용 설정이 필요합니다. 상세 내용은 [`deploy/README.md`](deploy/README.md)를 참고하세요.
 
 ## API
 
@@ -77,4 +73,4 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --test web/tests/model.test.mjs
 ```
 
-외부 에이전트에 연결하지 않는 합성 검증과 실제 서비스 연결 검증은 별개입니다. 현재 구성과 검증 범위는 [`docs/current-state.md`](docs/current-state.md)를 참고하세요.
+외부 에이전트에 연결하지 않는 합성 검증과 실제 서비스 연결 검증은 별개입니다.

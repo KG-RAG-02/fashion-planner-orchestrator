@@ -11,12 +11,6 @@ Browser → P08 UI/API
 
 Agent 간 요청은 P08이 순차 전달합니다. P07 요청은 P08이 P06 Draft에서 직접 만듭니다. 외부에 포트를 공개하는 서비스는 P08 UI뿐이며 Agent는 내부 backend 네트워크에서 통신합니다. 상품 이미지와 착장 이미지는 P06이 만들고, P08은 결과를 사용해 Planning Sheet PNG를 합성합니다.
 
-## 현재 연결 상태
-
-P07 `main`의 Dockerfile은 `vogue-sales-market-review-http --service-mode --host 0.0.0.0 --port 8766`을 실행합니다. P08 Compose의 `GET /api/health` healthcheck와 `service_healthy` 의존 조건이 준비되어 있으며, P08의 bearer 인증 요청은 `POST /v1/agents/sales-market-agent/reviews`로 연결됩니다. 요청 계약은 `vogue-sales-market-review/0.3-proposal`입니다.
-
-2026-11-17 실 DB/R2·LLM 통합 실행에서 P07 `/reviews`는 HTTP 200과 계약에 맞는 `partial` 응답을 반환했습니다. H&M 연령 집계는 DuckDB 메모리 부족으로 실패했고, 타깃 LLM 결과는 `secondary_segments` 검증을 통과하지 못했습니다. 이는 HTTP 연결이나 envelope/schema 불일치가 아니라 P07 내부 자료 처리·LLM 결과 오류였습니다. workflow 계약 baseline은 `proposed` 상태이므로 개발 실행에서만 `VOGUE_WORKFLOW_ALLOW_PROPOSED=1`로 gate를 열었습니다.
-
 ## 프로필
 
 | 프로필 | 구성 | 데이터·호출 특성 | UI |
