@@ -46,7 +46,7 @@ class ServiceManifestTests(unittest.TestCase):
             self.assertEqual(service_manifest.venv_root(), self.tmp / 'venvs')
         with patch.dict(os.environ):
             os.environ.pop('FASHION_PLANNER_VENV_ROOT', None)
-            self.assertEqual(service_manifest.venv_root(), Path('~/.cache/vogue-venvs').expanduser())
+            self.assertEqual(service_manifest.venv_root(), Path('~/.cache/fashion-planner-venvs').expanduser())
 
 
 if __name__ == '__main__':

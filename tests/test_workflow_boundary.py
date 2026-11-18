@@ -93,7 +93,8 @@ class BoundaryTests(unittest.TestCase):
         with patch.dict(os.environ):
             os.environ.pop('FASHION_PLANNER_SERVICE_MANIFEST', None)
             entries = services(require_runtime=False)
-        self.assertEqual(next(entry for entry in entries if entry['name'] == 'stock')['port'], 8002)
+        self.assertEqual([entry['name'] for entry in entries], ['orchestrator', 'trend', 'inventory', 'novelty', 'research'])
+        self.assertEqual(next(entry for entry in entries if entry['name'] == 'inventory')['port'], 8002)
         self.assertTrue(all('0.0.0.0' not in entry['args'] for entry in entries))
-        self.assertEqual(next(entry for entry in entries if entry['name'] == 'sales-market')['repo'].name,
-                         'research')
+        self.assertEqual(next(entry for entry in entries if entry['name'] == 'research')['repo'].name,
+                         'fashion-planner-research')

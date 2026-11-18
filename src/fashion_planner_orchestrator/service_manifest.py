@@ -12,8 +12,8 @@ DEFAULT_MANIFEST = ROOT / 'deploy/service-manifest.json'
 
 
 def venv_root():
-    """Shared venvs live outside iCloud: ${FASHION_PLANNER_VENV_ROOT:-~/.cache/vogue-venvs}/<service>."""
-    return Path((os.environ.get('FASHION_PLANNER_VENV_ROOT') or '').strip() or '~/.cache/vogue-venvs').expanduser()
+    """Shared venvs live outside iCloud: ${FASHION_PLANNER_VENV_ROOT:-~/.cache/fashion-planner-venvs}/<service>."""
+    return Path((os.environ.get('FASHION_PLANNER_VENV_ROOT') or '').strip() or '~/.cache/fashion-planner-venvs').expanduser()
 
 
 def _python(name, repo, version):
@@ -71,7 +71,7 @@ def services(manifest_path=None, *, require_runtime=True):
         env = {'PYTHONDONTWRITEBYTECODE':'1'}
         if name == 'orchestrator':
             env.update(ORCHESTRATOR_HOST='127.0.0.1', ORCHESTRATOR_PORT=str(port))
-        elif name == 'new-product':
+        elif name == 'novelty':
             env.update(NOVELTY_HTTP_MODE='local', NOVELTY_HOST='127.0.0.1', NOVELTY_PORT=str(port))
         elif name == 'trend':
             env.update(TREND_API_HOST='127.0.0.1', TREND_API_PORT=str(port))

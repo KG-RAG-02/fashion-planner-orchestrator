@@ -74,7 +74,7 @@ class BlankSettingTests(unittest.TestCase):
 
     def test_blank_launcher_and_server_settings(self):
         with patch.dict(os.environ, {'FASHION_PLANNER_VENV_ROOT': '  ', 'FASHION_PLANNER_SERVICE_MANIFEST': ' '}):
-            self.assertEqual(service_manifest.venv_root(), service_manifest.Path('~/.cache/vogue-venvs').expanduser())
+            self.assertEqual(service_manifest.venv_root(), service_manifest.Path('~/.cache/fashion-planner-venvs').expanduser())
             with patch.object(service_manifest, 'DEFAULT_MANIFEST', real_tempdir(self) / 'absent.json'):
                 self.assertEqual(service_manifest.services(require_runtime=False), [])
         from unittest.mock import Mock
