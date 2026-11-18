@@ -74,7 +74,7 @@ class ContainerImageTests(unittest.TestCase):
     def test_private_and_repository_only_material_stays_out(self):
         for path in ('.git/HEAD', '.env', '.envrc', '.env.local', 'configs/.env', '.local/latest-run.json',
                      '.local/workflow/blobs/x', 'tests/test_workflow.py', 'tools/workflow_contract/support.py',
-                     'deploy/service-manifest.json', 'docs/workflow-integration-conventions.md', 'data/query-structuring-eval/dev.json',
+                     'deploy/service-manifest.json', 'docs/architecture.md', 'data/query-structuring-eval/dev.json',
                      'scripts/local_servers.py', 'compose.yaml', 'README.md',
                      'src/fashion_planner_orchestrator/server 2.py', 'web/app 2.js', 'contracts/workflow/baseline 3.json',
                      'prompts/query_structuring/examples 2.json',

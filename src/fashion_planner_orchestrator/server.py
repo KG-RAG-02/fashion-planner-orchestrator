@@ -172,7 +172,7 @@ def _single_header(handler: BaseHTTPRequestHandler, name: str) -> tuple[bool, st
 
 
 def _request_is_trusted_local(handler: BaseHTTPRequestHandler) -> bool:
-    """Conventions section 5: (loopback peer or peer in ORCHESTRATOR_TRUSTED_PEER_CIDRS)
+    """docs/architecture.md §5: (loopback peer or peer in ORCHESTRATOR_TRUSTED_PEER_CIDRS)
     and Host in ORCHESTRATOR_ALLOWED_HOSTS and (no Origin or Origin == http://<Host>)."""
     try:
         peer = ipaddress.ip_address(handler.client_address[0])

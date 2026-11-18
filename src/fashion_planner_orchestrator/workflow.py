@@ -14,7 +14,7 @@ from .workflow_contract import (VERSION, TREND_HANDOFF_VERSION, INVENTORY_HANDOF
                                 STAGES, DRAFT_MODES, research_review_input, require, require_novelty_inputs, walk)
 from .workflow_store import ArtifactError, RESOLVER_CODES, canonical, digest, strict_json, checked_image
 
-# Namespaces whose artifacts orchestrator imports through a reader (conventions section 8): peer review artifacts.
+# Namespaces whose artifacts orchestrator imports through a reader (docs/contracts.md §5): peer review artifacts.
 PEER_NAMESPACES = ('research', 'novelty')
 # An upstream that itself answers 503/504 keeps that meaning (the contract's error table): the same
 # codes as a refused connection or a socket timeout, retryable. Every other non-2xx is 502.
@@ -53,7 +53,7 @@ class StageFailure(RuntimeError):
 
 
 def stage_failure(exc, artifact=None):
-    """Outbound failure mapping (conventions section 4) for one producer call.
+    """Outbound failure mapping (docs/architecture.md §5, docs/contracts.md §6) for one producer call.
 
     Timeouts are OSErrors too, so they are matched first (QA-O-01: a read timeout used to
     surface as 503 UPSTREAM_UNAVAILABLE). TLS certificate errors are both OSError and

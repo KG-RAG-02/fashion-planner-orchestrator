@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-# Conventions section 2: uid/gid 10001, read-only root filesystem (compose), HOME=/tmp,
+# docs/decisions/0006-single-host-compose-profiles.md: uid/gid 10001, read-only root filesystem (compose), HOME=/tmp,
 # writable state only on the /app/.local volume. Code is root-owned and read-only for the app user.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

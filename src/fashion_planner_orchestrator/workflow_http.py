@@ -56,7 +56,7 @@ def peer_artifact_reader(env=None):
 def ensure_live_contract(contract=None, env=None):
     """Return the run limitations the contract gate requires, or raise 409 CONTRACT_NOT_FROZEN.
 
-    Reads only contracts/workflow (or ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE); see conventions section 9.
+    Reads only contracts/workflow (or ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE); see docs/contracts.md §7.
     """
     status = contract_gate_status(env, getattr(contract, 'root', None))
     if status['gate'] == 'open':
@@ -262,7 +262,7 @@ def dispatch(handler, value):
     try:
         require(isinstance(value, dict), 'INPUT_OBJECT_REQUIRED')
         if value.get('contract_version') != VERSION:
-            # Rejected before any model, DB or network work (conventions section 1).
+            # Rejected before any model, DB or network work (docs/contracts.md §2).
             problem(handler, 422, 'UNSUPPORTED_CONTRACT_VERSION')
             return
         rid = value.get('request_id')

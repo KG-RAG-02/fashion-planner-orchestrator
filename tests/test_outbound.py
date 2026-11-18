@@ -1,4 +1,4 @@
-"""Outbound HTTP policy from orchestrator (conventions section 4). Loopback sockets only; no network."""
+"""Outbound HTTP policy from orchestrator (docs/architecture.md §5, docs/contracts.md §6). Loopback sockets only; no network."""
 import importlib.util
 import os
 from pathlib import Path

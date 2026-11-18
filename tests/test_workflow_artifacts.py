@@ -1,4 +1,4 @@
-"""Artifact naming and resolution (conventions section 8): content-addressed orchestrator store, peer reader."""
+"""Artifact naming and resolution (docs/contracts.md §5): content-addressed orchestrator store, peer reader."""
 import hashlib
 import io
 import os

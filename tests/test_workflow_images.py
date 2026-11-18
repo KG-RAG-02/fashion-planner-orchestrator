@@ -1,4 +1,4 @@
-"""Final image providers (fixture | openai) and the image-retry switch (conventions section 9)."""
+"""Stage-06 image providers (planning_sheet | fixture) and the image-retry switch (docs/contracts.md §7, configs/README.md)."""
 import importlib.util
 import io
 import unittest

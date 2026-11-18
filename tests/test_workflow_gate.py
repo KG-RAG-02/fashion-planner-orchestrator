@@ -1,4 +1,4 @@
-"""In-repo contract gate (conventions section 9): frozen runs, development override, 409 otherwise."""
+"""In-repo contract gate (docs/contracts.md §7, configs/README.md): frozen runs, development override, 409 otherwise."""
 import copy
 import importlib
 import importlib.util

@@ -16,12 +16,12 @@ import stat
 import tempfile
 import warnings
 
-# Conventions section 8: artifact://<namespace>/<relative-path>; orchestrator mints artifact://orchestrator/blobs/<sha256>.
+# docs/contracts.md §5: artifact://<namespace>/<relative-path>; orchestrator mints artifact://orchestrator/blobs/<sha256>.
 ARTIFACT_URI = re.compile(r'artifact://[A-Za-z0-9_./-]+')
 ORCHESTRATOR_BLOB_URI = re.compile(r'artifact://orchestrator/blobs/([0-9a-f]{64})')
 SHA256_HEX = re.compile(r'[0-9a-f]{64}')
-MAX_ARTIFACT_BYTES = 16777216  # retained response limit (conventions section 6)
-# Resolver failures that keep their own code and HTTP status (conventions section 8).
+MAX_ARTIFACT_BYTES = 16777216  # retained response limit (docs/contracts.md §6)
+# Resolver failures that keep their own code and HTTP status (docs/contracts.md §5).
 RESOLVER_CODES = {'ARTIFACT_READER_REQUIRED': 503, 'INVALID_ARTIFACT_URI': 422, 'INVALID_ARTIFACT_PATH': 422,
                   'ARTIFACT_UNAVAILABLE': 503, 'ARTIFACT_SIZE_MISMATCH': 422, 'ARTIFACT_HASH_MISMATCH': 422,
                   'ARTIFACT_TOO_LARGE': 413}
@@ -405,7 +405,7 @@ class PeerArtifactReader:
     artifact://<namespace>/<path> maps to <root>/<namespace>/<path>. Every component below the root
     is opened with O_NOFOLLOW relative to its parent, so escapes and symlinks are refused; the file
     must be regular with exactly size_bytes bytes and the reference's sha256. Fails closed with the
-    conventions section 8 codes.
+    docs/contracts.md §5 codes.
     """
 
     def __init__(self, root, namespaces=('research',), max_bytes=MAX_ARTIFACT_BYTES):

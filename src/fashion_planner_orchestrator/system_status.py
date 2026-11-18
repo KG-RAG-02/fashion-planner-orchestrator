@@ -18,7 +18,7 @@ from .connectors import ConnectorConfigurationError, _safe_origin, _service_url,
 
 PROBE_TIMEOUT_SECONDS = 2.0
 MAX_PROBE_BODY_BYTES = 4096
-# (id, base URL variable, liveness path, bearer required): conventions section 2.
+# (id, base URL variable, liveness path, bearer required): docs/architecture.md §5.
 AGENTS = (
     ('trend', 'ORCHESTRATOR_TREND_URL', '/health', False),
     ('inventory', 'ORCHESTRATOR_INVENTORY_URL', '/health/live', False),
