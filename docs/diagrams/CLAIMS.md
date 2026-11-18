@@ -22,9 +22,9 @@
 | inventory → 모델 가중치 호스트: OpenCLIP 가중치를 처음 불러올 때 내려받음. 받는 곳은 설치한 open_clip 버전이 정함(open_clip_torch 4.2.2는 Hugging Face Hub를 먼저 씀, inventory 세션 확인) | `fashion-planner-inventory/fashion_planner_inventory/clip_matcher.py:51-52,79-92`(`ViT-B-32-quickgelu`, `openai`), open_clip `pretrained.py`의 `download_pretrained`, `deploy/compose.data.yaml`(`HF_HOME=/models/hf` 볼륨) | 파일 읽기 |
 | novelty → 초안 원장(SQLite + 이미지 파일) | `fashion-planner-novelty/src/fashion_planner_novelty/workflows/draft_artifacts.py:151` | 파일 읽기 |
 | novelty → OpenAI: 컨셉 텍스트, 이미지(live에서만) | `fashion-planner-novelty/src/fashion_planner_novelty/sources/openai_text_provider.py:152`, `fashion-planner-novelty/src/fashion_planner_novelty/workflows/image_generation.py:102`, `deploy/compose.paid.yaml:16-18` | 파일 읽기 |
-| research → R2: H&M 집계 스냅샷 | `fashion-planner-research/src/fashion_planner_research/sources/sales/hm_kaggle/hm_research_aggregate.py:525`, `deploy/compose.data.yaml:64` | 파일 읽기 |
-| research → Frankfurter 환율 | `fashion-planner-research/src/fashion_planner_research/domain/currency_conversion.py:17` | 파일 읽기 |
-| research → OpenAI: 타깃 가설(live, 동의 설정 1일 때) | `fashion-planner-research/src/fashion_planner_research/llm/responses_api.py:17`, `deploy/compose.paid.yaml:28-31` | 파일 읽기 |
+| research → R2: H&M 동의(`RESEARCH_HM_NONCOMMERCIAL_RESEARCH=1`)와 스냅샷 키가 있으면 집계 스냅샷 하나(H&M 가격·고객 연령 + 원단 목록), 동의가 꺼져 있으면(기본) 원단 목록 CSV만 | `fashion-planner-research/src/fashion_planner_research/sources/sales/hm_kaggle/hm_combined_research_source.py:40-87`, `fashion-planner-research/src/fashion_planner_research/sources/sales/hm_kaggle/hm_research_aggregate.py:525`, `fashion-planner-research/src/fashion_planner_research/sources/market/fabric_price_r2_source.py:26`, `deploy/compose.data.yaml:64-66` | 파일 읽기 |
+| research → Frankfurter 환율: H&M 동의가 켜지고 과거 가격이 있을 때만 | `fashion-planner-research/src/fashion_planner_research/domain/currency_conversion.py:17`, `fashion-planner-research/src/fashion_planner_research/http_server.py:444-448` | 파일 읽기 |
+| research → OpenAI: 타깃 가설(live, 전송 동의 `RESEARCH_TARGET_LLM_TRANSFER_AUTHORIZED=1`일 때, 120초 제한) | `fashion-planner-research/src/fashion_planner_research/llm/responses_api.py:17`, `fashion-planner-research/src/fashion_planner_research/http_server.py:460-472`, `deploy/compose.paid.yaml:28-31` | 파일 읽기 |
 | 초안 원장 → 실행 기록: 읽기 전용 볼륨, sha256 확인 | `deploy/compose.yaml:199-204`, `src/fashion_planner_orchestrator/workflow.py:242,255`, `src/fashion_planner_orchestrator/workflow_store.py:273,402-407` | `tests/test_workflow_artifacts.py` |
 
 ## 2. 계약 지도 (`contracts.svg`)

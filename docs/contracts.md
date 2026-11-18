@@ -28,7 +28,8 @@
 
 아래는 orchestrator 자신의 API(`fashion-planner-workflow`)와 orchestrator가 서비스에 보내는 요청의 형식이다. 서비스의 실패
 본문, 버전 거절 코드, 모르는 키 처리는 서비스마다 다르다(예: trend는 실패 본문이 `{"error": {"code", "message"}}`이고, 모르는
-`contract_version`을 `400`으로 거절하며, 모르는 필드는 무시한다). 그래서 orchestrator는 서비스 실패를 HTTP 상태로 분류하고
+`contract_version`을 `400`으로 거절하며, 모르는 필드는 무시한다. research는 `status` 없이
+`{"contract_version", "request_id" | null, "error": {"code", "message"}}`만 보낸다). 그래서 orchestrator는 서비스 실패를 HTTP 상태로 분류하고
 본문은 실행 기록에 보관만 한다. 오류 본문을 검사해 코드를 가져오는 것은 research뿐이다(§6).
 
 ```text
@@ -58,8 +59,8 @@
     보낸 값과 같은지 확인한다. novelty는 본문을 1,000,000바이트까지 받는다([troubleshooting.md](troubleshooting.md#t-http-01)).
 - **research**: 초안 전체가 아니라 `product_profile`에서 뽑은 다섯 필드(`category`, `product_type`, `gender`, `season`,
   `material`)와 필드별 출처(`kind`, `source_ref` = `novelty.draft.product_profile.<필드>`, `evidence_ids`)를 보낸다.
-  초안에 쓸 수 있는 값이 없으면 결정적인 자리값을 `kind: proposal`로 보낸다. research는 이 값을 확정 사실이 아닌
-  제안으로 다룬다.
+  초안에 쓸 수 있는 값이 없으면 결정적인 자리값을 `kind: proposal`로 보낸다. research는 출처를 형식만 검사하고 계산에는
+  쓰지 않으므로, `proposal`인 자리값도 그대로 자료 선택에 쓰인다(예: `material`=`혼방 소재`로 원단 목록을 맞춘다).
   - research는 문자열을 120자까지 받는다. novelty가 이 다섯 값을 120자 이하로 보장한다. `product_type`, `gender`,
     `material`이 길면 novelty가 규칙 값이나 제안값으로 바꾼다. `category`와 `season`은 novelty가 기획 요청의 값을 그대로
     쓰므로 대신할 값이 없어, 120자를 넘는 요청은 novelty가 `422 INVALID_INPUT`으로 거절하고 3단계가 502로 멈춘다.

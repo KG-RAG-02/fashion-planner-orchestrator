@@ -55,7 +55,7 @@ deploy/bin/fashion-planner preflight live
 deploy/bin/fashion-planner live "상품 기획 요청"
 ```
 
-- rehearsal에는 직접 만든 Neo4j Aura(트렌드 그래프)와 R2 버킷(재고 DuckDB·이미지, research 집계 스냅샷)이 필요하다.
+- rehearsal에는 직접 만든 Neo4j Aura(트렌드 그래프)와 R2 버킷(재고 DuckDB·이미지, research 원단 판매 목록과 H&M 동의 시 집계 스냅샷)이 필요하다.
   데이터를 만드는 방법은 각 서비스 레포의 `docs/data.md`에 있다([docs/data.md](../docs/data.md)).
 - research는 env 파일의 동의 설정을 `1`로 켤 때만 해당 동작을 한다. `RESEARCH_HM_NONCOMMERCIAL_RESEARCH`(H&M Kaggle 자료,
   비상업 연구만 허용), `RESEARCH_TARGET_LLM_TRANSFER_AUTHORIZED`(타깃 가설 입력을 외부 LLM에 보냄, live에서만 의미 있음).

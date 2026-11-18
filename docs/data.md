@@ -27,7 +27,7 @@ orchestrator 자체는 데이터 소스를 읽지 않는다. 각 서비스가 �
 | 프로필 | 필요한 것 | 안내 |
 |---|---|---|
 | stub | 없음. 합성 그래프, 합성 DuckDB, 합성 리뷰 소스, 합성 이미지, 합성 질의 구조화 | [deploy/README.md](../deploy/README.md) |
-| rehearsal | 직접 만든 Neo4j(Aura 등)의 트렌드 그래프, 직접 만든 Cloudflare R2 버킷의 재고 DuckDB·이미지와 H&M 집계 스냅샷 | 각 서비스의 `docs/data.md` |
+| rehearsal | 직접 만든 Neo4j(Aura 등)의 트렌드 그래프, 직접 만든 Cloudflare R2 버킷의 재고 DuckDB·이미지와 research 자료(원단 판매 목록, H&M 동의 시 집계 스냅샷) | 각 서비스의 `docs/data.md` |
 | live | rehearsal 전부 + 본인 OpenAI 키(비용 발생) | 같음 |
 
 - 트렌드 그래프: [fashion-planner-trend](https://github.com/KG-RAG-02/fashion-planner-trend)의 데이터 문서.

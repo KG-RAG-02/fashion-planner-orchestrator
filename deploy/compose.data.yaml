@@ -59,8 +59,8 @@ services:
     environment:
       <<: *r2
       RESEARCH_CACHE_DIR: /data/hm-cache
-      # research reads its H&M age, price and fabric research from one precomputed aggregate snapshot;
-      # the env file supplies its content-addressed R2 key.
+      # With the H&M opt-in below, research reads H&M age, price and fabric research from one precomputed aggregate
+      # snapshot (the env file supplies its content-addressed R2 key). Without it, research reads only the fabric CSV.
       RESEARCH_AGGREGATE_SNAPSHOT_KEY: ${RESEARCH_AGGREGATE_SNAPSHOT_KEY:?research aggregate snapshot key is required for rehearsal/live}
       # Deployer opt-in: H&M Kaggle data is for non-commercial research only (research reads it only when 1).
       RESEARCH_HM_NONCOMMERCIAL_RESEARCH: ${RESEARCH_HM_NONCOMMERCIAL_RESEARCH:-0}
