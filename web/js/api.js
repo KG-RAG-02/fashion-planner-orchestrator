@@ -27,7 +27,7 @@ export function systemStatus() {
 export function runWorkflow({ requestId, text, images }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), RUN_TIMEOUT_MS);
-  const payload = { contract_version: 'vogue-workflow/0.2', request_id: requestId, input: { user_input: { text, images } } };
+  const payload = { contract_version: 'fashion-planner-workflow', request_id: requestId, input: { user_input: { text, images } } };
   return request('/api/workflow/run', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload), signal: controller.signal })
     .finally(() => clearTimeout(timer));
 }
@@ -49,7 +49,7 @@ export function getDecisions(requestId) {
 }
 
 export function saveDecision(requestId, { integratedSha, decision, note }) {
-  const payload = { contract_version: 'vogue-workflow/0.2', request_id: requestId, integrated_response_sha256: integratedSha, decision };
+  const payload = { contract_version: 'fashion-planner-workflow', request_id: requestId, integrated_response_sha256: integratedSha, decision };
   if (note) payload.note = note;
   return request(`/api/workflow/runs/${encodeURIComponent(requestId)}/md-decision`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload) });
 }

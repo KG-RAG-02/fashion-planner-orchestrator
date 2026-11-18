@@ -1,7 +1,7 @@
 """Season arithmetic for query structuring. Standard library only.
 
 Dates are always computed here, in code. The LLM only reports whether the query mentions a
-season and which one; it never guesses today's date (contract rule, contracts/agents/trend-analysis-agent/input/trend-query.md).
+season and which one; it never guesses today's date (contract rule, contracts/agents/trend/input/trend-query.md).
 """
 
 from __future__ import annotations

@@ -16,9 +16,9 @@ import stat
 import tempfile
 import warnings
 
-# Conventions section 8: artifact://<namespace>/<relative-path>; P08 mints artifact://p08/blobs/<sha256>.
+# Conventions section 8: artifact://<namespace>/<relative-path>; P08 mints artifact://orchestrator/blobs/<sha256>.
 ARTIFACT_URI = re.compile(r'artifact://[A-Za-z0-9_./-]+')
-P08_BLOB_URI = re.compile(r'artifact://p08/blobs/([0-9a-f]{64})')
+P08_BLOB_URI = re.compile(r'artifact://orchestrator/blobs/([0-9a-f]{64})')
 SHA256_HEX = re.compile(r'[0-9a-f]{64}')
 MAX_ARTIFACT_BYTES = 16777216  # retained response limit (conventions section 6)
 # Resolver failures that keep their own code and HTTP status (conventions section 8).
@@ -70,7 +70,7 @@ def artifact_path(uri):
 
 def p08_artifact(sha, media_type, size):
     """The content-addressed P08 reference: the same bytes always give the same URI."""
-    return dict(artifact_id=sha, uri='artifact://p08/blobs/' + sha, sha256=sha, media_type=media_type,
+    return dict(artifact_id=sha, uri='artifact://orchestrator/blobs/' + sha, sha256=sha, media_type=media_type,
                 size_bytes=size, immutable=True)
 
 
@@ -173,7 +173,7 @@ class WorkflowStore:
             raise ValueError('STORE_SYMLINK')
         with self.db() as db:
             # artifacts: legacy artifact://local/<uuid> rows and imported peer references (exact metadata).
-            # blob_refs/blob_owners: content-addressed artifact://p08/blobs/<sha256> references.
+            # blob_refs/blob_owners: content-addressed artifact://orchestrator/blobs/<sha256> references.
             db.executescript('''
             CREATE TABLE IF NOT EXISTS artifacts(uri TEXT PRIMARY KEY, metadata TEXT NOT NULL, blob TEXT NOT NULL, owner TEXT);
             CREATE TABLE IF NOT EXISTS blob_refs(sha TEXT NOT NULL, media_type TEXT NOT NULL, size_bytes INTEGER NOT NULL, PRIMARY KEY(sha, media_type));
@@ -255,7 +255,7 @@ class WorkflowStore:
         return _read_regular(descriptor)
 
     def put(self, data, mime='application/json', owner=None):
-        """Content-addressed: artifact://p08/blobs/<sha256>; identical bytes are stored once."""
+        """Content-addressed: artifact://orchestrator/blobs/<sha256>; identical bytes are stored once."""
         data = bytes(data)
         sha = hashlib.sha256(data).hexdigest()
         self._write_blob(data, sha)
@@ -345,7 +345,7 @@ class WorkflowStore:
                               (rid, rid)).fetchone() is not None
 
     def integrated_response(self, rid):
-        """(envelope, python-json-sort/1 sha256) of the latest final integrated response, or None."""
+        """(envelope, python-json-sort sha256) of the latest final integrated response, or None."""
         value = self.run(rid, 'current') or self.run(rid)
         return (value['envelope'], digest(value['envelope'])) if value else None
 
@@ -400,7 +400,7 @@ class WorkflowStore:
 
 
 class PeerArtifactReader:
-    """Resolve peer artifacts (artifact://p07/...) under a read-only root (VOGUE_PEER_ARTIFACT_ROOT).
+    """Resolve peer artifacts (artifact://research/...) under a read-only root (VOGUE_PEER_ARTIFACT_ROOT).
 
     artifact://<namespace>/<path> maps to <root>/<namespace>/<path>. Every component below the root
     is opened with O_NOFOLLOW relative to its parent, so escapes and symlinks are refused; the file
@@ -408,7 +408,7 @@ class PeerArtifactReader:
     conventions section 8 codes.
     """
 
-    def __init__(self, root, namespaces=('p07',), max_bytes=MAX_ARTIFACT_BYTES):
+    def __init__(self, root, namespaces=('research',), max_bytes=MAX_ARTIFACT_BYTES):
         self.root = Path(root)
         self.namespaces = frozenset(namespaces)
         self.max_bytes = max_bytes

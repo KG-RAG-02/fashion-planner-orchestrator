@@ -14,8 +14,8 @@ TOKEN = 'dummy-status-token'
 
 
 def envelope(rid, status='ok', marker=0):
-    return {'http_status': 200, 'envelope': {'contract_version': 'vogue-workflow/0.2', 'request_id': rid,
-                                              'producer': {'agent_id': 'vogue-orchestrator', 'schema_version': 'integrated-result/2.0'},
+    return {'http_status': 200, 'envelope': {'contract_version': 'fashion-planner-workflow', 'request_id': rid,
+                                              'producer': {'agent_id': 'orchestrator', 'schema_version': '1.0.0'},
                                               'status': status, 'result': {'request_id': rid, 'marker': marker,
                                                                            'user_input': {'text': 'legacy query ' + rid}}}}
 
@@ -76,7 +76,7 @@ class MdDecisionTests(EndpointTestBase, unittest.TestCase):
         self.path = '/api/workflow/runs/run-1/md-decision'
 
     def decision(self, **overrides):
-        body = {'contract_version': 'vogue-workflow/0.2', 'request_id': 'run-1', 'integrated_response_sha256': self.sha,
+        body = {'contract_version': 'fashion-planner-workflow', 'request_id': 'run-1', 'integrated_response_sha256': self.sha,
                 'decision': 'adopt'}
         body.update(overrides)
         return {k: v for k, v in body.items() if v is not ...}
@@ -97,7 +97,7 @@ class MdDecisionTests(EndpointTestBase, unittest.TestCase):
 
     def test_strict_validation(self):
         cases = [(self.decision(extra=True), 'MD_DECISION_UNKNOWN_FIELD'),
-                 (self.decision(contract_version='vogue-workflow/0.1'), 'UNSUPPORTED_CONTRACT_VERSION'),
+                 (self.decision(contract_version='old-workflow'), 'UNSUPPORTED_CONTRACT_VERSION'),
                  (self.decision(contract_version=...), 'UNSUPPORTED_CONTRACT_VERSION'),
                  (self.decision(request_id='run-2'), 'REQUEST_ID_MISMATCH'),
                  (self.decision(integrated_response_sha256='ABC'), 'INTEGRATED_RESPONSE_SHA256_INVALID'),

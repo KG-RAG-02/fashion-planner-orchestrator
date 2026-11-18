@@ -1,0 +1,506 @@
+{
+  "_provenance": {
+    "agent_id": "novelty",
+    "contract": "new-product-agent /runs input (three producer payloads)",
+    "direction": "input",
+    "method": "authored",
+    "source_repo": "KG-RAG-02/new-product-agent",
+    "source_branch": "feat/p06-images-prompt-budget-20261117",
+    "source_commit": "3abae2c73664",
+    "source_files": [
+      {
+        "path": "src/vogue_npp/adapters/draft_inputs.py",
+        "sha256": "60da5706dbb39b3ba08a5fd647f134b3222eca940fb73576d4e9c4c823b235da"
+      },
+      {
+        "path": "src/vogue_npp/workflows/planning_draft.py",
+        "sha256": "dc976d7e89f5c4dfed851949d3e26e7a981118bee9786236aa8e5796cd2b34bb"
+      },
+      {
+        "path": "src/vogue_npp/domain/context.py",
+        "sha256": "59157ad70eebcde506067c1a8786e69c8f6395ddc16100aeba0dac1ed32796ab"
+      },
+      {
+        "path": "src/vogue_npp/workflows/text_concept_generation.py",
+        "sha256": "8b42abf1438a8cf65bc36196e5c0736c40b8333a847d4a0b25b1412d3fb2289c"
+      },
+      {
+        "path": "src/vogue_npp/prototype/server.py",
+        "sha256": "76475ed4b4f67bc89d44eb714e09947f9002d32b1eb31ab3fc7b571483607f94"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/new-product-agent/runs",
+      "contract_version": "vogue-handoff/0.3",
+      "detected_from": "src/vogue_npp/prototype/server.py:_build_handoff_run"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "소유 레포에 JSON Schema가 없어 코드를 읽고 이 저장소에서 작성했다. 스크립트가 다시 쓰지 않는다. source_files의 sha256이 달라지면 코드를 다시 읽고 손으로 갱신한다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:vogue:orchestrator:snapshot:new-product-agent:input:handoff-0.3",
+    "title": "new-product-agent /runs input (vogue-handoff/0.3)",
+    "description": "envelope의 input 객체. 요청 최상위는 정확히 {contract_version: \"vogue-handoff/0.3\", request_id, input}이고(아니면 422 INVALID_ENVELOPE·UNSUPPORTED_CONTRACT_VERSION, request_id가 빈 문자열이면 INVALID_REQUEST_ID), input은 정확히 아래 세 키를 가진다(아니면 422 INVALID_INPUT; 0.2의 sales_market_result는 더 이상 받지 않는다). 세 payload의 request_id는 모두 envelope request_id와 같아야 하고, server.py가 planning_request.request_id를 strip()[:160]한 값과 다시 비교하므로 앞뒤 공백 없이 160자 이하여야 한다 (JSON Schema로 표현 불가, adapters/draft_inputs.py·prototype/server.py가 검사). 본문은 application/json, 1,000,000 bytes 이하. 실패 시 HTTP 4xx {error:{code,message}}. 성공은 입력 status가 no_results·error여도 HTTP 200. 각 payload의 '읽는 필드' 설명은 server.py가 실제로 꺼내 쓰는 값이며, 나머지는 받은 그대로 input_evidence에 보존된다. P08은 trend_result와 inventory_product_result를 원본이 아니라 등록 투영 p06-input/2로 보낸다: P06이 읽지 않는 필드와 같은 재고 상품의 중복 사진만 빼고 나머지 값은 바꾸지 않으며, 전체 원본은 P08 런 기록(sources.trend·sources.stock의 raw_response)에 남는다. VOGUE_WORKFLOW_P06_INPUT_PROJECTION=raw이면 원본을 그대로 보낸다(배포 1단계).",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "planning_request",
+      "trend_result",
+      "inventory_product_result"
+    ],
+    "properties": {
+      "planning_request": {
+        "type": "object",
+        "description": "PlanningRequest 1.0. adapters/draft_inputs.py는 request_id·schema_version만 보고 아래 필드는 server.py가 읽는다. payload 어디에 있든 evidence_id·evidence_ids, limitations·data_limitations, errors, missing_data·missing_fields·missing_attributes를 재귀 수집한다.",
+        "required": [
+          "request_id",
+          "schema_version"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "description": "envelope request_id와 같아야 한다 (adapters/draft_inputs.py: 422 REQUEST_ID_MISMATCH)."
+          },
+          "schema_version": {
+            "const": "1.0"
+          },
+          "agent_id": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "생략 가능 (없으면 user-request). 있으면 공백만이 아닌 문자열이어야 한다 (아니면 422 INVALID_PRODUCER_PAYLOAD). 값은 검사하지 않는다."
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_results",
+              "error"
+            ],
+            "description": "생략 가능 (없으면 ok). 다른 값은 422 INVALID_PRODUCER_PAYLOAD"
+          },
+          "query": {
+            "type": "string",
+            "description": "원문. 없으면 original_query를 읽음"
+          },
+          "original_query": {
+            "type": "string"
+          },
+          "context": {
+            "type": "object",
+            "description": "아래 키를 읽는다. context에 없으면 같은 이름의 최상위 키를 대신 읽는다. 객체가 아니면 무시한다.",
+            "properties": {
+              "season": {
+                "description": "예: {value:\"2027SS\", source:\"user\"}. 문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 field_origins에 unknown으로 적는다. evidence_ids는 field_evidence_ids가 된다.",
+                "anyOf": [
+                  {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "value": {},
+                      "source": {
+                        "type": "string"
+                      },
+                      "evidence_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "category": {
+                "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 field_origins에 unknown으로 적는다. evidence_ids는 field_evidence_ids가 된다.",
+                "anyOf": [
+                  {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "value": {},
+                      "source": {
+                        "type": "string"
+                      },
+                      "evidence_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "market": {
+                "type": "array",
+                "items": {
+                  "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓴다.",
+                  "anyOf": [
+                    {
+                      "type": [
+                        "string",
+                        "number",
+                        "null"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {},
+                        "source": {
+                          "type": "string"
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "channel": {
+                "type": "array",
+                "items": {
+                  "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓴다.",
+                  "anyOf": [
+                    {
+                      "type": [
+                        "string",
+                        "number",
+                        "null"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {},
+                        "source": {
+                          "type": "string"
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "product_role": {
+                "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓴다.",
+                "anyOf": [
+                  {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "value": {},
+                      "source": {
+                        "type": "string"
+                      },
+                      "evidence_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "target_customer": {
+                "description": "문자열 값 또는 {value, source, evidence_ids}. 받는 쪽은 value만 쓰고, source가 user|inferred가 아니면 field_origins에 unknown으로 적는다. evidence_ids는 field_evidence_ids가 된다.",
+                "anyOf": [
+                  {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "value": {},
+                      "source": {
+                        "type": "string"
+                      },
+                      "evidence_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "requested_attributes": {
+            "description": "[{name, value, source, evidence_ids}] 또는 {name: value | [values] | {value, ...}}. source가 user이면 user_requested, 아니면 unknown 출처. 배열 항목에 name이 없으면 422 INVALID_PRODUCER_PAYLOAD",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {},
+                    "source": {
+                      "type": "string"
+                    },
+                    "evidence_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object"
+              }
+            ]
+          },
+          "missing_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "항목마다 'Confirm missing planning input: <항목>.' 확인 질문이 된다"
+          },
+          "constraints": {
+            "type": "array"
+          },
+          "field_origins": {
+            "type": "object",
+            "description": "season·category·target_customer에서 계산한 출처 위에 덮어쓴다. 객체가 아니면 422 INVALID_PRODUCER_PAYLOAD"
+          }
+        }
+      },
+      "trend_result": {
+        "type": "object",
+        "description": "trend-analysis-agent TrendAnalysisResult 1.1의 등록 투영 p06-input/2(Trend 쪽은 p06-input/1과 같다). trends[].items[].similar_products와 evidence[].url·title만 빠지고 나머지 값과 배열 길이·순서·null 항목은 원본과 같다(quote가 남아 trend-result-1.1 스키마에 맞는다). 전체 원본은 P08 런 기록(sources.trend.raw_response)에 남는다. 1.1만 받고(422 UNSUPPORTED_PRODUCER_SCHEMA) 내부 사본에서만 schema_version을 1.0으로 바꾼다. 받은 payload는 result.input_evidence.trend_result.payload에 그대로 남고, 읽지 않는 필드(예: trends[].style.example_images)도 보존된다.",
+        "required": [
+          "request_id",
+          "schema_version",
+          "status"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "description": "envelope request_id와 같아야 한다 (adapters/draft_inputs.py: 422 REQUEST_ID_MISMATCH)."
+          },
+          "schema_version": {
+            "const": "1.1"
+          },
+          "agent_id": {
+            "const": "trend-analysis-agent",
+            "description": "생략 가능 (생략하면 trend-analysis-agent로 본다). null은 adapter를 통과하지만 server.py가 422 INVALID_PRODUCER_PAYLOAD로 거절한다. 다른 값은 422 PRODUCER_MISMATCH"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_results",
+              "error"
+            ],
+            "description": "필수. 없거나 다른 값이면 422 INVALID_DOMAIN_STATUS"
+          },
+          "trends": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "style": {
+                  "type": "object",
+                  "description": "읽는 필드: id, name(없으면 이 trend를 건너뜀), description[].text/evidence_ids, seasons(하나일 때만 season으로 씀), focus_evidence_ids"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "colors": {
+                        "type": "array"
+                      },
+                      "materials": {
+                        "type": "array"
+                      },
+                      "patterns": {
+                        "type": "array"
+                      },
+                      "fit": {},
+                      "shape": {},
+                      "length": {
+                        "description": "받는 쪽은 length를 읽지만 trend 1.1은 length_body·length_sleeve로 내보낸다. 현재 항상 비어 있음 (어긋남)"
+                      },
+                      "details": {
+                        "type": "array",
+                        "description": "각 항목의 name, 없으면 raw"
+                      },
+                      "evidence_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "trend_candidates": {
+            "type": "array",
+            "description": "legacy 형식 (키 candidates도 같음). 있으면 trends 대신 읽음: name(없으면 건너뜀), qualification, season, market, channel, category, attributes, evidence_ids, description, description_evidence_ids, id(없으면 style_id)"
+          },
+          "evidence": {
+            "type": "array",
+            "description": "evidence_id를 재귀 수집"
+          },
+          "limitations": {
+            "type": "array"
+          }
+        }
+      },
+      "inventory_product_result": {
+        "type": "object",
+        "description": "stock-agent result 1.0의 등록 투영 p06-input/2. 같은 style_id의 상품 사진(url 없이 base64 data를 담은 products[].image)은 처음 한 번만 보내고 이후 항목은 null로 바뀌며, 나머지 값과 배열 길이·순서·null 슬롯은 원본과 같다(stock-result-1.0 스키마에 맞는다). P06은 착장 이미지에 함께 입힐 재고 상품 하나의 사진(image.data)을 이 중에서 찾아 쓴다. 전체 원본은 P08 런 기록(sources.stock.raw_response)에 남는다.",
+        "required": [
+          "request_id",
+          "schema_version",
+          "agent_id",
+          "status"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "description": "envelope request_id와 같아야 한다 (adapters/draft_inputs.py: 422 REQUEST_ID_MISMATCH)."
+          },
+          "schema_version": {
+            "const": "1.0"
+          },
+          "agent_id": {
+            "const": "stock-agent",
+            "description": "필수. 없거나 다르면 422 PRODUCER_MISMATCH"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "no_results",
+              "error"
+            ],
+            "description": "필수. 없거나 다른 값이면 422 INVALID_DOMAIN_STATUS"
+          },
+          "products": {
+            "type": "array",
+            "description": "배열이 아니면 상품을 정규화하지 않고 limitation으로 남긴다. 객체가 아닌 항목은 건너뛴다.",
+            "items": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "style_id": {},
+                "product_id": {
+                  "description": "style_id가 없을 때"
+                },
+                "sku_ids": {
+                  "type": "array",
+                  "description": "article_id가 없으면 첫 숫자 값을 H&M article ID로 씀"
+                },
+                "article_id": {
+                  "description": "숫자이면 H&M article ID"
+                },
+                "season": {},
+                "category": {},
+                "market": {
+                  "type": "array"
+                },
+                "channel": {
+                  "type": "array"
+                },
+                "attributes": {
+                  "description": "[{name, value, origin, evidence_ids}] 또는 {name: value | [values] | {value, ...}}. 배열 항목에 name이 없으면 422 INVALID_PRODUCER_PAYLOAD"
+                },
+                "evidence_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "inventory": {
+                  "type": "object",
+                  "description": "읽는 필드: quantity, unit, as_of, definition. 없으면 상품의 quantity, unit, as_of, inventory_definition"
+                },
+                "image": {
+                  "description": "P08 p06-input/2 sends each product's photo once: a later entry of the same style_id gets null (stock-result-1.0 allows a null image). P06 reads url and, for the one stock item worn in the outfit image, data/media_type.",
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "product_role": {},
+                "note": {},
+                "reason": {
+                  "description": "note가 없을 때"
+                }
+              }
+            }
+          },
+          "trend_results": {
+            "type": "array",
+            "description": "읽는 필드: style.id/name, product_index(products 원래 인덱스, 정수), status, rank(정수), summary, evidence_ids(없으면 같은 style_id인 루트 evidence[]의 evidence_id), limitations·errors·missing_*. 배열이 아니면 연결을 해석하지 않고 limitation으로 남긴다"
+          },
+          "evidence": {
+            "type": "array",
+            "description": "읽는 필드: evidence_id, style_id"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
- "_about": "홀드아웃 질의 20개(합성, 새 질의 h201~h220). 2026-11-11 프롬프트 v4를 읽지 않은 별도 Claude Agent가 질의와 라벨을 작성했다(라벨 근거: draft_v3.py 형식, contracts/agents/vogue-orchestrator/output/structured-query.md). 프롬프트 v4의 최종 확인용(튜닝에 쓰지 않은 세트). label_status=silver: 사용자 확인 전. 생성: scripts/build_query_holdout_v3.py",
+ "_about": "홀드아웃 질의 20개(합성, 새 질의 h201~h220). 2026-11-11 프롬프트 v4를 읽지 않은 별도 Claude Agent가 질의와 라벨을 작성했다(라벨 근거: draft_v3.py 형식, contracts/agents/orchestrator/output/structured-query.md). 프롬프트 v4의 최종 확인용(튜닝에 쓰지 않은 세트). label_status=silver: 사용자 확인 전. 생성: scripts/build_query_holdout_v3.py",
  "dataset": "user_queries_holdout",
  "version": "v3",
  "created": "2026-11-11",
@@ -53,7 +53,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h201",
     "original_query": "봄 시즌이랑 가을 시즌에 같이 가져갈 베이지 트렌치코트 기획해줘",
     "trend_terms": {
@@ -190,7 +190,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h202",
     "original_query": "꽈배기 니트 조끼랑 스트라이프 셔츠, 둘 다 그레이 컬러로 보여줘",
     "trend_terms": {
@@ -374,7 +374,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h203",
     "original_query": "올겨울 레더 재킷이랑 내년 여름 린넨 팬츠 트렌드 비교해줘",
     "trend_terms": {
@@ -521,7 +521,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h204",
     "original_query": "내년 봄에 데님 소재로 뭐가 뜰지 정리해줘",
     "trend_terms": {
@@ -631,7 +631,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h205",
     "original_query": "블랙 첼시부츠랑 롱 스커트 같이 기획해줘",
     "trend_terms": {
@@ -744,7 +744,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h206",
     "original_query": "남성 상품은 제외하고, 아우터 중에서 패딩만 빼고 보여줘",
     "trend_terms": {
@@ -869,7 +869,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h207",
     "original_query": "아르켓 스타일로 단정한 느낌의 울 코트, 가격은 30만원 이하로 잡아줘",
     "trend_terms": {
@@ -1006,7 +1006,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h208",
     "original_query": "자사몰 단독으로 낼 셔링 롱 원피스, 메인 타깃은 30대야",
     "trend_terms": {
@@ -1143,7 +1143,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h209",
     "original_query": "아크릴 혼방 말고 울 함량 높은 가디건으로 기획해줘, 컬러는 그레이나 네이비",
     "trend_terms": {
@@ -1265,7 +1265,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h210",
     "original_query": "도트 무늬 들어간 건 빼고 7부 소매 티셔츠 트렌드 봐줘",
     "trend_terms": {
@@ -1396,7 +1396,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h211",
     "original_query": "남성 와이드 청바지랑 여성 크롭 가디건 같이 기획해줘",
     "trend_terms": {
@@ -1554,7 +1554,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h212",
     "original_query": "후드티랑 조거팬츠 세트로 볼 건데 둘 다 블랙은 빼줘",
     "trend_terms": {
@@ -1709,7 +1709,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h213",
     "original_query": "맨투맨이랑 트랙 팬츠, 오버사이즈 핏으로 2027년 SS 기획해줘",
     "trend_terms": {
@@ -1853,7 +1853,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h214",
     "original_query": "코티지코어 감성의 퍼프 소매 블라우스 트렌드 정리해줘",
     "trend_terms": {
@@ -1976,7 +1976,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h215",
     "original_query": "여름 상의 기획인데 브라탑이랑 민소매 탑은 제외해줘",
     "trend_terms": {
@@ -2109,7 +2109,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h216",
     "original_query": "동남아 시장 겨냥해서 5만원 이하 린넨 반팔 셔츠 기획해줘",
     "trend_terms": {
@@ -2225,7 +2225,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h217",
     "original_query": "우먼즈는 제외하고 코치 재킷 트렌드 정리해줘",
     "trend_terms": {
@@ -2344,7 +2344,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h218",
     "original_query": "맥시스커트랑 크롭자켓 내년 SS 기준으로 정리 부탁해",
     "trend_terms": {
@@ -2493,7 +2493,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h219",
     "original_query": "스웨이드 소재 빼고 카멜 컬러 블루종 찾아줘",
     "trend_terms": {
@@ -2619,7 +2619,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h220",
     "original_query": "2026 가을겨울 슬림핏 터틀넥 니트 블랙 계열로 보여줘",
     "trend_terms": {

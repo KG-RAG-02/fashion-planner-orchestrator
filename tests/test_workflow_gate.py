@@ -14,7 +14,7 @@ from vogue_orchestrator.workflow_contract import (CONTRACT_ROOT, baseline_proble
                                                   snapshot_state)
 
 ROOT = Path(__file__).resolve().parents[1]
-DEV_LIMITATION = 'workflow-contract/0.5.0 not frozen; development run'
+DEV_LIMITATION = 'workflow-contract not frozen; development run'
 GATE_KEYS = ('VOGUE_WORKFLOW_ALLOW_PROPOSED', 'VOGUE_WORKFLOW_CONTRACT_BASELINE')
 
 
@@ -56,7 +56,7 @@ class ContractGateTests(unittest.TestCase):
         self.assertTrue(status['consistent'], status['problems'])
         self.assertFalse(status['frozen'])
         self.assertEqual(status['gate'], 'closed')
-        self.assertEqual(status['contract_version'], 'workflow-contract/0.5.0')
+        self.assertEqual(status['contract_version'], 'workflow-contract')
 
     def test_allow_proposed_opens_a_development_run_with_the_exact_limitation(self):
         from vogue_orchestrator.workflow_http import ensure_live_contract

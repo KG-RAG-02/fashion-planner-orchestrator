@@ -1,5 +1,5 @@
 """StructuredQuery 1.0 model: contract examples, validation rules, JSON Schema export, and the
-intended differences from trend's TrendQuery snapshot (contracts/agents/vogue-orchestrator/output/structured-query.md).
+intended differences from trend's TrendQuery snapshot (contracts/agents/orchestrator/output/structured-query.md).
 
 Since 2026-11-11 the conditions are grouped per item (decisions IT-1..IT-7): `items[]` with category,
 excluded categories, gender, attributes and unsupported conditions, plus `out_of_scope_items`."""
@@ -15,7 +15,7 @@ from _query_support import HAS_PYDANTIC, ROOT, SKIP_REASON, SNAPSHOT_PATH, load_
 from vogue_orchestrator.query import contract_vocabulary as cvocab
 from vogue_orchestrator.query import vocabulary as vocab
 
-SCHEMA_PATH = ROOT / "contracts" / "agents" / "vogue-orchestrator" / "output" / "structured-query-1.0.schema.json"
+SCHEMA_PATH = ROOT / "contracts" / "agents" / "orchestrator" / "output" / "structured-query.schema.json"
 HAS_JSONSCHEMA = importlib.util.find_spec("jsonschema") is not None
 
 EMPTY_ATTRIBUTES = {"color": [], "material": [], "pattern": [], "detail": [], "fit": [],
@@ -41,7 +41,7 @@ def query_item(category=None, *, item_id="i1", excluded=(), gender=None, include
 def full_query(request_id, original_query, *, items=(), out_of_scope=(), trend_terms=None):
     """A complete StructuredQuery document."""
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.0.0",
         "request_id": request_id,
         "original_query": original_query,
         "trend_terms": trend_terms or {"seasons": [dict(DEFAULT_SEASON)], "style_names": [], "product_model_names": []},
@@ -82,7 +82,7 @@ EXAMPLE_2 = full_query("req-ex2", "슬랙스 빼고 하의로 기획해줘", ite
 
 # Example 3: mixed provenance (the whole document is copied verbatim from the contract).
 EXAMPLE_3 = {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "req-003",
     "original_query": "꾸안꾸 느낌 버터옐로우 오버핏 후드티 기획해줘, 블랙은 빼고",
     "trend_terms": {"seasons": [{"year": 2027, "season": "SS", "raw": None, "origin": "default_next"}],
@@ -240,7 +240,7 @@ class StructuredQueryExamplesTests(unittest.TestCase):
     def test_package_exports_the_contract(self):
         package = importlib.import_module("vogue_orchestrator.query")
         self.assertIs(package.StructuredQuery, self.models.StructuredQuery)
-        self.assertEqual(package.SCHEMA_VERSION, "1.0")
+        self.assertEqual(package.SCHEMA_VERSION, "1.0.0")
         self.assertIs(package.TrendQuery, importlib.import_module("vogue_orchestrator.query.trend_query").TrendQuery)
 
 

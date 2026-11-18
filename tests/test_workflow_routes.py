@@ -58,7 +58,7 @@ class WorkflowRouteTableTests(LiveServerMixin, unittest.TestCase):
     def test_unsupported_contract_version_is_422_before_any_work(self):
         with environment(), patch.object(workflow_http, 'dispatch', new=self.real_dispatch), \
                 patch.object(workflow_http, 'build_workflow', side_effect=AssertionError('no work')):
-            for version in ('vogue-workflow/0.1', None, 'vogue-handoff/0.1'):
+            for version in ('old-workflow', None, 'trend-handoff'):
                 with self.subTest(version=version):
                     status, code, _ = self.code('POST', '/api/workflow/run', {'contract_version': version, 'request_id': 'r-1'})
                     self.assertEqual((status, code), (422, 'UNSUPPORTED_CONTRACT_VERSION'))
@@ -74,7 +74,7 @@ class WorkflowRouteTableTests(LiveServerMixin, unittest.TestCase):
     def test_problem_bodies_match_the_common_schema(self):
         from vogue_orchestrator.workflow_contract import WorkflowContract
         validator = WorkflowContract().validators['common.schema.json'].evolve(
-            schema={'$ref': 'https://contracts.vogue.invalid/workflow/0.1/common.schema.json#/$defs/problem'})
+            schema={'$ref': 'https://contracts.fashion-planner.invalid/orchestrator/common.schema.json#/$defs/problem'})
         with environment():
             for args in (('GET', '/api/workflow/nope'), ('POST', '/api/workflow/runs/x'), ('GET', '/api/workflow/runs/x'),
                          ('POST', '/api/workflow/run', None)):

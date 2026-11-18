@@ -57,7 +57,7 @@ class FixtureImageProviderTests(unittest.TestCase):
         for provider in ('dall-e', 'openai'):
             with self.subTest(provider=provider):
                 handler = Mock()
-                request = dict(contract_version='vogue-workflow/0.2', request_id='r-1', input=dict(user_input=dict(text='t', images=[])))
+                request = dict(contract_version='fashion-planner-workflow', request_id='r-1', input=dict(user_input=dict(text='t', images=[])))
                 with environment(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1', VOGUE_WORKFLOW_IMAGES_ENABLED='1',
                                  VOGUE_WORKFLOW_IMAGE_PROVIDER=provider, VOGUE_WORKFLOW_STORE_DIR=str(real_tempdir(self)),
                                  VOGUE_AGENT_SERVICE_BEARER_TOKEN='synthetic-test-token', **AGENTS):
@@ -89,7 +89,7 @@ class ImageRetrySwitchTests(LiveServerMixin, unittest.TestCase):
                 environment(VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED='1'):
             status, body, _ = self.request('POST', '/v1/orchestrations/image-retries', {'request_id': 'r-1', 'retry_key': 'k-1'})
             wrong = self.request('POST', '/v1/orchestrations/image-retries',
-                                 {'contract_version': 'vogue-workflow/9', 'request_id': 'r-1', 'retry_key': 'k-2'})
+                                 {'contract_version': 'old-workflow', 'request_id': 'r-1', 'retry_key': 'k-2'})
         self.assertEqual((status, body), (200, {'status': 'partial'}))
         fake.retry_image.assert_called_once_with('r-1', 'k-1')
         self.assertEqual((wrong[0], wrong[1]['error']['code']), (422, 'UNSUPPORTED_CONTRACT_VERSION'))

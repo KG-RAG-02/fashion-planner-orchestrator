@@ -26,7 +26,7 @@ def png(color=(10, 20, 30)):
 
 def reference(data, uri=None, **overrides):
     sha = hashlib.sha256(data).hexdigest()
-    value = dict(artifact_id='p07-' + sha[:16], uri=uri or 'artifact://p07/reviews/%s.json' % sha, sha256=sha,
+    value = dict(artifact_id='p07-' + sha[:16], uri=uri or 'artifact://research/reviews/%s.json' % sha, sha256=sha,
                  media_type='application/json', size_bytes=len(data), immutable=True)
     value.update(overrides)
     return value
@@ -46,13 +46,13 @@ class ContentAddressedStoreTests(unittest.TestCase):
         data = b'{"synthetic":true}'
         sha = hashlib.sha256(data).hexdigest()
         first = self.store.put(data)
-        self.assertEqual(first, dict(artifact_id=sha, uri='artifact://p08/blobs/' + sha, sha256=sha,
+        self.assertEqual(first, dict(artifact_id=sha, uri='artifact://orchestrator/blobs/' + sha, sha256=sha,
                                      media_type='application/json', size_bytes=len(data), immutable=True))
         self.assertEqual(self.store.put(data), first)
         self.assertEqual((self.store.blobs / sha).read_bytes(), data)
         self.assertEqual(sorted(p.name for p in self.store.blobs.iterdir()), [sha])  # no temp files left
         self.assertEqual(self.store.media_types(sha), [('application/json', len(data))])
-        self.assertEqual(artifact_path(first['uri']), ('p08', ['blobs', sha]))
+        self.assertEqual(artifact_path(first['uri']), ('orchestrator', ['blobs', sha]))
 
     def test_same_bytes_with_another_media_type_share_the_uri(self):
         data = b'{"error":"denied"}'
@@ -133,11 +133,11 @@ class ContentAddressedStoreTests(unittest.TestCase):
 class PeerArtifactReaderTests(unittest.TestCase):
     def setUp(self):
         self.root = real_tempdir(self) / 'peer'
-        (self.root / 'p07' / 'reviews').mkdir(parents=True)
+        (self.root / 'research' / 'reviews').mkdir(parents=True)
         self.reader = PeerArtifactReader(self.root)
         self.data = b'{"review":"synthetic"}'
         self.reference = reference(self.data)
-        self.path = self.root / 'p07' / 'reviews' / (self.reference['sha256'] + '.json')
+        self.path = self.root / 'research' / 'reviews' / (self.reference['sha256'] + '.json')
         self.path.write_bytes(self.data)
 
     def code(self, value):
@@ -149,10 +149,10 @@ class PeerArtifactReaderTests(unittest.TestCase):
         self.assertEqual(self.reader(self.reference), self.data)
 
     def test_uri_grammar_namespace_and_escapes(self):
-        cases = {'file:///etc/passwd': 'INVALID_ARTIFACT_URI', 'artifact://p07/a b.json': 'INVALID_ARTIFACT_URI',
-                 'artifact://p08/blobs/' + 'a' * 64: 'INVALID_ARTIFACT_URI', 'artifact://fixtures/raw/x': 'INVALID_ARTIFACT_URI',
-                 'artifact://p07/../etc/passwd': 'INVALID_ARTIFACT_PATH', 'artifact://p07//x': 'INVALID_ARTIFACT_PATH',
-                 'artifact://p07/./reviews/x': 'INVALID_ARTIFACT_PATH', 'artifact://p07': 'INVALID_ARTIFACT_PATH'}
+        cases = {'file:///etc/passwd': 'INVALID_ARTIFACT_URI', 'artifact://research/a b.json': 'INVALID_ARTIFACT_URI',
+                 'artifact://orchestrator/blobs/' + 'a' * 64: 'INVALID_ARTIFACT_URI', 'artifact://fixtures/raw/x': 'INVALID_ARTIFACT_URI',
+                 'artifact://research/../etc/passwd': 'INVALID_ARTIFACT_PATH', 'artifact://research//x': 'INVALID_ARTIFACT_PATH',
+                 'artifact://research/./reviews/x': 'INVALID_ARTIFACT_PATH', 'artifact://research': 'INVALID_ARTIFACT_PATH'}
         for uri, code in cases.items():
             with self.subTest(uri=uri):
                 self.assertEqual(self.code(dict(self.reference, uri=uri)), (code, 422))
@@ -161,24 +161,24 @@ class PeerArtifactReaderTests(unittest.TestCase):
         other = self.root.parent / 'elsewhere'
         (other / 'reviews').mkdir(parents=True)
         (other / 'reviews' / self.path.name).write_bytes(self.data)
-        (self.root / 'p07' / 'linked').symlink_to(other / 'reviews', target_is_directory=True)
-        linked = dict(self.reference, uri='artifact://p07/linked/' + self.path.name)
+        (self.root / 'research' / 'linked').symlink_to(other / 'reviews', target_is_directory=True)
+        linked = dict(self.reference, uri='artifact://research/linked/' + self.path.name)
         self.assertEqual(self.code(linked), ('INVALID_ARTIFACT_PATH', 422))
-        (self.root / 'p07' / 'reviews' / 'file-link.json').symlink_to(self.path)
-        self.assertEqual(self.code(dict(self.reference, uri='artifact://p07/reviews/file-link.json')),
+        (self.root / 'research' / 'reviews' / 'file-link.json').symlink_to(self.path)
+        self.assertEqual(self.code(dict(self.reference, uri='artifact://research/reviews/file-link.json')),
                          ('INVALID_ARTIFACT_PATH', 422))
 
     def test_missing_mismatched_and_irregular_files_fail_closed(self):
-        self.assertEqual(self.code(dict(self.reference, uri='artifact://p07/reviews/absent.json')), ('ARTIFACT_UNAVAILABLE', 503))
+        self.assertEqual(self.code(dict(self.reference, uri='artifact://research/reviews/absent.json')), ('ARTIFACT_UNAVAILABLE', 503))
         with self.assertRaises(ArtifactError) as raised:
             PeerArtifactReader(self.root / 'absent-root')(self.reference)
         self.assertEqual(raised.exception.code, 'ARTIFACT_UNAVAILABLE')
         self.assertEqual(self.code(dict(self.reference, size_bytes=len(self.data) + 1)), ('ARTIFACT_SIZE_MISMATCH', 422))
         self.assertEqual(self.code(dict(self.reference, sha256='0' * 64)), ('ARTIFACT_HASH_MISMATCH', 422))
-        (self.root / 'p07' / 'reviews' / 'dir.json').mkdir()
-        self.assertEqual(self.code(dict(self.reference, uri='artifact://p07/reviews/dir.json')), ('INVALID_ARTIFACT_PATH', 422))
-        os.mkfifo(self.root / 'p07' / 'reviews' / 'fifo.json')  # must not block
-        self.assertEqual(self.code(dict(self.reference, uri='artifact://p07/reviews/fifo.json')), ('INVALID_ARTIFACT_PATH', 422))
+        (self.root / 'research' / 'reviews' / 'dir.json').mkdir()
+        self.assertEqual(self.code(dict(self.reference, uri='artifact://research/reviews/dir.json')), ('INVALID_ARTIFACT_PATH', 422))
+        os.mkfifo(self.root / 'research' / 'reviews' / 'fifo.json')  # must not block
+        self.assertEqual(self.code(dict(self.reference, uri='artifact://research/reviews/fifo.json')), ('INVALID_ARTIFACT_PATH', 422))
         self.assertEqual(self.code(dict(self.reference, size_bytes=16777217)), ('ARTIFACT_TOO_LARGE', 413))
         self.assertEqual(self.code(dict(self.reference, size_bytes='22')), ('ARTIFACT_REFERENCE_INVALID', 422))
 
@@ -255,7 +255,7 @@ class ArtifactRouteTests(LiveServerMixin, unittest.TestCase):
             second = self.request('POST', '/v1/input-images', raw=image, content_type='image/png', **{'X-Request-ID': 'req-2'})
         self.assertEqual((first[0], second[0]), (201, 201))
         self.assertEqual(first[1], second[1])
-        self.assertEqual(first[1]['uri'], 'artifact://p08/blobs/' + hashlib.sha256(image).hexdigest())
+        self.assertEqual(first[1]['uri'], 'artifact://orchestrator/blobs/' + hashlib.sha256(image).hexdigest())
         self.assertEqual(self.store.verify(first[1], owner='req-2'), image)
 
 

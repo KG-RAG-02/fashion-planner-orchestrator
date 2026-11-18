@@ -152,7 +152,7 @@ def semantic(document, schema_name, store):
             # Python equality conflates true/1 and 1/1.0. Compare typed JSON bytes.
             require(canonical(original) == canonical(raw), "RAW_ARTIFACT_OBJECT_MISMATCH")
             retained_docs[node["content_sha256"]] = raw
-            if raw["producer"]["agent_id"] == "trend-analysis-agent":
+            if raw["producer"]["agent_id"] == "trend":
                 source = raw["result"]
                 require(source["status"] in {"ok", "no_results", "error"}, "UNSUPPORTED_TREND_STATUS")
                 if source["status"] == "ok":
@@ -167,7 +167,7 @@ def semantic(document, schema_name, store):
                     for field in ["evidence_ids", "focus_evidence_ids"]:
                         if field in element:
                             require(set(element[field]).issubset(evidence_ids), "DANGLING_TREND_EVIDENCE")
-            if raw["producer"]["agent_id"] == "stock-agent":
+            if raw["producer"]["agent_id"] == "inventory":
                 products = raw["result"]["products"]
                 trend_results = raw["result"]["trend_results"]
                 require(len(products) == len(trend_results), "STOCK_SLOT_LENGTH_MISMATCH")
@@ -217,7 +217,7 @@ def semantic(document, schema_name, store):
             require(node["review_identity"]["content_sha256"] == fingerprint(review), "REVIEW_CONTENT_HASH_MISMATCH")
             source = lookup.get(review["draft_response_sha256"])
             require(source is not None, "REVIEW_DRAFT_SOURCE_MISSING")
-            require(source.get("producer", {}).get("agent_id") == "new-product-agent", "REVIEW_SOURCE_PRODUCER_MISMATCH")
+            require(source.get("producer", {}).get("agent_id") == "novelty", "REVIEW_SOURCE_PRODUCER_MISMATCH")
             require(source["status"] in {"ok", "partial"}, "UNREVIEWABLE_DRAFT")
             require(review["reviewed_draft"] == source["result"]["draft_identity"], "DRAFT_REVISION_MISMATCH")
             if node["status"] in {"ok", "partial"}:
@@ -233,7 +233,7 @@ def semantic(document, schema_name, store):
                 require(provenance["source_payload_sha256"] == fingerprint(trend["result"]), "STOCK_UPSTREAM_HASH_MISMATCH")
                 require(provenance["source_schema_version"] == trend["producer"]["schema_version"], "STOCK_UPSTREAM_VERSION_MISMATCH")
             context = node["stock_call_context"]
-            wire = {"contract_version": "vogue-handoff/0.1", "request_id": rid, "input": trend["result"]}
+            wire = {"contract_version": "inventory-handoff", "request_id": rid, "input": trend["result"]}
             expected_context = {"planning_request_sha256": fingerprint(node["planning_request"]), "trend_response_sha256": node["trend_response"]["content_sha256"],
                                 "stock_input_sha256": fingerprint(trend["result"]), "stock_wire_request_sha256": fingerprint(wire),
                                 "stock_response_sha256": node["stock_response"]["content_sha256"]}
@@ -337,7 +337,7 @@ def semantic(document, schema_name, store):
             elif sources["trend"] is not None and sources["stock"] is not None:
                 # Canonical outgoing Draft request is reconstructable from retained inputs.
                 t, s = sources["trend"], sources["stock"]
-                wire = {"contract_version": "vogue-handoff/0.1", "request_id": rid, "input": t["raw_response"]["result"]}
+                wire = {"contract_version": "inventory-handoff", "request_id": rid, "input": t["raw_response"]["result"]}
                 context = {"planning_request_sha256": fingerprint(body["planning_request"]), "trend_response_sha256": t["content_sha256"],
                            "stock_input_sha256": fingerprint(t["raw_response"]["result"]), "stock_wire_request_sha256": fingerprint(wire), "stock_response_sha256": s["content_sha256"]}
                 # Either Draft mode (0.2.0) may have been sent; the trace must match one of them.

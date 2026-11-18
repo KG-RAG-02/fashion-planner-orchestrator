@@ -1,6 +1,6 @@
 """Regenerate src/vogue_orchestrator/query/vocabulary.py from the TrendQuery contract snapshot.
 
-The snapshot (contracts/agents/trend-analysis-agent/input/trend-query.contract.json) is a read-only copy of the contract
+The snapshot (contracts/agents/trend/input/trend-query.contract.json) is a read-only copy of the contract
 owned by trend-analysis-agent. This script turns it into plain Python constants so the query
 module has no runtime dependency on the docs folder and can be moved to another repository.
 
@@ -20,13 +20,13 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTRACT_PATH = ROOT / "contracts" / "agents" / "trend-analysis-agent" / "input" / "trend-query.contract.json"
+CONTRACT_PATH = ROOT / "contracts" / "agents" / "trend" / "input" / "trend-query.contract.json"
 TARGET_PATH = ROOT / "src" / "vogue_orchestrator" / "query" / "vocabulary.py"
 
 HEADER = '''"""GENERATED FILE - do not edit by hand.
 
 Standard vocabulary of the TrendQuery contract, generated from the read-only snapshot
-contracts/agents/trend-analysis-agent/input/trend-query.contract.json (a copy of the contract owned by trend-analysis-agent).
+contracts/agents/trend/input/trend-query.contract.json (a copy of the contract owned by trend-analysis-agent).
 
 Regenerate:  py scripts/generate_query_vocabulary.py
 Drift check: tests/test_query_vocabulary.py (fails when this file and the snapshot disagree)

@@ -47,7 +47,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h001",
     "original_query": "2027년 봄여름 시즌에 나올 크롭 가디건 트렌드 알려줘",
     "trend_terms": {
@@ -159,7 +159,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h002",
     "original_query": "겨울 시즌 롱패딩 기획해줘, 블랙 컬러는 제외하고",
     "trend_terms": {
@@ -278,7 +278,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h003",
     "original_query": "남성 봄버재킷 트렌드 카키랑 네이비 위주로 정리해줘",
     "trend_terms": {
@@ -394,7 +394,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h004",
     "original_query": "2026 FW 남녀 공용 아우터 쪽 트렌드 한번 훑어줘",
     "trend_terms": {
@@ -497,7 +497,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h005",
     "original_query": "가을 시즌 로퍼랑 크로스백 트렌드도 알 수 있을까?",
     "trend_terms": {
@@ -584,7 +584,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h006",
     "original_query": "이번 주 MD 회의 자료로 쓸 트렌드 키워드 몇 개만 뽑아줘",
     "trend_terms": {
@@ -687,7 +687,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h007",
     "original_query": "유니클로 말고 7만원 아래 플리스 조끼 위주로 찾아줘",
     "trend_terms": {
@@ -805,7 +805,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h008",
     "original_query": "일본 시장 겨냥해서 와이드 청바지 기획해봐",
     "trend_terms": {
@@ -917,7 +917,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h009",
     "original_query": "홈쇼핑에서 팔 캐시미어 코트 트렌드 봐줄래",
     "trend_terms": {
@@ -1036,7 +1036,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h010",
     "original_query": "40대 여성 고객 대상으로 실크 블라우스 기획안 부탁해",
     "trend_terms": {
@@ -1154,7 +1154,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h011",
     "original_query": "고급스러운 느낌 나는 아이보리 스커트 보여줘",
     "trend_terms": {
@@ -1267,7 +1267,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h012",
     "original_query": "폴리 소재는 빼고 터틀넥 니트웨어로 추려줘",
     "trend_terms": {
@@ -1385,7 +1385,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h013",
     "original_query": "2027 여름 민소매 맥시 원피스 트렌드 정리 부탁해",
     "trend_terms": {
@@ -1496,7 +1496,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h014",
     "original_query": "여성 라인은 빼고 코듀로이 팬츠 기획해줘",
     "trend_terms": {
@@ -1614,7 +1614,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h015",
     "original_query": "긴팔 스트라이프 티셔츠 볼 건데 레드 계열은 빼줘",
     "trend_terms": {
@@ -1739,7 +1739,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h016",
     "original_query": "남녀 같이 입을 수 있는 버건디 후드 집업 기획해줘",
     "trend_terms": {
@@ -1862,7 +1862,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h017",
     "original_query": "올드머니 무드로 2027 SS 화이트 슬랙스 기획해줘",
     "trend_terms": {
@@ -1966,7 +1966,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h018",
     "original_query": "MA-1 점퍼 숏 기장으로 나온 것들 트렌드 좀 보여줘",
     "trend_terms": {
@@ -2071,7 +2071,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h019",
     "original_query": "레오파드 패턴 없는 셔츠랑 스커트 같이 보고 싶어",
     "trend_terms": {
@@ -2211,7 +2211,7 @@
     }
    },
    "expected_structured_query": {
-    "schema_version": "1.0",
+    "schema_version": "1.0.0",
     "request_id": "h020",
     "original_query": "내년 봄 시즌 점프수트는 빼고 원피스 위주로 보여줘",
     "trend_terms": {

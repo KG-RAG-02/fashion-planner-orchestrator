@@ -76,8 +76,8 @@ def schema_validator():
         from referencing import Registry, Resource
     except ImportError:
         return None
-    bases = ("https://contracts.vogue.invalid/workflow/0.1/",
-             "https://contracts.vogue.invalid/workflow/2.0/")
+    bases = ("https://contracts.fashion-planner.invalid/orchestrator/",
+             "https://contracts.fashion-planner.invalid/orchestrator/")
     registry = Registry(retrieve=lambda uri: (_ for _ in ()).throw(ValueError(f"remote ref disabled: {uri}")))
     target = None
     for path in sorted(SCHEMAS.rglob("*.schema.json")):
@@ -94,10 +94,10 @@ def schema_validator():
 
 def build_input(args, request_id):
     text = args.query
-    payload = {"contract_version": "vogue-workflow/0.2", "request_id": request_id, "input": {"user_input": {"text": text, "images": []}}}
+    payload = {"contract_version": "fashion-planner-workflow", "request_id": request_id, "input": {"user_input": {"text": text, "images": []}}}
     if args.trend_query:
         template = json.loads(Path(args.trend_query).expanduser().read_text(encoding="utf-8"))
-        trend_query = template.get("input", template)  # accepts a full vogue-handoff envelope or a bare TrendQuery
+        trend_query = template.get("input", template)  # accepts a full trend-handoff envelope or a bare TrendQuery
         trend_query = json.loads(json.dumps(trend_query))
         trend_query["request_id"] = request_id
         if text:
@@ -114,7 +114,7 @@ def main(argv=None):
     parser.add_argument("--base", default="http://127.0.0.1:8765")
     parser.add_argument("--profile", choices=["stub", "rehearsal", "live"], required=True)
     parser.add_argument("--query", default="", help="planning brief text (defaults to the TrendQuery original_query)")
-    parser.add_argument("--trend-query", help="JSON file with a TrendQuery (or a vogue-handoff envelope whose input is one)")
+    parser.add_argument("--trend-query", help="JSON file with a TrendQuery (or a trend-handoff envelope whose input is one)")
     parser.add_argument("--image", help="optional PNG/JPEG/WebP reference image to upload")
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--out", help="write the evidence JSON here")
@@ -248,7 +248,7 @@ def main(argv=None):
     check("md-decision GET exposes the integrated response hash", status == 200 and isinstance(sha, str) and len(sha) == 64, status)
     if sha:
         status, saved, _, _, _ = call(base, "POST", f"/api/workflow/runs/{request_id}/md-decision",
-                                      {"contract_version": "vogue-workflow/0.2", "request_id": request_id, "integrated_response_sha256": sha, "decision": "hold", "note": f"e2e {args.profile} check"})
+                                      {"contract_version": "fashion-planner-workflow", "request_id": request_id, "integrated_response_sha256": sha, "decision": "hold", "note": f"e2e {args.profile} check"})
         check("md-decision POST records the decision", status == 201, status)
         status, after, _, _, _ = call(base, "GET", f"/api/workflow/runs/{request_id}/md-decision")
         check("decision history has the new record", status == 200 and len((after or {}).get("decisions", [])) >= 1)

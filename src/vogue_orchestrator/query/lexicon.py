@@ -2,7 +2,7 @@
 
 Source of truth (read-only): trend-analysis-agent `src/trend_agent/ingestion/normalization/alias_map.py`
 and `configs/alias_map/*.yaml`. The dictionary data comes from the generated module `alias_data.py`
-(snapshot contracts/agents/trend-analysis-agent/vocabulary/alias-map.snapshot.json). The port must behave exactly like the original;
+(snapshot contracts/agents/trend/vocabulary/alias-map.snapshot.json). The port must behave exactly like the original;
 tests/test_query_lexicon.py compares it with outputs of the original code (alias-map.golden.json).
 Original behaviour that looks questionable is ported as is (decision H1: follow the dictionary).
 

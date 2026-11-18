@@ -1,5 +1,5 @@
 """Query structuring: natural-language query -> StructuredQuery 1.0 (this repository's contract,
-contracts/agents/vogue-orchestrator/output/structured-query.md), converted to TrendQuery for the trend-analysis-agent (first item and season
+contracts/agents/orchestrator/output/structured-query.md), converted to TrendQuery for the trend-analysis-agent (first item and season
 only, to_trend.py).
 
 Called in-process by the UI server only (server.structure_query_for_ui, structured.structure_query);

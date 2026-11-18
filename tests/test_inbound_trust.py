@@ -109,7 +109,7 @@ class LiveServerTests(unittest.TestCase):
         with environment():
             status, body = self.request('POST', '/api/workflow/run', {}, Origin='http://127.0.0.1:1')
             self.assertEqual((status, body['error']['code']), (403, 'LOCAL_WORKFLOW_ONLY'))
-            self.assertEqual(self.request('POST', '/v1/orchestrations', {'contract_version': 'vogue-workflow/0.2'},
+            self.assertEqual(self.request('POST', '/v1/orchestrations', {'contract_version': 'fashion-planner-workflow'},
                                           Host='evil.example')[0], 403)
             self.assertEqual(self.request('POST', '/api/run', {'query': 'x'})[0], 404)
             self.assertEqual(self.request('GET', '/api/run-history')[0], 404)

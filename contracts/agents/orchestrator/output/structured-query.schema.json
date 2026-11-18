@@ -1,0 +1,959 @@
+{
+  "$defs": {
+    "AttributeFilter": {
+      "additionalProperties": false,
+      "properties": {
+        "exclude": {
+          "$ref": "#/$defs/AttributeValues"
+        },
+        "include": {
+          "$ref": "#/$defs/AttributeValues"
+        }
+      },
+      "required": [
+        "include",
+        "exclude"
+      ],
+      "title": "AttributeFilter",
+      "type": "object"
+    },
+    "AttributeValues": {
+      "additionalProperties": false,
+      "description": "One side (include or exclude) of the requested attributes: every kind is always present.",
+      "properties": {
+        "body_length": {
+          "items": {
+            "$ref": "#/$defs/BodyLengthRef"
+          },
+          "title": "Body Length",
+          "type": "array"
+        },
+        "color": {
+          "items": {
+            "$ref": "#/$defs/ColorRef"
+          },
+          "title": "Color",
+          "type": "array"
+        },
+        "detail": {
+          "items": {
+            "$ref": "#/$defs/DetailRef"
+          },
+          "title": "Detail",
+          "type": "array"
+        },
+        "fit": {
+          "items": {
+            "$ref": "#/$defs/FitRef"
+          },
+          "title": "Fit",
+          "type": "array"
+        },
+        "material": {
+          "items": {
+            "$ref": "#/$defs/MaterialRef"
+          },
+          "title": "Material",
+          "type": "array"
+        },
+        "pattern": {
+          "items": {
+            "$ref": "#/$defs/PatternRef"
+          },
+          "title": "Pattern",
+          "type": "array"
+        },
+        "sleeve_length": {
+          "items": {
+            "$ref": "#/$defs/SleeveLengthRef"
+          },
+          "title": "Sleeve Length",
+          "type": "array"
+        }
+      },
+      "required": [
+        "color",
+        "material",
+        "pattern",
+        "detail",
+        "fit",
+        "body_length",
+        "sleeve_length"
+      ],
+      "title": "AttributeValues",
+      "type": "object"
+    },
+    "BodyLengthRef": {
+      "additionalProperties": false,
+      "description": "Body length (기장), trend's BodyLength values (decision OQ-9′).",
+      "properties": {
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm",
+            "none"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "크롭",
+                "노멀",
+                "하프",
+                "롱",
+                "미니",
+                "니렝스",
+                "미디",
+                "발목",
+                "맥시"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "raw",
+        "value",
+        "match"
+      ],
+      "title": "BodyLengthRef",
+      "type": "object"
+    },
+    "CategoryRef": {
+      "additionalProperties": false,
+      "description": "A standard category. `minor` set = only that minor category; `minor` null = the whole major one.",
+      "properties": {
+        "major": {
+          "enum": [
+            "상의",
+            "하의",
+            "아우터",
+            "원피스"
+          ],
+          "title": "Major",
+          "type": "string"
+        },
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "minor": {
+          "anyOf": [
+            {
+              "enum": [
+                "탑",
+                "블라우스",
+                "티셔츠",
+                "니트웨어",
+                "셔츠",
+                "브라탑",
+                "후드티",
+                "청바지",
+                "팬츠",
+                "스커트",
+                "레깅스",
+                "조거팬츠",
+                "코트",
+                "재킷",
+                "점퍼",
+                "패딩",
+                "베스트",
+                "가디건",
+                "짚업",
+                "드레스",
+                "점프수트"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minor"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw",
+        "major",
+        "minor",
+        "match"
+      ],
+      "title": "CategoryRef",
+      "type": "object"
+    },
+    "ColorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm",
+            "none"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "골드",
+                "그레이",
+                "그린",
+                "네온",
+                "네이비",
+                "라벤더",
+                "레드",
+                "민트",
+                "베이지",
+                "브라운",
+                "블랙",
+                "블루",
+                "스카이블루",
+                "실버",
+                "옐로우",
+                "오렌지",
+                "와인",
+                "카키",
+                "퍼플",
+                "핑크",
+                "화이트"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "raw",
+        "value",
+        "match"
+      ],
+      "title": "ColorRef",
+      "type": "object"
+    },
+    "DetailRef": {
+      "additionalProperties": false,
+      "description": "Detail, neckline and collar values share this kind (61 values).",
+      "properties": {
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm",
+            "none"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "X스트랩",
+                "글리터",
+                "너치드칼라",
+                "노카라",
+                "니트꽈배기",
+                "단추",
+                "더블브레스티드",
+                "드롭숄더",
+                "드롭웨이스트",
+                "디스트로이드",
+                "띠",
+                "라운드넥",
+                "러플",
+                "레이스업",
+                "롤업",
+                "리본",
+                "밴드칼라",
+                "버클",
+                "보우칼라",
+                "보트넥",
+                "브이넥",
+                "비대칭",
+                "비즈",
+                "세일러칼라",
+                "셔링",
+                "셔츠칼라",
+                "숄칼라",
+                "스위트하트",
+                "스퀘어넥",
+                "스터드",
+                "스티치",
+                "스팽글",
+                "슬릿",
+                "오프숄더",
+                "원숄더",
+                "유넥",
+                "자수",
+                "집업",
+                "차이나칼라",
+                "체인",
+                "컷아웃",
+                "컷오프",
+                "퀼팅",
+                "태슬",
+                "터틀넥",
+                "테일러드칼라",
+                "패딩",
+                "패치워크",
+                "퍼트리밍",
+                "퍼프",
+                "페플럼",
+                "포켓",
+                "폴로칼라",
+                "폼폼",
+                "프린지",
+                "프릴",
+                "플레어",
+                "플리츠",
+                "피터팬칼라",
+                "홀터넥",
+                "후드"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "raw",
+        "value",
+        "match"
+      ],
+      "title": "DetailRef",
+      "type": "object"
+    },
+    "FitRef": {
+      "additionalProperties": false,
+      "properties": {
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm",
+            "none"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "노멀",
+                "루즈",
+                "벨보텀",
+                "스키니",
+                "오버사이즈",
+                "와이드",
+                "타이트"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "raw",
+        "value",
+        "match"
+      ],
+      "title": "FitRef",
+      "type": "object"
+    },
+    "GenderFilter": {
+      "additionalProperties": false,
+      "description": "Decision G-3. Genders to select = the include values when there are any (minus excluded ones),\notherwise all three standard genders minus the excluded ones; both empty = no gender filter.\nEntries with value null (match none) take no part in that. Code never rewrites an exclusion into the\ncomplement (\"남성 말고\" stays exclude [남]; it means 여·공용 by this definition).",
+      "properties": {
+        "exclude": {
+          "items": {
+            "$ref": "#/$defs/GenderRef"
+          },
+          "title": "Exclude",
+          "type": "array"
+        },
+        "include": {
+          "items": {
+            "$ref": "#/$defs/GenderRef"
+          },
+          "title": "Include",
+          "type": "array"
+        }
+      },
+      "required": [
+        "include",
+        "exclude"
+      ],
+      "title": "GenderFilter",
+      "type": "object"
+    },
+    "GenderRef": {
+      "additionalProperties": false,
+      "description": "Same shape as AttributeRef; `value` is one of the three standard genders or null.",
+      "properties": {
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm",
+            "none"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "남",
+                "여",
+                "공용"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "raw",
+        "value",
+        "match"
+      ],
+      "title": "GenderRef",
+      "type": "object"
+    },
+    "MaterialRef": {
+      "additionalProperties": false,
+      "properties": {
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm",
+            "none"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "가죽",
+                "네오프렌",
+                "니트",
+                "데님",
+                "레이스",
+                "린넨",
+                "메시",
+                "면",
+                "무스탕",
+                "벨벳",
+                "비닐/PVC",
+                "스웨이드",
+                "스판덱스",
+                "시퀸/글리터",
+                "시폰",
+                "실크",
+                "앙고라",
+                "울/캐시미어",
+                "자카드",
+                "저지",
+                "코듀로이",
+                "트위드",
+                "퍼",
+                "플리스",
+                "합성섬유",
+                "헤어니트"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "raw",
+        "value",
+        "match"
+      ],
+      "title": "MaterialRef",
+      "type": "object"
+    },
+    "OutOfScopeItem": {
+      "additionalProperties": false,
+      "description": "An item the user asked for that is not a standard category (\"블랙 부츠\" -> 부츠), decision IT-7.\nIt is not turned into an item (that would widen the search to every category); its own conditions are\nkept as raw text in `conditions_raw` (the 블랙 of \"블랙 부츠랑 셔츠\" belongs to 부츠, not to 셔츠).",
+      "properties": {
+        "conditions_raw": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Conditions Raw",
+          "type": "array"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw",
+        "reason",
+        "conditions_raw"
+      ],
+      "title": "OutOfScopeItem",
+      "type": "object"
+    },
+    "PatternRef": {
+      "additionalProperties": false,
+      "properties": {
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm",
+            "none"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "그라데이션",
+                "그래픽",
+                "깅엄",
+                "도트",
+                "레터링",
+                "무지",
+                "믹스",
+                "스트라이프",
+                "아가일",
+                "지그재그",
+                "지브라",
+                "체크",
+                "카무플라쥬",
+                "타이다이",
+                "페이즐리",
+                "플로럴",
+                "하운즈투스",
+                "해골",
+                "호피"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "raw",
+        "value",
+        "match"
+      ],
+      "title": "PatternRef",
+      "type": "object"
+    },
+    "QueryItem": {
+      "additionalProperties": false,
+      "description": "One item to look for, with every condition that applies to it (decisions IT-1, IT-3).\n\nAn item is complete on its own, so the same process can run once per item: conditions that the user\ngave for the whole query are copied into every item. `category` null = the user named no item to look\nfor (IT-6): every category minus `excluded_categories` (\"아우터는 빼고 블랙\" = 상의·하의·원피스 중 블랙).\n`excluded_categories` keeps the exclusion form (like gender, G-3); code never rewrites it into the\nremaining categories.\n\n`item_id` (decision IT-8, 2026-11-11): \"i1\", \"i2\", ... in `items` order, so a result produced for one\nitem (for example by a per-item Agent) can be joined back to it after the items are sent apart.",
+      "properties": {
+        "attributes": {
+          "$ref": "#/$defs/AttributeFilter"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CategoryRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "excluded_categories": {
+          "items": {
+            "$ref": "#/$defs/CategoryRef"
+          },
+          "title": "Excluded Categories",
+          "type": "array"
+        },
+        "gender": {
+          "$ref": "#/$defs/GenderFilter"
+        },
+        "item_id": {
+          "pattern": "^i[1-9][0-9]*$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "unsupported": {
+          "items": {
+            "$ref": "#/$defs/UnsupportedCondition"
+          },
+          "title": "Unsupported",
+          "type": "array"
+        }
+      },
+      "required": [
+        "item_id",
+        "category",
+        "excluded_categories",
+        "gender",
+        "attributes",
+        "unsupported"
+      ],
+      "title": "QueryItem",
+      "type": "object"
+    },
+    "SeasonRequest": {
+      "additionalProperties": false,
+      "description": "Planning season. `default_next` = the user named none and code filled the next fashion season.",
+      "properties": {
+        "origin": {
+          "enum": [
+            "user_requested",
+            "default_next"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw"
+        },
+        "season": {
+          "enum": [
+            "SS",
+            "FW"
+          ],
+          "title": "Season",
+          "type": "string"
+        },
+        "year": {
+          "title": "Year",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "year",
+        "season",
+        "raw",
+        "origin"
+      ],
+      "title": "SeasonRequest",
+      "type": "object"
+    },
+    "SleeveLengthRef": {
+      "additionalProperties": false,
+      "description": "Sleeve length (소매 기장), trend's SleeveLength values (decision OQ-9′).",
+      "properties": {
+        "match": {
+          "enum": [
+            "exact",
+            "alias",
+            "approx",
+            "llm",
+            "none"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "민소매",
+                "반팔",
+                "캡",
+                "7부소매",
+                "긴팔"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "raw",
+        "value",
+        "match"
+      ],
+      "title": "SleeveLengthRef",
+      "type": "object"
+    },
+    "TermRef": {
+      "additionalProperties": false,
+      "description": "Trend name or product model name. No normalised vocabulary exists yet, so `value` is always null.",
+      "properties": {
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value",
+          "type": "null"
+        }
+      },
+      "required": [
+        "raw",
+        "value"
+      ],
+      "title": "TermRef",
+      "type": "object"
+    },
+    "TrendTerms": {
+      "additionalProperties": false,
+      "description": "Query-wide terms (decision IT-5″).\n\n`seasons` (decision SQ-2, 2026-11-11): every season the user named, in query order, never empty - a query\nnaming no season gets the one `default_next` season. Duplicates (same year and season) are removed.\n`product_model_names` (decision SQ-1, renamed from `item_terms`): specific product / model names that no\nstandard category or attribute can express (e.g. a model name); items the user asks for are in `items`.",
+      "properties": {
+        "product_model_names": {
+          "items": {
+            "$ref": "#/$defs/TermRef"
+          },
+          "title": "Product Model Names",
+          "type": "array"
+        },
+        "seasons": {
+          "items": {
+            "$ref": "#/$defs/SeasonRequest"
+          },
+          "minItems": 1,
+          "title": "Seasons",
+          "type": "array"
+        },
+        "style_names": {
+          "items": {
+            "$ref": "#/$defs/TermRef"
+          },
+          "title": "Style Names",
+          "type": "array"
+        }
+      },
+      "required": [
+        "seasons",
+        "style_names",
+        "product_model_names"
+      ],
+      "title": "TrendTerms",
+      "type": "object"
+    },
+    "UnsupportedCondition": {
+      "additionalProperties": false,
+      "description": "A requested condition the vocabulary or this contract cannot express; recorded, never dropped.",
+      "properties": {
+        "polarity": {
+          "enum": [
+            "include",
+            "exclude"
+          ],
+          "title": "Polarity",
+          "type": "string"
+        },
+        "raw": {
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "brand",
+            "category",
+            "attribute",
+            "abstract",
+            "price",
+            "market",
+            "channel",
+            "age",
+            "other"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "raw",
+        "reason",
+        "polarity"
+      ],
+      "title": "UnsupportedCondition",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard\nvocabulary. Definition: contracts/agents/orchestrator/output/structured-query.md (owner: vogue-orchestrator).\n\n`items` are in the order the user named them (decision IT-4: the pipeline takes one item today, so\nonly `items[0]` is forwarded to trend). Season and trend names are query-wide (`trend_terms`,\ndecision IT-5″). The assembler always writes at least one item: with no named item, or only\nout-of-scope ones, one item with `category: null` (IT-6, IT-7′). The model still accepts `[]`.",
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/QueryItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "missing_fields": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing Fields",
+      "type": "array"
+    },
+    "original_query": {
+      "minLength": 1,
+      "title": "Original Query",
+      "type": "string"
+    },
+    "out_of_scope_items": {
+      "items": {
+        "$ref": "#/$defs/OutOfScopeItem"
+      },
+      "title": "Out Of Scope Items",
+      "type": "array"
+    },
+    "request_id": {
+      "minLength": 1,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "trend_terms": {
+      "$ref": "#/$defs/TrendTerms"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "original_query",
+    "trend_terms",
+    "items",
+    "out_of_scope_items",
+    "missing_fields"
+  ],
+  "title": "StructuredQuery",
+  "type": "object"
+}

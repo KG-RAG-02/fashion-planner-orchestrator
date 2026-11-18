@@ -1,14 +1,14 @@
 {
-  "contract_version": "vogue-workflow/0.1",
+  "contract_version": "fashion-planner-workflow",
   "request_id": "fixture:workflow:001",
   "producer": {
-    "agent_id": "vogue-orchestrator",
+    "agent_id": "orchestrator",
     "schema_version": "integrated-result/1.0"
   },
   "status": "partial",
   "result": {
     "schema_version": "integrated-result/1.0",
-    "agent_id": "vogue-orchestrator",
+    "agent_id": "orchestrator",
     "request_id": "fixture:workflow:001",
     "status": "partial",
     "user_input": {
@@ -16,7 +16,7 @@
       "images": []
     },
     "planning_request": {
-      "schema_version": "1.0",
+      "schema_version": "1.0.0",
       "request_id": "fixture:workflow:001",
       "query": "2027SS 합성 셔츠 검토용 초안",
       "context": {
@@ -27,11 +27,11 @@
     "sources": {
       "trend": {
         "raw_response": {
-          "contract_version": "vogue-handoff/0.1",
+          "contract_version": "trend-handoff",
           "request_id": "fixture:workflow:001",
           "producer": {
-            "agent_id": "trend-analysis-agent",
-            "schema_version": "1.1"
+            "agent_id": "trend",
+            "schema_version": "1.0.0"
           },
           "status": "ok",
           "result": {
@@ -119,15 +119,15 @@
             "limitations": [
               "Synthetic fixture article, not an external citation."
             ],
-            "schema_version": "1.1"
+            "schema_version": "1.0.0"
           }
         },
-        "content_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325",
-        "hash_profile": "python-json-sort/1",
+        "content_sha256": "f4977b1c4aa4859f64344fc4ab599e647848e54048d017103c5b5f84b83403db",
+        "hash_profile": "python-json-sort",
         "raw_artifact": {
-          "artifact_id": "fixture:38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b",
-          "uri": "artifact://fixtures/raw/38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b.json",
-          "sha256": "38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b",
+          "artifact_id": "fixture:b2f03dc8e6208e6f97b8a01ea80528183f2f99761330b685092d582e5a57b79b",
+          "uri": "artifact://fixtures/raw/b2f03dc8e6208e6f97b8a01ea80528183f2f99761330b685092d582e5a57b79b.json",
+          "sha256": "b2f03dc8e6208e6f97b8a01ea80528183f2f99761330b685092d582e5a57b79b",
           "media_type": "application/json",
           "size_bytes": 2443,
           "immutable": true
@@ -145,17 +145,17 @@
       },
       "stock": {
         "raw_response": {
-          "contract_version": "vogue-handoff/0.1",
+          "contract_version": "inventory-handoff",
           "request_id": "fixture:workflow:001",
           "producer": {
-            "agent_id": "stock-agent",
-            "schema_version": "1.0"
+            "agent_id": "inventory",
+            "schema_version": "1.0.0"
           },
           "status": "partial",
           "result": {
-            "schema_version": "1.0",
+            "schema_version": "1.0.0",
             "request_id": "fixture:workflow:001",
-            "agent_id": "stock-agent",
+            "agent_id": "inventory",
             "status": "partial",
             "summary": "Synthetic fixture only",
             "products": [
@@ -202,7 +202,7 @@
                 ],
                 "errors": [],
                 "evidence_ids": [
-                  "stock-agent:fixture:sample"
+                  "inventory:fixture:sample"
                 ]
               },
               {
@@ -227,7 +227,7 @@
             "season_basis": null,
             "evidence": [
               {
-                "evidence_id": "stock-agent:fixture:sample",
+                "evidence_id": "inventory:fixture:sample",
                 "style_id": "fixture:style",
                 "source_id": "fixture:stock",
                 "source_type": "synthetic_fixture",
@@ -243,21 +243,21 @@
             ],
             "errors": [],
             "input_provenance": {
-              "source_agent_id": "trend-analysis-agent",
-              "source_schema_version": "1.1",
+              "source_agent_id": "trend",
+              "source_schema_version": "1.0.0",
               "internal_schema_version": null,
-              "adapter_version": "stock-trend-input-adapter/1.0",
+              "adapter_version": "inventory-trend-input-adapter",
               "transformed": true,
-              "source_payload_sha256": "4da8ff8d6f1d34e184418ea1153100fe99d693a4d7516c2f39dd0a4996cfe5ea"
+              "source_payload_sha256": "8d936585ad7e512c2c62ff2ca3dffa595281563d07e74e43da0f2db3676be008"
             }
           }
         },
-        "content_sha256": "0cd2d0299ca4c602fdae06410708570f7f303b5e8d440bced5ecab428755029d",
-        "hash_profile": "python-json-sort/1",
+        "content_sha256": "7c8629232e77d82a2197a963b89d49c3fc9a334163027ea83574173f065b09ce",
+        "hash_profile": "python-json-sort",
         "raw_artifact": {
-          "artifact_id": "fixture:589862056a0f14f67037003657b89454a15a568e86cdd7c788842138c2b2ba12",
-          "uri": "artifact://fixtures/raw/589862056a0f14f67037003657b89454a15a568e86cdd7c788842138c2b2ba12.json",
-          "sha256": "589862056a0f14f67037003657b89454a15a568e86cdd7c788842138c2b2ba12",
+          "artifact_id": "fixture:dd4ea0fd5b5e32fe08334bbeb7938eca663cd875259a1d602e1516c93b677bdb",
+          "uri": "artifact://fixtures/raw/dd4ea0fd5b5e32fe08334bbeb7938eca663cd875259a1d602e1516c93b677bdb.json",
+          "sha256": "dd4ea0fd5b5e32fe08334bbeb7938eca663cd875259a1d602e1516c93b677bdb",
           "media_type": "application/json",
           "size_bytes": 2904,
           "immutable": true
@@ -275,22 +275,22 @@
       },
       "planning_draft": {
         "raw_response": {
-          "contract_version": "vogue-workflow/0.1",
+          "contract_version": "fashion-planner-workflow",
           "request_id": "fixture:workflow:001",
           "producer": {
-            "agent_id": "new-product-agent",
+            "agent_id": "novelty",
             "schema_version": "planning-draft/1.0"
           },
           "status": "partial",
           "result": {
             "schema_version": "planning-draft/1.0",
-            "agent_id": "new-product-agent",
+            "agent_id": "novelty",
             "request_id": "fixture:workflow:001",
             "status": "partial",
             "draft_identity": {
               "draft_id": "fixture:draft:001",
               "revision": 1,
-              "content_sha256": "49a575fd49d5de7a03889f84265489f9f80e75dcac238f32046d16bc57789f0c"
+              "content_sha256": "c56c7802536bcc682a6a0b1a9758ce621b9689725218a39f5bda0ecb077e65d4"
             },
             "draft": {
               "title": "합성 검토용 셔츠 초안",
@@ -303,7 +303,7 @@
                   "evidence_refs": [
                     {
                       "evidence_id": "trend:fixture:article:0:bd1ee873",
-                      "source_response_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325",
+                      "source_response_sha256": "f4977b1c4aa4859f64344fc4ab599e647848e54048d017103c5b5f84b83403db",
                       "source_pointer": "/result/evidence/0"
                     }
                   ]
@@ -329,7 +329,7 @@
               ]
             },
             "source_request": {
-              "contract_version": "vogue-workflow/0.1",
+              "contract_version": "fashion-planner-workflow",
               "request_id": "fixture:workflow:001",
               "input": {
                 "mode": "draft_only",
@@ -338,7 +338,7 @@
                   "images": []
                 },
                 "planning_request": {
-                  "schema_version": "1.0",
+                  "schema_version": "1.0.0",
                   "request_id": "fixture:workflow:001",
                   "query": "2027SS 합성 셔츠 검토용 초안",
                   "context": {
@@ -348,11 +348,11 @@
                 },
                 "trend_response": {
                   "raw_response": {
-                    "contract_version": "vogue-handoff/0.1",
+                    "contract_version": "trend-handoff",
                     "request_id": "fixture:workflow:001",
                     "producer": {
-                      "agent_id": "trend-analysis-agent",
-                      "schema_version": "1.1"
+                      "agent_id": "trend",
+                      "schema_version": "1.0.0"
                     },
                     "status": "ok",
                     "result": {
@@ -440,15 +440,15 @@
                       "limitations": [
                         "Synthetic fixture article, not an external citation."
                       ],
-                      "schema_version": "1.1"
+                      "schema_version": "1.0.0"
                     }
                   },
-                  "content_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325",
-                  "hash_profile": "python-json-sort/1",
+                  "content_sha256": "f4977b1c4aa4859f64344fc4ab599e647848e54048d017103c5b5f84b83403db",
+                  "hash_profile": "python-json-sort",
                   "raw_artifact": {
-                    "artifact_id": "fixture:38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b",
-                    "uri": "artifact://fixtures/raw/38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b.json",
-                    "sha256": "38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b",
+                    "artifact_id": "fixture:b2f03dc8e6208e6f97b8a01ea80528183f2f99761330b685092d582e5a57b79b",
+                    "uri": "artifact://fixtures/raw/b2f03dc8e6208e6f97b8a01ea80528183f2f99761330b685092d582e5a57b79b.json",
+                    "sha256": "b2f03dc8e6208e6f97b8a01ea80528183f2f99761330b685092d582e5a57b79b",
                     "media_type": "application/json",
                     "size_bytes": 2443,
                     "immutable": true
@@ -466,17 +466,17 @@
                 },
                 "stock_response": {
                   "raw_response": {
-                    "contract_version": "vogue-handoff/0.1",
+                    "contract_version": "inventory-handoff",
                     "request_id": "fixture:workflow:001",
                     "producer": {
-                      "agent_id": "stock-agent",
-                      "schema_version": "1.0"
+                      "agent_id": "inventory",
+                      "schema_version": "1.0.0"
                     },
                     "status": "partial",
                     "result": {
-                      "schema_version": "1.0",
+                      "schema_version": "1.0.0",
                       "request_id": "fixture:workflow:001",
-                      "agent_id": "stock-agent",
+                      "agent_id": "inventory",
                       "status": "partial",
                       "summary": "Synthetic fixture only",
                       "products": [
@@ -523,7 +523,7 @@
                           ],
                           "errors": [],
                           "evidence_ids": [
-                            "stock-agent:fixture:sample"
+                            "inventory:fixture:sample"
                           ]
                         },
                         {
@@ -548,7 +548,7 @@
                       "season_basis": null,
                       "evidence": [
                         {
-                          "evidence_id": "stock-agent:fixture:sample",
+                          "evidence_id": "inventory:fixture:sample",
                           "style_id": "fixture:style",
                           "source_id": "fixture:stock",
                           "source_type": "synthetic_fixture",
@@ -564,21 +564,21 @@
                       ],
                       "errors": [],
                       "input_provenance": {
-                        "source_agent_id": "trend-analysis-agent",
-                        "source_schema_version": "1.1",
+                        "source_agent_id": "trend",
+                        "source_schema_version": "1.0.0",
                         "internal_schema_version": null,
-                        "adapter_version": "stock-trend-input-adapter/1.0",
+                        "adapter_version": "inventory-trend-input-adapter",
                         "transformed": true,
-                        "source_payload_sha256": "4da8ff8d6f1d34e184418ea1153100fe99d693a4d7516c2f39dd0a4996cfe5ea"
+                        "source_payload_sha256": "8d936585ad7e512c2c62ff2ca3dffa595281563d07e74e43da0f2db3676be008"
                       }
                     }
                   },
-                  "content_sha256": "0cd2d0299ca4c602fdae06410708570f7f303b5e8d440bced5ecab428755029d",
-                  "hash_profile": "python-json-sort/1",
+                  "content_sha256": "7c8629232e77d82a2197a963b89d49c3fc9a334163027ea83574173f065b09ce",
+                  "hash_profile": "python-json-sort",
                   "raw_artifact": {
-                    "artifact_id": "fixture:589862056a0f14f67037003657b89454a15a568e86cdd7c788842138c2b2ba12",
-                    "uri": "artifact://fixtures/raw/589862056a0f14f67037003657b89454a15a568e86cdd7c788842138c2b2ba12.json",
-                    "sha256": "589862056a0f14f67037003657b89454a15a568e86cdd7c788842138c2b2ba12",
+                    "artifact_id": "fixture:dd4ea0fd5b5e32fe08334bbeb7938eca663cd875259a1d602e1516c93b677bdb",
+                    "uri": "artifact://fixtures/raw/dd4ea0fd5b5e32fe08334bbeb7938eca663cd875259a1d602e1516c93b677bdb.json",
+                    "sha256": "dd4ea0fd5b5e32fe08334bbeb7938eca663cd875259a1d602e1516c93b677bdb",
                     "media_type": "application/json",
                     "size_bytes": 2904,
                     "immutable": true
@@ -596,14 +596,14 @@
                 },
                 "stock_call_context": {
                   "planning_request_sha256": "87752b6aabe82d6a5285310f97da9b3c4ec368cdbe5bc4f112499350a057ce0f",
-                  "trend_response_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325",
-                  "stock_input_sha256": "4da8ff8d6f1d34e184418ea1153100fe99d693a4d7516c2f39dd0a4996cfe5ea",
+                  "trend_response_sha256": "f4977b1c4aa4859f64344fc4ab599e647848e54048d017103c5b5f84b83403db",
+                  "stock_input_sha256": "8d936585ad7e512c2c62ff2ca3dffa595281563d07e74e43da0f2db3676be008",
                   "stock_wire_request_sha256": "c98c7c696c5a09d050f2cc48c440f66f7e548056459f1c641f1bc9620b89bc38",
-                  "stock_response_sha256": "0cd2d0299ca4c602fdae06410708570f7f303b5e8d440bced5ecab428755029d"
+                  "stock_response_sha256": "7c8629232e77d82a2197a963b89d49c3fc9a334163027ea83574173f065b09ce"
                 }
               }
             },
-            "source_request_sha256": "d89f479580bae129daf40c5835b72c755de95bdc2b5a6ab59769274aff937e2c",
+            "source_request_sha256": "4313a8c546a9257819e128faf0c42ead04c9cab348e0775fce9e23006440b0c0",
             "limitations": [
               "Synthetic contract fixture only."
             ],
@@ -613,12 +613,12 @@
             "review_calls": 0
           }
         },
-        "content_sha256": "65dd7a074bb683ab2f62c546014fe08bc6ff1bd5c5872370e3ce40d68d6b5a54",
-        "hash_profile": "python-json-sort/1",
+        "content_sha256": "774234106b82fad59d02444b577afa8fca9909043a88fcb9bed416a89da6701d",
+        "hash_profile": "python-json-sort",
         "raw_artifact": {
-          "artifact_id": "fixture:cbfd691cc44c9f6d8d996c43d24a67cba5c86239aab6b45eb83c2510a3bcf73c",
-          "uri": "artifact://fixtures/raw/cbfd691cc44c9f6d8d996c43d24a67cba5c86239aab6b45eb83c2510a3bcf73c.json",
-          "sha256": "cbfd691cc44c9f6d8d996c43d24a67cba5c86239aab6b45eb83c2510a3bcf73c",
+          "artifact_id": "fixture:41677679041d980491b6d741176c65e5fce515d0c4f78fa2a16e239411af001c",
+          "uri": "artifact://fixtures/raw/41677679041d980491b6d741176c65e5fce515d0c4f78fa2a16e239411af001c.json",
+          "sha256": "41677679041d980491b6d741176c65e5fce515d0c4f78fa2a16e239411af001c",
           "media_type": "application/json",
           "size_bytes": 12467,
           "immutable": true
@@ -636,30 +636,30 @@
       },
       "sales_market_review": {
         "raw_response": {
-          "contract_version": "vogue-workflow/0.1",
+          "contract_version": "fashion-planner-workflow",
           "request_id": "fixture:workflow:001",
           "producer": {
-            "agent_id": "sales-market-agent",
+            "agent_id": "research",
             "schema_version": "sales-market-review/1.0"
           },
           "status": "partial",
           "result": {
             "schema_version": "sales-market-review/1.0",
-            "agent_id": "sales-market-agent",
+            "agent_id": "research",
             "request_id": "fixture:workflow:001",
             "status": "partial",
             "review_identity": {
               "review_id": "fixture:review:001",
               "revision": 1,
-              "content_sha256": "775c65bfd55c9a5aac3cc2483f6fb88cc1e7224e8dfb18fd8b6daed2f46bf88f"
+              "content_sha256": "6b514b779406865bbd20b41f2684c21563f21ba7f69a95f3e624ba05969d9133"
             },
             "review": {
               "reviewed_draft": {
                 "draft_id": "fixture:draft:001",
                 "revision": 1,
-                "content_sha256": "49a575fd49d5de7a03889f84265489f9f80e75dcac238f32046d16bc57789f0c"
+                "content_sha256": "c56c7802536bcc682a6a0b1a9758ce621b9689725218a39f5bda0ecb077e65d4"
               },
-              "draft_response_sha256": "65dd7a074bb683ab2f62c546014fe08bc6ff1bd5c5872370e3ce40d68d6b5a54",
+              "draft_response_sha256": "774234106b82fad59d02444b577afa8fca9909043a88fcb9bed416a89da6701d",
               "findings": [
                 {
                   "kind": "interpretation",
@@ -667,7 +667,7 @@
                   "evidence_refs": [
                     {
                       "evidence_id": "trend:fixture:article:0:bd1ee873",
-                      "source_response_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325",
+                      "source_response_sha256": "f4977b1c4aa4859f64344fc4ab599e647848e54048d017103c5b5f84b83403db",
                       "source_pointer": "/result/evidence/0"
                     }
                   ]
@@ -717,12 +717,12 @@
             "artifacts": []
           }
         },
-        "content_sha256": "a8dc10e698b6a7b17ca0e605feb896d40811a8e85100859cf5080ccfe8320733",
-        "hash_profile": "python-json-sort/1",
+        "content_sha256": "62b96c74b74a00076fb83194b92791d8f1fb2ff3bee70157d9c6161e49c9f82a",
+        "hash_profile": "python-json-sort",
         "raw_artifact": {
-          "artifact_id": "fixture:c081d7e180de7264b6dd55cd9f9697997dc0e4591b347db73fd43332128cb60d",
-          "uri": "artifact://fixtures/raw/c081d7e180de7264b6dd55cd9f9697997dc0e4591b347db73fd43332128cb60d.json",
-          "sha256": "c081d7e180de7264b6dd55cd9f9697997dc0e4591b347db73fd43332128cb60d",
+          "artifact_id": "fixture:adb56aa7a86a420c70981e825cc41b5b252f6b98e3ad42a7fc57fbef66f96662",
+          "uri": "artifact://fixtures/raw/adb56aa7a86a420c70981e825cc41b5b252f6b98e3ad42a7fc57fbef66f96662.json",
+          "sha256": "adb56aa7a86a420c70981e825cc41b5b252f6b98e3ad42a7fc57fbef66f96662",
           "media_type": "application/json",
           "size_bytes": 2677,
           "immutable": true
@@ -746,7 +746,7 @@
         "request_id": "fixture:workflow:001",
         "status": "ok",
         "input_sha256": "87752b6aabe82d6a5285310f97da9b3c4ec368cdbe5bc4f112499350a057ce0f",
-        "response_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325",
+        "response_sha256": "f4977b1c4aa4859f64344fc4ab599e647848e54048d017103c5b5f84b83403db",
         "started_at": "2026-11-12T06:00:00Z",
         "completed_at": "2026-11-12T06:00:01Z",
         "errors": []
@@ -756,8 +756,8 @@
         "stage": "stock",
         "request_id": "fixture:workflow:001",
         "status": "partial",
-        "input_sha256": "4da8ff8d6f1d34e184418ea1153100fe99d693a4d7516c2f39dd0a4996cfe5ea",
-        "response_sha256": "0cd2d0299ca4c602fdae06410708570f7f303b5e8d440bced5ecab428755029d",
+        "input_sha256": "8d936585ad7e512c2c62ff2ca3dffa595281563d07e74e43da0f2db3676be008",
+        "response_sha256": "7c8629232e77d82a2197a963b89d49c3fc9a334163027ea83574173f065b09ce",
         "started_at": "2026-11-12T06:00:02Z",
         "completed_at": "2026-11-12T06:00:03Z",
         "errors": []
@@ -767,8 +767,8 @@
         "stage": "planning_draft",
         "request_id": "fixture:workflow:001",
         "status": "partial",
-        "input_sha256": "d89f479580bae129daf40c5835b72c755de95bdc2b5a6ab59769274aff937e2c",
-        "response_sha256": "65dd7a074bb683ab2f62c546014fe08bc6ff1bd5c5872370e3ce40d68d6b5a54",
+        "input_sha256": "4313a8c546a9257819e128faf0c42ead04c9cab348e0775fce9e23006440b0c0",
+        "response_sha256": "774234106b82fad59d02444b577afa8fca9909043a88fcb9bed416a89da6701d",
         "started_at": "2026-11-12T06:00:04Z",
         "completed_at": "2026-11-12T06:00:05Z",
         "errors": []
@@ -778,8 +778,8 @@
         "stage": "sales_market_review",
         "request_id": "fixture:workflow:001",
         "status": "partial",
-        "input_sha256": "65dd7a074bb683ab2f62c546014fe08bc6ff1bd5c5872370e3ce40d68d6b5a54",
-        "response_sha256": "a8dc10e698b6a7b17ca0e605feb896d40811a8e85100859cf5080ccfe8320733",
+        "input_sha256": "774234106b82fad59d02444b577afa8fca9909043a88fcb9bed416a89da6701d",
+        "response_sha256": "62b96c74b74a00076fb83194b92791d8f1fb2ff3bee70157d9c6161e49c9f82a",
         "started_at": "2026-11-12T06:00:06Z",
         "completed_at": "2026-11-12T06:00:07Z",
         "errors": []
@@ -833,15 +833,15 @@
         "draft_identity": {
           "draft_id": "fixture:draft:001",
           "revision": 1,
-          "content_sha256": "49a575fd49d5de7a03889f84265489f9f80e75dcac238f32046d16bc57789f0c"
+          "content_sha256": "c56c7802536bcc682a6a0b1a9758ce621b9689725218a39f5bda0ecb077e65d4"
         },
-        "draft_response_sha256": "65dd7a074bb683ab2f62c546014fe08bc6ff1bd5c5872370e3ce40d68d6b5a54",
+        "draft_response_sha256": "774234106b82fad59d02444b577afa8fca9909043a88fcb9bed416a89da6701d",
         "review_identity": {
           "review_id": "fixture:review:001",
           "revision": 1,
-          "content_sha256": "775c65bfd55c9a5aac3cc2483f6fb88cc1e7224e8dfb18fd8b6daed2f46bf88f"
+          "content_sha256": "6b514b779406865bbd20b41f2684c21563f21ba7f69a95f3e624ba05969d9133"
         },
-        "review_response_sha256": "a8dc10e698b6a7b17ca0e605feb896d40811a8e85100859cf5080ccfe8320733",
+        "review_response_sha256": "62b96c74b74a00076fb83194b92791d8f1fb2ff3bee70157d9c6161e49c9f82a",
         "integration_input_sha256": "7242001014cffd3a72324551201cac4b6a3742eef23d9ca33ed551059aacd49d"
       },
       "reason": null,

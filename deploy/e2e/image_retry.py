@@ -47,7 +47,7 @@ def main(argv=None):
     out = Path(args.out).expanduser()
     out.parent.mkdir(parents=True, exist_ok=True)
     retry_key = "retry-" + uuid.uuid4().hex[:12]
-    body = {"contract_version": "vogue-workflow/0.2", "request_id": args.request_id, "retry_key": retry_key}
+    body = {"contract_version": "fashion-planner-workflow", "request_id": args.request_id, "retry_key": retry_key}
     status, envelope, raw, elapsed, _ = call(args.base, "POST", "/v1/orchestrations/image-retries", body, timeout=args.timeout)
     result = (envelope or {}).get("result") or {}
     image = result.get("final_image") or {}

@@ -1,4 +1,4 @@
-"""Export the StructuredQuery 1.0 JSON Schema to contracts/agents/vogue-orchestrator/output/structured-query-1.0.schema.json.
+"""Export the StructuredQuery 1.0 JSON Schema to contracts/agents/orchestrator/output/structured-query.schema.json.
 
 The schema is generated from the pydantic models in src/vogue_orchestrator/query/models.py
 (this repository owns the contract, decision Y1) and is the file handed to receivers.
@@ -21,14 +21,14 @@ from pathlib import Path
 from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET_PATH = ROOT / "contracts" / "agents" / "vogue-orchestrator" / "output" / "structured-query-1.0.schema.json"
+TARGET_PATH = ROOT / "contracts" / "agents" / "orchestrator" / "output" / "structured-query.schema.json"
 sys.path.insert(0, str(ROOT / "src"))
 
 from vogue_orchestrator.query.models import export_json_schema  # noqa: E402
 
 
 def render() -> str:
-    """Return the full text of structured-query-1.0.schema.json for the current models."""
+    """Return the full text of structured-query.schema.json for the current models."""
     return json.dumps(export_json_schema(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
@@ -42,9 +42,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.check:
         if current != expected:
-            print("structured-query-1.0.schema.json is out of date; run: py scripts/export_structured_query_schema.py")
+            print("structured-query.schema.json is out of date; run: py scripts/export_structured_query_schema.py")
             return 1
-        print("structured-query-1.0.schema.json matches the models")
+        print("structured-query.schema.json matches the models")
         return 0
 
     TARGET_PATH.parent.mkdir(parents=True, exist_ok=True)

@@ -30,7 +30,7 @@ class BoundaryTests(unittest.TestCase):
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra required')
     def test_live_gate_blocks_before_any_query_provider(self):
-        request = {'contract_version': 'vogue-workflow/0.2', 'request_id': 'test-gate',
+        request = {'contract_version': 'fashion-planner-workflow', 'request_id': 'test-gate',
                    'input': {'user_input': {'text': 'test', 'images': []}}}
         handler = self.handler(request)
         with patch.dict(os.environ), patch('vogue_orchestrator.server.structure_query_for_ui') as structurer:
@@ -46,7 +46,7 @@ class BoundaryTests(unittest.TestCase):
         response = {'http_status': 502, 'envelope': {'status': 'error', 'result': {'sources': {'trend': None}}}}
         fake = Mock()
         fake.run.return_value = response
-        request = {'contract_version': 'vogue-workflow/0.2', 'request_id': 'test',
+        request = {'contract_version': 'fashion-planner-workflow', 'request_id': 'test',
                    'input': {'user_input': {'text': 'test', 'images': []}, 'trend_query': {'request_id': 'test'}}}
         with patch('vogue_orchestrator.workflow_http.build_workflow', return_value=fake):
             dispatch(handler, request)
@@ -58,7 +58,7 @@ class BoundaryTests(unittest.TestCase):
                      'trend_terms': {'season': {'year': 2026, 'season': 'FW', 'origin': 'user_requested'}},
                      'requested': {'categories': {'include': [{'major': '아우터', 'minor': '가디건'}]},
                                    'gender': gender}}
-            request = {'contract_version': 'vogue-workflow/0.2', 'request_id': 'test-gender',
+            request = {'contract_version': 'fashion-planner-workflow', 'request_id': 'test-gender',
                        'input': {'user_input': {'text': 'test', 'images': []}, 'trend_query': trend}}
             fake = Mock()
             fake.run.return_value = {'http_status': 200, 'envelope': {}}
@@ -96,4 +96,4 @@ class BoundaryTests(unittest.TestCase):
         self.assertEqual(next(entry for entry in entries if entry['name'] == 'stock')['port'], 8002)
         self.assertTrue(all('0.0.0.0' not in entry['args'] for entry in entries))
         self.assertEqual(next(entry for entry in entries if entry['name'] == 'sales-market')['repo'].name,
-                         'sales-market-agent')
+                         'research')

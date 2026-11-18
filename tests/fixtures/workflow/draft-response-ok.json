@@ -1,20 +1,20 @@
 {
-  "contract_version": "vogue-workflow/0.1",
+  "contract_version": "fashion-planner-workflow",
   "request_id": "fixture:workflow:001",
   "producer": {
-    "agent_id": "new-product-agent",
+    "agent_id": "novelty",
     "schema_version": "planning-draft/1.0"
   },
   "status": "ok",
   "result": {
     "schema_version": "planning-draft/1.0",
-    "agent_id": "new-product-agent",
+    "agent_id": "novelty",
     "request_id": "fixture:workflow:001",
     "status": "ok",
     "draft_identity": {
       "draft_id": "fixture:draft:001",
       "revision": 1,
-      "content_sha256": "a74ed0f1d1b3c20ca4aa4aafb4ca770c020f20b865f2aeddfce6a24b50f090bc"
+      "content_sha256": "5c97155feeb6351566c004d691cfd0a0332c1eea78ed6033cf13ee69fdcf674f"
     },
     "draft": {
       "title": "합성 검토용 셔츠 초안",
@@ -27,7 +27,7 @@
           "evidence_refs": [
             {
               "evidence_id": "trend:fixture:article:0:bd1ee873",
-              "source_response_sha256": "d360118bc820e8395df8a59c7f2e81685082bda6d78e141a7cf7372315c283bc",
+              "source_response_sha256": "00b6def8d64f62f80b52245e25d45369d49740b98b9c48d1a95b46119466ddfd",
               "source_pointer": "/result/evidence/0"
             }
           ]
@@ -80,7 +80,7 @@
       }
     },
     "source_request": {
-      "contract_version": "vogue-workflow/0.1",
+      "contract_version": "fashion-planner-workflow",
       "request_id": "fixture:workflow:001",
       "input": {
         "mode": "draft_only",
@@ -89,7 +89,7 @@
           "images": []
         },
         "planning_request": {
-          "schema_version": "1.0",
+          "schema_version": "1.0.0",
           "request_id": "fixture:workflow:001",
           "query": "2027SS 합성 셔츠 검토용 초안",
           "context": {
@@ -99,11 +99,11 @@
         },
         "trend_response": {
           "raw_response": {
-            "contract_version": "vogue-handoff/0.1",
+            "contract_version": "trend-handoff",
             "request_id": "fixture:workflow:001",
             "producer": {
-              "agent_id": "trend-analysis-agent",
-              "schema_version": "1.1"
+              "agent_id": "trend",
+              "schema_version": "1.0.0"
             },
             "status": "ok",
             "result": {
@@ -190,11 +190,11 @@
               "limitations": [
                 "Synthetic fixture article, not an external citation."
               ],
-              "schema_version": "1.1"
+              "schema_version": "1.0.0"
             }
           },
-          "content_sha256": "d360118bc820e8395df8a59c7f2e81685082bda6d78e141a7cf7372315c283bc",
-          "hash_profile": "python-json-sort/1",
+          "content_sha256": "00b6def8d64f62f80b52245e25d45369d49740b98b9c48d1a95b46119466ddfd",
+          "hash_profile": "python-json-sort",
           "raw_artifact": {
             "artifact_id": "fixture:20398762d44bcfb70cd0aae524b92266ccc570fdc4165eeb36e6fdf231524111",
             "uri": "artifact://fixtures/raw/20398762d44bcfb70cd0aae524b92266ccc570fdc4165eeb36e6fdf231524111.json",
@@ -216,17 +216,17 @@
         },
         "stock_response": {
           "raw_response": {
-            "contract_version": "vogue-handoff/0.1",
+            "contract_version": "inventory-handoff",
             "request_id": "fixture:workflow:001",
             "producer": {
-              "agent_id": "stock-agent",
-              "schema_version": "1.0"
+              "agent_id": "inventory",
+              "schema_version": "1.0.0"
             },
             "status": "ok",
             "result": {
-              "schema_version": "1.0",
+              "schema_version": "1.0.0",
               "request_id": "fixture:workflow:001",
-              "agent_id": "stock-agent",
+              "agent_id": "inventory",
               "status": "ok",
               "summary": "Synthetic fixture only",
               "products": [
@@ -272,14 +272,14 @@
                   ],
                   "errors": [],
                   "evidence_ids": [
-                    "stock-agent:fixture:sample"
+                    "inventory:fixture:sample"
                   ]
                 }
               ],
               "season_basis": null,
               "evidence": [
                 {
-                  "evidence_id": "stock-agent:fixture:sample",
+                  "evidence_id": "inventory:fixture:sample",
                   "style_id": "fixture:style",
                   "source_id": "fixture:stock",
                   "source_type": "synthetic_fixture",
@@ -295,17 +295,17 @@
               ],
               "errors": [],
               "input_provenance": {
-                "source_agent_id": "trend-analysis-agent",
-                "source_schema_version": "1.1",
+                "source_agent_id": "trend",
+                "source_schema_version": "1.0.0",
                 "internal_schema_version": null,
-                "adapter_version": "stock-trend-input-adapter/1.0",
+                "adapter_version": "inventory-trend-input-adapter",
                 "transformed": true,
-                "source_payload_sha256": "041556b19d893aed9a18e4fccc433dadfe29c7554b6adfd962d0b564c25c0efb"
+                "source_payload_sha256": "b6edd28d3f7a4bb0a937cac92d09ef7a0617560be7dcef80e62440c6d7cc77bf"
               }
             }
           },
-          "content_sha256": "f8b01236a452e9baf6ee04329960c5c22fa72275e5dc9cb76559a9e731a1a625",
-          "hash_profile": "python-json-sort/1",
+          "content_sha256": "025a2fabed7c36e726d25a702eeef1d112ee720dbb197539738fba52a6e5d164",
+          "hash_profile": "python-json-sort",
           "raw_artifact": {
             "artifact_id": "fixture:20cf624e4b4bf7e3a4d28fd4932bb646358789a49b6a0017b4b89e207f41b536",
             "uri": "artifact://fixtures/raw/20cf624e4b4bf7e3a4d28fd4932bb646358789a49b6a0017b4b89e207f41b536.json",
@@ -327,14 +327,14 @@
         },
         "stock_call_context": {
           "planning_request_sha256": "87752b6aabe82d6a5285310f97da9b3c4ec368cdbe5bc4f112499350a057ce0f",
-          "trend_response_sha256": "d360118bc820e8395df8a59c7f2e81685082bda6d78e141a7cf7372315c283bc",
-          "stock_input_sha256": "041556b19d893aed9a18e4fccc433dadfe29c7554b6adfd962d0b564c25c0efb",
+          "trend_response_sha256": "00b6def8d64f62f80b52245e25d45369d49740b98b9c48d1a95b46119466ddfd",
+          "stock_input_sha256": "b6edd28d3f7a4bb0a937cac92d09ef7a0617560be7dcef80e62440c6d7cc77bf",
           "stock_wire_request_sha256": "c0b2864c2ed2093b13fa5a7fb8efd46dc35e3d7b607308c19a13e6075db4aba9",
-          "stock_response_sha256": "f8b01236a452e9baf6ee04329960c5c22fa72275e5dc9cb76559a9e731a1a625"
+          "stock_response_sha256": "025a2fabed7c36e726d25a702eeef1d112ee720dbb197539738fba52a6e5d164"
         }
       }
     },
-    "source_request_sha256": "512795c90a26fb4bc1fb39055d2a3c639570a17ee919bd43818f749deb0dd17e",
+    "source_request_sha256": "f0c291e5c198ff8024fcb96d117a1b405002cd9ab0af5cf94f6ce1c61ccd0ed5",
     "limitations": [
       "Synthetic contract fixture only."
     ],

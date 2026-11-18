@@ -307,7 +307,7 @@ class StructuredPathTests(unittest.TestCase):
 
 @unittest.skipUnless(HAS_PYDANTIC, SKIP_REASON)
 class ContractExamplesAreProducedByTheCodeTests(unittest.TestCase):
-    """The contract examples with several items (contracts/agents/vogue-orchestrator/output/structured-query.md §6) come out of the assembly."""
+    """The contract examples with several items (contracts/agents/orchestrator/output/structured-query.md §6) come out of the assembly."""
 
     @classmethod
     def setUpClass(cls):

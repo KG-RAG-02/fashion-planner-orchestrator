@@ -1,0 +1,82 @@
+{
+  "contract_version": "fashion-planner-workflow",
+  "producer": {
+    "agent_id": "research",
+    "schema_version": "sales-market-review/1.0"
+  },
+  "request_id": "fixture:workflow:001",
+  "result": {
+    "agent_id": "research",
+    "artifacts": [],
+    "errors": [],
+    "limitations": [
+      "Synthetic fixture only; not current market validation."
+    ],
+    "request_id": "fixture:workflow:001",
+    "review": {
+      "draft_response_sha256": "5ba8a526e87e8d4d0be8f6fac6a31bdb98c71af8a3d9af3955f291239ef206e4",
+      "evidence": [],
+      "findings": [
+        {
+          "evidence_refs": [
+            {
+              "evidence_id": "trend:fixture:article:0:bd1ee873",
+              "source_pointer": "/result/evidence/0",
+              "source_response_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325"
+            }
+          ],
+          "kind": "interpretation",
+          "text": "Fixture-only qualitative assessment, not a sales forecast."
+        }
+      ],
+      "limitations": [
+        "Historical/sample sources cannot establish current sales."
+      ],
+      "metrics": [
+        {
+          "comparability": "unknown",
+          "currency": null,
+          "evidence_refs": [],
+          "missing_reason": "No current company sales source in this fixture.",
+          "name": "current_company_sales",
+          "observation": {
+            "as_of": null,
+            "data_nature": "synthetic_fixture",
+            "limitations": [
+              "Fixture only; not current inventory or actual sales."
+            ],
+            "observed_at": "2026-11-12T06:00:00Z",
+            "source": "coordinator synthetic fixture; no real company data",
+            "synthetic": true
+          },
+          "period": null,
+          "unit": "pieces",
+          "value": null
+        }
+      ],
+      "observation": {
+        "as_of": null,
+        "data_nature": "synthetic_fixture",
+        "limitations": [
+          "Fixture only; not current inventory or actual sales."
+        ],
+        "observed_at": "2026-11-12T06:00:00Z",
+        "source": "coordinator synthetic fixture; no real company data",
+        "synthetic": true
+      },
+      "reviewed_draft": {
+        "content_sha256": "402a804ff41919f432c18dac9712438845cc969d06e7e2d39d334685dd0bab49",
+        "draft_id": "fixture:draft:001",
+        "revision": 1
+      }
+    },
+    "review_identity": {
+      "content_sha256": "a1f2d8f53ee33913d6c3104e0143588890a1e5bb7f91619d0cf7c93e6c9b1c45",
+      "review_id": "fixture:review:001",
+      "revision": 1
+    },
+    "schema_version": "sales-market-review/1.0",
+    "status": "ok"
+  },
+  "status": "ok"
+}

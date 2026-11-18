@@ -1,34 +1,41 @@
-# P08 workflow contract — proposed 0.5.0
+# 워크플로 계약 (workflow-contract)
 
-현재 요청·응답의 기준은 실행 코드, [`baseline.json`](baseline.json), [`snapshot.json`](snapshot.json)입니다. baseline 상태는 `proposed`이며 producer/consumer 독립 검증을 완료한 frozen 계약으로 간주하지 않습니다. 계약 동결·갱신은 [`contracts README`](../README.md)와 `scripts/freeze_workflow_contract.py` 절차를 따릅니다.
+요청·응답의 기준은 실행 코드, [`baseline.json`](baseline.json), [`snapshot.json`](snapshot.json)입니다.
+`baseline.json`의 상태가 `frozen`일 때만 워크플로가 실행됩니다(`proposed`이면 개발 모드에서만 실행하고 결과에
+그 사실을 표시합니다). 동결과 갱신은 `scripts/freeze_workflow_contract.py`로만 합니다.
 
-## 현재 호출 흐름
+식별자 이름에는 버전을 넣지 않습니다. 계약 버전은 응답의 `schema_version`(`"1.0.0"`) 한 곳에만 둡니다.
 
-모든 단계는 P08이 같은 `request_id`로 순차 호출합니다. P06과 P07은 서로 직접 호출하지 않습니다.
+## 호출 흐름
 
-| 순서 | 호출 | 계약 |
-| --- | --- | --- |
-| 1 | P08 → Trend `POST /v1/agents/trend-analysis-agent/runs` | `vogue-handoff/0.1`, Trend result `1.1` |
-| 2 | P08 → Stock `POST /v1/agents/stock-agent/runs` | `vogue-handoff/0.1`, Trend result body를 입력, Stock result `1.0` |
-| 3 | P08 → P06 `POST /v1/agents/new-product-agent/runs` | `vogue-handoff/0.3`, P06 result `1.0` |
-| 4 | P08 → P07 `POST /v1/agents/sales-market-agent/reviews` | `vogue-sales-market-review/0.3-proposal`(허용 product 필드 + 필드별 출처), native response `sales-market-review/0.1-internal` |
-| 5 | P08 내부 통합·Planning Sheet 생성 → UI | `vogue-workflow/0.2`, 통합 결과 `integrated-result/2.0` |
+모든 단계는 orchestrator가 같은 `request_id`로 차례로 호출합니다. novelty와 research는 서로 부르지 않습니다.
 
-P06은 상품 및 착장 이미지를 생성할 수 있고, P08은 검증된 실행 결과로 Planning Sheet PNG를 합성합니다. P08의 Planning Sheet 합성은 이미지 모델 호출이 아닙니다.
+| 순서 | 호출 | 전송(`contract_version`) | 응답 `schema_version` |
+| --- | --- | --- | --- |
+| 1 | orchestrator → trend `POST /v1/agents/trend/runs` (입력: TrendQuery) | `trend-handoff` | `1.0.0` |
+| 2 | orchestrator → inventory `POST /v1/agents/inventory/runs` (입력: 받은 trend 결과 그대로) | `inventory-handoff` | `1.0.0` |
+| 3 | orchestrator → novelty `POST /v1/agents/novelty/runs` (입력: 기획 요청 + trend·inventory 결과의 등록된 투영) | `novelty-handoff` | `1.0.0` |
+| 4 | orchestrator → research `POST /v1/agents/research/reviews` (입력: 허용 상품 필드 + 필드별 출처) | `research-handoff` | `1.0.0` |
+| 5 | orchestrator 내부 통합과 기획서 생성 → UI | `fashion-planner-workflow` | `1.0.0` (integrated result) |
 
-## 데이터 보존 및 연결 한계
+novelty는 상품·착장 이미지를 만들 수 있고, orchestrator는 검증된 실행 기록으로 기획서 PNG를 그립니다. 기획서를
+그릴 때 이미지 모델은 부르지 않습니다.
 
-- P08은 Agent 원 응답, request ID, 응답 hash, 단계 기록과 검증된 artifact 참조를 저장합니다. 원 응답의 status, 오류, evidence, `missing_data`, limitations를 성공 상태로 바꾸거나 임의로 채우지 않습니다.
-- P07에는 P06 Draft 전체가 아니라 P08이 Draft의 `product_profile`에서 추린 허용 필드와 필드별 출처(`kind`, `source_ref`, `evidence_ids`)만 전달됩니다. P08은 P07 요청과 P06 원 응답을 보존해 연결하지만, P07 응답은 Draft 전체나 Draft response hash를 증명하지 않습니다. 통합 결과에서 이 제한을 완전한 Draft hash attestation으로 표현하지 않습니다.
-- artifact는 소유자와 허용 namespace를 확인하고 실제 bytes의 크기·SHA-256을 검증한 뒤 사용합니다. 원문에 없는 provenance나 연구 근거를 추가하지 않습니다.
-- `ok`, `partial`, `no_results`, `error`의 집계는 각 producer 의미와 `workflow_contract.py`의 단계 규칙을 따릅니다. 부분 결과와 비치명 오류는 보존하고, 계약·식별자·무결성 위반은 후속 호출을 중단합니다.
+## 보존과 연결의 한계
+
+- orchestrator는 서비스 응답 원문, request ID, 응답 해시(`python-json-sort`), 단계 기록, 검증된 산출물 참조를
+  저장합니다. 원문의 status, 오류, 근거, `missing_data`, limitations를 성공으로 바꾸거나 임의로 채우지 않습니다.
+- research에는 novelty 초안 전체가 아니라 초안의 `product_profile`에서 뽑은 허용 필드와 필드별 출처(`kind`,
+  `source_ref` = `novelty.draft.product_profile.<field>`, `evidence_ids`)만 보냅니다. research 응답은 초안 전체나
+  초안 응답 해시를 증명하지 않으므로, 통합 결과도 이를 초안 전체의 증명으로 표현하지 않습니다.
+- 산출물은 소유자와 허용 네임스페이스(`artifact://novelty/…`, `artifact://research/…`)를 확인하고, 실제 바이트의
+  크기와 SHA-256을 검증한 뒤 씁니다. orchestrator가 만든 blob은 `artifact://orchestrator/blobs/<sha256>`입니다.
+- `ok`, `partial`, `no_results`, `error`는 각 서비스의 의미와 `workflow_contract.py`의 단계 규칙을 따릅니다.
+  부분 결과와 치명적이지 않은 오류는 보존하고, 계약·식별자·무결성 위반은 뒤 단계 호출을 멈춥니다.
 
 ## 계약 산출물
 
-- 호출·통합 JSON Schema: 이 디렉터리의 `*.schema.json`
-- producer schema 출처 및 fingerprint: [`../agents/SOURCES.md`](../agents/SOURCES.md)
-- source/consumer 및 검증 범위: [`source-consumer-matrix.json`](source-consumer-matrix.json)
-- 통합 규칙: [`../../docs/workflow-integration-conventions.md`](../../docs/workflow-integration-conventions.md)
-- 현재 흐름 개요: [`../../docs/current-state.md`](../../docs/current-state.md)
-
-이 문서는 과거 `/drafts`, P07 `/runs`, full-Draft 직접 전달, 이전 workflow 버전의 설계·마이그레이션 기록을 현재 계약으로 취급하지 않습니다. P06/P07의 계약은 각 소유 저장소와 해당 source fingerprint를 기준으로 확인합니다.
+- 호출·통합 JSON Schema: 이 디렉터리의 `*.schema.json`(`$id` = `https://contracts.fashion-planner.invalid/<소유 서비스>/<파일>`)
+- 서비스 계약 사본과 출처: [`../agents/SOURCES.md`](../agents/SOURCES.md)
+- 호출 행렬: [`source-consumer-matrix.json`](source-consumer-matrix.json)
+- 기준 검증기와 합성 픽스처: [`../../tools/workflow_contract/`](../../tools/workflow_contract/)

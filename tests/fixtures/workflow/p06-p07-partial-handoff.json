@@ -5,15 +5,15 @@
     "season": "2027SS"
   },
   "p06_response": {
-    "contract_version": "vogue-handoff/0.3",
+    "contract_version": "novelty-handoff",
     "request_id": "fixture:workflow:001",
     "producer": {
-      "agent_id": "new-product-agent",
-      "schema_version": "1.0"
+      "agent_id": "novelty",
+      "schema_version": "1.0.0"
     },
     "status": "partial",
     "result": {
-      "schema_version": "1.0",
+      "schema_version": "1.0.0",
       "request_id": "fixture:workflow:001",
       "status": "partial",
       "draft": {
@@ -72,18 +72,18 @@
     }
   },
   "p07_response": {
-    "contract_version": "vogue-sales-market-review/0.3-proposal",
+    "contract_version": "research-handoff",
     "request_id": "fixture:workflow:001",
     "producer": {
-      "agent_id": "sales-market-agent",
-      "schema_version": "sales-market-review/0.1-internal"
+      "agent_id": "research",
+      "schema_version": "1.0.0"
     },
     "status": "partial",
     "result": {
-      "schema_version": "sales-market-review/0.1-internal",
+      "schema_version": "1.0.0",
       "request_id": "fixture:workflow:001",
       "draft_id": null,
-      "producer_id": "sales-market-agent",
+      "producer_id": "research",
       "status": "partial",
       "draft_context": {
         "category": "니트웨어",

@@ -23,14 +23,14 @@ AGENTS = {k: 'http://127.0.0.1:9' for k in ('VOGUE_TREND_AGENT_URL', 'VOGUE_STOC
 HISTORICAL_KEYS = ('p06-input/1', 'p06-input/2')
 # The registered versions' output on upstream-projection.json (sha256 of canonical JSON). A registered version is
 # never edited in place: a changed projection is a new key with new golden hashes, and these stay as they are.
-FIXTURE_SHA256 = {'trend': '1f70fad1c24beaff6944178777181cba92c6a3e055482e13990f045f84b0e821',
-                  'stock': '31fc88164eec64e39bccda4b308532121133ad8a5f2e1e1a87f3ab68d601cdc0'}
+FIXTURE_SHA256 = {'trend': '1bbcd515db08f0b1be95fc1612b4ca74da74a6f21acdb585e18965a52c4a7997',
+                  'stock': '76db0a285f4a807db15431b859e755fe17bb128af90ae72fac128af1fee71902'}
 GOLDEN = {
-    'p06-input/1': {'trend': '5a9daf39aa98a1a35200501d67e807abb66449a728e7e33e3cd152bf92adeb60',
-                    'stock': '0f276a9dbd8a36c226f89ab2e1fdd1438a7e31c17e811c6f2e12686da0d15116'},
+    'p06-input/1': {'trend': '073d69aa050c2110040c864fdc5e1bc5356eb5c8255b39dea224ed82b62a2faf',
+                    'stock': '521a2d4ae87004e33986c719d23ef760a053957fd274e0d239c3c680c001456b'},
     # The fixture's photos belong to different products, so p06-input/2 keeps its Stock side whole.
-    'p06-input/2': {'trend': '5a9daf39aa98a1a35200501d67e807abb66449a728e7e33e3cd152bf92adeb60',
-                    'stock': '31fc88164eec64e39bccda4b308532121133ad8a5f2e1e1a87f3ab68d601cdc0'},
+    'p06-input/2': {'trend': '073d69aa050c2110040c864fdc5e1bc5356eb5c8255b39dea224ed82b62a2faf',
+                    'stock': '76db0a285f4a807db15431b859e755fe17bb128af90ae72fac128af1fee71902'},
 }
 
 
@@ -79,7 +79,7 @@ class P06Input2Tests(unittest.TestCase):
         def photo(tag):
             return dict(data=tag, media_type='image/jpeg', encoding='base64', size_bytes=3, source='s',
                         data_nature='sample')
-        return {'schema_version': '1.0', 'products': [
+        return {'schema_version': '1.0.0', 'products': [
             dict(style_id='0764600', image=photo('A')), None, dict(style_id='0838846', image=photo('B')),
             dict(style_id='0764600', image=photo('A')), dict(style_id='0838846', image=None),
             dict(style_id='0714927', image=dict(url='https://example.invalid/c.jpg', data='C')),
@@ -175,8 +175,8 @@ class P06Input1Tests(unittest.TestCase):
     def test_the_output_keeps_the_upstream_schema_versions_true(self):
         from vogue_orchestrator.workflow_contract import WorkflowContract
         contract = WorkflowContract()
-        trend_schema = contract.validators['upstream/trend-result-1.1.schema.json']
-        stock_schema = contract.validators['upstream/stock-result-1.0.schema.json']
+        trend_schema = contract.validators['upstream/trend-result.schema.json']
+        stock_schema = contract.validators['upstream/inventory-result.schema.json']
         for name, (trend, stock) in (('upstream-projection.json', upstream()), ('draft-request-text-ok.json', base_sample())):
             for version in P06_INPUT_PROJECTIONS:
                 with self.subTest(fixture=name, version=version):
@@ -184,9 +184,9 @@ class P06Input1Tests(unittest.TestCase):
                     trend_view, stock_view = p06_inputs(trend, stock, version)
                     self.assertTrue(trend_schema.is_valid(trend_view), list(trend_schema.iter_errors(trend_view))[:1])
                     self.assertTrue(stock_schema.is_valid(stock_view), list(stock_schema.iter_errors(stock_view))[:1])
-                    self.assertEqual((trend_view['schema_version'], stock_view['schema_version']), ('1.1', '1.0'))
-                    request = dict(contract_version='vogue-handoff/0.3', request_id=trend['request_id'], input=dict(
-                        planning_request=dict(schema_version='1.0', request_id=trend['request_id']),
+                    self.assertEqual((trend_view['schema_version'], stock_view['schema_version']), ('1.0.0', '1.0.0'))
+                    request = dict(contract_version='novelty-handoff', request_id=trend['request_id'], input=dict(
+                        planning_request=dict(schema_version='1.0.0', request_id=trend['request_id']),
                         trend_result=trend_view, inventory_product_result=stock_view))
                     contract.schema(request, 'planning-draft-request.schema.json')
 
@@ -249,7 +249,7 @@ class SettingTests(unittest.TestCase):
     @unittest.skipUnless(HAVE_JSONSCHEMA, 'jsonschema not installed (install the `workflow` extra)')
     def test_an_invalid_setting_is_a_409_before_any_work(self):
         handler = Mock()
-        request = dict(contract_version='vogue-workflow/0.2', request_id='r-1', input=dict(user_input=dict(text='t', images=[])))
+        request = dict(contract_version='fashion-planner-workflow', request_id='r-1', input=dict(user_input=dict(text='t', images=[])))
         with environment(VOGUE_WORKFLOW_ALLOW_PROPOSED='1', VOGUE_AGENT_HTTP_DEV_MODE='1',
                          VOGUE_WORKFLOW_P06_INPUT_PROJECTION='full', VOGUE_WORKFLOW_STORE_DIR=str(real_tempdir(self)),
                          VOGUE_AGENT_SERVICE_BEARER_TOKEN='synthetic-test-token', **AGENTS):

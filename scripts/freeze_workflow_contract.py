@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record the current vogue-workflow contract baseline: contracts/workflow/baseline.json.
+"""Record the current workflow contract baseline: contracts/workflow/baseline.json.
 
 This script is the only writer of baseline.json. The runtime gate in
 vogue_orchestrator.workflow_http reads it; "frozen" is never hand-edited.
@@ -31,13 +31,13 @@ CONTRACTS = ROOT / "contracts" / "workflow"
 SNAPSHOT = CONTRACTS / "snapshot.json"
 BASELINE = CONTRACTS / "baseline.json"
 TOOLS = ROOT / "tools" / "workflow_contract"
-FORMAT = "vogue-workflow-baseline/1"
+FORMAT = "workflow-baseline"
 SOURCE_PATHS = {
-    "trend-analysis-agent": ("trend-analysis-agent",),
-    "stock-agent": ("stock-agent",),
-    "new-product-agent": ("new-product-agent", "project_06"),
-    "sales-market-agent": ("sales-market-agent", "project_07"),
-    "vogue-orchestrator": (".",),
+    "trend": ("fashion-planner-trend",),
+    "inventory": ("fashion-planner-inventory",),
+    "novelty": ("fashion-planner-novelty",),
+    "research": ("fashion-planner-research",),
+    "orchestrator": (".",),
 }
 # P06 and P07 own their native wire contracts; P08 call-side schemas are not vendored there.
 VENDORED = ()

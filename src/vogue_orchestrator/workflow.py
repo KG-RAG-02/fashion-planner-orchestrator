@@ -9,21 +9,22 @@ import json
 import logging
 import time
 from .upstream_projection import CURRENT_P06_INPUT_PROJECTION, p06_input_projection_valid, p06_inputs
-from .workflow_contract import (VERSION, HANDOFF_VERSION, P06_HANDOFF_VERSION, P07_REVIEW_VERSION,
+from .workflow_contract import (VERSION, TREND_HANDOFF_VERSION, INVENTORY_HANDOFF_VERSION, NOVELTY_HANDOFF_VERSION,
+                                RESEARCH_HANDOFF_VERSION, PAYLOAD_SCHEMA_VERSION,
                                 STAGES, DRAFT_MODES, p07_review_input, require, require_registered_p06_inputs, walk)
 from .workflow_store import ArtifactError, RESOLVER_CODES, canonical, digest, strict_json, checked_image
 
 # Namespaces whose artifacts P08 imports through a reader (conventions section 8): peer review artifacts.
-PEER_NAMESPACES = ('p07', 'p06')
+PEER_NAMESPACES = ('research', 'novelty')
 # An upstream that itself answers 503/504 keeps that meaning (the contract's error table): the same
 # codes as a refused connection or a socket timeout, retryable. Every other non-2xx is 502.
 UPSTREAM_STATUS_CODES = {503: 'UPSTREAM_UNAVAILABLE', 504: 'UPSTREAM_TIMEOUT'}
 LOGGER = logging.getLogger(__name__)
 STAGE_PRODUCERS = {
-    'trend': 'trend-analysis-agent',
-    'stock': 'stock-agent',
-    'planning_draft': 'new-product-agent',
-    'sales_market_review': 'sales-market-agent',
+    'trend': 'trend',
+    'stock': 'inventory',
+    'planning_draft': 'novelty',
+    'sales_market_review': 'research',
 }
 
 
@@ -111,7 +112,7 @@ class Workflow:
                                data_nature='sample' if natures == {'sample'} else 'mixed' if len(natures) > 1 else 'unknown',
                                source=raw['producer']['agent_id'],
                                limitations=['Receipt time is not source observation time; unspecified provenance remains unknown.'])
-        return dict(raw_response=copy.deepcopy(raw), content_sha256=digest(raw), hash_profile='python-json-sort/1',
+        return dict(raw_response=copy.deepcopy(raw), content_sha256=digest(raw), hash_profile='python-json-sort',
                     raw_artifact=artifact, observation=observation)
 
     def _key(self, rid, stage, payload, attempt='initial'):
@@ -177,7 +178,7 @@ class Workflow:
                         self.contract.schema(error_body, 'sales-market-review-error.schema.json')
                         error = error_body.get('error') if isinstance(error_body, dict) else None
                         if (isinstance(error_body, dict)
-                                and error_body.get('contract_version') == P07_REVIEW_VERSION
+                                and error_body.get('contract_version') == RESEARCH_HANDOFF_VERSION
                                 and error_body.get('request_id') in {rid, None}
                                 and set(error_body) == {'contract_version', 'request_id', 'error'}
                                 and isinstance(error, dict) and set(error) == {'code', 'message'}
@@ -277,7 +278,7 @@ class Workflow:
                                    status=status, input_sha256=logical_hash, response_sha256=response_hash,
                                    started_at=start, completed_at=completed, errors=errors or []))
         _log_event(logging.INFO, 'workflow_stage_completed', request_id=body['request_id'], stage=stage,
-                   agent_id=STAGE_PRODUCERS.get(stage, 'vogue-orchestrator'), status=status,
+                   agent_id=STAGE_PRODUCERS.get(stage, 'orchestrator'), status=status,
                    duration_ms=round(duration_ms, 3) if duration_ms is not None else None,
                    retryable=any(bool(error.get('retryable')) for error in (errors or [])),
                    fatal=any(bool(error.get('fatal')) for error in (errors or [])))
@@ -386,9 +387,9 @@ class Workflow:
     def _stage_payload(self, stage, request_id, planning_request, trend_query, body):
         """Build one producer request from already validated upstream results."""
         if stage == 'trend':
-            return dict(contract_version=HANDOFF_VERSION, request_id=request_id, input=trend_query)
+            return dict(contract_version=TREND_HANDOFF_VERSION, request_id=request_id, input=trend_query)
         if stage == 'stock':
-            return dict(contract_version=HANDOFF_VERSION, request_id=request_id,
+            return dict(contract_version=INVENTORY_HANDOFF_VERSION, request_id=request_id,
                         input=body['sources']['trend']['raw_response']['result'])
         if stage == 'planning_draft':
             # P06 gets the configured projection of the results; body['sources'] keeps the raw for the rest of
@@ -396,14 +397,14 @@ class Workflow:
             trend, stock = body['sources']['trend'], body['sources']['stock']
             trend_view, stock_view = p06_inputs(trend['raw_response']['result'], stock['raw_response']['result'],
                                                 self.p06_input_projection)
-            return dict(contract_version=P06_HANDOFF_VERSION, request_id=request_id, input=dict(
+            return dict(contract_version=NOVELTY_HANDOFF_VERSION, request_id=request_id, input=dict(
                 planning_request=planning_request,
                 trend_result=trend_view,
                 inventory_product_result=stock_view))
         if stage == 'sales_market_review':
             # P07 0.3: P08 sends the allowlisted product fields of P06's Draft with their per-field provenance.
             planning_draft = body['sources']['planning_draft']['raw_response']['result']
-            return dict(contract_version=P07_REVIEW_VERSION, request_id=request_id,
+            return dict(contract_version=RESEARCH_HANDOFF_VERSION, request_id=request_id,
                         input=p07_review_input(planning_draft, request_id))
         raise StageFailure('WORKFLOW_STAGE_UNKNOWN', 409)
 
@@ -428,7 +429,7 @@ class Workflow:
             claims.append(dict(kind='interpretation', text='P06 Draft and P07 product review were retained for this request.', evidence_refs=[]))
         body['integration'] = dict(claims=claims,
             limitations=list(dict.fromkeys(body['limitations'] + draft.get('limitations', []) + review.get('limitations', []) + [
-                'P07 received only the allowlisted product fields and their per-field provenance under vogue-sales-market-review/0.3-proposal, not the complete Draft.',
+                'P07 received only the allowlisted product fields and their per-field provenance under research-handoff, not the complete Draft.',
                 'P07 0.3-proposal does not echo an immutable P06 Draft ID or response hash, so P08 cannot claim that P07 attested to the complete Draft.'])) )
         self._trace(body, 'integration', body['sources'], start, body['status'], digest(body['integration']),
                     duration_ms=(time.monotonic() - started_monotonic) * 1000)
@@ -444,7 +445,7 @@ class Workflow:
         require(user_input.get('text') == planning_request.get('query') == trend_query.get('original_query'), 'USER_TEXT_MISMATCH')
         # Validate input definitions with a local registry, before building upstream requests.
         for value, name in ((user_input, 'user_input'), (planning_request, 'planning_request')):
-            validator = self.contract.validators['common.schema.json'].evolve(schema={'$ref': 'https://contracts.vogue.invalid/workflow/0.1/common.schema.json#/$defs/' + name})
+            validator = self.contract.validators['common.schema.json'].evolve(schema={'$ref': 'https://contracts.fashion-planner.invalid/orchestrator/common.schema.json#/$defs/' + name})
             require(validator.is_valid(value), 'INPUT_SCHEMA_INVALID')
         for image in user_input['images']:
             data = self.store.verify(image, owner=request_id)
@@ -460,7 +461,7 @@ class Workflow:
                            duration_ms=round((time.monotonic() - run_started) * 1000, 3),
                            cache_hit=True, stage_count=len(previous['envelope']['result'].get('stages', [])))
                 return previous
-            body = dict(schema_version='integrated-result/2.0', agent_id='vogue-orchestrator', request_id=request_id, status='ok',
+            body = dict(schema_version=PAYLOAD_SCHEMA_VERSION, agent_id='orchestrator', request_id=request_id, status='ok',
                         user_input=copy.deepcopy(user_input), planning_request=copy.deepcopy(planning_request),
                         sources={s: None for s in STAGES[:4]}, stages=[], integration=None,
                         final_image=dict(status='skipped', artifact=None, lineage=None, reason='No eligible review.', provider_calls=0),
@@ -471,7 +472,7 @@ class Workflow:
                         errors=[], rejected_response_artifacts=[],
                         md_review=dict(status='pending', choices=['adopt','revise','hold'], reserved_decisions=['price','cost','quantity','purchase_order','adoption']))
             http_status, known = 200, {}
-            payload = dict(contract_version=HANDOFF_VERSION, request_id=request_id, input=trend_query)
+            payload = dict(contract_version=TREND_HANDOFF_VERSION, request_id=request_id, input=trend_query)
             for stage in STAGES[:4]:
                 start = now()
                 started_monotonic = time.monotonic()
@@ -537,7 +538,7 @@ class Workflow:
     @staticmethod
     def _response(body, http_status):
         return dict(http_status=http_status, envelope=dict(contract_version=VERSION, request_id=body['request_id'],
-                    producer=dict(agent_id='vogue-orchestrator', schema_version='integrated-result/2.0'), status=body['status'], result=copy.deepcopy(body)))
+                    producer=dict(agent_id='orchestrator', schema_version=PAYLOAD_SCHEMA_VERSION), status=body['status'], result=copy.deepcopy(body)))
 
     def retry_image(self, request_id, retry_key):
         require(isinstance(retry_key, str) and 0 < len(retry_key) <= 128 and retry_key != 'initial', 'RETRY_KEY_REQUIRED')

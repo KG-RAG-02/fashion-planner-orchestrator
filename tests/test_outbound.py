@@ -78,7 +78,7 @@ class TimeoutConfigurationTests(unittest.TestCase):
             os.environ.pop('VOGUE_WORKFLOW_CONTRACT_BASELINE', None)
             workflow = workflow_http.build_workflow()
             self.assertEqual(workflow.adapters['stock']({'p': 1}), 'sent')
-        wire.assert_called_once_with('http://stock:8002/v1/agents/stock-agent/runs', {'p': 1}, TOKEN,
+        wire.assert_called_once_with('http://stock:8002/v1/agents/inventory/runs', {'p': 1}, TOKEN,
                                      connect_timeout=1.5, read_timeout=9.0)
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
@@ -91,7 +91,7 @@ class TimeoutConfigurationTests(unittest.TestCase):
         env = {**PRIVATE, 'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_TREND_AGENT_URL': 'http://trend:8768',
                'VOGUE_STOCK_AGENT_URL': 'http://stock:8002', 'VOGUE_NEW_PRODUCT_AGENT_URL': 'http://new-product:8767',
                'VOGUE_SALES_MARKET_AGENT_URL': 'http://sales-market:8766', 'VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS': 'never'}
-        request = dict(contract_version='vogue-workflow/0.2', request_id='r-1',
+        request = dict(contract_version='fashion-planner-workflow', request_id='r-1',
                        input=dict(user_input=dict(text='t', images=[])))
         with patch.dict(os.environ, env):
             os.environ.pop('VOGUE_WORKFLOW_CONTRACT_BASELINE', None)
@@ -155,7 +155,7 @@ class WireTransportTests(unittest.TestCase):
 
     def test_stage_failure_mapping_matches_the_conventions(self):
         import ssl
-        artifact = {'uri': 'artifact://p08/blobs/' + '0' * 64}
+        artifact = {'uri': 'artifact://orchestrator/blobs/' + '0' * 64}
         cases = [(TimeoutError(), None, 'UPSTREAM_TIMEOUT', 504), (socket.timeout(), None, 'UPSTREAM_TIMEOUT', 504),
                  (ConnectionRefusedError(), None, 'UPSTREAM_UNAVAILABLE', 503),
                  (ssl.SSLCertVerificationError(), None, 'UPSTREAM_UNAVAILABLE', 503),

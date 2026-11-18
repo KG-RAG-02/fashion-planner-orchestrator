@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.vogue.invalid/workflow/2.0/integrated-result.schema.json",
-  "title": "P08 integrated result; MD decision pending",
-  "$comment": "PROPOSED workflow-contract/0.5.0; P06/P07 native peer payloads are retained without claiming full-Draft review lineage.",
+  "$id": "https://contracts.fashion-planner.invalid/orchestrator/integrated-result.schema.json",
+  "title": "orchestrator integrated result; MD decision pending",
+  "$comment": "workflow-contract; novelty and research native payloads are retained without claiming full-draft review lineage.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,7 +14,7 @@
   ],
   "properties": {
     "contract_version": {
-      "const": "vogue-workflow/0.2"
+      "const": "fashion-planner-workflow"
     },
     "request_id": {
       "$ref": "common.schema.json#/$defs/id"
@@ -28,10 +28,10 @@
       ],
       "properties": {
         "agent_id": {
-          "const": "vogue-orchestrator"
+          "const": "orchestrator"
         },
         "schema_version": {
-          "const": "integrated-result/2.0"
+          "const": "1.0.0"
         }
       }
     },
@@ -59,10 +59,10 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "integrated-result/2.0"
+          "const": "1.0.0"
         },
         "agent_id": {
-          "const": "vogue-orchestrator"
+          "const": "orchestrator"
         },
         "request_id": {
           "$ref": "common.schema.json#/$defs/id"

@@ -1,14 +1,14 @@
 {
-  "contract_version": "vogue-workflow/0.1",
+  "contract_version": "fashion-planner-workflow",
   "request_id": "fixture:workflow:001",
   "producer": {
-    "agent_id": "sales-market-agent",
+    "agent_id": "research",
     "schema_version": "sales-market-review/1.0"
   },
   "status": "ok",
   "result": {
     "schema_version": "sales-market-review/1.0",
-    "agent_id": "sales-market-agent",
+    "agent_id": "research",
     "request_id": "fixture:workflow:001",
     "status": "ok",
     "review_identity": {

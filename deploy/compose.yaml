@@ -224,13 +224,13 @@ services:
       - p08_state:/app/.local
       - type: volume
         source: p07_state
-        target: /peer/p07/reviews
+        target: /peer/research/reviews
         read_only: true
         volume: { subpath: reviews }
-      # P06 Draft visuals: artifact://p06/images/<sha256>.<ext>, verified by size + sha256 on import.
+      # novelty draft visuals: artifact://novelty/images/<sha256>.<ext>, verified by size + sha256 on import.
       - type: volume
         source: p06_data
-        target: /peer/p06
+        target: /peer/novelty
         read_only: true
         volume: { subpath: p06-artifacts }
     networks: [edge, backend]

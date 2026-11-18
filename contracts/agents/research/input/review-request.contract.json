@@ -1,0 +1,186 @@
+{
+  "_provenance": {
+    "agent_id": "research",
+    "contract": "P07 /reviews proposal request (allowlisted product projection with per-field provenance)",
+    "direction": "input",
+    "payload_schema_version": "vogue-sales-market-review/0.3-proposal",
+    "method": "copy",
+    "source_repo": "KG-RAG-02/sales-market-agent",
+    "source_branch": "main",
+    "source_commit": "2738e9f9c0b8",
+    "source_schema": "contracts/schemas/proposals/sales-market-review-0.3-proposal.schema.json",
+    "source_files": [
+      {
+        "path": "src/market_research_agent/http_server.py",
+        "sha256": "b79891a3d251f1b3a0296756572177fab05aa87b2a4ee194dbb0a8c4de016e99"
+      },
+      {
+        "path": "contracts/examples/sales-market-review-0.3-proposal.request.json",
+        "sha256": "e24589b24885e11213b89a201e71c9b60fa38ee588145ce59994f5d62f3ab34e"
+      }
+    ],
+    "handoff": {
+      "route": "/v1/agents/sales-market-agent/reviews",
+      "contract_version": "vogue-sales-market-review/0.3-proposal",
+      "detected_from": "src/market_research_agent/http_server.py:REVIEW_CONTRACT_VERSION"
+    },
+    "generated_by": "scripts/export_agent_contracts.py",
+    "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
+  },
+  "json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:vogue:sales-market-review:0.3:proposal",
+    "title": "Project_07 product review request with per-field provenance",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract_version",
+      "request_id",
+      "input"
+    ],
+    "properties": {
+      "contract_version": {
+        "const": "vogue-sales-market-review/0.3-proposal"
+      },
+      "request_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "request_id",
+          "product",
+          "product_evidence"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "product": {
+            "$ref": "#/$defs/product"
+          },
+          "product_evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "category"
+            ],
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/field_evidence"
+              },
+              "product_type": {
+                "$ref": "#/$defs/field_evidence"
+              },
+              "gender": {
+                "$ref": "#/$defs/field_evidence"
+              },
+              "season": {
+                "$ref": "#/$defs/field_evidence"
+              },
+              "material": {
+                "$ref": "#/$defs/field_evidence"
+              }
+            }
+          }
+        }
+      }
+    },
+    "$defs": {
+      "product": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": ".*\\S.*"
+          },
+          "product_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": ".*\\S.*"
+          },
+          "gender": {
+            "enum": [
+              "women",
+              "men",
+              "unisex",
+              "unknown",
+              null
+            ]
+          },
+          "season": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": ".*\\S.*"
+          },
+          "material": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 120,
+            "pattern": ".*\\S.*"
+          }
+        }
+      },
+      "field_evidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "source_ref",
+          "evidence_ids"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "user_requested",
+              "evidence_observation",
+              "proposal",
+              "hypothesis",
+              "to_validate",
+              "unknown"
+            ]
+          },
+          "source_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": ".*\\S.*"
+          },
+          "evidence_ids": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": ".*\\S.*"
+            }
+          }
+        }
+      }
+    }
+  }
+}

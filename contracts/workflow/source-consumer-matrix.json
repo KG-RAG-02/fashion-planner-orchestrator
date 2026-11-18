@@ -1,68 +1,61 @@
 {
   "state": "proposed",
-  "baseline_version": "workflow-contract/0.5.0",
-  "public_transport_version": "vogue-workflow/0.2",
+  "baseline_version": "workflow-contract",
+  "public_transport_version": "fashion-planner-workflow",
   "flow": [
     {
-      "from": "P08",
-      "to": "Trend",
-      "endpoint": "/v1/agents/trend-analysis-agent/runs",
-      "contract": "vogue-handoff/0.1",
-      "result_schema": "1.1"
+      "from": "orchestrator",
+      "to": "trend",
+      "endpoint": "/v1/agents/trend/runs",
+      "contract": "trend-handoff",
+      "result_schema": "1.0.0"
     },
     {
-      "from": "P08",
-      "to": "Stock",
-      "endpoint": "/v1/agents/stock-agent/runs",
-      "contract": "vogue-handoff/0.1",
-      "result_schema": "1.0"
+      "from": "orchestrator",
+      "to": "inventory",
+      "endpoint": "/v1/agents/inventory/runs",
+      "contract": "inventory-handoff",
+      "result_schema": "1.0.0"
     },
     {
-      "from": "P08",
-      "to": "P06",
-      "endpoint": "/v1/agents/new-product-agent/runs",
-      "contract": "vogue-handoff/0.3",
+      "from": "orchestrator",
+      "to": "novelty",
+      "endpoint": "/v1/agents/novelty/runs",
+      "contract": "novelty-handoff",
       "input": {
-        "planning_request": "1.0",
-        "trend_result": "1.1",
-        "inventory_product_result": "1.0"
+        "planning_request": "1.0.0",
+        "trend_result": "1.0.0",
+        "inventory_product_result": "1.0.0"
       },
-      "result_schema": "1.0"
+      "result_schema": "1.0.0"
     },
     {
-      "from": "P08",
-      "to": "P07",
-      "endpoint": "/v1/agents/sales-market-agent/reviews",
-      "contract": "vogue-sales-market-review/0.3-proposal",
-      "input": "request_id, product (category, product_type, gender, season, and material required, with per-field product_evidence) and product_evidence: per sent field kind, source_ref (p06.draft.product_profile.<field>) and evidence_ids",
-      "result_schema": "sales-market-review/0.1-internal"
+      "from": "orchestrator",
+      "to": "research",
+      "endpoint": "/v1/agents/research/reviews",
+      "contract": "research-handoff",
+      "input": "request_id, product(category, product_type, gender, season, material), product_evidence: 보낸 필드마다 kind, source_ref(novelty.draft.product_profile.<field>), evidence_ids",
+      "result_schema": "1.0.0"
     },
     {
-      "from": "P08",
+      "from": "orchestrator",
       "to": "UI/MD",
-      "endpoint": "/api/workflow/run or /v1/orchestrations",
-      "contract": "vogue-workflow/0.2",
-      "result_schema": "integrated-result/2.0"
+      "endpoint": "/api/workflow/run, /v1/orchestrations",
+      "contract": "fashion-planner-workflow",
+      "result_schema": "1.0.0"
     }
   ],
   "lineage": {
-    "request_id": "P08 preserves one request_id across all stages",
-    "p06_request": "Exact request is stored as a P08 JSON artifact and hash checked against the retained call record.",
-    "p07_request": "P08 builds the P07 0.3 request from the retained P06 Draft product_profile (user_requested and evidence_observation values with their provenance), stores that exact object as a JSON artifact and sends it to P07.",
-    "p07_attestation": "P07 0.3 response does not echo a Draft ID or response hash; P08 records this limitation and does not claim full-Draft attestation."
+    "request_id": "orchestrator는 모든 단계에서 같은 request_id를 쓴다.",
+    "novelty_request": "보낸 요청을 그대로 JSON 산출물로 저장하고 실행 기록의 호출 기록과 해시로 대조한다.",
+    "research_request": "저장된 novelty 초안의 product_profile에서 허용 필드와 출처를 뽑아 요청을 만들고, 그 객체를 그대로 저장한 뒤 보낸다.",
+    "research_attestation": "research 응답은 초안 ID나 해시를 되돌려주지 않는다. orchestrator는 이 한계를 기록하고 초안 전체를 검토했다고 주장하지 않는다."
   },
   "artifacts": {
-    "p08_raw_responses": "Retained unchanged as P08 content-addressed JSON artifacts.",
-    "p06_artifacts": "Current P06 /runs result does not publish the previous P08 workflow visual-artifact contract; P08 only imports references explicitly present in the native response.",
-    "p07_artifacts": "Validated/imported only when native P07 responses provide supported artifact references."
+    "raw_responses": "응답 원문은 바꾸지 않고 내용 주소 JSON 산출물로 보관한다.",
+    "novelty_artifacts": "novelty 응답에 명시된 이미지 참조만 크기와 sha256을 확인해 가져온다.",
+    "research_artifacts": "research 응답이 지원되는 산출물 참조를 줄 때만 검증해 가져온다."
   },
-  "validation_required_before_freeze": [
-    "Validate P08 request and response schemas against P06 and P07 current source parsers/serializers using synthetic data.",
-    "Validate the integrated-result/2.0 envelope and UI consumer.",
-    "Run local Compose boundary checks after confirming the service build contexts select the recorded P06/P07 checkouts.",
-    "Record independent validation evidence before changing baseline state from proposed to frozen."
-  ],
-  "version_policy": "Keep raw producer payloads and schema versions unchanged. P08 derives the P07 request from the validated P06 Draft and sends only fields accepted by P07, each with its P06 provenance.",
-  "execution_mode": "sequential P08 orchestration; P06 never calls P07",
-  "semantic_version": "workflow-contract/0.5.0"
+  "version_policy": "producer 응답과 schema_version은 바꾸지 않고 보관한다. research 요청은 검증된 novelty 초안에서 만들고, research가 받는 필드만 출처와 함께 보낸다.",
+  "execution_mode": "orchestrator가 순차로 호출한다. novelty는 research를 부르지 않는다."
 }

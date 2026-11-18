@@ -115,7 +115,7 @@ class BoardMappingTests(unittest.TestCase):
 
     def test_p07_price_cost_margin_and_target_are_read_as_reported(self):
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
-        p07 = json.loads((FIXTURES / 'p07-review-v0.3.response.json').read_text(encoding='utf-8'))
+        p07 = json.loads((FIXTURES / 'research-handoff.response.json').read_text(encoding='utf-8'))
         body = p07['result']
         body['price_analysis'].update(proposed_price=59000, currency='KRW', unit='KRW')
         # Runs recorded before P07 c662d4d may carry fabric_cost_analysis.unit_cost; their sheets still show it.
@@ -139,7 +139,7 @@ class BoardMappingTests(unittest.TestCase):
         # P07 main c662d4d: Korean limitations, no fabric unit_cost (listing references are not verified costs, so
         # the sheet shows no 소재 원가 row), compact evidence, target hypothesis without price_positioning.
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
-        p07 = fixture('p07-review-v0.3.consumer-projection.response')
+        p07 = fixture('research-handoff.consumer-projection.response')
         envelope['result']['sources']['sales_market_review']['raw_response'] = p07
         sheet = build_sheet(envelope)
         self.assertEqual(sheet.price_rows, (('제안 판매가', '66,000원'), ('업계 평균 마진 참고치', '56.88%')))
@@ -164,7 +164,7 @@ class BoardMappingTests(unittest.TestCase):
     def test_a_missing_target_stays_missing(self):
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
         envelope['result']['sources']['sales_market_review']['raw_response'] = json.loads(
-            (FIXTURES / 'p07-review-v0.3.response.json').read_text(encoding='utf-8'))
+            (FIXTURES / 'research-handoff.response.json').read_text(encoding='utf-8'))
         sheet = build_sheet(envelope)
         self.assertIsNone(sheet.target)  # the synthetic P07 response carries no target analysis
         self.assertEqual(sheet.price_rows, ())
@@ -314,7 +314,7 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
     def test_the_p07_consumer_projection_renders_deterministically(self):
         fonts = self.fonts()
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
-        envelope['result']['sources']['sales_market_review']['raw_response'] = fixture('p07-review-v0.3.consumer-projection.response')
+        envelope['result']['sources']['sales_market_review']['raw_response'] = fixture('research-handoff.consumer-projection.response')
         png = planning_sheet_png(envelope, load_artifact=lambda artifact: red_png(), fonts=fonts)
         self.assertTrue(png.startswith(PNG_SIGNATURE))
         self.assertEqual(png, planning_sheet_png(envelope, load_artifact=lambda artifact: red_png(), fonts=fonts))

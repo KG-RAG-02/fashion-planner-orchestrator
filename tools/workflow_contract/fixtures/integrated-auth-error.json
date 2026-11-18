@@ -1,14 +1,14 @@
 {
-  "contract_version": "vogue-workflow/0.1",
+  "contract_version": "fashion-planner-workflow",
   "request_id": "fixture:workflow:001",
   "producer": {
-    "agent_id": "vogue-orchestrator",
+    "agent_id": "orchestrator",
     "schema_version": "integrated-result/1.0"
   },
   "status": "error",
   "result": {
     "schema_version": "integrated-result/1.0",
-    "agent_id": "vogue-orchestrator",
+    "agent_id": "orchestrator",
     "request_id": "fixture:workflow:001",
     "status": "error",
     "user_input": {
@@ -16,7 +16,7 @@
       "images": []
     },
     "planning_request": {
-      "schema_version": "1.0",
+      "schema_version": "1.0.0",
       "request_id": "fixture:workflow:001",
       "query": "2027SS 합성 셔츠 검토용 초안",
       "context": {
@@ -27,11 +27,11 @@
     "sources": {
       "trend": {
         "raw_response": {
-          "contract_version": "vogue-handoff/0.1",
+          "contract_version": "trend-handoff",
           "request_id": "fixture:workflow:001",
           "producer": {
-            "agent_id": "trend-analysis-agent",
-            "schema_version": "1.1"
+            "agent_id": "trend",
+            "schema_version": "1.0.0"
           },
           "status": "ok",
           "result": {
@@ -119,15 +119,15 @@
             "limitations": [
               "Synthetic fixture article, not an external citation."
             ],
-            "schema_version": "1.1"
+            "schema_version": "1.0.0"
           }
         },
-        "content_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325",
-        "hash_profile": "python-json-sort/1",
+        "content_sha256": "f4977b1c4aa4859f64344fc4ab599e647848e54048d017103c5b5f84b83403db",
+        "hash_profile": "python-json-sort",
         "raw_artifact": {
-          "artifact_id": "fixture:38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b",
-          "uri": "artifact://fixtures/raw/38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b.json",
-          "sha256": "38a41502c6f42bec6ca4b872f96141d1872492dcbed8d06eb8ad3c354b15496b",
+          "artifact_id": "fixture:b2f03dc8e6208e6f97b8a01ea80528183f2f99761330b685092d582e5a57b79b",
+          "uri": "artifact://fixtures/raw/b2f03dc8e6208e6f97b8a01ea80528183f2f99761330b685092d582e5a57b79b.json",
+          "sha256": "b2f03dc8e6208e6f97b8a01ea80528183f2f99761330b685092d582e5a57b79b",
           "media_type": "application/json",
           "size_bytes": 2443,
           "immutable": true
@@ -154,7 +154,7 @@
         "request_id": "fixture:workflow:001",
         "status": "ok",
         "input_sha256": "87752b6aabe82d6a5285310f97da9b3c4ec368cdbe5bc4f112499350a057ce0f",
-        "response_sha256": "31ea12cc33cf4bf0319e6550fad5bde9057874b6205b11faaf42020e4a85b325",
+        "response_sha256": "f4977b1c4aa4859f64344fc4ab599e647848e54048d017103c5b5f84b83403db",
         "started_at": "2026-11-12T06:00:00Z",
         "completed_at": "2026-11-12T06:00:01Z",
         "errors": []
@@ -201,9 +201,9 @@
     ],
     "rejected_response_artifacts": [
       {
-        "artifact_id": "fixture:dc91e2562fbb84bb968acc678ad24aecfba6434dd2dee5612cf5338d3821c720",
-        "uri": "artifact://fixtures/raw/dc91e2562fbb84bb968acc678ad24aecfba6434dd2dee5612cf5338d3821c720.json",
-        "sha256": "dc91e2562fbb84bb968acc678ad24aecfba6434dd2dee5612cf5338d3821c720",
+        "artifact_id": "fixture:3de31a2f81eea84a184e0b0181c7352453394ce68cb2d50e285d6a8671b4fdd9",
+        "uri": "artifact://fixtures/raw/3de31a2f81eea84a184e0b0181c7352453394ce68cb2d50e285d6a8671b4fdd9.json",
+        "sha256": "3de31a2f81eea84a184e0b0181c7352453394ce68cb2d50e285d6a8671b4fdd9",
         "media_type": "application/json",
         "size_bytes": 34,
         "immutable": true

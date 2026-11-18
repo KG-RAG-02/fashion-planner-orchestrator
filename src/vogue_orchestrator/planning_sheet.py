@@ -1,6 +1,6 @@
 """Deterministic Planning Sheet PNG rendered from the integrated workflow result.
 
-Presentation only. The input is the ``integrated-result/2.0`` envelope exactly as P08 stored it. No
+Presentation only. The input is the integrated-result envelope exactly as P08 stored it. No
 agent is called, no producer value is recomputed or rewritten, a missing value stays missing
 (미제공 / 미확인, never 0), and long lists are cut with an explicit "+N" count instead of silently.
 
@@ -225,7 +225,7 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
     review = _mapping(body.get('review'))
     # P07's current 0.3 proposal response is its domain review directly, not the
     # earlier P08 full-Draft wrapper with review.findings/metrics.
-    if not review and body.get('schema_version') == 'sales-market-review/0.1-internal':
+    if not review and body.get('schema_version') == '1.0.0':
         review = body
     evidence = {item['evidence_id']: item for item in (_mapping(entry) for entry in _list(review.get('evidence')))
                 if isinstance(item.get('evidence_id'), str)}
@@ -269,7 +269,7 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
             claims.append(_claim(f'{label}: 미확인 — {reason}', 'to_validate', _evidence_ids(metric.get('evidence_refs'))))
     # P07 0.3 returns these native research summaries directly; it does not use the older review.findings/metrics
     # shape above. Summarize the actual values so the Marketing panel contains the evidence P07 analyzed.
-    if body.get('schema_version') == 'sales-market-review/0.1-internal':
+    if body.get('schema_version') == '1.0.0':
         for row in (_mapping(item) for item in _list(body.get('category_price_comparison'))):
             sample_count = row.get('sample_count')
             period = _period_bounds(row.get('period'))
@@ -363,7 +363,7 @@ def _insight(result: Mapping[str, Any]) -> BoardSection:
         _claim(claim['text'].strip(), kinds.get(claim.get('kind'), 'to_validate'), _evidence_ids(claim.get('evidence_refs')))
         for claim in (_mapping(item) for item in _list(draft.get('claims')))
         if isinstance(claim.get('text'), str) and claim['text'].strip())
-    if body.get('schema_version') == '1.0' and not claims:
+    if body.get('schema_version') == '1.0.0' and not claims:
         for key in ('opportunity', 'product_definition'):
             item = _mapping(draft.get(key))
             value = item.get('value')
@@ -705,7 +705,7 @@ def _concept_view(result: Mapping[str, Any]) -> ConceptView:
 
 
 def _price_rows(result: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
-    """sales-market-agent price, cost and margin values exactly as reported (sales-market-review/0.1-internal); absent values are not shown."""
+    """sales-market-agent price, cost and margin values exactly as reported (research review result); absent values are not shown."""
     raw = _raw(result, 'sales_market_review')
     body = _mapping(raw.get('result')) if raw else {}
     units = {'KRW': '원', 'KRW/m': '원/m', 'USD': ' USD'}

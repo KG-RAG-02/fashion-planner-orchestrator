@@ -17,7 +17,7 @@ CONTRACT_FIXTURES = Path(__file__).resolve().parents[1] / 'tools/workflow_contra
 
 def consumer_projection_p07_review(request_id, product):
     """P07 main c662d4d's response shape (its consumer projection; a fabricated fixture) for this run and product."""
-    value = json.loads((CONTRACT_FIXTURES / 'p07-review-v0.3.consumer-projection.response.json').read_bytes())
+    value = json.loads((CONTRACT_FIXTURES / 'research-handoff.consumer-projection.response.json').read_bytes())
     value['request_id'] = value['result']['request_id'] = request_id
     value['result']['draft_context'] = copy.deepcopy(product)
     return value
@@ -45,13 +45,13 @@ def add_second_trend_style(sample, style_id='fixture:style-2', name='합성 블�
 
 def native_p07_review(request_id, product, status='ok'):
     return {
-        'contract_version': 'vogue-sales-market-review/0.3-proposal',
+        'contract_version': 'research-handoff',
         'request_id': request_id,
-        'producer': {'agent_id': 'sales-market-agent', 'schema_version': 'sales-market-review/0.1-internal'},
+        'producer': {'agent_id': 'research', 'schema_version': '1.0.0'},
         'status': status,
         'result': {
-            'schema_version': 'sales-market-review/0.1-internal', 'request_id': request_id, 'draft_id': None,
-            'producer_id': 'sales-market-agent', 'status': status, 'draft_context': copy.deepcopy(product),
+            'schema_version': '1.0.0', 'request_id': request_id, 'draft_id': None,
+            'producer_id': 'research', 'status': status, 'draft_context': copy.deepcopy(product),
             'category_price_comparison': [], 'material_cost_analysis': [], 'customer_segment_analysis': [],
             'target_audience_analysis': {}, 'margin_estimate': {}, 'evidence': [], 'missing_data': [],
             'errors': [], 'limitations': ['synthetic P07 response'],
@@ -101,9 +101,9 @@ class WorkflowTests(unittest.TestCase):
             else:
                 if stage == 'planning_draft':
                     value = json.loads((FIXTURES/'draft-response-ok.json').read_bytes())
-                    value['contract_version'] = 'vogue-handoff/0.3'
-                    value['producer']['schema_version'] = '1.0'
-                    value['result']['schema_version'] = '1.0'
+                    value['contract_version'] = 'novelty-handoff'
+                    value['producer']['schema_version'] = '1.0.0'
+                    value['result']['schema_version'] = '1.0.0'
                     value['result']['input_evidence'] = value['result'].get('input_evidence', {})
                     value['result'].pop('source_request', None)
                     value['result'].pop('source_request_sha256', None)
@@ -154,14 +154,14 @@ class WorkflowTests(unittest.TestCase):
             product = {'category':'Outerwear','product_type':'Jacket','gender':'women','season':'winter','material':'wool'}
             calls['p06_product'] = product
             profile = {key:{'value':value,'kind':'user_requested','evidence_ids':[]} for key,value in product.items()}
-            result = {'schema_version':'1.0','request_id':self.rid,'status':'partial',
+            result = {'schema_version':'1.0.0','request_id':self.rid,'status':'partial',
                       'draft':{'title':'검증용 Draft','category':'Outerwear','season':'winter','product_profile':profile,
                                'opportunity':{'value':'합성 기회','kind':'interpretation','evidence_ids':[]},
                                'product_definition':{'value':'합성 재킷','kind':'proposal','evidence_ids':[]},
                                'attributes':[],'limitations':['synthetic P06 response']},'evidence_ids':[],
                       'input_evidence':{},'limitations':['synthetic P06 response'],'errors':[]}
-            return WireResponse(json.dumps({'contract_version':'vogue-handoff/0.3','request_id':self.rid,
-                'producer':{'agent_id':'new-product-agent','schema_version':'1.0'},'status':'partial','result':result}).encode())
+            return WireResponse(json.dumps({'contract_version':'novelty-handoff','request_id':self.rid,
+                'producer':{'agent_id':'novelty','schema_version':'1.0.0'},'status':'partial','result':result}).encode())
         def p07(payload):
             calls['p07'] = copy.deepcopy(payload)
             product = payload['input']['product']
@@ -170,21 +170,21 @@ class WorkflowTests(unittest.TestCase):
         self.workflow.adapters['sales_market_review'] = p07
         self.workflow.image = None
         result = self.run_flow()['envelope']
-        self.assertEqual(result['contract_version'], 'vogue-workflow/0.2')
-        self.assertEqual(calls['p06']['contract_version'], 'vogue-handoff/0.3')
+        self.assertEqual(result['contract_version'], 'fashion-planner-workflow')
+        self.assertEqual(calls['p06']['contract_version'], 'novelty-handoff')
         self.assertEqual(set(calls['p06']['input']), {'planning_request','trend_result','inventory_product_result'})
-        self.assertEqual(calls.get('p07', {}).get('contract_version'), 'vogue-sales-market-review/0.3-proposal', result)
+        self.assertEqual(calls.get('p07', {}).get('contract_version'), 'research-handoff', result)
         self.assertEqual(set(calls['p07']['input']), {'request_id', 'product', 'product_evidence'})
         self.assertEqual(calls['p07']['input']['product'], {'category':'Outerwear','product_type':'Jacket','gender':'women','season':'winter','material':'wool'})
         self.assertEqual(calls['p07']['input']['product_evidence'], {
-            key: {'kind': 'user_requested', 'source_ref': f'p06.draft.product_profile.{key}', 'evidence_ids': []}
+            key: {'kind': 'user_requested', 'source_ref': f'novelty.draft.product_profile.{key}', 'evidence_ids': []}
             for key in ('category', 'product_type', 'gender', 'season', 'material')})
-        self.assertEqual(result['result']['sources']['planning_draft']['raw_response']['result']['schema_version'], '1.0')
-        self.assertEqual(result['result']['sources']['sales_market_review']['raw_response']['result']['schema_version'], 'sales-market-review/0.1-internal')
+        self.assertEqual(result['result']['sources']['planning_draft']['raw_response']['result']['schema_version'], '1.0.0')
+        self.assertEqual(result['result']['sources']['sales_market_review']['raw_response']['result']['schema_version'], '1.0.0')
         self.assertTrue(any('does not echo an immutable' in item for item in result['result']['integration']['limitations']))
 
     def test_p07_http_error_code_is_preserved_as_a_fatal_stage_error(self):
-        error = {'contract_version': 'vogue-sales-market-review/0.3-proposal', 'request_id': self.rid,
+        error = {'contract_version': 'research-handoff', 'request_id': self.rid,
                  'error': {'code': 'INVALID_INPUT', 'message': 'Unsupported product field.'}}
         self.workflow.adapters['sales_market_review'] = lambda _payload: WireResponse(
             json.dumps(error).encode(), status=422)
@@ -199,11 +199,11 @@ class WorkflowTests(unittest.TestCase):
                    'material':{'value':'wool blend','kind':'evidence_observation','evidence_ids':['trend:e1','trend:e1']},
                    'season':{'value':'winter','kind':'proposal','evidence_ids':[]},
                    **{key:{'value':None,'kind':'unknown','evidence_ids':[]} for key in ('product_type','gender')}}
-        draft_result = {'schema_version':'1.0','request_id':self.rid,'status':'partial','evidence_ids':['trend:e1'],
+        draft_result = {'schema_version':'1.0.0','request_id':self.rid,'status':'partial','evidence_ids':['trend:e1'],
                         'draft':{'category':'Outerwear','product_profile':profile},'input_evidence':{},'limitations':[],'errors':[]}
         self.workflow.adapters['planning_draft'] = lambda _payload: WireResponse(json.dumps({
-            'contract_version':'vogue-handoff/0.3','request_id':self.rid,
-            'producer':{'agent_id':'new-product-agent','schema_version':'1.0'},'status':'partial','result':draft_result}).encode())
+            'contract_version':'novelty-handoff','request_id':self.rid,
+            'producer':{'agent_id':'novelty','schema_version':'1.0.0'},'status':'partial','result':draft_result}).encode())
         def p07(payload):
             calls.append(copy.deepcopy(payload))
             return WireResponse(json.dumps(native_p07_review(self.rid, payload['input']['product'])).encode())
@@ -216,11 +216,11 @@ class WorkflowTests(unittest.TestCase):
             'product': {'category': 'Outerwear', 'product_type': 'Outerwear', 'gender': 'unknown',
                         'season': 'winter', 'material': 'wool blend'},
             'product_evidence': {
-                'category': {'kind': 'user_requested', 'source_ref': 'p06.draft.product_profile.category', 'evidence_ids': []},
-                'product_type': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.product_type', 'evidence_ids': []},
-                'gender': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.gender', 'evidence_ids': []},
-                'season': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.season', 'evidence_ids': []},
-                'material': {'kind': 'evidence_observation', 'source_ref': 'p06.draft.product_profile.material',
+                'category': {'kind': 'user_requested', 'source_ref': 'novelty.draft.product_profile.category', 'evidence_ids': []},
+                'product_type': {'kind': 'proposal', 'source_ref': 'novelty.draft.product_profile.product_type', 'evidence_ids': []},
+                'gender': {'kind': 'proposal', 'source_ref': 'novelty.draft.product_profile.gender', 'evidence_ids': []},
+                'season': {'kind': 'proposal', 'source_ref': 'novelty.draft.product_profile.season', 'evidence_ids': []},
+                'material': {'kind': 'evidence_observation', 'source_ref': 'novelty.draft.product_profile.material',
                              'evidence_ids': ['trend:e1']}}})
         self.contract.semantic(result, self.rid, self.store)
 
@@ -236,11 +236,11 @@ class WorkflowTests(unittest.TestCase):
             'product': {'category': '가디건', 'product_type': '가디건', 'gender': 'unknown',
                         'season': '2026FW', 'material': '울 혼방 니트'},
             'product_evidence': {
-                'category': {'kind': 'user_requested', 'source_ref': 'p06.draft.product_profile.category', 'evidence_ids': []},
-                'product_type': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.product_type', 'evidence_ids': []},
-                'gender': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.gender', 'evidence_ids': []},
-                'season': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.season', 'evidence_ids': []},
-                'material': {'kind': 'proposal', 'source_ref': 'p06.draft.product_profile.material', 'evidence_ids': []}}})
+                'category': {'kind': 'user_requested', 'source_ref': 'novelty.draft.product_profile.category', 'evidence_ids': []},
+                'product_type': {'kind': 'proposal', 'source_ref': 'novelty.draft.product_profile.product_type', 'evidence_ids': []},
+                'gender': {'kind': 'proposal', 'source_ref': 'novelty.draft.product_profile.gender', 'evidence_ids': []},
+                'season': {'kind': 'proposal', 'source_ref': 'novelty.draft.product_profile.season', 'evidence_ids': []},
+                'material': {'kind': 'proposal', 'source_ref': 'novelty.draft.product_profile.material', 'evidence_ids': []}}})
 
     def test_p06_trend_basis_and_the_p07_consumer_projection_pass_every_check(self):
         """A Draft with draft.trend_basis (P06 rule, 2026-11-17) and P07 main c662d4d's response run end to end."""
@@ -256,14 +256,14 @@ class WorkflowTests(unittest.TestCase):
                  'trend_basis': {'source_style_id': style['id'], 'name': style['name'],
                                  'selection_rule': 'most_evidence_linked_design_attributes/1',
                                  'evidence_ids': [], 'design_attributes': [], 'candidates_considered': 2}}
-        result = {'schema_version': '1.0', 'request_id': self.rid, 'status': 'ok', 'draft': draft, 'evidence_ids': [],
+        result = {'schema_version': '1.0.0', 'request_id': self.rid, 'status': 'ok', 'draft': draft, 'evidence_ids': [],
                   'input_evidence': {}, 'limitations': [], 'errors': []}
         sent = []
 
         def p06(_payload):
             self.trace.append('planning_draft')
-            return WireResponse(json.dumps({'contract_version': 'vogue-handoff/0.3', 'request_id': self.rid,
-                                            'producer': {'agent_id': 'new-product-agent', 'schema_version': '1.0'},
+            return WireResponse(json.dumps({'contract_version': 'novelty-handoff', 'request_id': self.rid,
+                                            'producer': {'agent_id': 'novelty', 'schema_version': '1.0.0'},
                                             'status': 'ok', 'result': result}, ensure_ascii=False).encode())
 
         def p07(payload):
@@ -397,7 +397,7 @@ class WorkflowTests(unittest.TestCase):
         events = [json.loads(record.getMessage()) for record in records]
         call = next(event for event in events if event['event'] == 'workflow_agent_call' and event['stage'] == 'planning_draft')
         self.assertEqual((call['request_id'], call['agent_id'], call['status'], call['upstream_http_ms']),
-                         (self.rid, 'new-product-agent', 'ok', 12.5))
+                         (self.rid, 'novelty', 'ok', 12.5))
         self.assertGreaterEqual(call['p08_call_overhead_ms'], 0)
         p07 = next(event for event in events if event['event'] == 'workflow_agent_call' and event['stage'] == 'sales_market_review')
         self.assertEqual((p07['status'], p07['retryable'], p07['fatal']), ('partial', False, False))
@@ -542,7 +542,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result['envelope']['status'], 'ok', result)
         image = result['envelope']['result']['final_image']
         self.assertEqual((image['status'], image['provider_calls'], image['artifact']['media_type']), ('generated', 1, 'image/png'))
-        self.assertEqual(image['artifact']['uri'], 'artifact://p08/blobs/' + image['artifact']['sha256'])
+        self.assertEqual(image['artifact']['uri'], 'artifact://orchestrator/blobs/' + image['artifact']['sha256'])
         with patch.dict(os.environ, {'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}):
             expected, _ = fixture_image({'lineage': image['lineage']})
         self.assertEqual(self.store.verify(image['artifact']), expected)
@@ -558,7 +558,7 @@ class WorkflowTests(unittest.TestCase):
     def test_crash_unknown_checkpoint_does_not_reissue_upstream(self):
         request = self.sample['input']
         trend_query = dict(request_id=self.rid, original_query=request['user_input']['text'])
-        payload = dict(contract_version='vogue-handoff/0.1', request_id=self.rid, input=trend_query)
+        payload = dict(contract_version='trend-handoff', request_id=self.rid, input=trend_query)
         self.store.checkpoint_write(self.workflow._key(self.rid,'trend',payload),'started')
         response = self.run_flow()
         self.assertEqual(response['http_status'], 409)
@@ -636,7 +636,7 @@ class WorkflowTests(unittest.TestCase):
     def p07_reference(data):
         import hashlib
         sha = hashlib.sha256(data).hexdigest()
-        return dict(artifact_id='p07-review-' + sha[:16], uri='artifact://p07/reviews/%s.json' % sha, sha256=sha,
+        return dict(artifact_id='p07-review-' + sha[:16], uri='artifact://research/reviews/%s.json' % sha, sha256=sha,
                     media_type='application/json', size_bytes=len(data), immutable=True)
 
     def review_carries(self, reference):
@@ -648,8 +648,8 @@ class WorkflowTests(unittest.TestCase):
 
     def peer_root(self, reference, data):
         root = Path(self.tmp.name) / 'peer'
-        (root / 'p07' / 'reviews').mkdir(parents=True)
-        (root / 'p07' / 'reviews' / (reference['sha256'] + '.json')).write_bytes(data)
+        (root / 'research' / 'reviews').mkdir(parents=True)
+        (root / 'research' / 'reviews' / (reference['sha256'] + '.json')).write_bytes(data)
         return root
 
     def test_p07_artifact_field_is_rejected_because_main_contract_has_no_artifacts(self):
@@ -660,7 +660,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('final_image', self.trace)
 
     def test_run_level_limitations_are_appended_to_the_result(self):
-        note = 'workflow-contract/0.5.0 not frozen; development run'
+        note = 'workflow-contract not frozen; development run'
         self.workflow = Workflow(**{k: self.workflow.adapters[s] for k, s in (('trend', 'trend'), ('stock', 'stock'),
                                     ('draft', 'planning_draft'), ('review', 'sales_market_review'))},
                                  image=self.workflow.image, store=self.store, contract=self.contract, limitations=[note],
@@ -779,7 +779,7 @@ class WorkflowTests(unittest.TestCase):
         sent = self.capture_p06()
         envelope = self.run_flow()['envelope']
         self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
-        before = dict(contract_version='vogue-handoff/0.3', request_id=self.rid, input=dict(
+        before = dict(contract_version='novelty-handoff', request_id=self.rid, input=dict(
             planning_request=self.sample['input']['planning_request'], trend_result=trend_raw, inventory_product_result=stock_raw))
         self.assertEqual(canonical(sent[0]), canonical(before))  # the request bytes P08 sent before the projection
         self.contract.semantic(envelope, self.rid, self.store)
@@ -959,7 +959,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
         data = self.images[key]
         sha = digest_bytes(data)
         self.blobs[sha] = data
-        artifact = dict(artifact_id='p06:image:' + sha, uri=f'artifact://p06/images/{sha}.png', sha256=sha,
+        artifact = dict(artifact_id='p06:image:' + sha, uri=f'artifact://novelty/images/{sha}.png', sha256=sha,
                         media_type='image/png', size_bytes=len(data), immutable=True)
         if key == 'outfit' and self.outfit_status == 'failed':
             return dict(status='failed', artifact=None, provider_calls=1, model='fixture', prompt_version='fixture-visual/1',
@@ -980,9 +980,9 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
             body['draft']['visuals'] = {key: self.visual(key) for key in ('product', 'outfit')}
             body['image_generation_calls'] = 2
             body['draft_identity']['content_sha256'] = digest(body['draft'])
-            value['contract_version'] = 'vogue-handoff/0.3'
-            value['producer']['schema_version'] = '1.0'
-            body['schema_version'] = '1.0'
+            value['contract_version'] = 'novelty-handoff'
+            value['producer']['schema_version'] = '1.0.0'
+            body['schema_version'] = '1.0.0'
             body['input_evidence'] = body.get('input_evidence', {})
             body.pop('source_request', None)
             body.pop('source_request_sha256', None)
@@ -1015,7 +1015,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
         result = self.run_flow()
         envelope = result['envelope']
         body = envelope['result']
-        self.assertEqual(self.sent['planning_draft']['contract_version'], 'vogue-handoff/0.3')
+        self.assertEqual(self.sent['planning_draft']['contract_version'], 'novelty-handoff')
         self.assertEqual(set(self.sent['planning_draft']['input']), {'planning_request', 'trend_result', 'inventory_product_result'})
         self.assertEqual((envelope['status'], [s['status'] for s in body['stages']]), ('ok', ['ok'] * 6), body['errors'])
         self.contract.schema(envelope, 'integrated-result.schema.json')

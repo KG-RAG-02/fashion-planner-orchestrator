@@ -27,7 +27,7 @@ def envelope():
                                            'recent_trend': {'weeks': 4, 'recent_sold': 0, 'prev_sold': 0, 'basis': 'too_few_sales'},
                                            'data_nature': {'sell_through': 'sample'}}
     value['result']['sources']['sales_market_review']['raw_response'] = json.loads(
-        (FIXTURES / 'p07-review-v0.3.response.json').read_text(encoding='utf-8'))
+        (FIXTURES / 'research-handoff.response.json').read_text(encoding='utf-8'))
     value['result']['sources']['sales_market_review']['raw_response']['result']['target_audience'] = {
         'status': 'ok', 'proposal': {'proposal': '합성 타깃', 'channel_content_hypotheses': ['합성 채널 가설'],
                                      'merchandising_actions': ['합성 운영 제안']}}
@@ -54,7 +54,7 @@ class InputTests(unittest.TestCase):
         # P07 main c662d4d sends no fabric unit cost and no price_positioning; nothing stands in for them.
         value = envelope()
         value['result']['sources']['sales_market_review']['raw_response'] = json.loads(
-            (FIXTURES / 'p07-review-v0.3.consumer-projection.response.json').read_text(encoding='utf-8'))
+            (FIXTURES / 'research-handoff.consumer-projection.response.json').read_text(encoding='utf-8'))
         market = swot_input(value)['market']
         self.assertEqual((market['proposed_price'], market['price_currency'], market['margin_rate_percent']), (66000, 'KRW', 56.88))
         self.assertEqual((market['target_age_cohort'], market['target_age_share']), ('20–39 (20s and 30s)', 0.5973))

@@ -1,4 +1,4 @@
-"""Reference checks for the proposed vogue-workflow/0.2 contract package.
+"""Reference checks for the proposed fashion-planner-workflow contract package.
 
 Runs the P08 reference validator over committed synthetic fixtures, semantic
 mutation probes, baseline consistency, and the check that no shared schema copies

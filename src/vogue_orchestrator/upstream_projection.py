@@ -1,4 +1,4 @@
-"""Registered projections of the Trend and Stock results P08 sends to P06 (vogue-handoff/0.3).
+"""Registered projections of the Trend and Stock results P08 sends to P06 (novelty-handoff).
 
 P08 keeps the full upstream results in its run (body['sources'] during the run, then the checkpoints and
 blobs) and sends P06 a registered projection of them: the same values minus fields P06 does not read, so the

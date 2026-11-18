@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.vogue.invalid/workflow/2.0/common.schema.json",
+  "$id": "https://contracts.fashion-planner.invalid/orchestrator/common.schema.json",
   "title": "Shared definitions; equality/hash/order require semantic validator",
-  "$comment": "PROPOSED workflow-contract/0.5.0: structural validation plus versioned semantic rules are required; see baseline.json. Not service compatibility.",
+  "$comment": "workflow-contract: structural validation plus the semantic rules in tools/workflow_contract are required; see baseline.json.",
   "$defs": {
     "id": {
       "type": "string",
@@ -207,7 +207,7 @@
       ],
       "properties": {
         "contract_version": {
-          "const": "vogue-workflow/0.2"
+          "const": "fashion-planner-workflow"
         },
         "request_id": {
           "anyOf": [
@@ -282,7 +282,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "1.0"
+          "const": "1.0.0"
         },
         "request_id": {
           "$ref": "common.schema.json#/$defs/id"
@@ -307,7 +307,7 @@
       ],
       "properties": {
         "contract_version": {
-          "const": "vogue-handoff/0.1"
+          "const": "trend-handoff"
         },
         "request_id": {
           "$ref": "common.schema.json#/$defs/id"
@@ -321,10 +321,10 @@
           ],
           "properties": {
             "agent_id": {
-              "const": "trend-analysis-agent"
+              "const": "trend"
             },
             "schema_version": {
-              "const": "1.1"
+              "const": "1.0.0"
             }
           }
         },
@@ -338,7 +338,7 @@
         "result": {
           "allOf": [
             {
-              "$ref": "upstream/trend-result-1.1.schema.json"
+              "$ref": "upstream/trend-result.schema.json"
             },
             {
               "required": [
@@ -350,7 +350,7 @@
               ],
               "properties": {
                 "schema_version": {
-                  "const": "1.1"
+                  "const": "1.0.0"
                 }
               }
             }
@@ -400,7 +400,7 @@
       ],
       "properties": {
         "contract_version": {
-          "const": "vogue-handoff/0.1"
+          "const": "inventory-handoff"
         },
         "request_id": {
           "$ref": "common.schema.json#/$defs/id"
@@ -414,10 +414,10 @@
           ],
           "properties": {
             "agent_id": {
-              "const": "stock-agent"
+              "const": "inventory"
             },
             "schema_version": {
-              "const": "1.0"
+              "const": "1.0.0"
             }
           }
         },
@@ -427,7 +427,7 @@
         "result": {
           "allOf": [
             {
-              "$ref": "upstream/stock-result-1.0.schema.json"
+              "$ref": "upstream/inventory-result.schema.json"
             },
             {
               "if": {
@@ -469,7 +469,7 @@
           "$ref": "common.schema.json#/$defs/sha256"
         },
         "hash_profile": {
-          "const": "python-json-sort/1"
+          "const": "python-json-sort"
         },
         "raw_artifact": {
           "$ref": "common.schema.json#/$defs/json_artifact"
@@ -497,7 +497,7 @@
           "$ref": "common.schema.json#/$defs/sha256"
         },
         "hash_profile": {
-          "const": "python-json-sort/1"
+          "const": "python-json-sort"
         },
         "raw_artifact": {
           "$ref": "common.schema.json#/$defs/json_artifact"
@@ -770,6 +770,18 @@
             }
           ]
         },
+        "prompt_sha256": {
+          "description": "sha256 of the prompt template that produced the image (novelty); optional.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "reason": {
           "anyOf": [
             {
@@ -981,7 +993,7 @@
       "properties": {
         "raw_response": {
           "type": "object",
-          "description": "Unmodified response from the P06 vogue-handoff/0.3 endpoint."
+          "description": "Unmodified response from the novelty novelty-handoff endpoint."
         },
         "call_request_sha256": {
           "$ref": "common.schema.json#/$defs/sha256"
@@ -993,7 +1005,7 @@
           "$ref": "common.schema.json#/$defs/sha256"
         },
         "hash_profile": {
-          "const": "python-json-sort/1"
+          "const": "python-json-sort"
         },
         "raw_artifact": {
           "$ref": "common.schema.json#/$defs/json_artifact"
@@ -1239,7 +1251,7 @@
       "properties": {
         "raw_response": {
           "type": "object",
-          "description": "Unmodified response from the P07 vogue-sales-market-review/0.3-proposal endpoint."
+          "description": "Unmodified response from the research research-handoff endpoint."
         },
         "call_request_sha256": {
           "$ref": "common.schema.json#/$defs/sha256"
@@ -1251,7 +1263,7 @@
           "$ref": "common.schema.json#/$defs/sha256"
         },
         "hash_profile": {
-          "const": "python-json-sort/1"
+          "const": "python-json-sort"
         },
         "raw_artifact": {
           "$ref": "common.schema.json#/$defs/json_artifact"

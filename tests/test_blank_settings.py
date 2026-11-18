@@ -51,7 +51,7 @@ class BlankSettingTests(unittest.TestCase):
         self.assertEqual(workflow.trend_photos.hosts, ('vogue.co.kr',))  # blank hosts mean the default allowlist
         self.assertIsNone(workflow.swot)  # blank LLM settings mean no SWOT draft
         self.assertEqual(workflow.draft_mode, 'draft_with_visuals')
-        self.assertEqual(wire.call_args_list[0].args, ('http://127.0.0.1:9/v1/agents/trend-analysis-agent/runs', {}, 'test-token'))
+        self.assertEqual(wire.call_args_list[0].args, ('http://127.0.0.1:9/v1/agents/trend/runs', {}, 'test-token'))
         self.assertEqual(wire.call_args_list[0].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))
         # P06 makes its two images inside the Draft call: that read waits up to 600 s.
         self.assertEqual(wire.call_args_list[1].kwargs, dict(connect_timeout=3.0, read_timeout=600.0))

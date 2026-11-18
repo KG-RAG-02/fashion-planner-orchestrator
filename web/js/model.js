@@ -447,9 +447,9 @@ function p06ProductProvenance(p06Result, product) {
     let value, metadata, sourceRef;
     const claim = profile[key];
     if (claim && typeof claim === 'object' && typeof claim.value === 'string' && claim.value.trim()) {
-      value = claim.value.trim(); metadata = claim; sourceRef = `p06.draft.product_profile.${key}`;
+      value = claim.value.trim(); metadata = claim; sourceRef = `novelty.draft.product_profile.${key}`;
     } else if (typeof draft[key] === 'string' && draft[key].trim()) {
-      value = draft[key].trim(); metadata = {}; sourceRef = `p06.draft.${key}`;
+      value = draft[key].trim(); metadata = {}; sourceRef = `novelty.draft.${key}`;
     }
     if (value !== product[key]) continue;
     const ids = Array.isArray(metadata?.evidence_ids) ? [...new Set(metadata.evidence_ids.filter((id) => typeof id === 'string' && evidenceIds.has(id)))] : [];

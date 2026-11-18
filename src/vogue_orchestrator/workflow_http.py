@@ -189,10 +189,10 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
     token = setting(env, 'VOGUE_AGENT_SERVICE_BEARER_TOKEN') or None
     if not token:
         raise ConnectorConfigurationError('VOGUE_AGENT_SERVICE_BEARER_TOKEN is required by P07 /reviews.')
-    specs = [('trend','VOGUE_TREND_AGENT_URL','trend-analysis-agent/runs'),
-             ('stock','VOGUE_STOCK_AGENT_URL','stock-agent/runs'),
-             ('draft','VOGUE_NEW_PRODUCT_AGENT_URL','new-product-agent/runs'),
-             ('review','VOGUE_SALES_MARKET_AGENT_URL','sales-market-agent/reviews')]
+    specs = [('trend','VOGUE_TREND_AGENT_URL','trend/runs'),
+             ('stock','VOGUE_STOCK_AGENT_URL','inventory/runs'),
+             ('draft','VOGUE_NEW_PRODUCT_AGENT_URL','novelty/runs'),
+             ('review','VOGUE_SALES_MARKET_AGENT_URL','research/reviews')]
     connect_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_CONNECT_TIMEOUT_SECONDS', WORKFLOW_CONNECT_TIMEOUT_SECONDS)
     read_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_READ_TIMEOUT_SECONDS', WORKFLOW_READ_TIMEOUT_SECONDS)
     mode = draft_mode(env)
@@ -296,7 +296,7 @@ def dispatch(handler, value):
             trend = structured['trend_query']
         planning = incoming.get('planning_request')
         if planning is None:
-            planning = dict(schema_version='1.0', request_id=rid, query=user['text'])
+            planning = dict(schema_version='1.0.0', request_id=rid, query=user['text'])
             context = {}
             season = trend.get('trend_terms', {}).get('season', {})
             if season.get('origin') == 'user_requested' and isinstance(season.get('year'),int) and season.get('season') in {'SS','FW'}:

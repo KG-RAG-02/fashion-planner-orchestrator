@@ -8,7 +8,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "contracts" / "workflow"
-BASE = "https://contracts.vogue.invalid/workflow/2.0/"
+BASE = "https://contracts.fashion-planner.invalid/orchestrator/"
 
 
 def atomic(path: Path, data: bytes) -> bool:

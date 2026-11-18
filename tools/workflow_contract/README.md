@@ -7,7 +7,7 @@ The committed schemas and synthetic fixtures are the validation inputs. This dir
 | `validate_contracts.py` | Reference consumer: JSON Schema (Draft 2020-12, no remote refs) + semantic invariants (IDs, status, hashes, Evidence closure, lineage). `collect()` returns a summary; `main([out_dir])` writes a report to `.local/contract-validation/`. |
 | `probe_semantic_gaps.py` | Contract mutation probes that must all be rejected. |
 | `support.py` | Shared paths and atomic JSON output helpers used by the validator and probes. |
-| `fixtures/` | Committed synthetic cases (`index.json`) and content-addressed artifacts. All documents are fabricated; no external calls. Fixture updates must follow the current P08 schema and snapshot procedure; the retired `vogue-workflow/0.1` generators were removed. |
+| `fixtures/` | Committed synthetic cases (`index.json`) and content-addressed artifacts. All documents are fabricated; no external calls. Fixture updates must follow the current P08 schema and snapshot procedure; the retired generators were removed. |
 
 Run (requires the `workflow` extra):
 

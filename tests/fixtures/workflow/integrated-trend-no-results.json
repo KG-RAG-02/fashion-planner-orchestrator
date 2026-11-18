@@ -1,14 +1,14 @@
 {
-  "contract_version": "vogue-workflow/0.1",
+  "contract_version": "fashion-planner-workflow",
   "request_id": "fixture:workflow:001",
   "producer": {
-    "agent_id": "vogue-orchestrator",
+    "agent_id": "orchestrator",
     "schema_version": "integrated-result/1.0"
   },
   "status": "no_results",
   "result": {
     "schema_version": "integrated-result/1.0",
-    "agent_id": "vogue-orchestrator",
+    "agent_id": "orchestrator",
     "request_id": "fixture:workflow:001",
     "status": "no_results",
     "user_input": {
@@ -16,7 +16,7 @@
       "images": []
     },
     "planning_request": {
-      "schema_version": "1.0",
+      "schema_version": "1.0.0",
       "request_id": "fixture:workflow:001",
       "query": "2027SS 합성 셔츠 검토용 초안",
       "context": {
@@ -27,11 +27,11 @@
     "sources": {
       "trend": {
         "raw_response": {
-          "contract_version": "vogue-handoff/0.1",
+          "contract_version": "trend-handoff",
           "request_id": "fixture:workflow:001",
           "producer": {
-            "agent_id": "trend-analysis-agent",
-            "schema_version": "1.1"
+            "agent_id": "trend",
+            "schema_version": "1.0.0"
           },
           "status": "no_results",
           "result": {
@@ -56,11 +56,11 @@
             "limitations": [
               "Synthetic fixture article, not an external citation."
             ],
-            "schema_version": "1.1"
+            "schema_version": "1.0.0"
           }
         },
-        "content_sha256": "a768fefb5b64dad4385eb7374e9ad5ab75681cc26f8ac1596dbaf76385473c25",
-        "hash_profile": "python-json-sort/1",
+        "content_sha256": "52bcceb777c24e84cbc4f98b57622a26f8e66682db632a78d04bda31ea4c6345",
+        "hash_profile": "python-json-sort",
         "raw_artifact": {
           "artifact_id": "fixture:1d90314615f9386d989b62d27b3b91b17de21b78c12f593799e68b68a6040097",
           "uri": "artifact://fixtures/raw/1d90314615f9386d989b62d27b3b91b17de21b78c12f593799e68b68a6040097.json",
@@ -91,7 +91,7 @@
         "request_id": "fixture:workflow:001",
         "status": "no_results",
         "input_sha256": "87752b6aabe82d6a5285310f97da9b3c4ec368cdbe5bc4f112499350a057ce0f",
-        "response_sha256": "a768fefb5b64dad4385eb7374e9ad5ab75681cc26f8ac1596dbaf76385473c25",
+        "response_sha256": "52bcceb777c24e84cbc4f98b57622a26f8e66682db632a78d04bda31ea4c6345",
         "started_at": "2026-11-12T06:00:00Z",
         "completed_at": "2026-11-12T06:00:01Z",
         "errors": []
