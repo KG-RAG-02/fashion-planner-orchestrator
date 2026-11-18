@@ -39,7 +39,7 @@ MD가 "2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/system-dark.svg">
-  <img alt="시스템 전체: 브라우저 UI가 orchestrator를 부르고, orchestrator가 trend, inventory, novelty, research를 차례로 부른다. 서비스별 저장소와 외부 시스템(Neo4j, Cloudflare R2, OpenAI, 환율 API, 기사 사진 호스트)이 함께 보인다" src="docs/diagrams/system.svg" width="900">
+  <img alt="시스템 전체: 브라우저 UI가 orchestrator를 부르고, orchestrator가 trend, inventory, novelty, research를 차례로 부른다. 서비스별 저장소와 외부 시스템(Neo4j, Cloudflare R2, OpenAI, 환율 API, 기사 사진 호스트, 무신사 이미지 CDN, Hugging Face Hub)이 함께 보인다" src="docs/diagrams/system.svg" width="900">
 </picture>
 
 <picture>

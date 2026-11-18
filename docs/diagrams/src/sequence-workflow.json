@@ -162,7 +162,7 @@
       "from": "inv",
       "to": "r2",
       "lines": [
-        "상품 사진(DuckDB와 CLIP 인덱스는 캐시)"
+        "상품·착샷 사진(rehearsal·live, DB와 CLIP 인덱스는 미리 받은 캐시)"
       ]
     },
     {

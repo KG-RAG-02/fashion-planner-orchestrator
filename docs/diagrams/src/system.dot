@@ -28,14 +28,16 @@ digraph system {
   fx     [label="Frankfurter\n환율", shape=box, style="rounded,dashed"];
   openai [label="OpenAI API\nlive 프로필에서만", shape=box, style="rounded,dashed"];
   photo  [label="기사 사진 호스트\nvogue.co.kr (허용 목록)", shape=box, style="rounded,dashed"];
+  cdn    [label="무신사 이미지 CDN\nmsscdn.net (허용 목록)", shape=box, style="rounded,dashed"];
+  hf     [label="Hugging Face Hub\nOpenCLIP 가중치", shape=box, style="rounded,dashed"];
 
   // 층(위→아래)과 층 안의 순서
   { rank=same; ui; photo; }
   { rank=same; store; orch; openai; }
   { rank=same; trend; inv; nov; res; }
-  { rank=same; neo4j; duck; r2; ledger; fx; }
+  { rank=same; neo4j; cdn; hf; duck; r2; ledger; fx; }
   edge [style=invis];
-  ui -> photo; store -> orch -> openai; trend -> inv -> nov -> res; neo4j -> duck -> r2 -> ledger -> fx;
+  ui -> photo; store -> orch -> openai; trend -> inv -> nov -> res; neo4j -> cdn -> hf -> duck -> r2 -> ledger -> fx;
   edge [style=solid];
 
   ui -> orch [label=" 실행, 진행 조회,\n 산출물, 기획서"];
@@ -49,7 +51,9 @@ digraph system {
 
   trend -> neo4j;
   inv   -> duck;
-  inv   -> r2     [label="상품 사진,\n캐시 구성"];
+  inv   -> r2     [label="상품·착샷 사진(요청 중),\nDB·CLIP 인덱스 캐시\n(--prepare-cache)"];
+  inv   -> cdn    [label="CLIP 기준 이미지\n(임베딩만)", style=dashed];
+  inv   -> hf     [label="처음 불러올 때", style=dashed];
   nov   -> ledger;
   nov   -> openai [label="컨셉 텍스트,\n이미지", style=dashed];
   res   -> openai [label="타깃\n가설", style=dashed];

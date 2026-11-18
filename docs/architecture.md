@@ -5,7 +5,7 @@ orchestrator는 기획 요청 하나를 받아 다른 네 서비스를 정해진
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/system-dark.svg">
-  <img alt="시스템 전체: 브라우저 UI가 orchestrator를 부르고, orchestrator가 trend·inventory·novelty·research를 차례로 부른다. 각 서비스는 자기 저장소와 외부 시스템(Neo4j, Cloudflare R2, OpenAI, 환율 API)을 쓴다." src="diagrams/system.svg" width="900">
+  <img alt="시스템 전체: 브라우저 UI가 orchestrator를 부르고, orchestrator가 trend·inventory·novelty·research를 차례로 부른다. 각 서비스는 자기 저장소와 외부 시스템(Neo4j, Cloudflare R2, OpenAI, 환율 API, 무신사 이미지 CDN, Hugging Face Hub)을 쓴다." src="diagrams/system.svg" width="900">
 </picture>
 
 그림의 상자와 화살표마다 코드 근거가 [diagrams/CLAIMS.md](diagrams/CLAIMS.md)에 있다.
@@ -94,6 +94,9 @@ orchestrator는 기획 요청 하나를 받아 다른 네 서비스를 정해진
 - 모든 서비스 호출에 공용 bearer 토큰(`FASHION_PLANNER_SERVICE_TOKEN`)을 붙인다.
 - 타임아웃: 연결 3초, 읽기 75초(`ORCHESTRATOR_WORKFLOW_CONNECT_TIMEOUT_SECONDS`, `ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS`).
   inventory와 novelty는 처리 시간이 길어 따로 정한다(`..._INVENTORY_READ_TIMEOUT_SECONDS`, `..._DRAFT_READ_TIMEOUT_SECONDS`).
+  호출받는 쪽의 마감보다 길게 잡아야 상대가 보낸 시간 초과 응답을 받을 수 있다. 예를 들어 Compose에서 inventory 마감은
+  180초(`INVENTORY_HANDOFF_TIMEOUT_SECONDS`), orchestrator의 inventory 읽기 타임아웃은 210초라서, inventory가 먼저
+  `504 TIMEOUT`을 보내고 orchestrator는 이를 `504 UPSTREAM_TIMEOUT`으로 기록한다.
 - 자동 재시도는 없다. 실패 매핑은 [contracts.md](contracts.md#6-오류)에 있다.
 - 로그에는 호출마다 JSON 이벤트 하나(요청 ID, 단계, 상태, 걸린 시간, 보낸 바이트 수)만 남기고, 페이로드·응답 원문·프롬프트·
   비밀값은 남기지 않는다.

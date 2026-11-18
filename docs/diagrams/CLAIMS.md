@@ -16,8 +16,10 @@
 | 6단계 기사 사진: HTTPS, 허용 목록 `vogue.co.kr`, 최대 3장 | `src/fashion_planner_orchestrator/trend_photos.py:8,26-27` | `tests/test_trend_photos.py` |
 | orchestrator → OpenAI: 질의 구조화, SWOT 초안(live에서만) | `src/fashion_planner_orchestrator/llm_provider.py:9,77`, `src/fashion_planner_orchestrator/swot.py:225-238`, `deploy/compose.paid.yaml:10-11` | 파일 읽기 |
 | trend → Neo4j(Aura 또는 로컬 stub) | `fashion-planner-trend/src/fashion_planner_trend/config.py:94`, `deploy/compose.stub.yaml:13,56`, `deploy/compose.data.yaml:18` | 파일 읽기 |
-| inventory → DuckDB 캐시 + CLIP 인덱스 | `fashion-planner-inventory/fashion_planner_inventory/api.py:101,138` | 파일 읽기 |
-| inventory → R2: 상품 사진, 캐시 구성 | `fashion-planner-inventory/fashion_planner_inventory/storage.py:74`, `deploy/compose.data.yaml:6,34-35` | 파일 읽기 |
+| inventory → DuckDB 캐시 + CLIP 인덱스 | `fashion-planner-inventory/fashion_planner_inventory/api.py:101`(DB 읽기 전용), `:137-165`(`clip_index_path`, `warm_up_clip`) | 파일 읽기 |
+| inventory → R2: 요청 중 상품·착샷 사진, DB·CLIP 인덱스 캐시는 `--prepare-cache`가 미리 받음 | `fashion-planner-inventory/fashion_planner_inventory/storage.py:70-79`(R2 설정), `:207-271`(사진·착샷 읽기), `:319-333`(`allow_download`), `deploy/compose.data.yaml:6,34-35` | 파일 읽기 |
+| inventory → 무신사 이미지 CDN: CLIP 기준 이미지(https, `msscdn.net`, 리다이렉트 없음, 10 MB 상한, 메모리에서 임베딩만). CLIP 인덱스가 있는 rehearsal·live에서만 | `fashion-planner-inventory/fashion_planner_inventory/clip_matcher.py:135-166` | 파일 읽기 |
+| inventory → Hugging Face Hub: OpenCLIP 가중치를 처음 불러올 때 내려받음 | `fashion-planner-inventory/fashion_planner_inventory/clip_matcher.py:79-92`, `deploy/compose.data.yaml`(`HF_HOME=/models/hf` 볼륨) | 파일 읽기 |
 | novelty → 초안 원장(SQLite + 이미지 파일) | `fashion-planner-novelty/src/fashion_planner_novelty/workflows/draft_artifacts.py:151` | 파일 읽기 |
 | novelty → OpenAI: 컨셉 텍스트, 이미지(live에서만) | `fashion-planner-novelty/src/fashion_planner_novelty/sources/openai_text_provider.py:152`, `fashion-planner-novelty/src/fashion_planner_novelty/workflows/image_generation.py:102`, `deploy/compose.paid.yaml:16-18` | 파일 읽기 |
 | research → R2: H&M 집계 스냅샷 | `fashion-planner-research/src/fashion_planner_research/sources/sales/hm_kaggle/hm_research_aggregate.py:525`, `deploy/compose.data.yaml:64` | 파일 읽기 |
