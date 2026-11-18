@@ -2,8 +2,8 @@
 
 The orchestrator maps every agent's input and output, so it keeps a code-based copy of each agent's
 contract here. The owning repository stays the source of truth; these files are copies with
-provenance (repo, branch, commit, source-file sha256) so a later change in the owner can be detected.
-Entries of this repository (agent id vogue-orchestrator) read their sources from this checkout.
+provenance (repository name and source-file sha256) so a later change in the owner can be detected.
+Entries of this repository (service id orchestrator) read their sources from this checkout.
 
 Methods
   copy      wrap a JSON Schema file published by the producer or in this repository's contracts/workflow package.
@@ -11,18 +11,18 @@ Methods
   pinned    an existing snapshot that generated code depends on (trend-query: query/vocabulary.py is
             generated from it). Checked only; refresh it through its own workflow
   authored  written in this repository by reading the agent's code, because the agent publishes no
-            JSON Schema (new-product-agent /runs, the P08 MD decision request). Never rewritten; the
+            JSON Schema (novelty /runs, the orchestrator MD decision request). Never rewritten; the
             check reports when its sources change
 
 Also reads each agent route's `contract_version` constant and compares it with the version used by
 the orchestrator on that route.
 
-Both modes compare the schemas with contracts/workflow/snapshot.json. P06 and P07 own their native wire contracts;
-P08's package records the call-side shape and is not copied into either producer repository.
+Both modes compare the schemas with contracts/workflow/snapshot.json. novelty and research own their native wire
+contracts; the orchestrator's package records the call-side shape and is not copied into either producer repository.
 
 Usage
-  py scripts/export_agent_contracts.py            # write copy/pydantic snapshots (pinned/authored untouched)
-  py scripts/export_agent_contracts.py --check    # exit 1 if a snapshot or a workflow contract copy is out of date
+  python scripts/export_agent_contracts.py            # write copy/pydantic snapshots (pinned/authored untouched)
+  python scripts/export_agent_contracts.py --check    # exit 1 if a snapshot or a workflow contract copy is out of date
 
 Sibling roots default to ../<repo-name>; override with FASHION_PLANNER_<NAME>_ROOT (TREND, INVENTORY,
 NOVELTY, RESEARCH). The trend Python defaults to <trend root>/.venv; override with FASHION_PLANNER_TREND_PYTHON.
@@ -89,20 +89,20 @@ class Entry:
 WORKFLOW_CONTRACT_PY = "src/fashion_planner_orchestrator/workflow_contract.py"
 
 ENVELOPES = {
-    "trend": Envelope("/v1/agents/trend/runs", "src/trend_agent/api/server.py",
+    "trend": Envelope("/v1/agents/trend/runs", "src/fashion_planner_trend/api/server.py",
                       "CONTRACT_VERSION", f"{WORKFLOW_CONTRACT_PY}:TREND_HANDOFF_VERSION"),
-    "inventory": Envelope("/v1/agents/inventory/runs", "stock_agent/api.py", "HANDOFF_CONTRACT_VERSION",
+    "inventory": Envelope("/v1/agents/inventory/runs", "fashion_planner_inventory/api.py", "HANDOFF_CONTRACT_VERSION",
                           f"{WORKFLOW_CONTRACT_PY}:INVENTORY_HANDOFF_VERSION"),
-    # P06 compares the envelope's contract_version with a literal inside _build_handoff_run.
-    "novelty": Envelope("/v1/agents/novelty/runs", "src/vogue_npp/prototype/server.py",
-                                  "_build_handoff_run contract_version check",
+    # novelty compares the envelope's contract_version with a literal inside its request parser.
+    "novelty": Envelope("/v1/agents/novelty/runs", "src/fashion_planner_novelty/server/app.py",
+                                  "request parser contract_version check",
                                   f"{WORKFLOW_CONTRACT_PY}:NOVELTY_HANDOFF_VERSION",
                                   pattern=r"""payload\.get\(["']contract_version["']\)\s*!=\s*["']([^"'\n]+)["']"""),
 }
 
-# P07 proposal review route. Its contract version is independent from the P08 public workflow version.
+# research review route. Its contract version is independent from the orchestrator public workflow version.
 WORKFLOW_ENVELOPES = {
-    "research": Envelope("/v1/agents/research/reviews", "src/market_research_agent/http_server.py",
+    "research": Envelope("/v1/agents/research/reviews", "src/fashion_planner_research/http_server.py",
                                    "REVIEW_CONTRACT_VERSION", f"{WORKFLOW_CONTRACT_PY}:RESEARCH_HANDOFF_VERSION"),
 }
 # Routes this repository serves. Read from this checkout; there is no other side to compare with.
@@ -111,15 +111,15 @@ RUN_ENVELOPE = Envelope("/api/workflow/run, /v1/orchestrations", WORKFLOW_CONTRA
 MD_DECISION_ENVELOPE = Envelope("/api/workflow/runs/{rid}/md-decision", WORKFLOW_CONTRACT_PY, "VERSION",
                                 f"{WORKFLOW_CONTRACT_PY}:VERSION")
 
-# P06 and P07 do not vendor P08 call-side schemas.
+# novelty and research do not vendor the orchestrator call-side schemas.
 VENDORED = {}
-# Pinned files a P08 call-side schema's $ref resolves to.
+# Pinned files an orchestrator call-side schema's $ref resolves to.
 WORKFLOW_REFS = ("common.schema.json", "upstream/trend-result.schema.json", "upstream/inventory-result.schema.json")
 
 
 def workflow_entry(agent_id: str, direction: str, name: str, contract: str, payload_version: str | None,
                    directory: str, envelope: Envelope) -> Entry:
-    """Copy a P08-owned schema; source_files add the pinned files its $ref resolves to."""
+    """Copy an orchestrator-owned schema; source_files add the pinned files its $ref resolves to."""
     source = f"{directory}/{name}.schema.json"
     return Entry(agent_id, direction, f"{name}.contract.json", contract, payload_version, "copy",
                  (source, *(f"{directory}/{rel}" for rel in WORKFLOW_REFS)), source, envelope=envelope)
@@ -127,42 +127,42 @@ def workflow_entry(agent_id: str, direction: str, name: str, contract: str, payl
 
 ENTRIES = (
     Entry("trend", "input", "trend-query.contract.json", "TrendQuery", None, "pinned",
-          ("src/trend_agent/schemas/trend_query.py", "src/trend_agent/schemas/vocabulary.py"),
-          "trend_agent.schemas.trend_query:TrendQuery"),
+          ("src/fashion_planner_trend/schemas/trend_query.py", "src/fashion_planner_trend/schemas/vocabulary.py"),
+          "fashion_planner_trend.schemas.trend_query:TrendQuery"),
     Entry("trend", "output", "trend-analysis-result.contract.json", "TrendAnalysisResult", "1.0.0",
           "pydantic",
-          ("src/trend_agent/schemas/trend_analysis_result.py", "src/trend_agent/schemas/trend_query.py",
-           "src/trend_agent/schemas/vocabulary.py"),
-          "trend_agent.schemas.trend_analysis_result:TrendAnalysisResult"),
+          ("src/fashion_planner_trend/schemas/trend_analysis_result.py", "src/fashion_planner_trend/schemas/trend_query.py",
+           "src/fashion_planner_trend/schemas/vocabulary.py"),
+          "fashion_planner_trend.schemas.trend_analysis_result:TrendAnalysisResult"),
     Entry("inventory", "input", "inventory-request.contract.json",
           "inventory input (TrendAnalysisResult as inventory reads it)", "1.0.0", "copy",
-          ("contracts/schemas/stock-agent-request.schema.json", "stock_agent/trend_request.py"),
-          "contracts/schemas/stock-agent-request.schema.json"),
+          ("contracts/schemas/inventory-request.schema.json", "fashion_planner_inventory/trend_request.py"),
+          "contracts/schemas/inventory-request.schema.json"),
     Entry("inventory", "output", "inventory-result.contract.json", "inventory result", "1.0.0", "copy",
-          ("contracts/schemas/stock-agent-result.schema.json",),
-          "contracts/schemas/stock-agent-result.schema.json"),
+          ("contracts/schemas/inventory-result.schema.json",),
+          "contracts/schemas/inventory-result.schema.json"),
     Entry("research", "input", "review-request.contract.json",
           "research /reviews request (allowlisted product projection with per-field provenance)",
           "research-handoff", "copy",
-          ("src/market_research_agent/http_server.py", "contracts/examples/sales-market-review-0.3-proposal.request.json"),
-          "contracts/schemas/proposals/sales-market-review-0.3-proposal.schema.json",
+          ("src/fashion_planner_research/http_server.py", "contracts/examples/research-review.request.json"),
+          "contracts/schemas/research-review-request.schema.json",
           envelope=WORKFLOW_ENVELOPES["research"]),
     Entry("research", "output", "review-response.contract.json",
           "research /reviews native review response", "1.0.0", "copy",
-          ("src/market_research_agent/http_server.py", "contracts/schemas/proposals/sales-market-review-0.3-proposal-response.schema.json"),
-          "contracts/schemas/proposals/sales-market-review-0.3-proposal-response.schema.json",
+          ("src/fashion_planner_research/http_server.py", "contracts/schemas/research-review-response.schema.json"),
+          "contracts/schemas/research-review-response.schema.json",
           envelope=WORKFLOW_ENVELOPES["research"]),
     Entry("research", "output", "review-error.contract.json",
           "research /reviews error response", "research-handoff", "copy",
-          ("src/market_research_agent/http_server.py", "contracts/schemas/proposals/sales-market-review-0.3-error.schema.json"),
-          "contracts/schemas/proposals/sales-market-review-0.3-error.schema.json",
+          ("src/fashion_planner_research/http_server.py", "contracts/schemas/research-review-error.schema.json"),
+          "contracts/schemas/research-review-error.schema.json",
           envelope=WORKFLOW_ENVELOPES["research"]),
     # The modules that read the three payloads (adapters/handoff.py no longer exists), so a reader change is seen.
     Entry("novelty", "input", "handoff-request.contract.json",
           "novelty /runs input (three producer payloads)", None, "authored",
-          ("src/vogue_npp/adapters/draft_inputs.py", "src/vogue_npp/workflows/planning_draft.py",
-           "src/vogue_npp/domain/context.py", "src/vogue_npp/workflows/text_concept_generation.py",
-           "src/vogue_npp/prototype/server.py")),
+          ("src/fashion_planner_novelty/adapters/draft_inputs.py", "src/fashion_planner_novelty/workflows/planning_draft.py",
+           "src/fashion_planner_novelty/domain/context.py", "src/fashion_planner_novelty/workflows/text_concept_generation.py",
+           "src/fashion_planner_novelty/server/app.py")),
     workflow_entry(SELF, "output", "integrated-result", "orchestrator workflow run response (integrated result)",
                    "1.0.0", "contracts/workflow", RUN_ENVELOPE),
     Entry(SELF, "input", "md-decision-request.contract.json",

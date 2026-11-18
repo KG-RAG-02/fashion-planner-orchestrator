@@ -1,13 +1,12 @@
 # TrendQuery 계약 스냅샷 (읽기 전용 복사본)
 
-> **이 문서와 `trend-query.contract.json`은 trend-analysis-agent가 소유한 계약의 복사본이다.** 원본 저장소는 비공개이고, 이 저장소의 작업자는 원본을 읽을 수 없다는 전제로 **이것만 보고 질의 구조화를 구현할 수 있게** 만들었다. 직접 고치지 않는다. 계약을 바꾸려면 원본 소유자와 합의한 뒤 아래 "갱신 절차"로 다시 만든다.
+> **이 문서와 `trend-query.contract.json`은 fashion-planner-trend가 소유한 계약의 복사본이다.** 원본을 읽지 않고도 **이것만 보고 질의 구조화를 구현할 수 있게** 만들었다. 직접 고치지 않는다. 계약을 바꾸려면 원본 소유자와 합의한 뒤 아래 "갱신 절차"로 다시 만든다.
 >
-> **상태 메모 (2026-11-09)**: 이 스냅샷은 trend의 **현재** 계약을 기록한 것으로 그대로 유지한다. 결정 X4에 따라 이 저장소가 정하는 변경(속성 제외 칸 등)은 이 파일이 아니라 별도 확장 제안으로 관리한다 ([query-structuring.md](../../../../docs/query-structuring.md)). "원본을 읽을 수 없다"는 전제는 구현·테스트 기준이며, 스냅샷 생성·갱신자는 원본에 접근한다 (W-7).
+> 이 스냅샷은 trend의 **현재** 계약을 그대로 기록한다. 이 레포가 원하는 변경(속성 제외 칸 등)은 이 파일이 아니라 별도 제안으로 다룬다 ([query-structuring.md](../../../../docs/query-structuring.md)).
 
 | 항목 | 값 |
 |---|---|
-| 원본 | trend-analysis-agent `src/trend_agent/schemas/trend_query.py`, `vocabulary.py` |
-| 원본 기준 커밋 | `origin/main@4196bc460876` (생성 시점 2026-11-09) |
+| 원본 | fashion-planner-trend `src/fashion_planner_trend/schemas/trend_query.py`, `vocabulary.py` |
 | JSON 내용 해시 | `content_sha256` = `462f998c7bbc…` (전체 값은 JSON의 `_provenance`) |
 | 생성 방법 | 코드에서 자동 생성 (손으로 쓰지 않음). 아래 "갱신 절차" |
 
@@ -78,10 +77,10 @@
 
 ## 5. 이 스냅샷이 다루지 않는 것
 - **별칭 사전**(무신사·LLM 표현 → 표준 값 변환표)은 포함하지 않았다. 원본 저장소의 파일이다. 질의 구조화가 표준 값을 고르는 방법은 현재 질의 구조화는 [query-structuring.md](../../../../docs/query-structuring.md)에 설명한 방식으로 동작한다: 별칭 사전도 별도 스냅샷으로 가져와([alias-map.md](../vocabulary/alias-map.md)) 코드가 값을 정하고, 사전에 없을 때만 LLM 제안을 출처 표시와 함께 쓴다 ([query-structuring.md](../../../../docs/query-structuring.md)).
-- 검색·점수 계산, `TrendAnalysisResult`의 정의 (출력 스냅샷은 [`trend-analysis-result-1.1.contract.json`](../output/trend-analysis-result-1.1.contract.json)).
+- 검색·점수 계산, `TrendAnalysisResult`의 정의 (출력 스냅샷은 [`trend-analysis-result.contract.json`](../output/trend-analysis-result.contract.json)).
 
 ## 6. 갱신 절차 (원본이 바뀔 때)
 1. 원본 소유자가 `TrendQuery` 변경을 알린다 (알림이 없으면 이 스냅샷은 낡을 수 있다).
-2. 원본 저장소 루트에서 계약을 다시 내보낸다. 내보내는 코드는 `TrendQuery.model_json_schema()`, `Season`·`Gender`·`CategoryMajor`·`CategoryMinor` Enum 값, 속성별 허용 값(`_ATTRIBUTE_VALUES`), `MINOR_TO_MAJOR`를 JSON 하나로 묶고 `source_commit`과 `content_sha256`를 기록한다.
-3. 이 폴더의 JSON을 교체하고 이 문서의 "원본 기준 커밋"·해시·§3의 개수를 고친다. 값 개수는 JSON에서 읽어 확인한다.
-4. 이 스냅샷에 의존하는 fixture와 테스트(QP-1, QP-6)를 다시 돌린다.
+2. 원본 저장소 루트에서 계약을 다시 내보낸다. 내보내는 코드는 `TrendQuery.model_json_schema()`, `Season`·`Gender`·`CategoryMajor`·`CategoryMinor` Enum 값, 속성별 허용 값(`_ATTRIBUTE_VALUES`), `MINOR_TO_MAJOR`를 JSON 하나로 묶고 `content_sha256`를 기록한다(커밋 SHA는 적지 않는다).
+3. 이 폴더의 JSON을 교체하고 이 문서의 해시·§3의 개수를 고친다. 값 개수는 JSON에서 읽어 확인한다.
+4. `python scripts/generate_query_vocabulary.py`로 `query/vocabulary.py`를 다시 만들고 테스트를 돌린다.

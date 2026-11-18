@@ -1,33 +1,31 @@
 {
   "_provenance": {
     "agent_id": "inventory",
-    "contract": "stock-agent result",
+    "contract": "inventory result",
     "direction": "output",
-    "payload_schema_version": "1.0",
+    "payload_schema_version": "1.0.0",
     "method": "copy",
-    "source_repo": "KG-RAG-02/stock-agent",
-    "source_branch": "main",
-    "source_commit": "416c37c8695e",
-    "source_schema": "contracts/schemas/stock-agent-result.schema.json",
+    "source_repo": "KG-RAG-02/fashion-planner-inventory",
+    "source_schema": "contracts/schemas/inventory-result.schema.json",
     "source_files": [
       {
-        "path": "contracts/schemas/stock-agent-result.schema.json",
-        "sha256": "f2b6984bb37cca4333559e4e05b88312ecf511f578803adee51885c344e6ce00"
+        "path": "contracts/schemas/inventory-result.schema.json",
+        "sha256": "bacceb81428082d81c7fdc86b448246513338d5a0a912ede628c3a4bdc0e2a0d"
       }
     ],
     "handoff": {
-      "route": "/v1/agents/stock-agent/runs",
-      "contract_version": "vogue-handoff/0.1",
-      "detected_from": "stock_agent/api.py:HANDOFF_CONTRACT_VERSION"
+      "route": "/v1/agents/inventory/runs",
+      "contract_version": "inventory-handoff",
+      "detected_from": "fashion_planner_inventory/api.py:HANDOFF_CONTRACT_VERSION"
     },
     "generated_by": "scripts/export_agent_contracts.py",
     "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
   },
   "json_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "urn:vogue:contracts:stock-agent:inventory-result:1.0",
-    "title": "stock-agent producer result payload schema 1.0",
-    "description": "Producer-owned Stock result payload version 1.0. It is distinct from the shared vogue-handoff/0.1 HTTP envelope. The /runs route wraps this complete object in result without moving or reconstructing producer fields. products[i] ↔ trend_results[i]; evidence is collected once and referenced by trend_results[i].evidence_ids.",
+    "$id": "https://contracts.fashion-planner.invalid/inventory/inventory-result.schema.json",
+    "title": "inventory 결과 payload",
+    "description": "inventory가 소유하는 결과 payload입니다(버전은 schema_version 필드). inventory-handoff HTTP envelope과 따로 관리합니다. /runs 경로는 이 객체 전체를 envelope의 result에 옮기거나 다시 만들지 않고 담습니다. products[i] ↔ trend_results[i]이며, 근거는 evidence에 한 번만 모으고 trend_results[i].evidence_ids로 가리킵니다.",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -44,7 +42,7 @@
     ],
     "properties": {
       "schema_version": {
-        "const": "1.0"
+        "const": "1.0.0"
       },
       "request_id": {
         "type": [
@@ -54,7 +52,7 @@
         "description": "받은 request_id 그대로. 본문을 읽지 못한 400에서만 null"
       },
       "agent_id": {
-        "const": "stock-agent"
+        "const": "inventory"
       },
       "status": {
         "enum": [
@@ -126,7 +124,7 @@
         ],
         "properties": {
           "source_agent_id": {
-            "const": "trend-analysis-agent"
+            "const": "trend"
           },
           "source_schema_version": {
             "type": "string",
@@ -139,7 +137,7 @@
             ]
           },
           "adapter_version": {
-            "const": "stock-trend-input-adapter/1.0"
+            "const": "inventory-trend-input-adapter"
           },
           "transformed": {
             "type": "boolean"
@@ -419,7 +417,7 @@
               "object",
               "null"
             ],
-            "description": "pairing, color, stock_value_krw, sell_through, recent_trend, season_share, season_name, score, data_nature, attributes, decided_by, llm_reason, llm_why_not_higher(1위가 아닐 때 더 높은 순위 대신 고른 이유, 1위면 null)"
+            "description": "pairing, color, stock_value_krw, sell_through, recent_trend, season_share, season_name, score, data_nature"
           },
           "summary": {
             "type": "string"
@@ -432,7 +430,7 @@
           },
           "search": {
             "type": "object",
-            "description": "찾은 조건 (segments, segment_basis, areas, colors, steps 등)"
+            "description": "찾은 조건 (segments, segment_basis, areas, colors, color_mode, color_attempts, relaxed, outfit_reference, clip 등)"
           },
           "limitations": {
             "type": "array",
@@ -474,7 +472,7 @@
         "properties": {
           "evidence_id": {
             "type": "string",
-            "pattern": "^stock-agent:"
+            "pattern": "^inventory:"
           },
           "style_id": {
             "type": "string"
@@ -556,7 +554,7 @@
               "string",
               "null"
             ],
-            "description": "03 안쪽 원인 (missing_fields, invalid_input, upstream_error, db_unavailable, no_llm, timeout, rule_violation, trend_failed ... / 여러 개면 mixed)"
+            "description": "03 안쪽 원인 (missing_fields, invalid_input, upstream_error, db_unavailable, image_source_unavailable, timeout, invalid_response, trend_failed, internal ... / 여러 개면 mixed)"
           },
           "style_ids": {
             "type": "array",

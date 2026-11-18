@@ -1,7 +1,7 @@
 """Regenerate src/fashion_planner_orchestrator/query/vocabulary.py from the TrendQuery contract snapshot.
 
 The snapshot (contracts/agents/trend/input/trend-query.contract.json) is a read-only copy of the contract
-owned by trend-analysis-agent. This script turns it into plain Python constants so the query
+owned by fashion-planner-trend. This script turns it into plain Python constants so the query
 module has no runtime dependency on the docs folder and can be moved to another repository.
 
 Usage (from the repository root):
@@ -26,9 +26,9 @@ TARGET_PATH = ROOT / "src" / "fashion_planner_orchestrator" / "query" / "vocabul
 HEADER = '''"""GENERATED FILE - do not edit by hand.
 
 Standard vocabulary of the TrendQuery contract, generated from the read-only snapshot
-contracts/agents/trend/input/trend-query.contract.json (a copy of the contract owned by trend-analysis-agent).
+contracts/agents/trend/input/trend-query.contract.json (a copy of the contract owned by fashion-planner-trend).
 
-Regenerate:  py scripts/generate_query_vocabulary.py
+Regenerate:  python scripts/generate_query_vocabulary.py
 Drift check: tests/test_query_vocabulary.py (fails when this file and the snapshot disagree)
 """
 
@@ -72,7 +72,6 @@ def render(contract: Mapping[str, Any]) -> str:
     parts.append(
         "PROVENANCE: dict[str, str] = {\n"
         f"    \"contract\": {_q(provenance['contract'])},\n"
-        f"    \"source_commit\": {_q(provenance['source_commit'])},\n"
         f"    \"content_sha256\": {_q(provenance['content_sha256'])},\n"
         f"    \"generated_from\": {_q(provenance['generated_from'])},\n"
         "}"

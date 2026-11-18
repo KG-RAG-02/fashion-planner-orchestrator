@@ -1,56 +1,54 @@
 {
   "_provenance": {
     "agent_id": "inventory",
-    "contract": "stock-agent input (TrendAnalysisResult as stock-agent reads it)",
+    "contract": "inventory input (TrendAnalysisResult as inventory reads it)",
     "direction": "input",
-    "payload_schema_version": "1.0",
+    "payload_schema_version": "1.0.0",
     "method": "copy",
-    "source_repo": "KG-RAG-02/stock-agent",
-    "source_branch": "main",
-    "source_commit": "f483bdf16573",
-    "source_schema": "contracts/schemas/stock-agent-request.schema.json",
+    "source_repo": "KG-RAG-02/fashion-planner-inventory",
+    "source_schema": "contracts/schemas/inventory-request.schema.json",
     "source_files": [
       {
-        "path": "contracts/schemas/stock-agent-request.schema.json",
-        "sha256": "9eb8d9050951c0bb50b10854e38910c05874aaecd682f44460c3ab5658e62d03"
+        "path": "contracts/schemas/inventory-request.schema.json",
+        "sha256": "f9d37df38c71127c9f409030bc0d330272b7a75b68ac24925869b8efaf0930bd"
       },
       {
-        "path": "stock_agent/trend_request.py",
-        "sha256": "6552cce94d367fa6568d3b71a8866b6b588fa1b6daec01fbde56a5e3cf26d393"
+        "path": "fashion_planner_inventory/trend_request.py",
+        "sha256": "87e3aa63fc12aff35e63f708d80c35e3a5d99d8bbc2fad3a61a681a68e205bac"
       }
     ],
     "handoff": {
-      "route": "/v1/agents/stock-agent/runs",
-      "contract_version": "vogue-handoff/0.1",
-      "detected_from": "stock_agent/api.py:HANDOFF_CONTRACT_VERSION"
+      "route": "/v1/agents/inventory/runs",
+      "contract_version": "inventory-handoff",
+      "detected_from": "fashion_planner_inventory/api.py:HANDOFF_CONTRACT_VERSION"
     },
     "generated_by": "scripts/export_agent_contracts.py",
     "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
   },
   "json_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "urn:vogue:contracts:stock-agent:inventory-request:1.0",
-    "title": "stock-agent input = TrendAnalysisResult 1.1",
-    "description": "Legacy POST /v1/inventory-products accepts this object directly. POST /v1/agents/stock-agent/runs accepts the same unchanged object under input in a vogue-handoff/0.1 envelope. This producer input schema is separate from the shared HTTP envelope version. Unlisted TrendAnalysisResult fields are preserved at the HTTP boundary even when Stock does not consume them.",
+    "$id": "https://contracts.fashion-planner.invalid/inventory/inventory-request.schema.json",
+    "title": "inventory 입력 = trend 결과(TrendAnalysisResult)",
+    "description": "POST /v1/agents/inventory/runs는 이 객체를 inventory-handoff envelope의 input에 바꾸지 않고 받습니다. 이 입력 스키마는 HTTP envelope과 따로 관리합니다. 여기 없는 TrendAnalysisResult 필드는 inventory가 쓰지 않더라도 HTTP 경계에서 그대로 보존합니다.",
     "x-http-envelope": {
-      "route": "POST /v1/agents/stock-agent/runs",
-      "contract_version": "vogue-handoff/0.1",
+      "route": "POST /v1/agents/inventory/runs",
+      "contract_version": "inventory-handoff",
       "request": {
-        "contract_version": "vogue-handoff/0.1",
+        "contract_version": "inventory-handoff",
         "request_id": "<non-empty string>",
         "input": "this producer input object"
       },
       "response": {
-        "contract_version": "vogue-handoff/0.1",
+        "contract_version": "inventory-handoff",
         "request_id": "<same request ID>",
         "producer": {
-          "agent_id": "stock-agent",
-          "schema_version": "1.0"
+          "agent_id": "inventory",
+          "schema_version": "1.0.0"
         },
         "status": "result.status",
-        "result": "stock-agent-result.schema.json"
+        "result": "inventory-result.schema.json"
       },
-      "authentication": "Authorization: Bearer VOGUE_AGENT_SERVICE_BEARER_TOKEN"
+      "authentication": "Authorization: Bearer FASHION_PLANNER_SERVICE_TOKEN"
     },
     "type": "object",
     "required": [
@@ -99,8 +97,8 @@
         }
       },
       "schema_version": {
-        "const": "1.1",
-        "description": "Trend producer schema, separate from Stock result1.0"
+        "const": "1.0.0",
+        "description": "trend 결과의 schema_version. inventory 결과의 schema_version과 따로 관리합니다."
       }
     },
     "$defs": {
@@ -302,7 +300,7 @@
       },
       "trend_item": {
         "type": "object",
-        "description": "03이 쓰는 Item 필드. 소재·핏은 vocabulary_v1 값만 쓰고, approx에 든 값은 쓰지 않는다(limitations에 적음).",
+        "description": "03이 쓰는 Item 필드: category_major·category_minor(트렌드 카테고리), colors(트렌드 색), gender(요청 성별이 없을 때 고객군), similar_products(snap_garment 착샷, 없으면 catalog_item 상품 이미지 → CLIP 유사도 필터). materials·fit·approx는 받기만 하고 재고를 거르는 데 쓰지 않는다.",
         "properties": {
           "category_major": {
             "anyOf": [
@@ -356,7 +354,7 @@
             "items": {
               "type": "string"
             },
-            "description": "21색 (vocabulary_v1 Color)"
+            "description": "21색 (trend 표준 어휘의 Color)"
           },
           "materials": {
             "type": "array",

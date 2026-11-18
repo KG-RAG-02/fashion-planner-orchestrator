@@ -37,7 +37,8 @@ class VocabularyMatchesSnapshotTests(unittest.TestCase):
 
     def test_provenance_matches_the_snapshot(self):
         provenance = self.snapshot["_provenance"]
-        self.assertEqual(vocab.PROVENANCE["source_commit"], provenance["source_commit"])
+        self.assertEqual(vocab.PROVENANCE["contract"], provenance["contract"])
+        self.assertNotIn("source_commit", provenance)  # commit SHAs change when history is rewritten
         self.assertEqual(vocab.PROVENANCE["content_sha256"], provenance["content_sha256"])
 
     def test_vocabulary_module_is_the_generator_output(self):

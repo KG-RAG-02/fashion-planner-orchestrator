@@ -3,30 +3,28 @@
     "agent_id": "trend",
     "contract": "TrendAnalysisResult",
     "direction": "output",
-    "payload_schema_version": "1.1",
+    "payload_schema_version": "1.0.0",
     "method": "pydantic",
-    "source_repo": "KG-RAG-02/trend-analysis-agent",
-    "source_branch": "main",
-    "source_commit": "4a2086ad4244",
-    "source_model": "trend_agent.schemas.trend_analysis_result:TrendAnalysisResult",
+    "source_repo": "KG-RAG-02/fashion-planner-trend",
+    "source_model": "fashion_planner_trend.schemas.trend_analysis_result:TrendAnalysisResult",
     "source_files": [
       {
-        "path": "src/trend_agent/schemas/trend_analysis_result.py",
-        "sha256": "596fc4bacf787b3bb209b97eb1d11ad84b98ef67185a00cf5ca5ac8aa2c04c01"
+        "path": "src/fashion_planner_trend/schemas/trend_analysis_result.py",
+        "sha256": "5bcf944af601a60e2dbc2d51a12ef9ebed92d79f7fcfea7991bdf77207ee057b"
       },
       {
-        "path": "src/trend_agent/schemas/trend_query.py",
-        "sha256": "1b386855e2bddf52e30b17d8a5adf98f55bd41f95a0f9ee3cc965b2dbd70f518"
+        "path": "src/fashion_planner_trend/schemas/trend_query.py",
+        "sha256": "c417b295524c3865e7c25c951ee40f5927c444889a1effdf27955a6899765158"
       },
       {
-        "path": "src/trend_agent/schemas/vocabulary.py",
-        "sha256": "82686f92051db853e220e405745016f70eb5d23ebed040ff44b6381ca6852d99"
+        "path": "src/fashion_planner_trend/schemas/vocabulary.py",
+        "sha256": "fbe58b2f8e071a5c711d1129653c3efcb3de50c663a9fdcc1ee92aec2e85c45c"
       }
     ],
     "handoff": {
-      "route": "/v1/agents/trend-analysis-agent/runs",
-      "contract_version": "vogue-handoff/0.1",
-      "detected_from": "src/trend_agent/api/server.py:CONTRACT_VERSION"
+      "route": "/v1/agents/trend/runs",
+      "contract_version": "trend-handoff",
+      "detected_from": "src/fashion_planner_trend/api/server.py:CONTRACT_VERSION"
     },
     "generated_by": "scripts/export_agent_contracts.py",
     "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."
@@ -411,7 +409,7 @@
         "type": "object"
       },
       "ExampleImage": {
-        "description": "Style 예시 사진 (D-48). Vogue URL — 결과물 표현은 G-10(링크로만)을 따른다.",
+        "description": "Style 예시 사진. 기사 이미지 URL이고, 결과를 쓰는 쪽은 링크로만 보여 준다(docs/data.md).",
         "properties": {
           "url": {
             "title": "Url",
@@ -1255,7 +1253,7 @@
         "type": "array"
       },
       "schema_version": {
-        "default": "1.1",
+        "default": "1.0.0",
         "title": "Schema Version",
         "type": "string"
       }

@@ -1,9 +1,9 @@
 """GENERATED FILE - do not edit by hand.
 
 Standard vocabulary of the TrendQuery contract, generated from the read-only snapshot
-contracts/agents/trend/input/trend-query.contract.json (a copy of the contract owned by trend-analysis-agent).
+contracts/agents/trend/input/trend-query.contract.json (a copy of the contract owned by fashion-planner-trend).
 
-Regenerate:  py scripts/generate_query_vocabulary.py
+Regenerate:  python scripts/generate_query_vocabulary.py
 Drift check: tests/test_query_vocabulary.py (fails when this file and the snapshot disagree)
 """
 
@@ -11,10 +11,9 @@ from __future__ import annotations
 
 
 PROVENANCE: dict[str, str] = {
-    "contract": "TrendQuery (trend-analysis-agent)",
-    "source_commit": "origin/main@4196bc460876",
+    "contract": "TrendQuery (fashion-planner-trend)",
     "content_sha256": "462f998c7bbc3d263408097a607806bc8e9052988dc1e26c99abbd18a7d2bcca",
-    "generated_from": "src/trend_agent/schemas/trend_query.py, vocabulary.py",
+    "generated_from": "src/fashion_planner_trend/schemas/trend_query.py, vocabulary.py",
 }
 
 SEASONS: tuple[str, ...] = (
