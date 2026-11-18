@@ -19,9 +19,9 @@ def collect():
     checks=validators(); store=FixtureStore(HERE/'fixtures'); results=[]
     for name,d in cases():
         schema_name = ('planning-draft-request.schema.json' if name.startswith('novelty-wrong') else
-                       'sales-market-review-request.schema.json' if name.startswith('research-full') else
+                       'research-review-request.schema.json' if name.startswith('research-full') else
                        'planning-draft-response.schema.json' if name.startswith('novelty-response') else
-                       'sales-market-review-response.schema.json')
+                       'research-review-response.schema.json')
         errors=list(checks[schema_name].iter_errors(d)); code=None
         if not errors:
             try: semantic(d,schema_name,store)

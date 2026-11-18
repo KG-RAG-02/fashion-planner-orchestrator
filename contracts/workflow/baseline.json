@@ -2,96 +2,25 @@
   "format": "workflow-baseline",
   "contract_version": "workflow-contract",
   "transport_version": "fashion-planner-workflow",
-  "state": "frozen",
-  "producer_consumer_validated": true,
-  "snapshot_sha256": "27d2b003af37fbe7d21438c6ce16757d512305efc2a7e9d03097ab4bba6aa5c0",
+  "state": "proposed",
+  "producer_consumer_validated": false,
+  "snapshot_sha256": "6e298c2e291cee57c9f98bce5408e2b8077f6bdb83ac015a252e339e4209ff57",
   "files": {
     "common.schema.json": "c8bd26bfa451efecb546617601d7223fbecfcf56c0b36da6dc2742a002cc2fe6",
     "integrated-result.schema.json": "6d2c711b1845166f906932876caaa162598889393df0ec7c327576f862e9500e",
     "planning-draft-request.schema.json": "f1ddc9ea0d7352f1844d309f040825ad8cefee8020c68166866118de8d899cb7",
     "planning-draft-response.schema.json": "3708ff1bd3bc70f5872ddfee4ef49b73125893f01e60784b6d42fad470bd38fd",
-    "sales-market-review-error.schema.json": "f55ed355df8bb01f999547ad2dc09be3210122b67114c3b76662175eb81726df",
-    "sales-market-review-request.schema.json": "780441de65cc11422ae1189c61f2b020165e752418dc3088dc34f9d4ddf6dce7",
-    "sales-market-review-response.schema.json": "9d8a05acc9c7eb500d712038065096b4167a7d8a796ceedd8d63bcc52b3c2f4c",
+    "research-review-error.schema.json": "f55ed355df8bb01f999547ad2dc09be3210122b67114c3b76662175eb81726df",
+    "research-review-request.schema.json": "780441de65cc11422ae1189c61f2b020165e752418dc3088dc34f9d4ddf6dce7",
+    "research-review-response.schema.json": "9d8a05acc9c7eb500d712038065096b4167a7d8a796ceedd8d63bcc52b3c2f4c",
     "source-consumer-matrix.json": "6d6ab1fb7c7eb65fd6090381be1e0c1c2b8dc7597c7892735f05d79e156f6aa4",
     "upstream/inventory-result.schema.json": "f5d74b1f4cadede5b512c21ae55e01ff2fe9dad19752b75a7e865b769cca1c3c",
     "upstream/trend-result.schema.json": "c030406865beb1da7a969aad881bd44b7c993dabda230e58401bcdc8f93f97db"
   },
-  "evidence": {
-    "reference_fixtures": {
-      "cases": 5,
-      "passed": 5,
-      "failed": 0,
-      "failed_cases": []
-    },
-    "mutation_probes": {
-      "cases": 4,
-      "rejected": 4,
-      "accepted": []
-    },
-    "vendored_copies": {},
-    "suites": [
-      {
-        "command": "python -m unittest discover -s tests",
-        "returncode": 0,
-        "output_sha256": "d6723b49e016159c83b004ab1ae20f931222dca203d3a1a95a840edfbd7cfdd5",
-        "output_tail": [
-          "Ran 436 tests in 10.076s",
-          "",
-          "OK"
-        ],
-        "started_at": "2026-11-18T04:07:46+00:00"
-      },
-      {
-        "command": "node --test web/tests/model.test.mjs",
-        "returncode": 0,
-        "output_sha256": "98f2f04ba49bfd25182e73671ec1b57debf9cfded80ee721814f40683f184dfc",
-        "output_tail": [
-          "ℹ skipped 0",
-          "ℹ todo 0",
-          "ℹ duration_ms 74.355333"
-        ],
-        "started_at": "2026-11-18T04:07:57+00:00"
-      }
-    ]
-  },
-  "sources": {
-    "trend": {
-      "path": "fashion-planner-trend",
-      "clean": true,
-      "worktree_sha256": "1fc2db82c4b223b3084580cfadb6618f1d22f205d86f5059ad0bee4450d41310",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    "inventory": {
-      "path": "fashion-planner-inventory",
-      "clean": true,
-      "worktree_sha256": "71ded7ffd4d812cd29f871db7dca65e151ca38c0458e5194a9969fcc3e7dd01f",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    "novelty": {
-      "path": "fashion-planner-novelty",
-      "clean": true,
-      "worktree_sha256": "04df7023d809981b44e92cdd980460d483f14e488881b179baddf4bd49cadf3a",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    "research": {
-      "path": "fashion-planner-research",
-      "clean": true,
-      "worktree_sha256": "900b90cbeb0b73a21dbe16d8d969b52570ba29d2b619e13f46647bc0d20d037e",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    "orchestrator": {
-      "path": ".",
-      "clean": true,
-      "worktree_sha256": "c9a47ec0a10cda7e515d7ecfca31f396af4436f27c3399e9454b961b60e782b6",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "worktree_fingerprint_excludes": [
-        "contracts/workflow/baseline.json"
-      ]
-    }
-  },
-  "recorded_at": "2026-11-18T04:07:46+00:00",
+  "evidence": {},
+  "sources": {},
+  "recorded_at": "2026-11-18T04:12:51+00:00",
   "notes": [
-    "Frozen = contract evidence only (offline fixtures, owner serializer/parser boundary and in-process TCP suites). Live data, model quality and browser acceptance are recorded separately."
+    "Proposed baseline: no producer/consumer validation claimed. Run --freeze to record evidence."
   ]
 }

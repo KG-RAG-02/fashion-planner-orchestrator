@@ -16,7 +16,7 @@
       },
       {
         "path": "src/fashion_planner_orchestrator/workflow_contract.py",
-        "sha256": "616ca197beec29c19d28431165d41409d3a142085bd441452daaf913c52f705c"
+        "sha256": "fc1b4403288e5828367fa393a5f8cb8601767ab8853a69683d89ad68d8b7c918"
       }
     ],
     "handoff": {

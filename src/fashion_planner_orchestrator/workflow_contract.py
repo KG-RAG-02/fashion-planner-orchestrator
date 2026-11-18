@@ -286,7 +286,7 @@ class WorkflowContract:
             require(isinstance(body.get('draft'), dict) or (body.get('draft') is None and body.get('status') in {'no_results','error'}), 'NOVELTY_DRAFT_REQUIRED')
             require(isinstance(body.get('input_evidence'), dict), 'NOVELTY_EVIDENCE_REQUIRED')
         else:
-            self.schema(value, 'sales-market-review-response.schema.json')
+            self.schema(value, 'research-review-response.schema.json')
             require(body.get('producer_id') == agent, 'BODY_PRODUCER_MISMATCH')
             require(isinstance(body.get('draft_context'), dict), 'RESEARCH_DRAFT_CONTEXT_REQUIRED')
             require(isinstance(body.get('limitations'), list), 'RESEARCH_LIMITATIONS_REQUIRED')

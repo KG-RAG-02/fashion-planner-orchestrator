@@ -7,9 +7,9 @@
     "integrated-result.schema.json": "6d2c711b1845166f906932876caaa162598889393df0ec7c327576f862e9500e",
     "planning-draft-request.schema.json": "f1ddc9ea0d7352f1844d309f040825ad8cefee8020c68166866118de8d899cb7",
     "planning-draft-response.schema.json": "3708ff1bd3bc70f5872ddfee4ef49b73125893f01e60784b6d42fad470bd38fd",
-    "sales-market-review-error.schema.json": "f55ed355df8bb01f999547ad2dc09be3210122b67114c3b76662175eb81726df",
-    "sales-market-review-request.schema.json": "780441de65cc11422ae1189c61f2b020165e752418dc3088dc34f9d4ddf6dce7",
-    "sales-market-review-response.schema.json": "9d8a05acc9c7eb500d712038065096b4167a7d8a796ceedd8d63bcc52b3c2f4c",
+    "research-review-error.schema.json": "f55ed355df8bb01f999547ad2dc09be3210122b67114c3b76662175eb81726df",
+    "research-review-request.schema.json": "780441de65cc11422ae1189c61f2b020165e752418dc3088dc34f9d4ddf6dce7",
+    "research-review-response.schema.json": "9d8a05acc9c7eb500d712038065096b4167a7d8a796ceedd8d63bcc52b3c2f4c",
     "source-consumer-matrix.json": "6d6ab1fb7c7eb65fd6090381be1e0c1c2b8dc7597c7892735f05d79e156f6aa4",
     "upstream/inventory-result.schema.json": "f5d74b1f4cadede5b512c21ae55e01ff2fe9dad19752b75a7e865b769cca1c3c",
     "upstream/trend-result.schema.json": "c030406865beb1da7a969aad881bd44b7c993dabda230e58401bcdc8f93f97db"

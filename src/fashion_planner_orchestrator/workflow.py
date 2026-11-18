@@ -170,7 +170,7 @@ class Workflow:
                 if stage == 'sales_market_review':
                     try:
                         error_body = strict_json(wire.body)
-                        self.contract.schema(error_body, 'sales-market-review-error.schema.json')
+                        self.contract.schema(error_body, 'research-review-error.schema.json')
                         error = error_body.get('error') if isinstance(error_body, dict) else None
                         if (isinstance(error_body, dict)
                                 and error_body.get('contract_version') == RESEARCH_HANDOFF_VERSION
@@ -479,7 +479,7 @@ class Workflow:
                                                body['sources']['stock']['raw_response']['result'])
                         self.contract.schema(payload, 'planning-draft-request.schema.json')
                     elif stage == 'sales_market_review':
-                        self.contract.schema(payload, 'sales-market-review-request.schema.json')
+                        self.contract.schema(payload, 'research-review-request.schema.json')
                     retained = self._call(stage, payload, request_id, known)
                     body['sources'][stage] = retained
                     known[retained['content_sha256']] = retained['raw_response']
