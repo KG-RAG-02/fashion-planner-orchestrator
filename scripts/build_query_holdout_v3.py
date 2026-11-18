@@ -1,7 +1,7 @@
 """Build data/user_queries.holdout.v3.json: 20 NEW holdout queries (h201-h220) for the final check of prompt v4.
 
 The queries and labels were written on 2026-11-11 by a separate Claude agent that did NOT read the v4
-prompt (no file under prompts/, no rendered prompt, no prompt examples) and did not look at data/eval_runs/.
+prompt (no file under prompts/, no rendered prompt, no prompt examples) and did not look at earlier model outputs.
 The agent wrote the labels only from the label rules: the draft v3 format (query/draft_v3.py), the contract
 (contracts/agents/orchestrator/output/structured-query.md §2-§6). So this set measures
 how prompt v4 generalises to queries it was not tuned on (work rule W-10 ④). The queries are new, not

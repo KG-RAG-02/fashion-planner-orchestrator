@@ -26,13 +26,12 @@ Providers:
            Sends every query to the external provider: run only with the user's approval (W-4).
   replay   the model outputs saved in an earlier report (--replay <report.json>) are fed in again, so a
            CODE change can be measured on the same LLM answers without any external call. Only reports
-           made with a draft_v3 or draft_v4 prompt (v4 and later) can be replayed, with the same --prompt-version; the 2026-11-10 reports in
-           data/eval_runs/ are in the old flat format (prompts v2/v3) and are kept as records only.
+           made with a draft_v3 or draft_v4 prompt (v4 and later) can be replayed, with the same --prompt-version.
 
 Usage (repository root):
   PYTHONPATH=src py scripts/evaluate_query_structuring.py --provider fixture
-  PYTHONPATH=src py scripts/evaluate_query_structuring.py --provider llm --out data/eval_runs/<name>.json
-  PYTHONPATH=src py scripts/evaluate_query_structuring.py --provider replay --replay data/eval_runs/<name>.json
+  PYTHONPATH=src py scripts/evaluate_query_structuring.py --provider llm --out .local/eval/<name>.json
+  PYTHONPATH=src py scripts/evaluate_query_structuring.py --provider replay --replay .local/eval/<name>.json
 The JSON report holds per-item facts, the produced draft and StructuredQuery, warnings and latency.
 It never contains the API key.
 """
