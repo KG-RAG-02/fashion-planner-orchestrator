@@ -2,8 +2,8 @@
   "format": "workflow-baseline",
   "contract_version": "workflow-contract",
   "transport_version": "fashion-planner-workflow",
-  "state": "proposed",
-  "producer_consumer_validated": false,
+  "state": "frozen",
+  "producer_consumer_validated": true,
   "snapshot_sha256": "6e298c2e291cee57c9f98bce5408e2b8077f6bdb83ac015a252e339e4209ff57",
   "files": {
     "common.schema.json": "c8bd26bfa451efecb546617601d7223fbecfcf56c0b36da6dc2742a002cc2fe6",
@@ -17,10 +17,81 @@
     "upstream/inventory-result.schema.json": "f5d74b1f4cadede5b512c21ae55e01ff2fe9dad19752b75a7e865b769cca1c3c",
     "upstream/trend-result.schema.json": "c030406865beb1da7a969aad881bd44b7c993dabda230e58401bcdc8f93f97db"
   },
-  "evidence": {},
-  "sources": {},
-  "recorded_at": "2026-11-18T04:12:51+00:00",
+  "evidence": {
+    "reference_fixtures": {
+      "cases": 5,
+      "passed": 5,
+      "failed": 0,
+      "failed_cases": []
+    },
+    "mutation_probes": {
+      "cases": 4,
+      "rejected": 4,
+      "accepted": []
+    },
+    "vendored_copies": {},
+    "suites": [
+      {
+        "command": "python -m unittest discover -s tests",
+        "returncode": 0,
+        "output_sha256": "e02c64e438fc5635596a4d331f4a3a8d6215380446d921cf48c2981d421b4871",
+        "output_tail": [
+          "Ran 436 tests in 10.036s",
+          "",
+          "OK"
+        ],
+        "started_at": "2026-11-18T04:15:28+00:00"
+      },
+      {
+        "command": "node --test web/tests/model.test.mjs",
+        "returncode": 0,
+        "output_sha256": "63b706e7970f494d907ebb1ed9b6322dd629a354e1691d601216ab256d0ec9e9",
+        "output_tail": [
+          "ℹ skipped 0",
+          "ℹ todo 0",
+          "ℹ duration_ms 74.602125"
+        ],
+        "started_at": "2026-11-18T04:15:38+00:00"
+      }
+    ]
+  },
+  "sources": {
+    "trend": {
+      "path": "fashion-planner-trend",
+      "clean": true,
+      "worktree_sha256": "1fc2db82c4b223b3084580cfadb6618f1d22f205d86f5059ad0bee4450d41310",
+      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "inventory": {
+      "path": "fashion-planner-inventory",
+      "clean": true,
+      "worktree_sha256": "71ded7ffd4d812cd29f871db7dca65e151ca38c0458e5194a9969fcc3e7dd01f",
+      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "novelty": {
+      "path": "fashion-planner-novelty",
+      "clean": true,
+      "worktree_sha256": "04df7023d809981b44e92cdd980460d483f14e488881b179baddf4bd49cadf3a",
+      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "research": {
+      "path": "fashion-planner-research",
+      "clean": true,
+      "worktree_sha256": "900b90cbeb0b73a21dbe16d8d969b52570ba29d2b619e13f46647bc0d20d037e",
+      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "orchestrator": {
+      "path": ".",
+      "clean": true,
+      "worktree_sha256": "39a46b1b4a3465edb39fa1e4e4191aaed97953cd200f014520c5bc53604f487d",
+      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "worktree_fingerprint_excludes": [
+        "contracts/workflow/baseline.json"
+      ]
+    }
+  },
+  "recorded_at": "2026-11-18T04:15:28+00:00",
   "notes": [
-    "Proposed baseline: no producer/consumer validation claimed. Run --freeze to record evidence."
+    "Frozen = contract evidence only (offline fixtures, owner serializer/parser boundary and in-process TCP suites). Live data, model quality and browser acceptance are recorded separately."
   ]
 }
