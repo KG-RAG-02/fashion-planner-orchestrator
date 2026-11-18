@@ -51,7 +51,7 @@ class InputTests(unittest.TestCase):
         self.assertNotIn('RAW USER REQUEST', json.dumps(summary, ensure_ascii=False))
 
     def test_the_research_consumer_projection_reaches_the_market_summary(self):
-        # research main c662d4d sends no fabric unit cost and no price_positioning; nothing stands in for them.
+        # this research response has no fabric unit cost and no price_positioning; nothing stands in for them.
         value = envelope()
         value['result']['sources']['sales_market_review']['raw_response'] = json.loads(
             (FIXTURES / 'research-handoff.consumer-projection.response.json').read_text(encoding='utf-8'))

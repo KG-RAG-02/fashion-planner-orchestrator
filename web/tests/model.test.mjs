@@ -213,7 +213,7 @@ test('planningSheetLink is offered only for a finished run with a safe request i
   assert.equal(m.planningSheetLink(null), null);
 });
 
-test('novelty visuals (workflow-contract 0.2.0) are shown only from verified generated references', () => {
+test('novelty visuals are shown only from verified generated references', () => {
   const sha = 'a'.repeat(64);
   const visuals = m.draftVisuals({
     product: { status: 'generated', artifact: { sha256: sha }, model: 'fixture', reason: null },
@@ -255,7 +255,7 @@ test('evidenceGroups files each trend evidence under the first style citing it, 
   assert.deepEqual(m.evidenceGroups(null), []);
 });
 
-test('research consumer projection (research main c662d4d) keeps its sections, Korean limitations and compact evidence', () => {
+test('research consumer projection keeps its sections, Korean limitations and compact evidence', () => {
   const response = fixture('research-handoff.consumer-projection.response');
   const view = m.reviewView(response);
   assert.equal(view.format, 'native');

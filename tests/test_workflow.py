@@ -16,7 +16,7 @@ CONTRACT_FIXTURES = Path(__file__).resolve().parents[1] / 'tools/workflow_contra
 
 
 def consumer_projection_research_review(request_id, product):
-    """research main c662d4d's response shape (its consumer projection; a fabricated fixture) for this run and product."""
+    """research's response shape (its consumer projection; a fabricated fixture) for this run and product."""
     value = json.loads((CONTRACT_FIXTURES / 'research-handoff.consumer-projection.response.json').read_bytes())
     value['request_id'] = value['result']['request_id'] = request_id
     value['result']['draft_context'] = copy.deepcopy(product)
@@ -243,7 +243,7 @@ class WorkflowTests(unittest.TestCase):
                 'material': {'kind': 'proposal', 'source_ref': 'novelty.draft.product_profile.material', 'evidence_ids': []}}})
 
     def test_novelty_trend_basis_and_the_research_consumer_projection_pass_every_check(self):
-        """A Draft with draft.trend_basis (novelty rule, 2026-11-17) and research main c662d4d's response run end to end."""
+        """A Draft with draft.trend_basis and research's current response run end to end."""
         from fashion_planner_orchestrator.planning_sheet import build_sheet, draft_trend_citations, focus_stock, focus_trend
         # Two Trend styles and a Draft that cites neither: without trend_basis the focus would be the first style,
         # so the focus below is the basis's doing.
@@ -930,7 +930,7 @@ def _png(colour, size=(48, 72)):
 
 @unittest.skipUnless(importlib.util.find_spec('jsonschema') and importlib.util.find_spec('PIL'), 'Install the workflow extra.')
 class DraftVisualsWorkflowTests(unittest.TestCase):
-    """workflow-contract 0.2.0: novelty returns the product and outfit images; stage 06 composes the planning sheet."""
+    """novelty returns the product and outfit images; stage 06 composes the planning sheet."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='orchestrator-visuals-')

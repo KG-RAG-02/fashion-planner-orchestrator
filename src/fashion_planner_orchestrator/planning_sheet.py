@@ -68,7 +68,7 @@ FOOTER_NOTE = '검토용 초안 · 근거 미연결 값은 확정 사실이 아�
 FIXTURE_IMAGE_MARKER = 'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=fixture'
 # novelty writes this limitation into the Draft when its visuals come from the offline fixture provider.
 DRAFT_FIXTURE_MARKER = 'NOVELTY_DRAFT_IMAGE_PROVIDER=fixture'
-# workflow-contract 0.2.0: the two novelty visuals of a Draft (draft.visuals), in display order.
+# The two novelty visuals of a Draft (draft.visuals), in display order.
 DRAFT_VISUALS = (('product', '신상품 · Product'), ('outfit', '착장 · Outfit'))
 MAX_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024
 
@@ -393,7 +393,7 @@ def _finance(result: Mapping[str, Any]) -> BoardSection:
 
 @dataclass(frozen=True)
 class DraftVisual:
-    """One novelty visual (draft.visuals.product | outfit, workflow-contract 0.2.0)."""
+    """One novelty visual (draft.visuals.product | outfit)."""
     key: str
     label: str
     status: str | None
@@ -520,7 +520,7 @@ def focus_trend(result: Mapping[str, Any]) -> Mapping[str, Any]:
     function: the poster's Analysis column, its stock card (focus_stock), the trend photos and the SWOT input.
 
     novelty selects one primary trend by its rule and records it in the Draft as
-    ``draft.trend_basis.source_style_id`` (user decision 2026-11-17); the focus is the Trend style with that id.
+    ``draft.trend_basis.source_style_id``; the focus is the Trend style with that id.
     A Draft without that id (runs recorded before it), or whose id matches no style of the stored Trend result,
     keeps the earlier rule: the Trend result has no defined order (trend does not order its styles), so the focus is the
     style whose article the Draft cites most; the first style when the Draft cites none (or on a tie).

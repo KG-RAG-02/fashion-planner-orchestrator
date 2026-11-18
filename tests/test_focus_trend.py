@@ -29,7 +29,7 @@ def result(draft, trends=None):
 
 
 def basis(style_id, name='카우보이 스타일'):
-    """draft.trend_basis as novelty records it (novelty 25a4ff3; only source_style_id is read here)."""
+    """draft.trend_basis as novelty records it (only source_style_id is read here)."""
     return {'source_style_id': style_id, 'name': name, 'selection_rule': 'most_evidence_linked_design_attributes/1',
             'evidence_ids': [], 'design_attributes': [], 'candidates_considered': 2}
 
@@ -56,7 +56,7 @@ class FocusTrendTests(unittest.TestCase):
 
 
 class TrendBasisTests(unittest.TestCase):
-    """draft.trend_basis (novelty selects one primary trend; user decision 2026-11-17)."""
+    """draft.trend_basis (novelty selects one primary trend)."""
 
     def test_focus_is_the_style_the_draft_names_as_its_basis(self):
         value = result({**CITES_990107, 'trend_basis': basis('990101-s0')})

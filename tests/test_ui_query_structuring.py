@@ -83,7 +83,7 @@ class StructuringTests(unittest.TestCase):
         self.assertEqual(out["trend_input_preview"]["forwarded"], {"items": ["i1"], "seasons": 1})
 
     def test_a_sleeve_length_alone_reaches_trend_with_its_season(self):
-        # the query reported on 2026-11-12 ("2027SS 여성 반팔 제작하고 싶어")
+        # a reported query ("2027SS 여성 반팔 제작하고 싶어")
         draft = flat_draft([("반팔", "반팔")], conditions=[
             {"raw": "여성", "kind": "gender", "polarity": "include", "suggestion": "여", "item": None}],
             seasons=[{"year": 2027, "season": "SS", "raw": "2027SS"}])

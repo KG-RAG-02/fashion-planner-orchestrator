@@ -116,7 +116,7 @@ class BoardMappingTests(unittest.TestCase):
         self.assertIn('UPSTREAM_TIMEOUT: timed out', section.notes)
 
     def test_novelty_concept_and_visuals_are_mapped_from_the_draft(self):
-        # workflow-contract 0.2.0: draft.concept gives the product definition; draft.visuals are the LOOK images.
+        # draft.concept gives the product definition; draft.visuals are the LOOK images.
         sheet = build_sheet(fixture('integrated-visuals-ok'))
         self.assertEqual(sheet.concept_line.text, '합성 셔츠 콘셉트 (fixture)')
         self.assertEqual([(v.key, v.status, v.model) for v in sheet.visual.draft_visuals],
@@ -146,7 +146,7 @@ class BoardMappingTests(unittest.TestCase):
                          ('합성 주 타깃', '합성 타깃 가설 문장', ('보조 타깃',), ('출퇴근', '주말')))
 
     def test_research_consumer_projection_fills_the_market_column(self):
-        # research main c662d4d: Korean limitations, no fabric unit_cost (listing references are not verified costs, so
+        # research's consumer projection: Korean limitations, no fabric unit_cost (listing references are not verified costs, so
         # the sheet shows no 소재 원가 row), compact evidence, target hypothesis without price_positioning.
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
         research = fixture('research-handoff.consumer-projection.response')

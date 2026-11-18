@@ -8,7 +8,7 @@
     "source_files": [
       {
         "path": "src/fashion_planner_orchestrator/workflow_http.py",
-        "sha256": "868daa07556691b7e2855933223297b19d3ed7388ccb3607154f570fd75edc4f"
+        "sha256": "48ab0d3b5a890b15ec2c588bc57b9e3e9c72b6bcf56168e031981a645cf36ba2"
       },
       {
         "path": "src/fashion_planner_orchestrator/workflow_store.py",

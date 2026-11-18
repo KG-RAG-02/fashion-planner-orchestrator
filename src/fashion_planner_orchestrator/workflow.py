@@ -80,7 +80,7 @@ class Workflow:
                  draft_mode='draft_with_visuals', trend_photos=None, swot=None):
         require(draft_mode in DRAFT_MODES, 'DRAFT_MODE_INVALID')
         self.adapters = dict(trend=trend, stock=stock, planning_draft=draft, sales_market_review=review)
-        # novelty handoff/0.3 currently returns the native draft without orchestrator image references.
+        # novelty returns its own draft without orchestrator image references.
         self.draft_mode = draft_mode
         self.image, self.store, self.contract = image, store, contract
         self.artifact_reader = artifact_reader
@@ -312,7 +312,7 @@ class Workflow:
             # Crash after provider invocation must not silently issue a second charge.
             body['final_image'] = dict(status='failed', artifact=None, lineage=lineage, reason='IMAGE_OUTCOME_UNKNOWN', provider_calls=1)
         else:
-            # Stage 06 (workflow-contract 0.2.0): the planning sheet (기획안 사진) composed from this run. The
+            # Stage 06: the planning sheet (기획안 사진) composed from this run. The
             # provider sees the run as it stands (stages 1-5, this stage pending as generated) and reads the novelty
             # visuals through the store; orchestrator calls no image model. The trend photos and the SWOT draft need the
             # network or an LLM, so they are gathered before the 'started' marker: a crash while waiting for them
@@ -460,7 +460,7 @@ class Workflow:
                         sources={s: None for s in STAGES[:4]}, stages=[], integration=None,
                         final_image=dict(status='skipped', artifact=None, lineage=None, reason='No eligible review.', provider_calls=0),
                         limitations=['Only the first item and first season are searched; full user text is retained.',
-                                     'novelty handoff/0.3 receives PlanningRequest, Trend result and Stock result only; user image references are not forwarded.',
+                                     'novelty receives the planning request and the trend and inventory results only; user image references are not forwarded.',
                                      'Trend receives a text search query.',
                                      *self.limitations],
                         errors=[], rejected_response_artifacts=[],

@@ -95,7 +95,7 @@ def post_wire(url, payload, token=None, *, connect_timeout=WORKFLOW_CONNECT_TIME
         conn.close()
 
 
-# Stage 06 providers (workflow-contract 0.2.0, 2026-11-13 decision): orchestrator calls no image model. The product and worn
+# Stage 06 providers: the orchestrator calls no image model. The product and worn
 # (outfit) images are novelty's Draft visuals; stage 06 composes the planning sheet (기획안 사진) from the run.
 IMAGE_PROVIDERS = ('planning_sheet', 'fixture')
 FIXTURE_IMAGE_LIMITATION = ('Final image comes from the deterministic local fixture provider '

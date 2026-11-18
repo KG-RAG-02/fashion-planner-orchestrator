@@ -8,7 +8,7 @@ protected by the trusted-local policy, not by the inter-service token).
   python deploy/e2e/run_e2e.py --base http://127.0.0.1:18765 --profile stub \
       --trend-query deploy/e2e/queries/stub-trend-query.json --out .local/e2e/stub.json
 
-Profiles (workflow-contract 0.2.0: novelty makes the product and worn images, stage 06 composes the planning sheet):
+Profiles (novelty makes the product and worn images, stage 06 composes the planning sheet):
   stub       explicit TrendQuery, novelty fixture visuals; expects all six stages ok and the composed sheet
   rehearsal  explicit TrendQuery against real Aura/R2 data, novelty fixture visuals; zero paid calls
   live       free-text query structured by the LLM, novelty OpenAI visuals (2 image calls); a single run, no retries

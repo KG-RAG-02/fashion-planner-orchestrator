@@ -151,7 +151,7 @@ CONTRACT_EXAMPLES = {
 POLICY_KEYS = {"additionalProperties", "required", "default", "minLength", "$schema"}
 
 # Every shape difference between trend's TrendQuery snapshot and StructuredQuery 1.0 at the document level.
-# (kind, path) -> reason. Since the per-item grouping (2026-11-11) the whole `requested` block and the
+# (kind, path) -> reason. Since the per-item grouping the whole `requested` block and the
 # top-level `unsupported` list are replaced, so the finer differences inside an item (match on every value,
 # attribute include/exclude per kind, gender lists, polarity, closed unsupported types, major never null)
 # are pinned by the model tests above instead of by this comparison. Any other difference fails.
@@ -263,7 +263,7 @@ class StructuredQueryValidationTests(unittest.TestCase):
     # --- items -----------------------------------------------------------------------------------
 
     def test_conditions_belong_to_an_item(self):
-        # the flat shape of 2026-11-10 is gone: no top-level `requested` / `unsupported`
+        # the old flat shape is gone: no top-level `requested` / `unsupported`
         for key, value in (("requested", {}), ("unsupported", [])):
             with self.subTest(key=key):
                 document = copy.deepcopy(EXAMPLE_1)

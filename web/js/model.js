@@ -262,7 +262,7 @@ export function draftView(draftResult) {
   };
 }
 
-// workflow-contract 0.2.0: novelty returns the product image and the worn (outfit) image with the Draft.
+// novelty returns the product image and the worn (outfit) image with the Draft.
 const DRAFT_VISUALS = Object.freeze([['product', '신상품'], ['outfit', '착장']]);
 
 export function draftVisuals(visuals) {
