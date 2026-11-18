@@ -179,8 +179,8 @@
 <title>res&#45;&gt;r2</title>
 <path fill="none" stroke="#1f2328" stroke-width="1.2" d="M651.43,-129.99C603.84,-109.31 530.02,-77.23 478.65,-54.91"/>
 <polygon fill="#1f2328" stroke="#1f2328" stroke-width="1.2" points="479.67,-52.68 472.27,-52.14 477.72,-57.18 479.67,-52.68"/>
-<text xml:space="preserve" text-anchor="middle" x="612.98" y="-97.09" font-family="Pretendard" font-size="10.00" fill="#1f2328">H&amp;M 집계</text>
-<text xml:space="preserve" text-anchor="middle" x="612.98" y="-84.34" font-family="Pretendard" font-size="10.00" fill="#1f2328">스냅샷</text>
+<text xml:space="preserve" text-anchor="middle" x="634.83" y="-96.85" font-family="Pretendard" font-size="10.00" fill="#1f2328">H&amp;M 집계</text>
+<text xml:space="preserve" text-anchor="middle" x="634.83" y="-84.1" font-family="Pretendard" font-size="10.00" fill="#1f2328">스냅샷</text>
 </g>
 <!-- fx -->
 <g id="node12" class="node">

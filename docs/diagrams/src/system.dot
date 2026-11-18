@@ -54,7 +54,7 @@ digraph system {
   nov   -> openai [label="컨셉 텍스트,\n이미지", style=dashed];
   res   -> openai [label="타깃\n가설", style=dashed];
   res   -> fx;
-  res   -> r2     [label="H&M 집계\n스냅샷"];
+  res   -> r2     [taillabel="H&M 집계\n스냅샷", labeldistance=4, labelangle=42];
   ledger -> store [label="이미지: 읽기 전용 볼륨,\nsha256 확인", style=dashed, constraint=false];
   orch  -> openai [label="질의 구조화,\nSWOT 초안", style=dashed, constraint=false];
 }
