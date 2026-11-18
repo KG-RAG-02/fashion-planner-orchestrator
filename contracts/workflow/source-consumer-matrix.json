@@ -2,42 +2,6 @@
   "state": "proposed",
   "baseline_version": "workflow-contract/0.5.0",
   "public_transport_version": "vogue-workflow/0.2",
-  "source_checkouts": {
-    "P08": {
-      "branch": "feat/merge-newP-salesM",
-      "head": "b259b97",
-      "origin_main": "b259b97",
-      "working_tree": "pre-existing local modifications preserved; P08 contract alignment in progress"
-    },
-    "Trend": {
-      "branch": "main",
-      "head": "4a2086a",
-      "main": "4a2086a",
-      "origin_main": "4a2086a",
-      "working_tree": "clean"
-    },
-    "Stock": {
-      "branch": "main",
-      "head": "f483bdf",
-      "main": "f483bdf",
-      "origin_main": "f483bdf",
-      "working_tree": "clean"
-    },
-    "P06": {
-      "branch": "feat/integrate-e2e",
-      "head": "ee02ebf",
-      "main": "f42bda6",
-      "origin_main": "040ae89",
-      "working_tree": "clean; P08 reads local main contract only"
-    },
-    "P07": {
-      "branch": "main",
-      "head": "2738e9f",
-      "main": "2738e9f",
-      "origin_main": "2738e9f",
-      "working_tree": "clean; P08 reads main contract only"
-    }
-  },
   "flow": [
     {
       "from": "P08",

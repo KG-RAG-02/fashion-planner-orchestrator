@@ -4,7 +4,7 @@
   "transport_version": "vogue-workflow/0.2",
   "state": "proposed",
   "producer_consumer_validated": false,
-  "snapshot_sha256": "f608090ab18fefbe2468a73a8264dd175b323abf6e14cd9fcc518fb3ed5397f4",
+  "snapshot_sha256": "677397c7e21c808a3e9d1afce8aa366b651434fb4fa04baa1afbaff28c018815",
   "files": {
     "common.schema.json": "76f30ce0969edcdde6ddc736ea01788fc249d3016f8392eaa408f7230e6c0f28",
     "integrated-result.schema.json": "ae869fb216f57ebbd508f4807ae0fb7882b0d110446a5b5a082564d92260efb9",
@@ -13,13 +13,13 @@
     "sales-market-review-error.schema.json": "b9f2315469a4edd19370f5b5009aa298454213b57158965f6d8a73f4ce22a156",
     "sales-market-review-request.schema.json": "f34fcdcc46b78b667f5b3a2091c0bbb009667f407be9439c18e4facfec63b7f1",
     "sales-market-review-response.schema.json": "7256537b970283a32e408da0c439c24b33a20dda22a81e53558876b9696b5273",
-    "source-consumer-matrix.json": "9713ecc9716c8f1eba318ca5906f064f142f4c1ccd658e4d573ef54cc1d69604",
+    "source-consumer-matrix.json": "28bdb456b3169419fc1eb845e0c756533b229fb277278faaf0a207b42d50499e",
     "upstream/stock-result-1.0.schema.json": "f2b6984bb37cca4333559e4e05b88312ecf511f578803adee51885c344e6ce00",
     "upstream/trend-result-1.1.schema.json": "7618fb459eb68f56bb12d2c5b171ff0a1fcd066a9ae987c2b4f9a3095d74dbef"
   },
   "evidence": {},
   "sources": {},
-  "recorded_at": "2026-11-15T06:39:23+00:00",
+  "recorded_at": "2026-11-18T02:52:50+00:00",
   "notes": [
     "Proposed baseline: no producer/consumer validation claimed. Run --freeze to record evidence."
   ]
