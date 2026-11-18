@@ -15,8 +15,6 @@ from .connectors import (ConnectorConfigurationError, WORKFLOW_CONNECT_TIMEOUT_S
                          WORKFLOW_READ_TIMEOUT_SECONDS, _service_url, timeout_seconds)
 from .swot import SwotWriter, enabled as swot_enabled, load_swot
 from .trend_photos import TrendPhotos, enabled as trend_photos_enabled, load_trend_photos
-from .upstream_projection import (CURRENT_P06_INPUT_PROJECTION, P06_INPUT_PROJECTIONS, RAW,
-                                  p06_input_projection_valid)
 from .workflow import PEER_NAMESPACES, Workflow, WireResponse, StageFailure
 from .workflow_contract import (WorkflowContract, VERSION, DRAFT_MODES, require, contract_gate_status,
                                 development_limitation, truthy)
@@ -130,14 +128,6 @@ def draft_mode(env=None):
     return value if value in DRAFT_MODES else None
 
 
-def p06_input_projection(env=None):
-    """VOGUE_WORKFLOW_P06_INPUT_PROJECTION: what P06 receives of the Trend/Stock results. A registered projection
-    key (default: the current one, p06-input/2) or raw (rollout stage 1: P08 already accepts the projections but
-    still sends the raw results); anything else is None (invalid)."""
-    value = setting(env, 'VOGUE_WORKFLOW_P06_INPUT_PROJECTION').lower() or CURRENT_P06_INPUT_PROJECTION
-    return value if p06_input_projection_valid(value) else None
-
-
 def image_retry_enabled(env=None):
     return truthy((os.environ if env is None else env).get('VOGUE_WORKFLOW_IMAGE_RETRY_ENABLED'))
 
@@ -198,11 +188,6 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
     mode = draft_mode(env)
     if mode is None:
         raise WorkflowUnavailable('DRAFT_MODE_INVALID', 409, 'VOGUE_WORKFLOW_DRAFT_MODE must be draft_with_visuals or draft_only.')
-    projection = p06_input_projection(env)
-    if projection is None:
-        raise WorkflowUnavailable('P06_INPUT_PROJECTION_INVALID', 409,
-                                  'VOGUE_WORKFLOW_P06_INPUT_PROJECTION must be ' + RAW + ' or a registered projection ('
-                                  + ', '.join(P06_INPUT_PROJECTIONS) + ').')
     # P06 generates its two images inside the Draft call, so that one read may take minutes.
     draft_timeout = timeout_seconds(env, 'VOGUE_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS',
                                     max(read_timeout, DRAFT_WITH_VISUALS_READ_TIMEOUT_SECONDS) if mode == 'draft_with_visuals' else read_timeout)
@@ -234,8 +219,7 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
                 trend_photos = TrendPhotos(private, env)
             swot = swot_writer(private, env)
     return Workflow(**adapters, image=image, store=private, contract=contract, artifact_reader=artifact_reader,
-                    limitations=limitations, draft_mode=mode, trend_photos=trend_photos, swot=swot,
-                    p06_input_projection=projection)
+                    limitations=limitations, draft_mode=mode, trend_photos=trend_photos, swot=swot)
 
 
 def swot_writer(private, env=None):

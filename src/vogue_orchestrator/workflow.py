@@ -8,10 +8,10 @@ import http.client
 import json
 import logging
 import time
-from .upstream_projection import CURRENT_P06_INPUT_PROJECTION, p06_input_projection_valid, p06_inputs
+from .upstream_projection import novelty_inputs
 from .workflow_contract import (VERSION, TREND_HANDOFF_VERSION, INVENTORY_HANDOFF_VERSION, NOVELTY_HANDOFF_VERSION,
                                 RESEARCH_HANDOFF_VERSION, PAYLOAD_SCHEMA_VERSION,
-                                STAGES, DRAFT_MODES, p07_review_input, require, require_registered_p06_inputs, walk)
+                                STAGES, DRAFT_MODES, p07_review_input, require, require_novelty_inputs, walk)
 from .workflow_store import ArtifactError, RESOLVER_CODES, canonical, digest, strict_json, checked_image
 
 # Namespaces whose artifacts P08 imports through a reader (conventions section 8): peer review artifacts.
@@ -77,16 +77,11 @@ def stage_failure(exc, artifact=None):
 class Workflow:
     """Injected producers return actual WireResponse bytes. No implicit fallbacks."""
     def __init__(self, *, trend, stock, draft, review, image, store, contract, artifact_reader=None, limitations=(),
-                 draft_mode='draft_with_visuals', trend_photos=None, swot=None,
-                 p06_input_projection=CURRENT_P06_INPUT_PROJECTION):
+                 draft_mode='draft_with_visuals', trend_photos=None, swot=None):
         require(draft_mode in DRAFT_MODES, 'DRAFT_MODE_INVALID')
-        require(p06_input_projection_valid(p06_input_projection), 'P06_INPUT_PROJECTION_INVALID')
         self.adapters = dict(trend=trend, stock=stock, planning_draft=draft, sales_market_review=review)
         # P06 handoff/0.3 currently returns the native draft without P08 image references.
         self.draft_mode = draft_mode
-        # What P06 receives of the Trend/Stock results: a registered projection key, or raw (rollout stage 1).
-        # The run itself always keeps the raw results.
-        self.p06_input_projection = p06_input_projection
         self.image, self.store, self.contract = image, store, contract
         self.artifact_reader = artifact_reader
         # Stage 06 hook (trend_photos.TrendPhotos): the Trend article photos shown on the planning sheet.
@@ -392,11 +387,10 @@ class Workflow:
             return dict(contract_version=INVENTORY_HANDOFF_VERSION, request_id=request_id,
                         input=body['sources']['trend']['raw_response']['result'])
         if stage == 'planning_draft':
-            # P06 gets the configured projection of the results; body['sources'] keeps the raw for the rest of
-            # the run (stage 06, the stored record). Deterministic, so a resumed run rebuilds the same P06 key.
+            # novelty gets the projection of the results; body['sources'] keeps the raw for the rest of the run
+            # (stage 06, the stored record). Deterministic, so a resumed run rebuilds the same novelty key.
             trend, stock = body['sources']['trend'], body['sources']['stock']
-            trend_view, stock_view = p06_inputs(trend['raw_response']['result'], stock['raw_response']['result'],
-                                                self.p06_input_projection)
+            trend_view, stock_view = novelty_inputs(trend['raw_response']['result'], stock['raw_response']['result'])
             return dict(contract_version=NOVELTY_HANDOFF_VERSION, request_id=request_id, input=dict(
                 planning_request=planning_request,
                 trend_result=trend_view,
@@ -480,9 +474,9 @@ class Workflow:
                     payload = self._stage_payload(stage, request_id, planning_request, trend_query, body)
                     if stage == 'planning_draft':
                         # integrated() applies this binding only at the end of the run, after the paid calls;
-                        # an unregistered projection must stop here, before P06 is called.
-                        require_registered_p06_inputs(payload['input'], body['sources']['trend']['raw_response']['result'],
-                                                      body['sources']['stock']['raw_response']['result'])
+                        # a request that is not the projection must stop here, before P06 is called.
+                        require_novelty_inputs(payload['input'], body['sources']['trend']['raw_response']['result'],
+                                               body['sources']['stock']['raw_response']['result'])
                         self.contract.schema(payload, 'planning-draft-request.schema.json')
                     elif stage == 'sales_market_review':
                         self.contract.schema(payload, 'sales-market-review-request.schema.json')
