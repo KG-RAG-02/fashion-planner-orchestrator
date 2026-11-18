@@ -39,7 +39,7 @@ SOURCE_PATHS = {
     "research": ("fashion-planner-research",),
     "orchestrator": (".",),
 }
-# P06 and P07 own their native wire contracts; P08 call-side schemas are not vendored there.
+# novelty and research own their native wire contracts; orchestrator call-side schemas are not vendored there.
 VENDORED = ()
 
 

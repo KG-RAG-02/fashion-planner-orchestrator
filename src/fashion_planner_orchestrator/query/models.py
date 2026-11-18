@@ -5,7 +5,7 @@ contracts/agents/orchestrator/output/structured-query.md. The JSON Schema handed
 contracts/agents/orchestrator/output/structured-query.schema.json, is generated from these models by
 scripts/export_structured_query_schema.py (drift check: tests/test_query_structured_models.py).
 
-Values come from the K-Fashion standard vocabulary owned by trend-analysis-agent (vocabulary.py,
+Values come from the K-Fashion standard vocabulary owned by trend (vocabulary.py,
 plus the two length kinds in contract_vocabulary.py, decision OQ-9′). Each attribute kind has its own
 reference type (ColorRef, ...) so the allowed values are part of the JSON Schema, not only of this
 code (decision X2).

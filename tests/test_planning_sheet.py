@@ -115,7 +115,7 @@ class BoardMappingTests(unittest.TestCase):
         self.assertEqual(section.claims, ())
         self.assertIn('UPSTREAM_TIMEOUT: timed out', section.notes)
 
-    def test_p06_concept_and_visuals_are_mapped_from_the_draft(self):
+    def test_novelty_concept_and_visuals_are_mapped_from_the_draft(self):
         # workflow-contract 0.2.0: draft.concept gives the product definition; draft.visuals are the LOOK images.
         sheet = build_sheet(fixture('integrated-visuals-ok'))
         self.assertEqual(sheet.concept_line.text, '합성 셔츠 콘셉트 (fixture)')
@@ -123,10 +123,10 @@ class BoardMappingTests(unittest.TestCase):
                          [('product', 'generated', 'fixture'), ('outfit', 'generated', 'fixture')])
         self.assertEqual(build_sheet(fixture('integrated-ok')).visual.draft_visuals, ())  # no visuals: one placeholder panel
 
-    def test_p07_price_cost_margin_and_target_are_read_as_reported(self):
+    def test_research_price_cost_margin_and_target_are_read_as_reported(self):
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
-        p07 = json.loads((FIXTURES / 'research-handoff.response.json').read_text(encoding='utf-8'))
-        body = p07['result']
+        research = json.loads((FIXTURES / 'research-handoff.response.json').read_text(encoding='utf-8'))
+        body = research['result']
         body['price_analysis'].update(proposed_price=59000, currency='KRW', unit='KRW')
         # research sets fabric_cost_analysis.unit_cost when a fabric listing gives a per-metre reference.
         body['fabric_cost_analysis'].update(unit_cost=12450.0, unit='KRW/m', currency='KRW')
@@ -137,7 +137,7 @@ class BoardMappingTests(unittest.TestCase):
                            'share_of_customers_with_known_age': 0.597291, 'suppressed': False},
             'proposal': {'proposal': '합성 타깃 가설 문장', 'primary_segment': '합성 주 타깃',
                          'secondary_segments': ['보조 타깃'], 'product_fit': {'wearing_occasions': ['출퇴근', '주말']}}}
-        envelope['result']['sources']['sales_market_review']['raw_response'] = p07
+        envelope['result']['sources']['sales_market_review']['raw_response'] = research
         sheet = build_sheet(envelope)
         self.assertEqual(sheet.price_rows, (('제안 판매가', '59,000원'), ('소재 원가', '12,450원/m'), ('마진율', '56.88%')))
         target = sheet.target
@@ -145,12 +145,12 @@ class BoardMappingTests(unittest.TestCase):
         self.assertEqual((target.primary, target.summary, target.secondary, target.occasions),
                          ('합성 주 타깃', '합성 타깃 가설 문장', ('보조 타깃',), ('출퇴근', '주말')))
 
-    def test_p07_consumer_projection_fills_the_market_column(self):
-        # P07 main c662d4d: Korean limitations, no fabric unit_cost (listing references are not verified costs, so
+    def test_research_consumer_projection_fills_the_market_column(self):
+        # research main c662d4d: Korean limitations, no fabric unit_cost (listing references are not verified costs, so
         # the sheet shows no 소재 원가 row), compact evidence, target hypothesis without price_positioning.
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
-        p07 = fixture('research-handoff.consumer-projection.response')
-        envelope['result']['sources']['sales_market_review']['raw_response'] = p07
+        research = fixture('research-handoff.consumer-projection.response')
+        envelope['result']['sources']['sales_market_review']['raw_response'] = research
         sheet = build_sheet(envelope)
         self.assertEqual(sheet.price_rows, (('제안 판매가', '66,000원'), ('업계 평균 마진 참고치', '56.88%')))
         target = sheet.target
@@ -168,7 +168,7 @@ class BoardMappingTests(unittest.TestCase):
             ('원단 공개 목록: wool 참고 · 공개 원단 목록 1건 · 중앙값 26,000 KRW/m', 'producer_finding'),
             ('H&M 과거 고객 연령 집계: 최대 연령 코호트 20–39 (20s and 30s) · 연령 확인 고객 4,000명 기준 · '
              '기간 2018-09-20–2020-09-22', 'producer_finding')])
-        self.assertEqual(sales.notes, tuple(p07['result']['limitations']))  # Korean, in P07's order
+        self.assertEqual(sales.notes, tuple(research['result']['limitations']))  # Korean, in research's order
         self.assertEqual(sales.notes[0], '[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.')
 
     def test_a_missing_target_stays_missing(self):
@@ -176,7 +176,7 @@ class BoardMappingTests(unittest.TestCase):
         envelope['result']['sources']['sales_market_review']['raw_response'] = json.loads(
             (FIXTURES / 'research-handoff.response.json').read_text(encoding='utf-8'))
         sheet = build_sheet(envelope)
-        self.assertIsNone(sheet.target)  # the synthetic P07 response carries no target analysis
+        self.assertIsNone(sheet.target)  # the synthetic research response carries no target analysis
         self.assertEqual(sheet.price_rows, ())
 
     def test_the_current_new_product_draft_fills_the_design_column(self):
@@ -260,7 +260,7 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
         self.assertGreater(red, 180)
         self.assertLess(green, 80)
 
-    def test_p06_visuals_are_embedded_and_the_final_image_never_is(self):
+    def test_novelty_visuals_are_embedded_and_the_final_image_never_is(self):
         fonts = self.fonts()
         envelope = fixture('integrated-visuals-ok')
         visuals = envelope['result']['sources']['planning_draft']['raw_response']['result']['draft']['visuals']
@@ -280,7 +280,7 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
         self.assertTrue(left[0] > 180 and left[2] < 80, left)
         self.assertTrue(right[2] > 180 and right[0] < 80, right)
 
-    def test_landscape_p06_visuals_are_stacked_full_width(self):
+    def test_landscape_novelty_visuals_are_stacked_full_width(self):
         # OpenAI returns landscape visuals (e.g. 1536x1024); side by side they would be shrunk to a quarter.
         fonts = self.fonts()
         envelope = fixture('integrated-visuals-ok')
@@ -321,7 +321,7 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
         self.assertEqual((left, right), (green, green))
         self.assertNotEqual(png, planning_sheet_png(envelope, load_artifact=lambda artifact: photo((200, 200, 200)), fonts=fonts))
 
-    def test_the_p07_consumer_projection_renders_deterministically(self):
+    def test_the_research_consumer_projection_renders_deterministically(self):
         fonts = self.fonts()
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
         envelope['result']['sources']['sales_market_review']['raw_response'] = fixture('research-handoff.consumer-projection.response')

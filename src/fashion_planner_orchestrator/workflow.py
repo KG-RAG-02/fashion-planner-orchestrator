@@ -11,10 +11,10 @@ import time
 from .upstream_projection import novelty_inputs
 from .workflow_contract import (VERSION, TREND_HANDOFF_VERSION, INVENTORY_HANDOFF_VERSION, NOVELTY_HANDOFF_VERSION,
                                 RESEARCH_HANDOFF_VERSION, PAYLOAD_SCHEMA_VERSION,
-                                STAGES, DRAFT_MODES, p07_review_input, require, require_novelty_inputs, walk)
+                                STAGES, DRAFT_MODES, research_review_input, require, require_novelty_inputs, walk)
 from .workflow_store import ArtifactError, RESOLVER_CODES, canonical, digest, strict_json, checked_image
 
-# Namespaces whose artifacts P08 imports through a reader (conventions section 8): peer review artifacts.
+# Namespaces whose artifacts orchestrator imports through a reader (conventions section 8): peer review artifacts.
 PEER_NAMESPACES = ('research', 'novelty')
 # An upstream that itself answers 503/504 keeps that meaning (the contract's error table): the same
 # codes as a refused connection or a socket timeout, retryable. Every other non-2xx is 502.
@@ -80,7 +80,7 @@ class Workflow:
                  draft_mode='draft_with_visuals', trend_photos=None, swot=None):
         require(draft_mode in DRAFT_MODES, 'DRAFT_MODE_INVALID')
         self.adapters = dict(trend=trend, stock=stock, planning_draft=draft, sales_market_review=review)
-        # P06 handoff/0.3 currently returns the native draft without P08 image references.
+        # novelty handoff/0.3 currently returns the native draft without orchestrator image references.
         self.draft_mode = draft_mode
         self.image, self.store, self.contract = image, store, contract
         self.artifact_reader = artifact_reader
@@ -117,7 +117,7 @@ class Workflow:
     def _call(self, stage, payload, rid, known):
         key = self._key(rid, stage, payload)
         # post_wire sends exactly these bytes; their length is logged to watch the margin to a producer's body
-        # limit (P06 refuses more than 1,000,000 B).
+        # limit (novelty refuses more than 1,000,000 B).
         request_body = canonical(payload)
         cached = self.store.checkpoint(key)
         if cached:
@@ -127,21 +127,21 @@ class Workflow:
                 raw = value.get('raw_response', {})
                 _log_event(logging.INFO, 'workflow_agent_call', request_id=rid, stage=stage,
                            agent_id=STAGE_PRODUCERS[stage], status=raw.get('status', 'cached'),
-                           duration_ms=0.0, upstream_http_ms=0.0, p08_call_overhead_ms=0.0,
+                           duration_ms=0.0, upstream_http_ms=0.0, orchestrator_call_overhead_ms=0.0,
                            retryable=False, fatal=False, cache_hit=True, outbound_attempted=False,
                            request_bytes=len(request_body))
                 return value
             if state == 'failed':
                 _log_event(logging.WARNING, 'workflow_agent_call', request_id=rid, stage=stage,
                            agent_id=STAGE_PRODUCERS[stage], status='error', duration_ms=0.0,
-                           upstream_http_ms=0.0, p08_call_overhead_ms=0.0,
+                           upstream_http_ms=0.0, orchestrator_call_overhead_ms=0.0,
                            retryable=value.get('http_status') in {503, 504}, fatal=True,
                            error_code=value['code'], cache_hit=True, outbound_attempted=False,
                            request_bytes=len(request_body))
                 raise StageFailure(value['code'], value['http_status'], value.get('artifact'))
             _log_event(logging.WARNING, 'workflow_agent_call', request_id=rid, stage=stage,
                        agent_id=STAGE_PRODUCERS[stage], status='error', duration_ms=0.0,
-                       upstream_http_ms=0.0, p08_call_overhead_ms=0.0, retryable=False, fatal=True,
+                       upstream_http_ms=0.0, orchestrator_call_overhead_ms=0.0, retryable=False, fatal=True,
                        error_code='STAGE_OUTCOME_UNKNOWN', cache_hit=True, outbound_attempted=False,
                        request_bytes=len(request_body))
             raise StageFailure('STAGE_OUTCOME_UNKNOWN', 409)
@@ -213,7 +213,7 @@ class Workflow:
                        agent_id=STAGE_PRODUCERS[stage], status=raw['status'],
                        duration_ms=round(duration_ms, 3),
                        upstream_http_ms=round(wire_elapsed_ms, 3) if wire_elapsed_ms is not None else None,
-                       p08_call_overhead_ms=round(max(0.0, duration_ms - wire_elapsed_ms), 3)
+                       orchestrator_call_overhead_ms=round(max(0.0, duration_ms - wire_elapsed_ms), 3)
                        if wire_elapsed_ms is not None else None,
                        retryable=any(bool(e.get('retryable')) for e in producer_errors if isinstance(e, dict)),
                        fatal=raw['status'] == 'error', cache_hit=False, outbound_attempted=True,
@@ -227,16 +227,16 @@ class Workflow:
             _log_event(logging.WARNING, 'workflow_agent_call', request_id=rid, stage=stage,
                        agent_id=STAGE_PRODUCERS[stage], status='error', duration_ms=round(duration_ms, 3),
                        upstream_http_ms=round(wire_elapsed_ms, 3) if wire_elapsed_ms is not None else None,
-                       p08_call_overhead_ms=round(max(0.0, duration_ms - wire_elapsed_ms), 3)
+                       orchestrator_call_overhead_ms=round(max(0.0, duration_ms - wire_elapsed_ms), 3)
                        if wire_elapsed_ms is not None else None,
                        retryable=failure.http_status in {503, 504}, fatal=True, error_code=failure.code,
                        cache_hit=False, outbound_attempted=True, request_bytes=len(request_body))
             raise failure from None
 
     def _import_peer_artifacts(self, raw):
-        """Import peer (P07) artifact references through the reader and the store's import_verified.
+        """Import peer (research) artifact references through the reader and the store's import_verified.
 
-        P08's own references are checked by the semantic pass; a peer reference that is not yet in
+        orchestrator's own references are checked by the semantic pass; a peer reference that is not yet in
         the store needs a configured reader (503 ARTIFACT_READER_REQUIRED otherwise).
         """
         prefixes = tuple('artifact://' + namespace + '/' for namespace in PEER_NAMESPACES)
@@ -287,13 +287,13 @@ class Workflow:
         draft, review = sources['planning_draft'], sources['sales_market_review']
         dr, rr = draft['raw_response']['result'], review['raw_response']['result']
         payload = dict(draft_response_sha256=draft['content_sha256'], review_response_sha256=review['content_sha256'], integration=body['integration'])
-        # The current peer contracts do not issue stable draft/review identities. These P08-local IDs
+        # The current peer contracts do not issue stable draft/review identities. These orchestrator-local IDs
         # identify the immutable response bytes retained by this run; they make no producer-side claim.
         rid_tag = digest(body['request_id'])[:16]
-        lineage = dict(draft_identity=dr.get('draft_identity') or dict(draft_id='p08-draft-' + rid_tag, revision=1,
+        lineage = dict(draft_identity=dr.get('draft_identity') or dict(draft_id='orchestrator-draft-' + rid_tag, revision=1,
                                            content_sha256=draft['content_sha256']),
                        draft_response_sha256=draft['content_sha256'],
-                       review_identity=rr.get('review_identity') or dict(review_id='p08-review-' + rid_tag, revision=1,
+                       review_identity=rr.get('review_identity') or dict(review_id='orchestrator-review-' + rid_tag, revision=1,
                                             content_sha256=review['content_sha256']),
                        review_response_sha256=review['content_sha256'], integration_input_sha256=digest(payload))
         rid = body['request_id']
@@ -313,8 +313,8 @@ class Workflow:
             body['final_image'] = dict(status='failed', artifact=None, lineage=lineage, reason='IMAGE_OUTCOME_UNKNOWN', provider_calls=1)
         else:
             # Stage 06 (workflow-contract 0.2.0): the planning sheet (기획안 사진) composed from this run. The
-            # provider sees the run as it stands (stages 1-5, this stage pending as generated) and reads the P06
-            # visuals through the store; P08 calls no image model. The trend photos and the SWOT draft need the
+            # provider sees the run as it stands (stages 1-5, this stage pending as generated) and reads the novelty
+            # visuals through the store; orchestrator calls no image model. The trend photos and the SWOT draft need the
             # network or an LLM, so they are gathered before the 'started' marker: a crash while waiting for them
             # leaves no marker, and a retry composes the sheet instead of reporting IMAGE_OUTCOME_UNKNOWN.
             pending = dict(status='generated', artifact=None, lineage=lineage, reason=None, provider_calls=1)
@@ -396,10 +396,10 @@ class Workflow:
                 trend_result=trend_view,
                 inventory_product_result=stock_view))
         if stage == 'sales_market_review':
-            # P07 0.3: P08 sends the allowlisted product fields of P06's Draft with their per-field provenance.
+            # research 0.3: orchestrator sends the allowlisted product fields of novelty's Draft with their per-field provenance.
             planning_draft = body['sources']['planning_draft']['raw_response']['result']
             return dict(contract_version=RESEARCH_HANDOFF_VERSION, request_id=request_id,
-                        input=p07_review_input(planning_draft, request_id))
+                        input=research_review_input(planning_draft, request_id))
         raise StageFailure('WORKFLOW_STAGE_UNKNOWN', 409)
 
     def _integrate(self, body, request_id, http_status):
@@ -420,11 +420,11 @@ class Workflow:
             if isinstance(item, dict) and isinstance(item.get('value'), str) and item['value'].strip():
                 claims.append(dict(kind='proposal', text=item['value'].strip(), evidence_refs=[]))
         if not claims:
-            claims.append(dict(kind='interpretation', text='P06 Draft and P07 product review were retained for this request.', evidence_refs=[]))
+            claims.append(dict(kind='interpretation', text='novelty Draft and research product review were retained for this request.', evidence_refs=[]))
         body['integration'] = dict(claims=claims,
             limitations=list(dict.fromkeys(body['limitations'] + draft.get('limitations', []) + review.get('limitations', []) + [
-                'P07 received only the allowlisted product fields and their per-field provenance under research-handoff, not the complete Draft.',
-                'P07 0.3-proposal does not echo an immutable P06 Draft ID or response hash, so P08 cannot claim that P07 attested to the complete Draft.'])) )
+                'research received only the allowlisted product fields and their per-field provenance under research-handoff, not the complete Draft.',
+                'research 0.3-proposal does not echo an immutable novelty Draft ID or response hash, so orchestrator cannot claim that research attested to the complete Draft.'])) )
         self._trace(body, 'integration', body['sources'], start, body['status'], digest(body['integration']),
                     duration_ms=(time.monotonic() - started_monotonic) * 1000)
         self.store.save_run(request_id, 'progress', self._response(body, http_status))
@@ -460,7 +460,7 @@ class Workflow:
                         sources={s: None for s in STAGES[:4]}, stages=[], integration=None,
                         final_image=dict(status='skipped', artifact=None, lineage=None, reason='No eligible review.', provider_calls=0),
                         limitations=['Only the first item and first season are searched; full user text is retained.',
-                                     'P06 handoff/0.3 receives PlanningRequest, Trend result and Stock result only; user image references are not forwarded.',
+                                     'novelty handoff/0.3 receives PlanningRequest, Trend result and Stock result only; user image references are not forwarded.',
                                      'Trend receives a text search query.',
                                      *self.limitations],
                         errors=[], rejected_response_artifacts=[],
@@ -474,7 +474,7 @@ class Workflow:
                     payload = self._stage_payload(stage, request_id, planning_request, trend_query, body)
                     if stage == 'planning_draft':
                         # integrated() applies this binding only at the end of the run, after the paid calls;
-                        # a request that is not the projection must stop here, before P06 is called.
+                        # a request that is not the projection must stop here, before novelty is called.
                         require_novelty_inputs(payload['input'], body['sources']['trend']['raw_response']['result'],
                                                body['sources']['stock']['raw_response']['result'])
                         self.contract.schema(payload, 'planning-draft-request.schema.json')

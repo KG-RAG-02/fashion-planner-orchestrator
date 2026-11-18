@@ -1,4 +1,4 @@
-"""Independent P08 consumer for the proposed workflow snapshot; no network refs."""
+"""Independent orchestrator consumer for the proposed workflow snapshot; no network refs."""
 from __future__ import annotations
 
 import hashlib
@@ -19,7 +19,7 @@ NOVELTY_HANDOFF_VERSION = 'novelty-handoff'
 RESEARCH_HANDOFF_VERSION = 'research-handoff'
 PAYLOAD_SCHEMA_VERSION = '1.0.0'
 STAGES = ('trend', 'stock', 'planning_draft', 'sales_market_review', 'integration', 'final_image')
-# planning-draft-request input.mode (0.2.0): draft_with_visuals asks P06 for the product and worn (outfit) images.
+# planning-draft-request input.mode (0.2.0): draft_with_visuals asks novelty for the product and worn (outfit) images.
 DRAFT_MODES = ('draft_only', 'draft_with_visuals')
 SCHEMAS = {'trend': ('trend', PAYLOAD_SCHEMA_VERSION, TREND_HANDOFF_VERSION),
            'stock': ('inventory', PAYLOAD_SCHEMA_VERSION, INVENTORY_HANDOFF_VERSION),
@@ -36,24 +36,24 @@ def require(condition, code):
         raise ContractViolation(code)
 
 
-# P06 product profile fields forwarded to P07. Proposal claims are retained as review inputs.
+# novelty product profile fields forwarded to research. Proposal claims are retained as review inputs.
 FORWARDED_CLAIM_KINDS = frozenset({'user_requested', 'evidence_observation', 'proposal'})
-P07_PRODUCT_FIELDS = ('product_type', 'gender', 'season', 'material')
+RESEARCH_PRODUCT_FIELDS = ('product_type', 'gender', 'season', 'material')
 
 
-def p07_review_input(draft, request_id):
-    """The P07 0.3 review input: the allowlisted product fields and, for each, its provenance from P06's profile."""
-    product, evidence = p07_product_projection(draft)
+def research_review_input(draft, request_id):
+    """The research 0.3 review input: the allowlisted product fields and, for each, its provenance from novelty's profile."""
+    product, evidence = research_product_projection(draft)
     return {'request_id': request_id, 'product': product, 'product_evidence': evidence}
 
 
-def p07_product_projection(draft):
-    """The allowlisted product fields P07 receives, read from P06's validated draft.product_profile, and each
+def research_product_projection(draft):
+    """The allowlisted product fields research receives, read from novelty's validated draft.product_profile, and each
     field's provenance (kind, source_ref, evidence_ids).
 
     Category, product type, gender, season, and material are always present. Existing supported claims retain
     their values and provenance. Missing or non-forwardable profile values use deterministic review placeholders
-    with kind 'proposal'; P07 receives the provenance and must treat these as proposals, not confirmed facts."""
+    with kind 'proposal'; research receives the provenance and must treat these as proposals, not confirmed facts."""
     require(isinstance(draft, dict), 'NOVELTY_DRAFT_REQUIRED')
     draft_body = draft.get('draft') if isinstance(draft.get('draft'), dict) else None
     require(draft_body is not None, 'NOVELTY_DRAFT_REQUIRED')
@@ -84,7 +84,7 @@ def p07_product_projection(draft):
     product = {'category': profile_value('category')}
     require(product['category'] and product['category'] == draft_body.get('category'), 'NOVELTY_PRODUCT_CATEGORY_REQUIRED')
 
-    # P07 requires a usable product definition. Preserve sourced/model proposals when present;
+    # research requires a usable product definition. Preserve sourced/model proposals when present;
     # fill missing fields deterministically and label each fallback as a proposal.
     category = product['category']
     fallbacks = {
@@ -94,7 +94,7 @@ def p07_product_projection(draft):
                    and draft_body.get('season').strip() else '미정'),
         'material': '혼방 소재',
     }
-    for key in P07_PRODUCT_FIELDS:
+    for key in RESEARCH_PRODUCT_FIELDS:
         claim = profile.get(key)
         value = profile_value(key)
         if value is None:
@@ -429,7 +429,7 @@ class WorkflowContract:
             call = strict_json(store.verify(review['call_request_artifact']))
             require(call.get('contract_version') == RESEARCH_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'RESEARCH_CALL_ENVELOPE_INVALID')
             draft_value = draft['raw_response']['result']
-            require(call.get('input') == p07_review_input(draft_value, body['request_id']), 'RESEARCH_PRODUCT_PROJECTION_MISMATCH')
+            require(call.get('input') == research_review_input(draft_value, body['request_id']), 'RESEARCH_PRODUCT_PROJECTION_MISMATCH')
         if sources['trend'] and sources['trend']['raw_response']['status'] == 'no_results':
             require(body['status'] == 'no_results', 'TREND_NO_RESULTS_HIDDEN')
         if draft and draft['raw_response']['status'] == 'no_results':
@@ -450,7 +450,7 @@ class WorkflowContract:
                 if draft and 'source_request_sha256' in draft['raw_response']['result']: expected = draft['raw_response']['result']['source_request_sha256']
                 elif draft: expected = draft['call_request_sha256']
                 else:
-                    # No P06 response exists on an upstream failure, so only the locally computed
+                    # No novelty response exists on an upstream failure, so only the locally computed
                     # request fingerprint is available in the trace.
                     expected = stage['input_sha256']
             elif name == 'sales_market_review': expected = draft['content_sha256']
@@ -463,8 +463,8 @@ class WorkflowContract:
             require(draft['raw_response']['status'] in {'ok','partial'} and review['raw_response']['status'] in {'ok','partial'}, 'IMAGE_WITHOUT_VALID_REVIEW')
             line = image['lineage']
             rid_tag = digest(body['request_id'])[:16]
-            draft_identity = draft['raw_response']['result'].get('draft_identity') or dict(draft_id='p08-draft-' + rid_tag, revision=1, content_sha256=draft['content_sha256'])
-            review_identity = review['raw_response']['result'].get('review_identity') or dict(review_id='p08-review-' + rid_tag, revision=1, content_sha256=review['content_sha256'])
+            draft_identity = draft['raw_response']['result'].get('draft_identity') or dict(draft_id='orchestrator-draft-' + rid_tag, revision=1, content_sha256=draft['content_sha256'])
+            review_identity = review['raw_response']['result'].get('review_identity') or dict(review_id='orchestrator-review-' + rid_tag, revision=1, content_sha256=review['content_sha256'])
             expected = dict(draft_identity=draft_identity, draft_response_sha256=draft['content_sha256'],
                             review_identity=review_identity, review_response_sha256=review['content_sha256'],
                             integration_input_sha256=digest(dict(draft_response_sha256=draft['content_sha256'], review_response_sha256=review['content_sha256'], integration=body['integration'])))
@@ -483,7 +483,7 @@ class WorkflowContract:
 
         # The aggregate status must reflect every retained producer result. A producer's
         # partial/no_results must never be downgraded to `ok` or mislabeled as no_results
-        # for the whole workflow. Trend/P06 no_results stop the workflow; all other
+        # for the whole workflow. Trend/novelty no_results stop the workflow; all other
         # incomplete sources and a skipped/failed final image aggregate to `partial`.
         producer_status = {name: source['raw_response']['status']
                            for name, source in sources.items() if source is not None}

@@ -99,10 +99,10 @@ def system_status(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         agents=agents,
         contract={key: gate[key] for key in ('contract_version', 'state', 'consistent', 'frozen', 'gate',
                                              'allow_proposed', 'source', 'problems')},
-        # Stage 06 needs no key: planning_sheet composes the sheet locally (P08 calls no image model).
+        # Stage 06 needs no key: planning_sheet composes the sheet locally (orchestrator calls no image model).
         image=dict(enabled=enabled, provider=provider or 'invalid', retry_enabled=image_retry_enabled(env),
                    ready=enabled and provider is not None),
-        # draft_with_visuals: P06 makes the product and worn images inside the Draft call.
+        # draft_with_visuals: novelty makes the product and worn images inside the Draft call.
         draft=dict(mode=draft_mode(env) or 'invalid'),
         query_structuring=dict(mode='synthetic_fixture' if structuring == 'synthetic_fixture' else 'llm'),
         outbound=dict(private_hosts=hosts, private_hosts_valid=hosts_valid,

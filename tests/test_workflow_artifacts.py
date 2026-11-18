@@ -1,4 +1,4 @@
-"""Artifact naming and resolution (conventions section 8): content-addressed P08 store, peer reader."""
+"""Artifact naming and resolution (conventions section 8): content-addressed orchestrator store, peer reader."""
 import hashlib
 import io
 import os
@@ -26,7 +26,7 @@ def png(color=(10, 20, 30)):
 
 def reference(data, uri=None, **overrides):
     sha = hashlib.sha256(data).hexdigest()
-    value = dict(artifact_id='p07-' + sha[:16], uri=uri or 'artifact://research/reviews/%s.json' % sha, sha256=sha,
+    value = dict(artifact_id='research-' + sha[:16], uri=uri or 'artifact://research/reviews/%s.json' % sha, sha256=sha,
                  media_type='application/json', size_bytes=len(data), immutable=True)
     value.update(overrides)
     return value
@@ -187,7 +187,7 @@ class PeerArtifactReaderTests(unittest.TestCase):
         store.import_verified(self.reference, self.reader(self.reference))
         self.assertEqual(store.verify(self.reference), self.data)
         with self.assertRaises(ValueError):
-            store.import_verified(dict(self.reference, artifact_id='p07-other'), self.data)
+            store.import_verified(dict(self.reference, artifact_id='research-other'), self.data)
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
     def test_build_workflow_wires_the_reader_from_the_environment(self):

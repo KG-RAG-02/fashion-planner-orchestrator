@@ -18,7 +18,7 @@ HAVE_WORKFLOW_EXTRA = bool(importlib.util.find_spec('jsonschema') and importlib.
 
 class BlankSettingTests(unittest.TestCase):
     def test_blank_image_provider_and_draft_mode_mean_the_defaults(self):
-        # 0.2.0: P08 composes the planning sheet (no image model); P06 is asked for its visuals.
+        # 0.2.0: orchestrator composes the planning sheet (no image model); novelty is asked for its visuals.
         for blank in BLANKS:
             with self.subTest(blank=repr(blank)):
                 self.assertEqual(workflow_http.image_provider_name({'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER': blank}), 'planning_sheet')
@@ -53,7 +53,7 @@ class BlankSettingTests(unittest.TestCase):
         self.assertEqual(workflow.draft_mode, 'draft_with_visuals')
         self.assertEqual(wire.call_args_list[0].args, ('http://127.0.0.1:9/v1/agents/trend/runs', {}, 'test-token'))
         self.assertEqual(wire.call_args_list[0].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))
-        # P06 makes its two images inside the Draft call: that read waits up to 600 s.
+        # novelty makes its two images inside the Draft call: that read waits up to 600 s.
         self.assertEqual(wire.call_args_list[1].kwargs, dict(connect_timeout=3.0, read_timeout=600.0))
         # A blank stock read timeout means the general read timeout.
         self.assertEqual(wire.call_args_list[2].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))

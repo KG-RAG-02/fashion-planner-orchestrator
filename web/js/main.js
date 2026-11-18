@@ -33,7 +33,7 @@ const SECTIONS = [
 const state = {
   envelope: null, requestId: null, inFlight: false, poller: null,
   autoScrollActive: false, autoScrollFrame: null, autoScrollLastFrameAt: 0, autoScrollStage: null, autoScrollGateY: 0,
-  p07CallRequest: null, p07CallRequestArtifactId: null, p07CallRequestState: 'unavailable',
+  researchCallRequest: null, researchCallRequestArtifactId: null, researchCallRequestState: 'unavailable',
   md: { decisions: [], integratedSha: null, selected: null, busy: false, message: '' },
   system: null, evidenceTab: 'evidence',
 };
@@ -180,11 +180,11 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
   const result = envelope?.result;
   if (!result) return;
   state.envelope = envelope;
-  const p07ArtifactId = result.sources?.sales_market_review?.call_request_artifact?.artifact_id ?? null;
-  if (p07ArtifactId !== state.p07CallRequestArtifactId) {
-    state.p07CallRequestArtifactId = p07ArtifactId;
-    state.p07CallRequest = null;
-    state.p07CallRequestState = p07ArtifactId ? 'loading' : 'unavailable';
+  const researchArtifactId = result.sources?.sales_market_review?.call_request_artifact?.artifact_id ?? null;
+  if (researchArtifactId !== state.researchCallRequestArtifactId) {
+    state.researchCallRequestArtifactId = researchArtifactId;
+    state.researchCallRequest = null;
+    state.researchCallRequestState = researchArtifactId ? 'loading' : 'unavailable';
   }
   el.results.hidden = false;
   const stageStatus = renderSpine(result, { inFlight });
@@ -210,25 +210,25 @@ function renderEnvelope(envelope, { inFlight = false } = {}) {
     sheetWaiting: waiting('final_image'),
   }));
   updateAutoScrollGate(model.rail(result, { inFlight }), { inFlight });
-  void loadP07CallRequest(result);
+  void loadResearchCallRequest(result);
   setSectionState(el.md, 'settled');
   renderMd();
   if (el.evidenceDialog.open) renderEvidence();
 }
 
-// The P07 request is printed in the side panel's JSON tab ("P07 요청 원문").
-async function loadP07CallRequest(result) {
+// The research request is printed in the side panel's JSON tab ("research 요청 원문").
+async function loadResearchCallRequest(result) {
   const artifactId = result?.sources?.sales_market_review?.call_request_artifact?.artifact_id;
-  if (!artifactId || artifactId !== state.p07CallRequestArtifactId || state.p07CallRequest || state.p07CallRequestState !== 'loading') return;
+  if (!artifactId || artifactId !== state.researchCallRequestArtifactId || state.researchCallRequest || state.researchCallRequestState !== 'loading') return;
   if (!/^[a-f0-9]{64}$/.test(artifactId)) {
-    state.p07CallRequestState = 'error';
+    state.researchCallRequestState = 'error';
     return;
   }
   const requestId = result?.request_id;
   const response = await api.getArtifact(artifactId);
-  if (state.requestId !== requestId || state.p07CallRequestArtifactId !== artifactId) return;
-  state.p07CallRequest = response.ok && response.body && typeof response.body === 'object' && !Array.isArray(response.body) ? response.body : null;
-  state.p07CallRequestState = state.p07CallRequest ? 'loaded' : 'error';
+  if (state.requestId !== requestId || state.researchCallRequestArtifactId !== artifactId) return;
+  state.researchCallRequest = response.ok && response.body && typeof response.body === 'object' && !Array.isArray(response.body) ? response.body : null;
+  state.researchCallRequestState = state.researchCallRequest ? 'loaded' : 'error';
   if (el.evidenceDialog.open) renderEvidence();
 }
 
@@ -300,7 +300,7 @@ function renderEvidence() {
   }
   const result = state.envelope?.result ?? null;
   view.renderEvidence(el.evidenceBody, {
-    result, groups: model.evidenceGroups(result), p07Request: state.p07CallRequest, p07RequestId: state.p07CallRequestArtifactId,
+    result, groups: model.evidenceGroups(result), researchRequest: state.researchCallRequest, researchRequestId: state.researchCallRequestArtifactId,
   }, state.evidenceTab);
 }
 

@@ -3,7 +3,7 @@
 vocabulary.py is generated from the TrendQuery snapshot and stays as it is (the v1 path and
 TrendQuery use it). StructuredQuery adds:
   - two length kinds (decision OQ-9′, 2026-11-10): `body_length` and `sleeve_length`. Their standard
-    values are trend-analysis-agent's own (`BodyLength`, `SleeveLength`, trend docs/schemas/
+    values are trend's own (`BodyLength`, `SleeveLength`, trend docs/schemas/
     vocabulary.md §6) and are taken from the alias dictionary snapshot (alias_data.py), so no new
     standard value is created here (D-29). tests/test_query_structured_models.py pins them.
   - the closed list of `unsupported.type` (decision OQ-3′), shared by the LLM draft (draft.py) and

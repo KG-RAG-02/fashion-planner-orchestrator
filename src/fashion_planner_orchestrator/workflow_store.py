@@ -16,9 +16,9 @@ import stat
 import tempfile
 import warnings
 
-# Conventions section 8: artifact://<namespace>/<relative-path>; P08 mints artifact://orchestrator/blobs/<sha256>.
+# Conventions section 8: artifact://<namespace>/<relative-path>; orchestrator mints artifact://orchestrator/blobs/<sha256>.
 ARTIFACT_URI = re.compile(r'artifact://[A-Za-z0-9_./-]+')
-P08_BLOB_URI = re.compile(r'artifact://orchestrator/blobs/([0-9a-f]{64})')
+ORCHESTRATOR_BLOB_URI = re.compile(r'artifact://orchestrator/blobs/([0-9a-f]{64})')
 SHA256_HEX = re.compile(r'[0-9a-f]{64}')
 MAX_ARTIFACT_BYTES = 16777216  # retained response limit (conventions section 6)
 # Resolver failures that keep their own code and HTTP status (conventions section 8).
@@ -68,8 +68,8 @@ def artifact_path(uri):
     return segments[0], segments[1:]
 
 
-def p08_artifact(sha, media_type, size):
-    """The content-addressed P08 reference: the same bytes always give the same URI."""
+def orchestrator_artifact(sha, media_type, size):
+    """The content-addressed orchestrator reference: the same bytes always give the same URI."""
     return dict(artifact_id=sha, uri='artifact://orchestrator/blobs/' + sha, sha256=sha, media_type=media_type,
                 size_bytes=size, immutable=True)
 
@@ -263,10 +263,10 @@ class WorkflowStore:
             db.execute('INSERT OR IGNORE INTO blob_refs VALUES (?,?,?)', (sha, mime, len(data)))
             if owner is not None:
                 db.execute('INSERT OR IGNORE INTO blob_owners VALUES (?,?)', (sha, owner))
-        return p08_artifact(sha, mime, len(data))
+        return orchestrator_artifact(sha, mime, len(data))
 
     def media_types(self, sha):
-        """[(media_type, size_bytes)] registered for one P08 blob."""
+        """[(media_type, size_bytes)] registered for one orchestrator blob."""
         with self.db() as db:
             return db.execute('SELECT media_type,size_bytes FROM blob_refs WHERE sha=? ORDER BY media_type', (sha,)).fetchall()
 
@@ -288,7 +288,7 @@ class WorkflowStore:
         """Return the bytes of a reference minted or imported by this store (exact metadata match)."""
         if not isinstance(artifact, dict) or not isinstance(artifact.get('uri'), str):
             raise ArtifactError('ARTIFACT_REFERENCE_INVALID')
-        match = P08_BLOB_URI.fullmatch(artifact['uri'])
+        match = ORCHESTRATOR_BLOB_URI.fullmatch(artifact['uri'])
         if match:
             sha, media = match.group(1), artifact.get('media_type')
             if not isinstance(media, str):
@@ -296,7 +296,7 @@ class WorkflowStore:
             with self.db() as db:
                 row = db.execute('SELECT size_bytes FROM blob_refs WHERE sha=? AND media_type=?', (sha, media)).fetchone()
                 owned = owner is None or db.execute('SELECT 1 FROM blob_owners WHERE sha=? AND owner=?', (sha, owner)).fetchone()
-            if not row or not owned or artifact != p08_artifact(sha, media, row[0]):
+            if not row or not owned or artifact != orchestrator_artifact(sha, media, row[0]):
                 raise ArtifactError('ARTIFACT_REFERENCE_INVALID')
             blob = sha
         else:

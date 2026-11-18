@@ -1,13 +1,13 @@
 """Deterministic Planning Sheet PNG rendered from the integrated workflow result.
 
-Presentation only. The input is the integrated-result envelope exactly as P08 stored it. No
+Presentation only. The input is the integrated-result envelope exactly as orchestrator stored it. No
 agent is called, no producer value is recomputed or rewritten, a missing value stays missing
 (미제공 / 미확인, never 0), and long lists are cut with an explicit "+N" count instead of silently.
 
 Layout: a one-product proposal poster. A header (title, season, category, run date) over three columns —
 Analysis (the focus Trend style, see focus_trend: description, colour swatches, material texture chips, article
 photos; the stock product matched to it: image, colour, material, fit, quantity, match reason; the LLM SWOT draft),
-Design (new-product-agent's product definition, LOOK visuals, specification, planning points) and Marketing (target,
+Design (novelty's product definition, LOOK visuals, specification, planning points) and Marketing (target,
 sales & market, price, LLM promotion ideas, MD review points). Agent
 metadata (Evidence IDs, stage statuses, run trace) stays in the stored run and the UI, not on the poster.
 """
@@ -64,11 +64,11 @@ def _claim(text: object, kind: str, ids=()) -> BoardClaim:
 SHEET_FORMAT = 'planning-sheet'
 REVIEW_LABEL = 'MD 검토용 초안 · 자동 승인 아님'
 FOOTER_NOTE = '검토용 초안 · 근거 미연결 값은 확정 사실이 아닙니다 · 승인·발주·생산 가능성 확정이 아닙니다.'
-# P08 writes this limitation itself when the deterministic fixture image provider is used.
+# orchestrator writes this limitation itself when the deterministic fixture image provider is used.
 FIXTURE_IMAGE_MARKER = 'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=fixture'
-# P06 writes this limitation into the Draft when its visuals come from the offline fixture provider.
+# novelty writes this limitation into the Draft when its visuals come from the offline fixture provider.
 DRAFT_FIXTURE_MARKER = 'NOVELTY_DRAFT_IMAGE_PROVIDER=fixture'
-# workflow-contract 0.2.0: the two P06 visuals of a Draft (draft.visuals), in display order.
+# workflow-contract 0.2.0: the two novelty visuals of a Draft (draft.visuals), in display order.
 DRAFT_VISUALS = (('product', '신상품 · Product'), ('outfit', '착장 · Outfit'))
 MAX_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024
 
@@ -223,8 +223,8 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
     if not body:
         return _missing_section(result, 'sales_market_review', 'sales_market', status, body)
     review = _mapping(body.get('review'))
-    # P07's current 0.3 proposal response is its domain review directly, not the
-    # earlier P08 full-Draft wrapper with review.findings/metrics.
+    # research's current 0.3 proposal response is its domain review directly, not the
+    # earlier orchestrator full-Draft wrapper with review.findings/metrics.
     if not review and body.get('schema_version') == '1.0.0':
         review = body
     evidence = {item['evidence_id']: item for item in (_mapping(entry) for entry in _list(review.get('evidence')))
@@ -267,8 +267,8 @@ def _sales(result: Mapping[str, Any]) -> BoardSection:
         for metric in missing:
             reason = metric.get('missing_reason') if isinstance(metric.get('missing_reason'), str) else '원천 없음'
             claims.append(_claim(f'{label}: 미확인 — {reason}', 'to_validate', _evidence_ids(metric.get('evidence_refs'))))
-    # P07 0.3 returns these native research summaries directly; it does not use the older review.findings/metrics
-    # shape above. Summarize the actual values so the Marketing panel contains the evidence P07 analyzed.
+    # research 0.3 returns these native research summaries directly; it does not use the older review.findings/metrics
+    # shape above. Summarize the actual values so the Marketing panel contains the evidence research analyzed.
     if body.get('schema_version') == '1.0.0':
         for row in (_mapping(item) for item in _list(body.get('category_price_comparison'))):
             sample_count = row.get('sample_count')
@@ -393,7 +393,7 @@ def _finance(result: Mapping[str, Any]) -> BoardSection:
 
 @dataclass(frozen=True)
 class DraftVisual:
-    """One P06 visual (draft.visuals.product | outfit, workflow-contract 0.2.0)."""
+    """One novelty visual (draft.visuals.product | outfit, workflow-contract 0.2.0)."""
     key: str
     label: str
     status: str | None
@@ -420,7 +420,7 @@ class PlanningSheet:
     visual: SheetVisual
     started_at: str | None
     # The one-product proposal poster reads these views: one Trend style, the stock product matched to it,
-    # and new-product-agent's concept for the new product.
+    # and novelty's concept for the new product.
     trend: 'TrendFocus | None' = None
     stock: 'StockFocus | None' = None
     concept_line: BoardClaim | None = None
@@ -480,7 +480,7 @@ DRAFT_CLAIM_KEYS = ('opportunity', 'product_definition', 'product_profile', 'att
 
 
 def draft_trend_citations(result: Mapping[str, Any]) -> dict[str, int]:
-    """Article id -> how often new-product-agent's Draft claims cite it (evidence ids 'trend:<article>:...').
+    """Article id -> how often novelty's Draft claims cite it (evidence ids 'trend:<article>:...').
 
     Only the claims that define the proposed product count (DRAFT_CLAIM_KEYS), not the Draft's full evidence list.
     """
@@ -508,7 +508,7 @@ def draft_trend_citations(result: Mapping[str, Any]) -> dict[str, int]:
 
 
 def draft_trend_basis_id(result: Mapping[str, Any]) -> str | None:
-    """The Trend style id new-product-agent's Draft names as the basis of its plan
+    """The Trend style id novelty's Draft names as the basis of its plan
     (``draft.trend_basis.source_style_id``), or None when the Draft carries none (e.g. runs recorded before it)."""
     _, body, _ = _draft_parts(result)
     style_id = _mapping(_mapping(_mapping(body.get('draft')).get('trend_basis'))).get('source_style_id')
@@ -519,10 +519,10 @@ def focus_trend(result: Mapping[str, Any]) -> Mapping[str, Any]:
     """The Trend style the one-product proposal is about. Every reader of the focus style goes through this
     function: the poster's Analysis column, its stock card (focus_stock), the trend photos and the SWOT input.
 
-    new-product-agent selects one primary trend by its rule and records it in the Draft as
+    novelty selects one primary trend by its rule and records it in the Draft as
     ``draft.trend_basis.source_style_id`` (user decision 2026-11-17); the focus is the Trend style with that id.
     A Draft without that id (runs recorded before it), or whose id matches no style of the stored Trend result,
-    keeps the earlier rule: the Trend result has no defined order (trend-analysis-agent R-4), so the focus is the
+    keeps the earlier rule: the Trend result has no defined order (trend R-4), so the focus is the
     style whose article the Draft cites most; the first style when the Draft cites none (or on a tie).
     """
     raw = _raw(result, 'trend')
@@ -531,7 +531,7 @@ def focus_trend(result: Mapping[str, Any]) -> Mapping[str, Any]:
         return {}
     basis = draft_trend_basis_id(result)
     if basis is not None:
-        # P06 keeps the style id as str(style['id']) (TrendCandidate.source_style_id); compare the same way.
+        # novelty keeps the style id as str(style['id']) (TrendCandidate.source_style_id); compare the same way.
         named = next((trend for trend in trends if _mapping(trend.get('style')).get('id') is not None
                       and str(_mapping(trend.get('style'))['id']) == basis), None)
         if named is not None:
@@ -579,7 +579,7 @@ def _trend_focus(result: Mapping[str, Any]) -> TrendFocus | None:
 
 
 def focus_stock(result: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]] | None:
-    """The stock-agent slot (trend_results[]) and product matched to the focus Trend style, or None."""
+    """The inventory slot (trend_results[]) and product matched to the focus Trend style, or None."""
     raw = _raw(result, 'stock')
     body = _mapping(raw.get('result')) if raw else {}
     products = _list(body.get('products'))
@@ -628,7 +628,7 @@ GENDER_LABELS = {'women': '여성', 'men': '남성', 'unisex': '공용'}
 
 @dataclass(frozen=True)
 class ConceptView:
-    """new-product-agent's concept as the Design column shows it."""
+    """novelty's concept as the Design column shows it."""
     line: BoardClaim | None  # product definition
     opportunity: str | None
     findings: tuple[str, ...]
@@ -650,7 +650,7 @@ def _claim_kind(value: Any) -> str:
     return kind if kind in KIND_LABELS else 'proposal'
 
 
-# A parenthesised snake_case source id inside new-product-agent sentences, e.g. "화이트 (trend_analysis_result)".
+# A parenthesised snake_case source id inside novelty sentences, e.g. "화이트 (trend_analysis_result)".
 _SOURCE_TAG = re.compile(r'\s*\((?:[a-z0-9]+_)+[a-z0-9]+\)')
 
 
@@ -660,7 +660,7 @@ def _drop_source_tags(text: str | None) -> str | None:
 
 
 def _concept_view(result: Mapping[str, Any]) -> ConceptView:
-    """Reads the current new-product-agent Draft (top-level product_definition, product_profile, opportunity, ...)
+    """Reads the current novelty Draft (top-level product_definition, product_profile, opportunity, ...)
     and, for runs recorded before that shape, the earlier draft.concept / draft.claims."""
     _, body, _ = _draft_parts(result)
     draft = _mapping(body.get('draft'))
@@ -706,7 +706,7 @@ def _concept_view(result: Mapping[str, Any]) -> ConceptView:
 
 
 def _price_rows(result: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
-    """sales-market-agent price, cost and margin values exactly as reported (research review result); absent values are not shown."""
+    """research price, cost and margin values exactly as reported (research review result); absent values are not shown."""
     raw = _raw(result, 'sales_market_review')
     body = _mapping(raw.get('result')) if raw else {}
     units = {'KRW': '원', 'KRW/m': '원/m', 'USD': ' USD'}
@@ -742,7 +742,7 @@ def _price_rows(result: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
 
 @dataclass(frozen=True)
 class TargetView:
-    """sales-market-agent's target audience: the H&M age cohort (research aggregate) and the LLM target hypothesis."""
+    """research's target audience: the H&M age cohort (research aggregate) and the LLM target hypothesis."""
     age: str | None
     age_note: str | None
     primary: str | None
@@ -1034,7 +1034,7 @@ def _image_size(data: bytes | None) -> tuple[int, int] | None:
 
 
 def _any_landscape(images: Mapping[str, bytes | None]) -> bool:
-    """True when an embedded P06 visual is wider than tall (the outfit is 1536x1024): then the LOOK panels are stacked
+    """True when an embedded novelty visual is wider than tall (the outfit is 1536x1024): then the LOOK panels are stacked
     full width, since side by side a landscape image would shrink to a strip."""
     sizes = [_image_size(data) for data in images.values() if data]
     return any(size is not None and size[0] > size[1] for size in sizes)
@@ -1437,7 +1437,7 @@ def _design(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet, imag
         y += (count * (ph + 40) - 14) if stacked else ph + 26
         y += 8
         models = list(dict.fromkeys(item.model for item in visual.draft_visuals if item.model))
-        note = 'new-product-agent 생성 시안' + (f' · {", ".join(models)}' if models else '') + \
+        note = 'novelty 생성 시안' + (f' · {", ".join(models)}' if models else '') + \
             (' · 로컬 fixture 이미지 — 생성된 컨셉 아님' if visual.draft_fixture else '')
         c.text(x, y, note, 'regular', 9.5, 'red' if any(i.status == 'failed' for i in visual.draft_visuals) else 'ink3')
         y += 24
@@ -1472,7 +1472,7 @@ def _design(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet, imag
         c.text(x, y + 2, f'외 {len(rows) - 10:,}개 — 전체는 실행 기록(JSON)에 있습니다', 'regular', 9.5, 'ink3')
         y += 18
     y += 10
-    # new-product-agent's differentiation first; while it is empty, the stage-06 LLM stand-in (swot.py, prompt v3).
+    # novelty's differentiation first; while it is empty, the stage-06 LLM stand-in (swot.py, prompt v3).
     stand_in = () if view and view.differentiation else tuple(
         text for text in (_mapping(item).get('text') for item in _list(_mapping(_mapping(swot).get('swot')).get('differentiation')))
         if isinstance(text, str) and text.strip())
@@ -1561,7 +1561,7 @@ def _target(c: _Canvas, x: float, y: float, w: float, target: TargetView | None,
         if target.occasions:
             _label(c, x, y, 'OCCASION · 착용 상황', scale=scale)
             y = _pills(c, x, y + 18 * scale, w, target.occasions, limit=4, scale=scale)
-        y = _paragraph(c, x, y, w, 'sales-market-agent LLM 가설 · 검증 필요', size=9.5 * scale, lines=1, color='ink3')
+        y = _paragraph(c, x, y, w, 'research LLM 가설 · 검증 필요', size=9.5 * scale, lines=1, color='ink3')
     return y + 14
 
 
@@ -1586,7 +1586,7 @@ def _marketing(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet,
     c.rect(x, y, w, box_h, 'yellow_lt', 4, 'yellow')
     _label(c, x + 14, y + 10 * sc, 'PRICE', scale=sc)
     c.text(x + 14, y + 26 * sc, price or '미제공', 'bold', 20 * sc, 'ink' if price else 'ink3')
-    sub = 'P07 과거 거래가격을 참고한 연구용 제안 · MD 확인 필요' if price else '판매가 근거 없음 · MD 판단 필요'
+    sub = 'research 과거 거래가격을 참고한 연구용 제안 · MD 확인 필요' if price else '판매가 근거 없음 · MD 판단 필요'
     sub_s = 9.5 * sc
     c.text(x + w - 14 - c.width(sub, 'regular', sub_s), y + 34 * sc, sub, 'regular', sub_s, 'ink3')
     y += box_h + 12
@@ -1651,7 +1651,7 @@ def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_
                draft_unreadable: Sequence[str] = (), trend_photos: Sequence[tuple[bytes, str]] = (),
                swot: Mapping[str, Any] | None = None) -> bytes:
     """A one-product proposal poster in three columns: Analysis (the Trend style with colour, texture and article
-    photos; the stock product matched to it), Design (new-product-agent's concept, LOOK visuals, specification, planning points)
+    photos; the stock product matched to it), Design (novelty's concept, LOOK visuals, specification, planning points)
     and Marketing (target, sales & market, price, promotion ideas, MD review points). Producer values are shown as stored; nothing is
     invented, and absent values stay absent."""
     c = _Canvas(fonts or Fonts())
@@ -1682,7 +1682,7 @@ def planning_sheet_png(envelope: Mapping[str, Any], *, load_artifact: Callable[[
     sheet = build_sheet(envelope)
     image_bytes, unreadable = None, False
     if sheet.visual.draft_visuals:
-        # 0.2.0: embed P06's verified visuals; the final image of such a run is this sheet and is never embedded.
+        # 0.2.0: embed novelty's verified visuals; the final image of such a run is this sheet and is never embedded.
         images, missing = {}, []
         for item in sheet.visual.draft_visuals:
             if item.status != 'generated' or not item.artifact or item.artifact.get('media_type') not in IMAGE_MEDIA:
@@ -1745,7 +1745,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='Render the planning sheet (기획서) PNG of a stored run.')
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument('--input', type=Path, help='integrated-result envelope JSON (GET /api/workflow/runs/{id} body)')
-    source.add_argument('--request-id', help='read the run from a P08 store directory (opened read-only)')
+    source.add_argument('--request-id', help='read the run from an orchestrator store directory (opened read-only)')
     parser.add_argument('--store-dir', type=Path, default=Path(os.environ.get('ORCHESTRATOR_WORKFLOW_STORE_DIR', '.local/workflow')))
     parser.add_argument('--image', type=Path, help='final image bytes to embed when reading --input (optional)')
     parser.add_argument('--output', required=True, help="PNG path, or '-' for stdout")

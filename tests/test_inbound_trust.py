@@ -1,4 +1,4 @@
-"""Inbound trust at P08 (conventions section 5) and the container runtime mode."""
+"""Inbound trust at orchestrator (conventions section 5) and the container runtime mode."""
 import contextlib
 import email.message
 import http.client

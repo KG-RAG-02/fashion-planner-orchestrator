@@ -4,7 +4,7 @@
     "category": "니트웨어",
     "season": "2027SS"
   },
-  "p06_response": {
+  "novelty_response": {
     "contract_version": "novelty-handoff",
     "request_id": "fixture:workflow:001",
     "producer": {
@@ -63,7 +63,7 @@
       },
       "input_evidence": {},
       "limitations": [
-        "P06 합성 부분 결과"
+        "novelty 합성 부분 결과"
       ],
       "errors": [],
       "conflicts": [],
@@ -71,7 +71,7 @@
       "evidence_ids": []
     }
   },
-  "p07_response": {
+  "research_response": {
     "contract_version": "research-handoff",
     "request_id": "fixture:workflow:001",
     "producer": {
@@ -116,7 +116,7 @@
         }
       ],
       "limitations": [
-        "P07 합성 부분 결과"
+        "research 합성 부분 결과"
       ],
       "decision_support": {
         "recommendation": "review_required",

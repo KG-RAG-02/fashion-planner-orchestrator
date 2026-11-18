@@ -15,8 +15,8 @@ FIXTURES = Path(__file__).parent / 'fixtures/workflow'
 CONTRACT_FIXTURES = Path(__file__).resolve().parents[1] / 'tools/workflow_contract/fixtures'
 
 
-def consumer_projection_p07_review(request_id, product):
-    """P07 main c662d4d's response shape (its consumer projection; a fabricated fixture) for this run and product."""
+def consumer_projection_research_review(request_id, product):
+    """research main c662d4d's response shape (its consumer projection; a fabricated fixture) for this run and product."""
     value = json.loads((CONTRACT_FIXTURES / 'research-handoff.consumer-projection.response.json').read_bytes())
     value['request_id'] = value['result']['request_id'] = request_id
     value['result']['draft_context'] = copy.deepcopy(product)
@@ -24,7 +24,7 @@ def consumer_projection_p07_review(request_id, product):
 
 
 def add_second_trend_style(sample, style_id='fixture:style-2', name='합성 블라우스'):
-    """Give the sample run a second Trend style and the stock slot stock-agent returns for it (products[i] ↔
+    """Give the sample run a second Trend style and the stock slot inventory returns for it (products[i] ↔
     trend_results[i]); the stock provenance hash follows the changed Trend result. Returns the new style."""
     trend = sample['input']['trend_response']['raw_response']['result']
     second = copy.deepcopy(trend['trends'][0])
@@ -43,7 +43,7 @@ def add_second_trend_style(sample, style_id='fixture:style-2', name='합성 블�
     return second['style']
 
 
-def native_p07_review(request_id, product, status='ok'):
+def native_research_review(request_id, product, status='ok'):
     return {
         'contract_version': 'research-handoff',
         'request_id': request_id,
@@ -54,7 +54,7 @@ def native_p07_review(request_id, product, status='ok'):
             'producer_id': 'research', 'status': status, 'draft_context': copy.deepcopy(product),
             'category_price_comparison': [], 'material_cost_analysis': [], 'customer_segment_analysis': [],
             'target_audience_analysis': {}, 'margin_estimate': {}, 'evidence': [], 'missing_data': [],
-            'errors': [], 'limitations': ['synthetic P07 response'],
+            'errors': [], 'limitations': ['synthetic research response'],
             'decision_support': {'recommendation': 'review_required', 'ready_for_human_decision': True,
                                  'evidence_areas': {'category_price': False, 'material_cost': False,
                                                     'margin': False, 'customer_segments': False},
@@ -68,7 +68,7 @@ def native_p07_review(request_id, product, status='ok'):
 @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'Install the workflow extra; validated separately with the existing Anaconda runtime.')
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix='p08-workflow-')
+        self.tmp = tempfile.TemporaryDirectory(prefix='orchestrator-workflow-')
         self.addCleanup(self.tmp.cleanup)
         # The store refuses symlinked parents; macOS temp dirs live under the /var -> /private/var link.
         self.store = WorkflowStore(os.path.realpath(self.tmp.name))
@@ -110,7 +110,7 @@ class WorkflowTests(unittest.TestCase):
                     if payload['input']['inventory_product_result']['status'] != 'ok':
                         value['status'] = value['result']['status'] = 'partial'
                 else:
-                    value = native_p07_review(self.rid, payload['input']['product'])
+                    value = native_research_review(self.rid, payload['input']['product'])
             value = self.mutate(stage, value)
             if stage == 'planning_draft':
                 self._last_draft_response = copy.deepcopy(value)
@@ -147,43 +147,43 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.run_flow(), result)
         self.assertEqual(len(self.trace), 5)
 
-    def test_current_p06_p07_native_contracts_run_in_sequence(self):
+    def test_current_novelty_research_native_contracts_run_in_sequence(self):
         calls = {}
-        def p06(payload):
-            calls['p06'] = copy.deepcopy(payload)
+        def novelty(payload):
+            calls['novelty'] = copy.deepcopy(payload)
             product = {'category':'Outerwear','product_type':'Jacket','gender':'women','season':'winter','material':'wool'}
-            calls['p06_product'] = product
+            calls['novelty_product'] = product
             profile = {key:{'value':value,'kind':'user_requested','evidence_ids':[]} for key,value in product.items()}
             result = {'schema_version':'1.0.0','request_id':self.rid,'status':'partial',
                       'draft':{'title':'검증용 Draft','category':'Outerwear','season':'winter','product_profile':profile,
                                'opportunity':{'value':'합성 기회','kind':'interpretation','evidence_ids':[]},
                                'product_definition':{'value':'합성 재킷','kind':'proposal','evidence_ids':[]},
-                               'attributes':[],'limitations':['synthetic P06 response']},'evidence_ids':[],
-                      'input_evidence':{},'limitations':['synthetic P06 response'],'errors':[]}
+                               'attributes':[],'limitations':['synthetic novelty response']},'evidence_ids':[],
+                      'input_evidence':{},'limitations':['synthetic novelty response'],'errors':[]}
             return WireResponse(json.dumps({'contract_version':'novelty-handoff','request_id':self.rid,
                 'producer':{'agent_id':'novelty','schema_version':'1.0.0'},'status':'partial','result':result}).encode())
-        def p07(payload):
-            calls['p07'] = copy.deepcopy(payload)
+        def research(payload):
+            calls['research'] = copy.deepcopy(payload)
             product = payload['input']['product']
-            return WireResponse(json.dumps(native_p07_review(self.rid, product)).encode())
-        self.workflow.adapters['planning_draft'] = p06
-        self.workflow.adapters['sales_market_review'] = p07
+            return WireResponse(json.dumps(native_research_review(self.rid, product)).encode())
+        self.workflow.adapters['planning_draft'] = novelty
+        self.workflow.adapters['sales_market_review'] = research
         self.workflow.image = None
         result = self.run_flow()['envelope']
         self.assertEqual(result['contract_version'], 'fashion-planner-workflow')
-        self.assertEqual(calls['p06']['contract_version'], 'novelty-handoff')
-        self.assertEqual(set(calls['p06']['input']), {'planning_request','trend_result','inventory_product_result'})
-        self.assertEqual(calls.get('p07', {}).get('contract_version'), 'research-handoff', result)
-        self.assertEqual(set(calls['p07']['input']), {'request_id', 'product', 'product_evidence'})
-        self.assertEqual(calls['p07']['input']['product'], {'category':'Outerwear','product_type':'Jacket','gender':'women','season':'winter','material':'wool'})
-        self.assertEqual(calls['p07']['input']['product_evidence'], {
+        self.assertEqual(calls['novelty']['contract_version'], 'novelty-handoff')
+        self.assertEqual(set(calls['novelty']['input']), {'planning_request','trend_result','inventory_product_result'})
+        self.assertEqual(calls.get('research', {}).get('contract_version'), 'research-handoff', result)
+        self.assertEqual(set(calls['research']['input']), {'request_id', 'product', 'product_evidence'})
+        self.assertEqual(calls['research']['input']['product'], {'category':'Outerwear','product_type':'Jacket','gender':'women','season':'winter','material':'wool'})
+        self.assertEqual(calls['research']['input']['product_evidence'], {
             key: {'kind': 'user_requested', 'source_ref': f'novelty.draft.product_profile.{key}', 'evidence_ids': []}
             for key in ('category', 'product_type', 'gender', 'season', 'material')})
         self.assertEqual(result['result']['sources']['planning_draft']['raw_response']['result']['schema_version'], '1.0.0')
         self.assertEqual(result['result']['sources']['sales_market_review']['raw_response']['result']['schema_version'], '1.0.0')
         self.assertTrue(any('does not echo an immutable' in item for item in result['result']['integration']['limitations']))
 
-    def test_p07_http_error_code_is_preserved_as_a_fatal_stage_error(self):
+    def test_research_http_error_code_is_preserved_as_a_fatal_stage_error(self):
         error = {'contract_version': 'research-handoff', 'request_id': self.rid,
                  'error': {'code': 'INVALID_INPUT', 'message': 'Unsupported product field.'}}
         self.workflow.adapters['sales_market_review'] = lambda _payload: WireResponse(
@@ -193,7 +193,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result['result']['errors'][-1]['code'], 'INVALID_INPUT')
         self.assertTrue(result['result']['errors'][-1]['fatal'])
 
-    def test_p07_receives_only_sent_fields_with_their_p06_provenance(self):
+    def test_research_receives_only_sent_fields_with_their_novelty_provenance(self):
         calls = []
         profile = {'category':{'value':'Outerwear','kind':'user_requested','evidence_ids':[]},
                    'material':{'value':'wool blend','kind':'evidence_observation','evidence_ids':['trend:e1','trend:e1']},
@@ -204,10 +204,10 @@ class WorkflowTests(unittest.TestCase):
         self.workflow.adapters['planning_draft'] = lambda _payload: WireResponse(json.dumps({
             'contract_version':'novelty-handoff','request_id':self.rid,
             'producer':{'agent_id':'novelty','schema_version':'1.0.0'},'status':'partial','result':draft_result}).encode())
-        def p07(payload):
+        def research(payload):
             calls.append(copy.deepcopy(payload))
-            return WireResponse(json.dumps(native_p07_review(self.rid, payload['input']['product'])).encode())
-        self.workflow.adapters['sales_market_review'] = p07
+            return WireResponse(json.dumps(native_research_review(self.rid, payload['input']['product'])).encode())
+        self.workflow.adapters['sales_market_review'] = research
         self.workflow.image = None
         result = self.run_flow()['envelope']
         self.assertNotEqual(result['status'], 'error', result['result']['errors'])
@@ -224,14 +224,14 @@ class WorkflowTests(unittest.TestCase):
                              'evidence_ids': ['trend:e1']}}})
         self.contract.semantic(result, self.rid, self.store)
 
-    def test_p07_receives_the_proposed_material_with_its_proposal_kind(self):
-        from fashion_planner_orchestrator.workflow_contract import p07_review_input
+    def test_research_receives_the_proposed_material_with_its_proposal_kind(self):
+        from fashion_planner_orchestrator.workflow_contract import research_review_input
         profile = {'category':{'value':'가디건','kind':'user_requested','evidence_ids':[]},
                    'material':{'value':'울 혼방 니트','kind':'proposal','evidence_ids':[]},
                    'season':{'value':'2026FW','kind':'proposal','evidence_ids':[]},
                    **{key:{'value':None,'kind':'unknown','evidence_ids':[]} for key in ('product_type','gender')}}
         draft = {'evidence_ids': [], 'draft': {'category': '가디건', 'product_profile': profile}}
-        self.assertEqual(p07_review_input(draft, 'req-1'), {
+        self.assertEqual(research_review_input(draft, 'req-1'), {
             'request_id': 'req-1',
             'product': {'category': '가디건', 'product_type': '가디건', 'gender': 'unknown',
                         'season': '2026FW', 'material': '울 혼방 니트'},
@@ -242,8 +242,8 @@ class WorkflowTests(unittest.TestCase):
                 'season': {'kind': 'proposal', 'source_ref': 'novelty.draft.product_profile.season', 'evidence_ids': []},
                 'material': {'kind': 'proposal', 'source_ref': 'novelty.draft.product_profile.material', 'evidence_ids': []}}})
 
-    def test_p06_trend_basis_and_the_p07_consumer_projection_pass_every_check(self):
-        """A Draft with draft.trend_basis (P06 rule, 2026-11-17) and P07 main c662d4d's response run end to end."""
+    def test_novelty_trend_basis_and_the_research_consumer_projection_pass_every_check(self):
+        """A Draft with draft.trend_basis (novelty rule, 2026-11-17) and research main c662d4d's response run end to end."""
         from fashion_planner_orchestrator.planning_sheet import build_sheet, draft_trend_citations, focus_stock, focus_trend
         # Two Trend styles and a Draft that cites neither: without trend_basis the focus would be the first style,
         # so the focus below is the basis's doing.
@@ -260,20 +260,20 @@ class WorkflowTests(unittest.TestCase):
                   'input_evidence': {}, 'limitations': [], 'errors': []}
         sent = []
 
-        def p06(_payload):
+        def novelty(_payload):
             self.trace.append('planning_draft')
             return WireResponse(json.dumps({'contract_version': 'novelty-handoff', 'request_id': self.rid,
                                             'producer': {'agent_id': 'novelty', 'schema_version': '1.0.0'},
                                             'status': 'ok', 'result': result}, ensure_ascii=False).encode())
 
-        def p07(payload):
+        def research(payload):
             self.trace.append('sales_market_review')
             sent.append(copy.deepcopy(payload['input']['product']))
-            review = consumer_projection_p07_review(self.rid, payload['input']['product'])
+            review = consumer_projection_research_review(self.rid, payload['input']['product'])
             return WireResponse(json.dumps(review, ensure_ascii=False).encode())
 
-        self.workflow.adapters['planning_draft'] = p06
-        self.workflow.adapters['sales_market_review'] = p07
+        self.workflow.adapters['planning_draft'] = novelty
+        self.workflow.adapters['sales_market_review'] = research
         envelope = self.run_flow()['envelope']
         self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
         self.assertEqual(sent, [{'category': 'Outerwear', 'product_type': 'Outerwear', 'gender': 'unknown',
@@ -294,52 +294,52 @@ class WorkflowTests(unittest.TestCase):
                       envelope['result']['integration']['limitations'])
 
     def test_user_category_season_and_partial_peer_results_are_preserved(self):
-        scenario = json.loads((FIXTURES/'p06-p07-partial-handoff.json').read_bytes())
+        scenario = json.loads((FIXTURES/'novelty-research-partial-handoff.json').read_bytes())
         request = self.sample['input']
         query = scenario['query']
         request['user_input']['text'] = query
         request['planning_request']['query'] = query
         request['planning_request']['context'] = copy.deepcopy(scenario['planning_context'])
-        p06_raw = scenario['p06_response']
-        p07_raw = scenario['p07_response']
+        novelty_raw = scenario['novelty_response']
+        research_raw = scenario['research_response']
         calls = {}
 
-        def p06(payload):
-            calls['p06'] = copy.deepcopy(payload)
-            return WireResponse(json.dumps(p06_raw, ensure_ascii=False).encode())
+        def novelty(payload):
+            calls['novelty'] = copy.deepcopy(payload)
+            return WireResponse(json.dumps(novelty_raw, ensure_ascii=False).encode())
 
-        def p07(payload):
-            calls['p07'] = copy.deepcopy(payload)
-            return WireResponse(json.dumps(p07_raw, ensure_ascii=False).encode())
+        def research(payload):
+            calls['research'] = copy.deepcopy(payload)
+            return WireResponse(json.dumps(research_raw, ensure_ascii=False).encode())
 
-        self.workflow.adapters['planning_draft'] = p06
-        self.workflow.adapters['sales_market_review'] = p07
+        self.workflow.adapters['planning_draft'] = novelty
+        self.workflow.adapters['sales_market_review'] = research
         self.workflow.image = None
         envelope = self.run_flow()['envelope']
         body = envelope['result']
 
-        self.assertEqual(calls['p06']['input']['planning_request'], request['planning_request'])
-        self.assertEqual(calls['p06']['input']['planning_request']['context'], scenario['planning_context'])
-        # P06's proposed material ('니트', kind proposal) is forwarded too; product_type and gender are always sent,
+        self.assertEqual(calls['novelty']['input']['planning_request'], request['planning_request'])
+        self.assertEqual(calls['novelty']['input']['planning_request']['context'], scenario['planning_context'])
+        # novelty's proposed material ('니트', kind proposal) is forwarded too; product_type and gender are always sent,
         # filled with labelled 'proposal' placeholders when the profile has no value.
-        self.assertEqual(calls['p07']['input']['product'], {'category': '니트웨어', 'product_type': '니트웨어',
+        self.assertEqual(calls['research']['input']['product'], {'category': '니트웨어', 'product_type': '니트웨어',
                                                             'gender': 'unknown', 'season': '2027SS', 'material': '니트'})
-        self.assertEqual(calls['p07']['input']['product_evidence']['material']['kind'], 'proposal')
+        self.assertEqual(calls['research']['input']['product_evidence']['material']['kind'], 'proposal')
         self.assertEqual(body['status'], 'partial')
-        self.assertEqual(body['sources']['planning_draft']['raw_response'], p06_raw)
-        self.assertEqual(body['sources']['sales_market_review']['raw_response'], p07_raw)
-        self.assertEqual(body['sources']['sales_market_review']['raw_response']['result']['missing_data'], p07_raw['result']['missing_data'])
+        self.assertEqual(body['sources']['planning_draft']['raw_response'], novelty_raw)
+        self.assertEqual(body['sources']['sales_market_review']['raw_response'], research_raw)
+        self.assertEqual(body['sources']['sales_market_review']['raw_response']['result']['missing_data'], research_raw['result']['missing_data'])
         self.assertIn('CUSTOMER_AGE_RESEARCH_FAILED', [error['code'] for error in body['errors']])
         self.assertEqual(body['sources']['planning_draft']['raw_response']['result']['draft']['field_origins'],
                          {'category': 'user', 'season': 'user'})
-        for stage, response in (('planning_draft', p06_raw), ('sales_market_review', p07_raw)):
+        for stage, response in (('planning_draft', novelty_raw), ('sales_market_review', research_raw)):
             retained = body['sources'][stage]
             self.assertEqual(retained['content_sha256'], digest(response))
             self.assertEqual(json.loads(self.store.verify(retained['raw_artifact'])), response)
             trace = next(item for item in body['stages'] if item['stage'] == stage)
             self.assertEqual((trace['status'], trace['request_id']), (response['status'], self.rid))
             sent = json.loads(self.store.verify(retained['call_request_artifact']))
-            self.assertEqual(sent, calls['p06' if stage == 'planning_draft' else 'p07'])
+            self.assertEqual(sent, calls['novelty' if stage == 'planning_draft' else 'research'])
 
         downgraded = copy.deepcopy(envelope)
         downgraded['status'] = downgraded['result']['status'] = 'no_results'
@@ -398,9 +398,9 @@ class WorkflowTests(unittest.TestCase):
         call = next(event for event in events if event['event'] == 'workflow_agent_call' and event['stage'] == 'planning_draft')
         self.assertEqual((call['request_id'], call['agent_id'], call['status'], call['upstream_http_ms']),
                          (self.rid, 'novelty', 'ok', 12.5))
-        self.assertGreaterEqual(call['p08_call_overhead_ms'], 0)
-        p07 = next(event for event in events if event['event'] == 'workflow_agent_call' and event['stage'] == 'sales_market_review')
-        self.assertEqual((p07['status'], p07['retryable'], p07['fatal']), ('partial', False, False))
+        self.assertGreaterEqual(call['orchestrator_call_overhead_ms'], 0)
+        research = next(event for event in events if event['event'] == 'workflow_agent_call' and event['stage'] == 'sales_market_review')
+        self.assertEqual((research['status'], research['retryable'], research['fatal']), ('partial', False, False))
         completed = next(event for event in events if event['event'] == 'workflow_stage_completed' and event['stage'] == 'sales_market_review')
         self.assertGreaterEqual(completed['duration_ms'], 0)
         run_event = next(event for event in events if event['event'] == 'workflow_completed')
@@ -633,10 +633,10 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(len(self.trace), 3)
 
     @staticmethod
-    def p07_reference(data):
+    def research_reference(data):
         import hashlib
         sha = hashlib.sha256(data).hexdigest()
-        return dict(artifact_id='p07-review-' + sha[:16], uri='artifact://research/reviews/%s.json' % sha, sha256=sha,
+        return dict(artifact_id='research-review-' + sha[:16], uri='artifact://research/reviews/%s.json' % sha, sha256=sha,
                     media_type='application/json', size_bytes=len(data), immutable=True)
 
     def review_carries(self, reference):
@@ -652,8 +652,8 @@ class WorkflowTests(unittest.TestCase):
         (root / 'research' / 'reviews' / (reference['sha256'] + '.json')).write_bytes(data)
         return root
 
-    def test_p07_artifact_field_is_rejected_because_main_contract_has_no_artifacts(self):
-        self.review_carries(self.p07_reference(b'{"review":"synthetic"}'))
+    def test_research_artifact_field_is_rejected_because_main_contract_has_no_artifacts(self):
+        self.review_carries(self.research_reference(b'{"review":"synthetic"}'))
         result = self.run_flow()
         body = result['envelope']['result']
         self.assertEqual((result['http_status'], body['errors'][-1]['code']), (502, 'CONTRACT_VIOLATION'))
@@ -710,13 +710,13 @@ class WorkflowTests(unittest.TestCase):
         sent = []
         original = self.workflow.adapters['planning_draft']
 
-        def p06(payload):
+        def novelty(payload):
             sent.append(copy.deepcopy(payload))
             return original(payload)
-        self.workflow.adapters['planning_draft'] = p06
+        self.workflow.adapters['planning_draft'] = novelty
         return sent
 
-    def test_p06_receives_the_projection_and_the_run_keeps_the_raw(self):
+    def test_novelty_receives_the_projection_and_the_run_keeps_the_raw(self):
         from fashion_planner_orchestrator.upstream_projection import novelty_inputs
         from fashion_planner_orchestrator.workflow import LOGGER
         trend_raw, stock_raw = self.use_upstream_projection_fixture()
@@ -736,26 +736,26 @@ class WorkflowTests(unittest.TestCase):
         body = envelope['result']
         self.assertEqual(envelope['status'], 'ok', body['errors'])
         self.assertEqual(self.trace, ['trend', 'stock', 'planning_draft', 'sales_market_review', 'final_image'])
-        # The run keeps the raw results, image data included; P06 received the projection.
+        # The run keeps the raw results, image data included; novelty received the projection.
         self.assertEqual(body['sources']['trend']['raw_response']['result'], trend_raw)
         self.assertEqual(body['sources']['stock']['raw_response']['result'], stock_raw)
         self.assertIn('data', body['sources']['stock']['raw_response']['result']['products'][0]['image'])
         trend_view, stock_view = novelty_inputs(trend_raw, stock_raw)
         self.assertEqual((sent[0]['input']['trend_result'], sent[0]['input']['inventory_product_result']), (trend_view, stock_view))
-        # The product's photo reaches P06 once, for the outfit image with the stock item.
+        # The product's photo reaches novelty once, for the outfit image with the stock item.
         self.assertEqual(sent[0]['input']['inventory_product_result']['products'], [stock_raw['products'][0], None])
         self.assertEqual(json.loads(self.store.verify(body['sources']['planning_draft']['call_request_artifact'])), sent[0])
         raw_request = dict(sent[0], input=dict(sent[0]['input'], trend_result=trend_raw, inventory_product_result=stock_raw))
         self.assertLess(len(canonical(sent[0])), len(canonical(raw_request)))
         self.contract.schema(envelope, 'integrated-result.schema.json')
-        self.contract.semantic(envelope, self.rid, self.store)  # integrated(): P06 saw the projection
+        self.contract.semantic(envelope, self.rid, self.store)  # integrated(): novelty saw the projection
         # The call log carries the size of the bytes sent (no payload).
         call = next(e for e in records if e['event'] == 'workflow_agent_call' and e['stage'] == 'planning_draft')
         self.assertEqual(call['request_bytes'], len(canonical(sent[0])))
         self.assertTrue(all('request_bytes' in e for e in records if e['event'] == 'workflow_agent_call'))
 
     def test_stock_still_receives_the_raw_trend_result(self):
-        # Decision B4: only P06 gets the projection. The stock trace and integrated() hash the stored raw result
+        # Decision B4: only novelty gets the projection. The stock trace and integrated() hash the stored raw result
         # rather than the bytes sent, so a regression here would pass both; pin what stock actually receives.
         from fashion_planner_orchestrator.upstream_projection import trend_view
         trend_raw, stock_raw = self.use_upstream_projection_fixture()
@@ -770,7 +770,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
         self.assertEqual(len(sent), 1)
         self.assertEqual(sent[0]['input'], trend_raw)
-        # Meaningful only because P06's view of the same result differs (similar_products, evidence url/title).
+        # Meaningful only because novelty's view of the same result differs (similar_products, evidence url/title).
         self.assertNotEqual(sent[0]['input'], trend_view(trend_raw))
 
     def test_a_changed_projection_stops_before_p06(self):
@@ -809,15 +809,15 @@ class WorkflowTests(unittest.TestCase):
                     result = self.run_flow()
                 body = result['envelope']['result']
                 self.assertEqual(raised, [code])
-                self.assertEqual(self.trace, ['trend', 'stock'])  # the P06 adapter was called 0 times
+                self.assertEqual(self.trace, ['trend', 'stock'])  # the novelty adapter was called 0 times
                 self.assertEqual((result['http_status'], body['errors'][-1]['stage'], body['errors'][-1]['code']),
                                  (502, 'planning_draft', 'CONTRACT_VIOLATION'))
                 self.assertIsNone(body['sources']['planning_draft'])
-                with self.store.db() as db:  # nothing was recorded for a P06 call
+                with self.store.db() as db:  # nothing was recorded for a novelty call
                     rows = db.execute("SELECT value FROM checkpoints WHERE key LIKE '%:request'").fetchall()
                 self.assertEqual(sorted(json.loads(value)['stage'] for (value,) in rows), ['stock', 'trend'])
 
-    def test_p06_binding_accepts_the_projection_only(self):
+    def test_novelty_binding_accepts_the_projection_only(self):
         from fashion_planner_orchestrator.upstream_projection import novelty_inputs
         from fashion_planner_orchestrator.workflow_contract import ContractViolation
         trend_raw, stock_raw = self.use_upstream_projection_fixture()
@@ -827,8 +827,8 @@ class WorkflowTests(unittest.TestCase):
         sent = json.loads(self.store.verify(draft['call_request_artifact']))
         trend_view, stock_view = novelty_inputs(trend_raw, stock_raw)
 
-        def as_if_p06_received(**fields):
-            """The stored run, with the request P06 received replaced (None = field omitted)."""
+        def as_if_novelty_received(**fields):
+            """The stored run, with the request novelty received replaced (None = field omitted)."""
             call = copy.deepcopy(sent)
             for key, value in fields.items():
                 if value is None:
@@ -867,10 +867,10 @@ class WorkflowTests(unittest.TestCase):
         }
         for name, fields in accepted.items():
             with self.subTest(accepted=name):
-                self.contract.integrated(as_if_p06_received(**fields), self.store)
+                self.contract.integrated(as_if_novelty_received(**fields), self.store)
         for name, (fields, code) in rejected.items():
             with self.subTest(rejected=name), self.assertRaisesRegex(ContractViolation, code):
-                self.contract.integrated(as_if_p06_received(**fields), self.store)
+                self.contract.integrated(as_if_novelty_received(**fields), self.store)
 
     def test_an_image_retry_of_a_projected_run_passes_the_binding(self):
         self.use_upstream_projection_fixture()
@@ -883,14 +883,14 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.trace.count('planning_draft'), 1)
         self.contract.semantic(retried['envelope'], self.rid, self.store)
 
-    def test_a_run_that_died_between_p06_and_initial_resumes_without_calling_p06(self):
+    def test_a_run_that_died_between_novelty_and_initial_resumes_without_calling_p06(self):
         from unittest.mock import patch
         from fashion_planner_orchestrator import workflow as workflow_module
 
         class Crash(BaseException):  # stands in for the process dying; run() only catches Exception
             pass
 
-        def dying(draft, request_id):  # building the P07 request: after the P06 call, before 'initial'
+        def dying(draft, request_id):  # building the research request: after the novelty call, before 'initial'
             raise Crash()
 
         keys = []
@@ -904,7 +904,7 @@ class WorkflowTests(unittest.TestCase):
 
         self.use_upstream_projection_fixture()
         with patch.object(Workflow, '_key', recording_key):
-            with patch.object(workflow_module, 'p07_review_input', dying), self.assertRaises(Crash):
+            with patch.object(workflow_module, 'research_review_input', dying), self.assertRaises(Crash):
                 self.run_flow()
             self.assertEqual(self.trace, ['trend', 'stock', 'planning_draft'])
             self.assertIsNone(self.store.run(self.rid))  # no 'initial'
@@ -913,7 +913,7 @@ class WorkflowTests(unittest.TestCase):
             result = self.run_flow()
         envelope = result['envelope']
         self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
-        # Rebuilt from the checkpointed raw results, the projection gives the same P06 key: no second P06 call.
+        # Rebuilt from the checkpointed raw results, the projection gives the same novelty key: no second novelty call.
         self.assertEqual(self.trace, ['trend', 'stock', 'planning_draft', 'sales_market_review', 'final_image'])
         self.assertEqual(len(keys), 2)
         self.assertEqual(keys[0], keys[1])
@@ -930,10 +930,10 @@ def _png(colour, size=(48, 72)):
 
 @unittest.skipUnless(importlib.util.find_spec('jsonschema') and importlib.util.find_spec('PIL'), 'Install the workflow extra.')
 class DraftVisualsWorkflowTests(unittest.TestCase):
-    """workflow-contract 0.2.0: P06 returns the product and outfit images; stage 06 composes the planning sheet."""
+    """workflow-contract 0.2.0: novelty returns the product and outfit images; stage 06 composes the planning sheet."""
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix='p08-visuals-')
+        self.tmp = tempfile.TemporaryDirectory(prefix='orchestrator-visuals-')
         self.addCleanup(self.tmp.cleanup)
         self.store = WorkflowStore(os.path.realpath(self.tmp.name))
         self.contract = WorkflowContract()
@@ -948,7 +948,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
         data = self.images[key]
         sha = digest_bytes(data)
         self.blobs[sha] = data
-        artifact = dict(artifact_id='p06:image:' + sha, uri=f'artifact://novelty/images/{sha}.png', sha256=sha,
+        artifact = dict(artifact_id='novelty:image:' + sha, uri=f'artifact://novelty/images/{sha}.png', sha256=sha,
                         media_type='image/png', size_bytes=len(data), immutable=True)
         if key == 'outfit' and self.outfit_status == 'failed':
             return dict(status='failed', artifact=None, provider_calls=1, model='fixture', prompt_version='fixture-visual/1',
@@ -979,7 +979,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
                 value['status'] = body['status'] = 'partial'
             self._last_draft_response = copy.deepcopy(value)
         else:
-            value = native_p07_review(self.rid, payload['input']['product'])
+            value = native_research_review(self.rid, payload['input']['product'])
         return WireResponse(json.dumps(value, ensure_ascii=False).encode())
 
     def reader(self, node):
@@ -997,7 +997,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
             return workflow.run(request_id=self.rid, user_input=request['user_input'], planning_request=request['planning_request'],
                                 trend_query=dict(request_id=self.rid, original_query=request['user_input']['text']))
 
-    def test_p06_visuals_are_imported_and_stage_06_is_the_composed_sheet(self):
+    def test_novelty_visuals_are_imported_and_stage_06_is_the_composed_sheet(self):
         from PIL import Image
         import io
         from fashion_planner_orchestrator.planning_sheet import build_sheet
@@ -1082,7 +1082,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
         image = result['envelope']['result']['final_image']
         self.assertEqual((image['status'], image['reason']), ('generated', None))
 
-    def test_p06_visuals_without_a_reader_stop_with_artifact_reader_required(self):
+    def test_novelty_visuals_without_a_reader_stop_with_artifact_reader_required(self):
         result = self.run_flow(reader=False)
         self.assertEqual((result['http_status'], result['envelope']['result']['errors'][-1]['code']), (503, 'ARTIFACT_READER_REQUIRED'))
 

@@ -53,7 +53,7 @@ class FixtureImageProviderTests(unittest.TestCase):
                 self.assertEqual(workflow_http.PLANNING_SHEET_LIMITATION in workflow.limitations, expected == 'planning_sheet_image')
 
     def test_invalid_provider_is_a_409_when_images_are_enabled(self):
-        # openai is refused too: since 0.2.0 P08 calls no image model (P06 makes the images).
+        # openai is refused too: since 0.2.0 orchestrator calls no image model (novelty makes the images).
         for provider in ('dall-e', 'openai'):
             with self.subTest(provider=provider):
                 handler = Mock()

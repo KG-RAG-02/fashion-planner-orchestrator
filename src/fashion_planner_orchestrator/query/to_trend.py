@@ -1,4 +1,4 @@
-"""StructuredQuery 1.0 -> TrendQuery (the input trend-analysis-agent knows today). Decisions IT-4, SQ-2, X4, FW-1.
+"""StructuredQuery 1.0 -> TrendQuery (the input trend knows today). Decisions IT-4, SQ-2, X4, FW-1.
 
 The pipeline takes ONE item and ONE season today, so only `items[0]` (the item named first) and
 `seasons[0]` (the season named first) are converted. Everything else stays in the StructuredQuery and

@@ -19,7 +19,7 @@ from .workflow import PEER_NAMESPACES, Workflow, WireResponse, StageFailure
 from .workflow_contract import (WorkflowContract, VERSION, DRAFT_MODES, require, contract_gate_status,
                                 development_limitation, truthy)
 from .workflow_store import (ArtifactError, MD_DECISIONS, PeerArtifactReader, RunStateError, SHA256_HEX,
-                             WorkflowStore, canonical, p08_artifact, strict_json)
+                             WorkflowStore, canonical, orchestrator_artifact, strict_json)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -48,7 +48,7 @@ def store():
 
 
 def peer_artifact_reader(env=None):
-    """PeerArtifactReader rooted at ORCHESTRATOR_PEER_ARTIFACT_ROOT (p07 reviews, p06 visuals), or None when unset."""
+    """PeerArtifactReader rooted at ORCHESTRATOR_PEER_ARTIFACT_ROOT (research reviews, novelty visuals), or None when unset."""
     value = setting(env, 'ORCHESTRATOR_PEER_ARTIFACT_ROOT')
     return PeerArtifactReader(_repo_path(value), namespaces=PEER_NAMESPACES) if value else None
 
@@ -95,15 +95,15 @@ def post_wire(url, payload, token=None, *, connect_timeout=WORKFLOW_CONNECT_TIME
         conn.close()
 
 
-# Stage 06 providers (workflow-contract 0.2.0, 2026-11-13 decision): P08 calls no image model. The product and worn
-# (outfit) images are P06's Draft visuals; stage 06 composes the planning sheet (기획안 사진) from the run.
+# Stage 06 providers (workflow-contract 0.2.0, 2026-11-13 decision): orchestrator calls no image model. The product and worn
+# (outfit) images are novelty's Draft visuals; stage 06 composes the planning sheet (기획안 사진) from the run.
 IMAGE_PROVIDERS = ('planning_sheet', 'fixture')
 FIXTURE_IMAGE_LIMITATION = ('Final image comes from the deterministic local fixture provider '
                             '(ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=fixture): a placeholder, not a generated concept.')
-PLANNING_SHEET_LIMITATION = ('The final image (stage 06) is the planning sheet composed by P08 from this run '
-                             '(ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=planning_sheet); P08 calls no image model. '
-                             'The product and outfit images are P06 Draft visuals.')
-# P06 makes two images inside the Draft call when draft_with_visuals is requested; its reads may take minutes.
+PLANNING_SHEET_LIMITATION = ('The final image (stage 06) is the planning sheet composed by orchestrator from this run '
+                             '(ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=planning_sheet); orchestrator calls no image model. '
+                             'The product and outfit images are novelty Draft visuals.')
+# novelty makes two images inside the Draft call when draft_with_visuals is requested; its reads may take minutes.
 DRAFT_WITH_VISUALS_READ_TIMEOUT_SECONDS = 600.0
 
 
@@ -158,7 +158,7 @@ def planning_sheet_image(payload):
     """Stage 06 provider: the planning sheet PNG of this run (planning_sheet.py), deterministic and local.
 
     ``payload['envelope']`` is the run as it stands when stage 06 starts; ``payload['load_artifact']`` returns
-    verified bytes for the P06 visuals already imported into the store; ``payload['trend_photos']`` are the Trend
+    verified bytes for the novelty visuals already imported into the store; ``payload['trend_photos']`` are the Trend
     article photos stage 06 stored for this run (trend_photos.py). No model is called.
     """
     require(images_enabled(), 'IMAGE_PROVIDER_DISABLED')
@@ -178,7 +178,7 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
         artifact_reader = peer_artifact_reader(env)
     token = setting(env, 'FASHION_PLANNER_SERVICE_TOKEN') or None
     if not token:
-        raise ConnectorConfigurationError('FASHION_PLANNER_SERVICE_TOKEN is required by P07 /reviews.')
+        raise ConnectorConfigurationError('FASHION_PLANNER_SERVICE_TOKEN is required by research /reviews.')
     specs = [('trend','ORCHESTRATOR_TREND_URL','trend/runs'),
              ('stock','ORCHESTRATOR_INVENTORY_URL','inventory/runs'),
              ('draft','ORCHESTRATOR_NOVELTY_URL','novelty/runs'),
@@ -188,7 +188,7 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
     mode = draft_mode(env)
     if mode is None:
         raise WorkflowUnavailable('DRAFT_MODE_INVALID', 409, 'ORCHESTRATOR_WORKFLOW_DRAFT_MODE must be draft_with_visuals or draft_only.')
-    # P06 generates its two images inside the Draft call, so that one read may take minutes.
+    # novelty generates its two images inside the Draft call, so that one read may take minutes.
     draft_timeout = timeout_seconds(env, 'ORCHESTRATOR_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS',
                                     max(read_timeout, DRAFT_WITH_VISUALS_READ_TIMEOUT_SECONDS) if mode == 'draft_with_visuals' else read_timeout)
     # Stock works through the trends one after another (about 10 s each with its LLM agent). Keep this read
@@ -208,7 +208,7 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
         provider = image_provider_name(env)
         if provider is None:
             raise WorkflowUnavailable('IMAGE_PROVIDER_INVALID', 409,
-                                      'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER must be planning_sheet or fixture (P08 calls no image model).')
+                                      'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER must be planning_sheet or fixture (orchestrator calls no image model).')
         if provider == 'fixture':
             image = fixture_image
             limitations = [*limitations, FIXTURE_IMAGE_LIMITATION]
@@ -252,7 +252,7 @@ def _configuration_problem(handler, exc, request_id=None):
 ID_PATTERN = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}')  # common.schema.json#/$defs/id
 
 
-# TrendQuery requested.gender.value (vocabulary GENDERS) -> the P06/P07 product-profile gender values.
+# TrendQuery requested.gender.value (vocabulary GENDERS) -> the novelty/research product-profile gender values.
 REQUESTED_GENDER = {'여': 'women', '남': 'men', '공용': 'unisex'}
 
 
@@ -290,9 +290,9 @@ def dispatch(handler, value):
                 category = categories[0].get('minor') or categories[0].get('major')
                 if category: context['category'] = category
             if context: planning['context'] = context
-            # The user's gender reached Trend and Stock only. P06 reads it from requested_attributes
-            # (name 'gender', value women/men/unisex, source 'user' -> user_requested), and P08 then
-            # forwards that user_requested profile value to P07 (p07_product_projection).
+            # The user's gender reached Trend and Stock only. novelty reads it from requested_attributes
+            # (name 'gender', value women/men/unisex, source 'user' -> user_requested), and orchestrator then
+            # forwards that user_requested profile value to research (research_product_projection).
             gender = REQUESTED_GENDER.get((trend.get('requested', {}).get('gender') or {}).get('value'))
             if gender:
                 planning['requested_attributes'] = [dict(name='gender', value=gender, source='user')]
@@ -600,7 +600,7 @@ def _get_artifact(handler, value):
             return
         rank = lambda item: (not item[0].startswith('image/'), item[0] != 'application/json', item[0])  # noqa: E731
         media, size = sorted(registered, key=rank)[0]
-        meta = p08_artifact(artifact_id, media, size)
+        meta = orchestrator_artifact(artifact_id, media, size)
     else:
         # Legacy artifact://local/<uuid4 hex> rows minted before content addressing.
         require(len(artifact_id) == 32 and all(c in '0123456789abcdef' for c in artifact_id), 'ARTIFACT_ID_INVALID')
@@ -640,4 +640,4 @@ def readiness():
                 endpoint_health='not_checked', authentication='not_verified', schema_compatibility='not_verified',
                 data_verified=False, end_to_end=False, baseline_state=gate['state'], contract_gate=gate['gate'],
                 service_token_configured=bool(os.environ.get('FASHION_PLANNER_SERVICE_TOKEN')),
-                description='Trend → Stock → P06 Draft-only → P07 full Draft Review → P08 final image; MD pending.')
+                description='Trend → Stock → novelty Draft-only → research full Draft Review → orchestrator final image; MD pending.')

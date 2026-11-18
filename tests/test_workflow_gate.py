@@ -150,13 +150,13 @@ class ContractGateTests(unittest.TestCase):
         self.assertEqual(workflow.limitations, (DEV_LIMITATION,))
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
-    def test_build_workflow_requires_p07_bearer_even_in_loopback_development_mode(self):
+    def test_build_workflow_requires_research_bearer_even_in_loopback_development_mode(self):
         from fashion_planner_orchestrator import workflow_http
         from fashion_planner_orchestrator.connectors import ConnectorConfigurationError
         env = {'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': '1', 'FASHION_PLANNER_HTTP_DEV_MODE': '1',
                'ORCHESTRATOR_TREND_URL': 'http://127.0.0.1:9', 'ORCHESTRATOR_INVENTORY_URL': 'http://127.0.0.1:9',
                'ORCHESTRATOR_NOVELTY_URL': 'http://127.0.0.1:9', 'ORCHESTRATOR_RESEARCH_URL': 'http://127.0.0.1:9'}
-        with patch.dict(os.environ, env), self.assertRaisesRegex(ConnectorConfigurationError, 'required by P07 /reviews'):
+        with patch.dict(os.environ, env), self.assertRaisesRegex(ConnectorConfigurationError, 'required by research /reviews'):
             workflow_http.build_workflow()
 
 

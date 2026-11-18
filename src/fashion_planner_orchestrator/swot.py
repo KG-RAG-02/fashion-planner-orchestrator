@@ -1,12 +1,12 @@
 """SWOT and promotion drafts for the planning sheet (stage 06), written by the configured LLM.
 
 Stage 06 builds a compact JSON summary of the stored run — the poster's Trend style, the stock product matched to
-it with stock-agent's indicators (sell-through, stock value, recent trend, score), new-product-agent's concept and
-sales-market-agent's price, cost, margin and target — and asks the model configured for query structuring
+it with inventory's indicators (sell-through, stock value, recent trend, score), novelty's concept and
+research's price, cost, margin and target — and asks the model configured for query structuring
 (``LLM_MODEL`` / ``LLM_API_KEY``, see llm_provider.py) for a SWOT of 0-4 short items per quadrant and 0-3 promotion
-ideas, each naming the inputs it rests on. While new-product-agent leaves ``draft.differentiation`` empty, the same call
+ideas, each naming the inputs it rests on. While novelty leaves ``draft.differentiation`` empty, the same call
 also returns 0-3 differentiation points (new product vs the matched stock product and the trend); the poster uses
-them only when new-product-agent's own list is empty. sales-market-agent's channel/content hypotheses and merchandising actions
+them only when novelty's own list is empty. research's channel/content hypotheses and merchandising actions
 are part of the summary. The answer is validated and kept in the store under ``swot:<request_id>``; the planning-sheet
 route renders that stored draft and never calls the model. A failed or invalid answer leaves the SWOT slot empty
 and never fails the run; a later stage-06 retry calls the model again only when no valid draft was kept.
@@ -196,7 +196,7 @@ def parse_swot(text: str) -> dict[str, list[dict[str, Any]]]:
             raise SwotRejected('PROMOTION_BASIS_INVALID')
         promotions.append({'title': title.strip(), 'text': text_value.strip(), 'basis': list(dict.fromkeys(basis))})
     out['promotions'] = promotions
-    # Differentiation stand-in (prompt v3) while new-product-agent leaves draft.differentiation empty.
+    # Differentiation stand-in (prompt v3) while novelty leaves draft.differentiation empty.
     entries = value.get('differentiation', [])
     if not isinstance(entries, list) or len(entries) > MAX_DIFFERENTIATION:
         raise SwotRejected('DIFFERENTIATION_SHAPE_INVALID')

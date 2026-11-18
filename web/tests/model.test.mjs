@@ -103,7 +103,7 @@ test('the integrated-review-no-results fixture keeps the image skipped and the d
   assert.equal(m.rail(result).at(-1).status, 'skipped');
 });
 
-test('P07 native partial response retains sections and diagnostics', () => {
+test('research native partial response retains sections and diagnostics', () => {
   const response = {
     contract_version: 'research-handoff',
     status: 'partial',
@@ -140,7 +140,7 @@ test('P07 native partial response retains sections and diagnostics', () => {
   assert.ok(payloadView.sections.some(({ key }) => key === 'price_analysis'));
 });
 
-test('P07 input view shows the provenance sent with the 0.3 request', () => {
+test('research input view shows the provenance sent with the 0.3 request', () => {
   const response = { contract_version: 'research-handoff', status: 'partial', result: {
     schema_version: '1.0.0', status: 'partial', errors: [], missing_data: [], limitations: [],
   } };
@@ -151,8 +151,8 @@ test('P07 input view shows the provenance sent with the 0.3 request', () => {
       season: { kind: 'evidence_observation', source_ref: 'novelty.draft.product_profile.season', evidence_ids: ['trend:e1'] },
     },
   } };
-  const p06 = { evidence_ids: [], draft: { product_profile: {} } };  // the sent provenance wins over the Draft
-  const view = m.reviewView(response, request, 'a'.repeat(64), 'loaded', p06);
+  const novelty = { evidence_ids: [], draft: { product_profile: {} } };  // the sent provenance wins over the Draft
+  const view = m.reviewView(response, request, 'a'.repeat(64), 'loaded', novelty);
   assert.equal(view.inputEvidenceSent, true);
   assert.equal(view.inputEvidenceState, 'loaded');
   assert.equal(view.inputFields[0].kind, 'user_requested');
@@ -161,25 +161,25 @@ test('P07 input view shows the provenance sent with the 0.3 request', () => {
   assert.deepEqual(view.inputFields[1].evidenceIds, ['trend:e1']);
 });
 
-test('P07 input view falls back to P06 provenance when the request carries none', () => {
+test('research input view falls back to novelty provenance when the request carries none', () => {
   const response = { contract_version: 'research-handoff', status: 'partial', result: {
     schema_version: '1.0.0', status: 'partial', errors: [], missing_data: [], limitations: [],
   } };
   const request = { contract_version: 'old-handoff', request_id: 'req-1', input: {
     request_id: 'req-1', product: { category: '니트웨어', season: '2027SS' },
   } };
-  const p06 = { evidence_ids: ['trend:e1'], draft: { category: '니트웨어', product_profile: {
+  const novelty = { evidence_ids: ['trend:e1'], draft: { category: '니트웨어', product_profile: {
     category: { value: '니트웨어', kind: 'user_requested', evidence_ids: [] },
     season: { value: '2027SS', kind: 'evidence_observation', evidence_ids: ['trend:e1'] },
   } } };
-  const view = m.reviewView(response, request, 'a'.repeat(64), 'loaded', p06);
+  const view = m.reviewView(response, request, 'a'.repeat(64), 'loaded', novelty);
   assert.equal(view.inputEvidenceSent, false);
   assert.equal(view.inputFields[0].kind, 'user_requested');
   assert.equal(view.inputFields[1].kind, 'evidence_observation');
   assert.deepEqual(view.inputFields[1].evidenceIds, ['trend:e1']);
 });
 
-test('P06 status and provenance diagnostics survive the Draft view mapping', () => {
+test('novelty status and provenance diagnostics survive the Draft view mapping', () => {
   const view = m.draftView({
     schema_version: '1.0.0', status: 'partial',
     draft: {
@@ -213,7 +213,7 @@ test('planningSheetLink is offered only for a finished run with a safe request i
   assert.equal(m.planningSheetLink(null), null);
 });
 
-test('P06 visuals (workflow-contract 0.2.0) are shown only from verified generated references', () => {
+test('novelty visuals (workflow-contract 0.2.0) are shown only from verified generated references', () => {
   const sha = 'a'.repeat(64);
   const visuals = m.draftVisuals({
     product: { status: 'generated', artifact: { sha256: sha }, model: 'fixture', reason: null },
@@ -233,7 +233,7 @@ test('P06 visuals (workflow-contract 0.2.0) are shown only from verified generat
 
 const envelopeWith = (sources) => ({ sources: Object.fromEntries(Object.entries(sources).map(([key, result]) => [key, { raw_response: { contract_version: 'x/1', status: 'ok', result } }])) });
 
-test('evidenceGroups files each trend evidence under the first style citing it, then stock and P07', () => {
+test('evidenceGroups files each trend evidence under the first style citing it, then stock and research', () => {
   const result = envelopeWith({
     trend: {
       trends: [
@@ -255,7 +255,7 @@ test('evidenceGroups files each trend evidence under the first style citing it, 
   assert.deepEqual(m.evidenceGroups(null), []);
 });
 
-test('P07 consumer projection (P07 main c662d4d) keeps its sections, Korean limitations and compact evidence', () => {
+test('research consumer projection (research main c662d4d) keeps its sections, Korean limitations and compact evidence', () => {
   const response = fixture('research-handoff.consumer-projection.response');
   const view = m.reviewView(response);
   assert.equal(view.format, 'native');
@@ -270,13 +270,13 @@ test('P07 consumer projection (P07 main c662d4d) keeps its sections, Korean limi
   assert.deepEqual(view.limitations, response.result.limitations);
   assert.equal(view.limitations[0], '[마진 참고] 미국 의류 업계 평균 매출총이익률 벤치마크이며 이 상품의 실제 마진이 아닙니다.');
   assert.deepEqual(view.missingData, []);
-  const p07 = m.evidenceGroups(envelopeWith({ sales_market_review: response.result })).find((g) => g.anchor === 'ev-sales_market_review');
-  assert.equal(p07.items.length, response.result.evidence.length);
-  const benchmark = p07.items.find((item) => item.raw.source_type === 'industry_gross_margin_benchmark');
+  const research = m.evidenceGroups(envelopeWith({ sales_market_review: response.result })).find((g) => g.anchor === 'ev-sales_market_review');
+  assert.equal(research.items.length, response.result.evidence.length);
+  const benchmark = research.items.find((item) => item.raw.source_type === 'industry_gross_margin_benchmark');
   assert.equal(benchmark.title, 'NYU Stern Damodaran Margins by Sector (US), January 2026');
   assert.match(benchmark.text, /^Sector-level benchmark/);
   assert.equal(benchmark.detail, 'https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/margin.html');
-  assert.equal(benchmark.url, null);  // P07 evidence carries a locator, not a url field
+  assert.equal(benchmark.url, null);  // research evidence carries a locator, not a url field
 });
 
 test('rawFields splits a raw result into anchored fields and points evidence to the evidence tab', () => {

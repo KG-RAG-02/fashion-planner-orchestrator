@@ -262,7 +262,7 @@ export function draftView(draftResult) {
   };
 }
 
-// workflow-contract 0.2.0: P06 returns the product image and the worn (outfit) image with the Draft.
+// workflow-contract 0.2.0: novelty returns the product image and the worn (outfit) image with the Draft.
 const DRAFT_VISUALS = Object.freeze([['product', '신상품'], ['outfit', '착장']]);
 
 export function draftVisuals(visuals) {
@@ -275,8 +275,8 @@ export function draftVisuals(visuals) {
   });
 }
 
-export function reviewView(reviewResult, callRequest = null, callRequestArtifactId = null, callRequestState = 'unavailable', p06Result = null) {
-  // P07's current native response is a partial-capable, analysis-oriented object.
+export function reviewView(reviewResult, callRequest = null, callRequestArtifactId = null, callRequestState = 'unavailable', noveltyResult = null) {
+  // research's current native response is a partial-capable, analysis-oriented object.
   if (!reviewResult || typeof reviewResult !== 'object') return null;
   const result = reviewResult.result && typeof reviewResult.result === 'object' ? reviewResult.result : reviewResult;
   if (!result.schema_version && !result.decision_support && !result.price_analysis && !result.target_audience) return null;
@@ -298,11 +298,11 @@ export function reviewView(reviewResult, callRequest = null, callRequestArtifact
     .map(([key, label]) => ({ key, label, value: result[key], path: result === reviewResult ? key : `result.${key}` }));
   const product = callRequest?.input?.product && typeof callRequest.input.product === 'object' && !Array.isArray(callRequest.input.product)
     ? callRequest.input.product : null;
-  // Under 0.3 P08 sends each field's provenance with the request (input.product_evidence); a run whose
-  // request carries none shows the provenance read from the P06 Draft instead.
+  // Under 0.3 orchestrator sends each field's provenance with the request (input.product_evidence); a run whose
+  // request carries none shows the provenance read from the novelty Draft instead.
   const sentEvidence = callRequest?.input?.product_evidence && typeof callRequest.input.product_evidence === 'object'
     && !Array.isArray(callRequest.input.product_evidence) ? callRequest.input.product_evidence : null;
-  const productEvidence = sentEvidence ?? p06ProductProvenance(p06Result, product);
+  const productEvidence = sentEvidence ?? noveltyProductProvenance(noveltyResult, product);
   const fieldLabels = Object.freeze({
     category: '카테고리', product_type: '상품 종류', gender: '성별', season: '시즌', material: '소재',
   });
@@ -352,7 +352,7 @@ function marketPrice(value, currency) {
   return `${shown}${currency === 'KRW' ? '원' : currency === 'USD' ? ' USD' : currency ? ` ${currency}` : ''}`;
 }
 
-// P07 owns the source values. The workspace shows only a few decision-useful summaries;
+// research owns the source values. The workspace shows only a few decision-useful summaries;
 // the complete response stays available in the JSON panel.
 export function marketView(reviewResult) {
   if (!reviewResult || typeof reviewResult !== 'object') return null;
@@ -371,7 +371,7 @@ export function marketView(reviewResult) {
   const historicalMedian = marketPrice(priceStats.median, priceStats.currency ?? priceStats.unit);
   if (proposedPrice || historicalMedian || sampleSize != null) {
     const note = [
-      proposedPrice ? 'P07 연구용 제안' : 'H&M 과거 거래 참고',
+      proposedPrice ? 'research 연구용 제안' : 'H&M 과거 거래 참고',
       Number.isFinite(sampleSize) ? `표본 ${sampleSize.toLocaleString('ko-KR')}건` : null,
       periodText,
     ].filter(Boolean).join(' · ');
@@ -390,7 +390,7 @@ export function marketView(reviewResult) {
     sections.push({
       label: '원단 가격 참고',
       value: unitCost ?? (materialMedian ? `중앙값 ${materialMedian}` : Number.isFinite(materialCount) ? `목록 ${materialCount.toLocaleString('ko-KR')}건` : '미제공'),
-      note: unitCost ? 'P07 응답의 원단 단가' : [Number.isFinite(materialCount) ? `공개 목록 ${materialCount.toLocaleString('ko-KR')}건` : null, '생산 원가 미확정'].filter(Boolean).join(' · '),
+      note: unitCost ? 'research 응답의 원단 단가' : [Number.isFinite(materialCount) ? `공개 목록 ${materialCount.toLocaleString('ko-KR')}건` : null, '생산 원가 미확정'].filter(Boolean).join(' · '),
     });
   }
 
@@ -420,7 +420,7 @@ export function marketView(reviewResult) {
     sections.push({
       label: '고객 분석', value: cohortName ?? primarySegment,
       note: cohortName ? [share ? `연령 확인 고객 중 ${share}%` : null, 'H&M 과거 집계'].filter(Boolean).join(' · ')
-        : 'P07 LLM 타깃 가설',
+        : 'research LLM 타깃 가설',
     });
   }
   const missingData = Array.isArray(result.missing_data) ? result.missing_data : [];
@@ -430,17 +430,17 @@ export function marketView(reviewResult) {
     status: reviewResult.status ?? result.status ?? null,
     sections,
     missingData: missingData.map((item) => typeof item === 'string' ? item : item?.field ?? item?.reason ?? '자료 누락'),
-    errors: errors.map((item) => typeof item === 'string' ? item : item?.code ?? 'P07 분석 오류'),
+    errors: errors.map((item) => typeof item === 'string' ? item : item?.code ?? 'research 분석 오류'),
     limitations,
   };
 }
 
-function p06ProductProvenance(p06Result, product) {
-  const draft = p06Result?.draft;
+function noveltyProductProvenance(noveltyResult, product) {
+  const draft = noveltyResult?.draft;
   if (!draft || !product) return {};
   const profile = draft.product_profile && typeof draft.product_profile === 'object' ? draft.product_profile : {};
   const origins = draft.field_origins && typeof draft.field_origins === 'object' ? draft.field_origins : {};
-  const evidenceIds = new Set(Array.isArray(p06Result.evidence_ids) ? p06Result.evidence_ids.filter((id) => typeof id === 'string') : []);
+  const evidenceIds = new Set(Array.isArray(noveltyResult.evidence_ids) ? noveltyResult.evidence_ids.filter((id) => typeof id === 'string') : []);
   const result = {};
   for (const key of ['category', 'product_type', 'gender', 'season', 'material']) {
     if (!Object.hasOwn(product, key)) continue;
@@ -529,7 +529,7 @@ export function evidenceItem(evidence) {
 }
 
 // Side-panel evidence: trend evidence grouped under the first style that cites it, the trend evidence no
-// style cites, then stock and P07 evidence. Every evidence record appears in exactly one group.
+// style cites, then stock and research evidence. Every evidence record appears in exactly one group.
 export function evidenceGroups(result) {
   const groups = [];
   const trend = sourceResult(result, 'trend');
@@ -544,11 +544,11 @@ export function evidenceGroups(result) {
   });
   const rest = [...records.keys()].filter((id) => !shown.has(id));
   if (rest.length) groups.push({ anchor: 'ev-trend-other', stage: 'trend', title: '스타일에 연결되지 않은 트렌드 근거', items: rest.map((id) => evidenceItem(records.get(id))), sharedCount: 0, exampleLinks: [] });
-  for (const [stage, title] of [['stock', '재고 근거'], ['sales_market_review', '시장 근거 (P07)']]) {
+  for (const [stage, title] of [['stock', '재고 근거'], ['sales_market_review', '시장 근거 (research)']]) {
     const list = sourceResult(result, stage)?.evidence;
     if (Array.isArray(list) && list.length) groups.push({ anchor: `ev-${stage}`, stage, title, items: list.map(evidenceItem), sharedCount: 0, exampleLinks: [] });
   }
-  // Different records can carry the same sentence (e.g. P07's interpretation); it is printed under the first.
+  // Different records can carry the same sentence (e.g. research's interpretation); it is printed under the first.
   const texts = new Map();
   for (const group of groups) {
     group.items = group.items.map((item) => {

@@ -8,10 +8,10 @@ protected by the trusted-local policy, not by the inter-service token).
   python deploy/e2e/run_e2e.py --base http://127.0.0.1:18765 --profile stub \
       --trend-query deploy/e2e/queries/stub-trend-query.json --out .local/e2e/stub.json
 
-Profiles (workflow-contract 0.2.0: P06 makes the product and worn images, stage 06 composes the planning sheet):
-  stub       explicit TrendQuery, P06 fixture visuals; expects all six stages ok and the composed sheet
-  rehearsal  explicit TrendQuery against real Aura/R2 data, P06 fixture visuals; zero paid calls
-  live       free-text query structured by the LLM, P06 OpenAI visuals (2 image calls); a single run, no retries
+Profiles (workflow-contract 0.2.0: novelty makes the product and worn images, stage 06 composes the planning sheet):
+  stub       explicit TrendQuery, novelty fixture visuals; expects all six stages ok and the composed sheet
+  rehearsal  explicit TrendQuery against real Aura/R2 data, novelty fixture visuals; zero paid calls
+  live       free-text query structured by the LLM, novelty OpenAI visuals (2 image calls); a single run, no retries
 """
 from __future__ import annotations
 
@@ -170,19 +170,19 @@ def main(argv=None):
     check("stages run in contract order", names == STAGE_ORDER[: len(names)], names)
     check("every stage keeps the same request_id", all(s.get("request_id") == request_id for s in stages))
     if args.profile == "rehearsal":
-        p07 = (((result.get("sources") or {}).get("sales_market_review") or {}).get("raw_response") or {})
-        p07_result = p07.get("result") if isinstance(p07, dict) else None
-        p07_result = p07_result if isinstance(p07_result, dict) else {}
-        age_rows = p07_result.get("customer_segment_analysis")
+        research = (((result.get("sources") or {}).get("sales_market_review") or {}).get("raw_response") or {})
+        research_result = research.get("result") if isinstance(research, dict) else None
+        research_result = research_result if isinstance(research_result, dict) else {}
+        age_rows = research_result.get("customer_segment_analysis")
         age_rows = age_rows if isinstance(age_rows, list) else []
-        p07_errors = p07_result.get("errors")
-        p07_errors = p07_errors if isinstance(p07_errors, list) else []
+        research_errors = research_result.get("errors")
+        research_errors = research_errors if isinstance(research_errors, list) else []
         age_failure = any(isinstance(item, dict) and item.get("code") == "CUSTOMER_AGE_RESEARCH_FAILED"
-                          for item in p07_errors)
-        check("P07 customer-age aggregate returned", bool(age_rows),
+                          for item in research_errors)
+        check("research customer-age aggregate returned", bool(age_rows),
               {"row_count": len(age_rows), "age_error": age_failure})
-        check("P07 customer-age aggregate has no source failure", not age_failure,
-              [item.get("code") for item in p07_errors if isinstance(item, dict)])
+        check("research customer-age aggregate has no source failure", not age_failure,
+              [item.get("code") for item in research_errors if isinstance(item, dict)])
     image = result.get("final_image", {})
     calls = image.get("provider_calls")
     check("at most one image provider call", isinstance(calls, int) and calls <= 1, calls)
@@ -191,21 +191,21 @@ def main(argv=None):
           names == STAGE_ORDER and all(s.get("status") in valid_statuses for s in stages)
           and result.get("status") in valid_statuses,
           [f"{s.get('stage')}={s.get('status')}" for s in stages])
-    # 0.2.0: P06 returns the trend-reflecting product image and the worn (outfit) image with the Draft.
-    check("P06 made the product and outfit visuals", [visuals.get(k, {}).get("status") for k in ("product", "outfit")] == ["generated", "generated"],
+    # 0.2.0: novelty returns the trend-reflecting product image and the worn (outfit) image with the Draft.
+    check("novelty made the product and outfit visuals", [visuals.get(k, {}).get("status") for k in ("product", "outfit")] == ["generated", "generated"],
           {k: (v or {}).get("status") for k, v in visuals.items()} or "no draft.visuals")
     for key in ("product", "outfit"):
         sha = ((visuals.get(key) or {}).get("artifact") or {}).get("sha256")
         if sha:
             status, _, data, _, ctype = call(base, "GET", f"/api/workflow/artifacts/{sha}")
             ok = status == 200 and ctype.startswith("image/") and hashlib.sha256(data).hexdigest() == sha
-            check(f"P06 {key} image is imported and served (sha256 verified)", ok, f"{status} {ctype} {len(data)}B")
+            check(f"novelty {key} image is imported and served (sha256 verified)", ok, f"{status} {ctype} {len(data)}B")
             if ok:
                 target = Path(args.out).expanduser().with_suffix("") if args.out else Path.cwd() / f"{args.profile}-{request_id}"
-                path = target.parent / (target.name + f"-p06-{key}.{'png' if ctype == 'image/png' else ctype.split('/')[-1]}")
+                path = target.parent / (target.name + f"-novelty-{key}.{'png' if ctype == 'image/png' else ctype.split('/')[-1]}")
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)
-                evidence.setdefault("p06_visual_files", {})[key] = {"path": str(path), "bytes": len(data), "sha256": sha}
+                evidence.setdefault("novelty_visual_files", {})[key] = {"path": str(path), "bytes": len(data), "sha256": sha}
     if image.get("status") == "generated":
         check("image only after a review", "sales_market_review" in names and "integration" in names, names)
         artifact = (image.get("artifact") or {}).get("artifact_id")
@@ -219,10 +219,10 @@ def main(argv=None):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(img_raw)
             evidence["stage06_sheet"] = {"path": str(path), "bytes": len(img_raw), "sha256": hashlib.sha256(img_raw).hexdigest()}
-    check("P08 calls no image model (stage 06 provider)", ((system or {}).get("image") or {}).get("provider") == "planning_sheet",
+    check("orchestrator calls no image model (stage 06 provider)", ((system or {}).get("image") or {}).get("provider") == "planning_sheet",
           ((system or {}).get("image") or {}).get("provider"))
     if args.profile in ("stub", "rehearsal"):
-        check("no paid image call outside live (P06 fixture visuals)", all((v or {}).get("model") in (None, "fixture") for v in visuals.values()),
+        check("no paid image call outside live (novelty fixture visuals)", all((v or {}).get("model") in (None, "fixture") for v in visuals.values()),
               [(v or {}).get("model") for v in visuals.values()])
     validator = schema_validator()
     if validator is None:

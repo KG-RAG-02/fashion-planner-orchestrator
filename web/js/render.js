@@ -169,20 +169,20 @@ export function renderWaiting(section, { id, n, title }, status) {
 }
 
 // --- Concept: integrated draft and the lookbook ----------------------------
-// The 기획서 (stage 06 PNG composed by P08's planning_sheet.py) is the fixed deliverable: it is shown
-// whole and flat, never cropped, tilted or restyled. P06's two visuals flank it.
+// The 기획서 (stage 06 PNG composed by orchestrator's planning_sheet.py) is the fixed deliverable: it is shown
+// whole and flat, never cropped, tilted or restyled. novelty's two visuals flank it.
 
 function sheetFigure(image, draft, sheet, waiting) {
   if (image.status === 'generated' && image.artifact?.artifact_id) {
     const src = artifactUrl(image.artifact.artifact_id);
     return h('figure', { class: `look look-sheet${sheet ? ' is-sheet' : ''}` },
       h('a', { class: 'look-frame', href: src, title: '화면 전체로 보기', dataset: { imageViewer: '', imageSrc: src, imageAlt: sheet ? `${draft?.title ?? '기획'} — 최종 기획안` : `${draft?.title ?? '기획'} — 최종 생성 이미지` }, 'aria-haspopup': 'dialog' },
-        h('img', { src, alt: sheet ? `${draft?.title ?? '기획'} — 기획안 사진 (P08 합성)` : `${draft?.title ?? '기획'} — 시장 검토 이후 생성한 최종 기획 이미지`, loading: 'lazy' })),
-      h('figcaption', {}, h('strong', {}, '기획안 사진'), sheet ? ' P08 합성' : ' 최종 기획 이미지'));
+        h('img', { src, alt: sheet ? `${draft?.title ?? '기획'} — 기획안 사진 (orchestrator 합성)` : `${draft?.title ?? '기획'} — 시장 검토 이후 생성한 최종 기획 이미지`, loading: 'lazy' })),
+      h('figcaption', {}, h('strong', {}, '기획안 사진'), sheet ? ' orchestrator 합성' : ' 최종 기획 이미지'));
   }
   const label = waiting === 'running' ? '기획서를 합성하고 있습니다' : waiting ? '기획서 합성 대기'
     : image.status === 'failed' ? '이미지 생성 실패' : image.status === 'skipped' ? '이미지 생략' : '이미지 없음';
-  const reason = waiting ? '시장 검토와 통합이 끝나면 P08이 한 번 그립니다.' : (image.reason || '시장 검토가 끝난 뒤에만 한 번 생성합니다.');
+  const reason = waiting ? '시장 검토와 통합이 끝나면 orchestrator가 한 번 그립니다.' : (image.reason || '시장 검토가 끝난 뒤에만 한 번 생성합니다.');
   return h('figure', { class: `look look-sheet is-empty state-${waiting ? 'waiting' : image.status ?? 'none'}` },
     h('div', { class: 'look-frame look-empty' }, h('strong', {}, label), h('span', {}, reason)),
     h('figcaption', {}, h('strong', {}, '기획안 사진')));
@@ -192,7 +192,7 @@ function visualFigure(view, item, side) {
   return h('figure', { class: `look look-side look-${side} state-${item.status ?? 'none'}` },
     item.sha256
       ? h('a', { class: 'look-frame', href: artifactUrl(item.sha256), target: '_blank', rel: 'noopener', title: '원본 크기로 열기' },
-          h('img', { src: artifactUrl(item.sha256), alt: `${view.title} — ${item.label} 시안 (P06)`, loading: 'lazy' }))
+          h('img', { src: artifactUrl(item.sha256), alt: `${view.title} — ${item.label} 시안 (novelty)`, loading: 'lazy' }))
       : h('div', { class: 'look-frame look-empty' }, item.reason || '이미지 없음'),
     h('figcaption', {}, h('strong', {}, item.label), ` ${model.statusMeta(item.status).label}${item.model ? ` · ${item.model}` : ''}`));
 }
@@ -201,7 +201,7 @@ export function renderDraftStage(section, draft, { errors = [] } = {}) {
   const meta = model.statusMeta(draft?.status);
   if (!draft) {
     fill(section, sectionHead({ id: 'draft-title', n: '03', title: '새상품 생성' }), stageErrorList(errors),
-      emptyNote(errors.length ? 'P06 응답에 새상품 결과가 없습니다.' : 'P06 응답을 아직 받지 않았습니다.'));
+      emptyNote(errors.length ? 'novelty 응답에 새상품 결과가 없습니다.' : 'novelty 응답을 아직 받지 않았습니다.'));
     return;
   }
   const profile = [
@@ -212,7 +212,7 @@ export function renderDraftStage(section, draft, { errors = [] } = {}) {
   const evidence = (draft.evidenceClaims ?? []).map((item) => h('li', {},
     h('span', {}, item.text), item.refs ? h('small', {}, `근거 ${item.refs}건`) : null));
   fill(section,
-    sectionHead({ id: 'draft-title', n: '03', title: '새상품 생성', meta: `P06 · ${meta.label}` }),
+    sectionHead({ id: 'draft-title', n: '03', title: '새상품 생성', meta: `novelty · ${meta.label}` }),
     stageErrorList(errors),
     h('div', { class: 'draft-stage-main' },
       h('div', { class: 'draft-stage-copy' },
@@ -228,7 +228,7 @@ export function renderConcept(section, envelope, { retryEnabled = false, onRetry
   const result = envelope.result ?? {};
   const draft = model.draftView(model.sourceResult(result, 'planning_draft'));
   const image = result.final_image ?? {};
-  // 0.2.0: the visuals are P06's; stage 06 is the planning sheet composed by P08.
+  // 0.2.0: the visuals are novelty's; stage 06 is the planning sheet composed by orchestrator.
   const visuals = draft?.visuals ?? [];
   const sheet = Boolean(visuals.length);
   const product = visuals.find((item) => item.key === 'product');
@@ -248,11 +248,11 @@ export function renderConcept(section, envelope, { retryEnabled = false, onRetry
           retry) : null,
         stageErrorList(errors),
         foldList('통합 제한', limitations))),
-    h('div', { class: `lookbook${sheet ? '' : ' is-single'}`, id: 'lookbook', tabindex: '-1', role: 'group', 'aria-label': sheet ? '기획안 사진과 P06 시안 이미지' : '기획안 사진' },
+    h('div', { class: `lookbook${sheet ? '' : ' is-single'}`, id: 'lookbook', tabindex: '-1', role: 'group', 'aria-label': sheet ? '기획안 사진과 novelty 시안 이미지' : '기획안 사진' },
       product ? visualFigure(draft, product, 'left') : null,
       sheetFigure(image, draft, sheet, sheetWaiting),
       outfit ? visualFigure(draft, outfit, 'right') : null),
-    sheet ? h('p', { class: 'small muted lookbook-note' }, 'P06(new-product-agent)가 트렌드 근거로 만든 검토용 시안') : null);
+    sheet ? h('p', { class: 'small muted lookbook-note' }, 'novelty가 트렌드 근거로 만든 검토용 시안') : null);
 }
 
 // --- Trend -----------------------------------------------------------------
@@ -354,19 +354,19 @@ function marketValueCard(section) {
 export function renderMarket(container, market, { errors = [] } = {}) {
   if (!market) {
     fill(container, sectionHead({ id: 'market-title', n: '04', title: '판매·시장 분석' }),
-      stageErrorList(errors), emptyNote(errors.length ? 'P07 응답에 판매·시장 결과가 없습니다.' : 'P07 응답을 아직 받지 않았습니다.'));
+      stageErrorList(errors), emptyNote(errors.length ? 'research 응답에 판매·시장 결과가 없습니다.' : 'research 응답을 아직 받지 않았습니다.'));
     return;
   }
   const meta = model.statusMeta(market.status);
   fill(container,
-    sectionHead({ id: 'market-title', n: '04', title: '판매·시장 분석', meta: `P07 · ${meta.label}` }),
-    h('p', { class: 'small muted market-note' }, 'P07 분석 핵심 요약 · 상세 응답은 근거·원문 패널에서 확인할 수 있습니다.'),
+    sectionHead({ id: 'market-title', n: '04', title: '판매·시장 분석', meta: `research · ${meta.label}` }),
+    h('p', { class: 'small muted market-note' }, 'research 분석 핵심 요약 · 상세 응답은 근거·원문 패널에서 확인할 수 있습니다.'),
     stageErrorList(errors),
     market.sections.length
       ? h('div', { class: 'market-grid' }, market.sections.map(marketValueCard))
-      : emptyNote('P07 응답에 표시할 요약 결과가 없습니다.'),
+      : emptyNote('research 응답에 표시할 요약 결과가 없습니다.'),
     market.missingData.length ? h('p', { class: 'small muted market-status-note' }, `미확인 자료 ${market.missingData.length}개 · ${market.missingData.slice(0, 2).join(', ')}`) : null,
-    market.errors.length ? h('p', { class: 'small market-error-note' }, `P07 분석 오류 ${market.errors.length}건 · ${market.errors.slice(0, 2).join(', ')}`) : null,
+    market.errors.length ? h('p', { class: 'small market-error-note' }, `research 분석 오류 ${market.errors.length}건 · ${market.errors.slice(0, 2).join(', ')}`) : null,
     market.limitations.length ? h('details', { class: 'limits' }, h('summary', {}, `분석 한계 ${market.limitations.length}건`),
       h('ul', {}, market.limitations.map((item) => h('li', {}, item)))) : null);
 }
@@ -419,7 +419,7 @@ function evidenceEntry(item) {
     h('details', { class: 'ev-raw', onToggle }, h('summary', {}, h('span', { class: 'mono' }, item.id ?? 'evidence'), ' JSON'), pre));
 }
 
-export function renderEvidence(container, { result, groups, p07Request, p07RequestId }, tab) {
+export function renderEvidence(container, { result, groups, researchRequest, researchRequestId }, tab) {
   if (!result) { fill(container, emptyNote('실행 결과가 없습니다.')); return; }
   if (tab === 'json') {
     // 03 and 04 keep a block when their call failed before a response was stored, so their errors stay reachable.
@@ -429,10 +429,10 @@ export function renderEvidence(container, { result, groups, p07Request, p07Reque
       .filter(Boolean);
     const blocks = stages.map((stage) => {
       const fields = stage.fields;
-      const request = stage.key === 'sales_market_review' && p07Request
-        ? jsonFold('json-p07-request', 'P07 요청 원문', p07Request) : null;
-      const missingRequest = stage.key === 'sales_market_review' && !p07Request && p07RequestId
-        ? h('p', { class: 'small muted', id: 'json-p07-request', tabindex: '-1' }, 'P07 요청 원문을 아직 불러오지 못했습니다.') : null;
+      const request = stage.key === 'sales_market_review' && researchRequest
+        ? jsonFold('json-research-request', 'research 요청 원문', researchRequest) : null;
+      const missingRequest = stage.key === 'sales_market_review' && !researchRequest && researchRequestId
+        ? h('p', { class: 'small muted', id: 'json-research-request', tabindex: '-1' }, 'research 요청 원문을 아직 불러오지 못했습니다.') : null;
       // 03 and 04 have no page section, so the errors the orchestrator recorded for them are printed here.
       const panelOnly = PANEL_STAGES.includes(stage.key);
       const errors = panelOnly ? model.stageErrors(result, stage.key) : [];
@@ -485,7 +485,7 @@ export function renderSystem(container, status) {
     h('dl', { class: 'meta-list' },
       h('dt', {}, '계약 baseline'), h('dd', {}, `${status.contract?.state ?? '—'}${status.contract?.gate ? ` · gate ${status.contract.gate}` : ''}`),
       h('dt', {}, '06 기획안 사진'), h('dd', {}, status.image ? `${status.image.provider}${status.image.enabled ? '' : ' (비활성)'}` : '—'),
-      h('dt', {}, 'Draft 요청'), h('dd', {}, status.draft?.mode === 'draft_with_visuals' ? 'P06 신상품·착장 이미지 포함' : (status.draft?.mode ?? '—')),
+      h('dt', {}, 'Draft 요청'), h('dd', {}, status.draft?.mode === 'draft_with_visuals' ? 'novelty 신상품·착장 이미지 포함' : (status.draft?.mode ?? '—')),
       h('dt', {}, '질의 구조화'), h('dd', {}, status.query_structuring?.mode || 'llm'),
       h('dt', {}, '실행 모드'), h('dd', {}, status.runtime ?? '—')));
 }

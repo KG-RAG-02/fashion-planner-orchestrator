@@ -1,6 +1,6 @@
 """Reference checks for the proposed fashion-planner-workflow contract package.
 
-Runs the P08 reference validator over committed synthetic fixtures, semantic
+Runs the orchestrator reference validator over committed synthetic fixtures, semantic
 mutation probes, baseline consistency, and the check that no shared schema copies
 are assumed in producer repositories.
 Offline: no network, no services. Requires the `workflow` extra (jsonschema).
@@ -56,7 +56,7 @@ class WorkflowContractReferenceTest(unittest.TestCase):
         self.assertEqual(self.freeze.check_baseline(baseline, snapshot, snapshot_sha, file_errors), [])
         self.assertNotIn("state", snapshot, "snapshot.json is digested into checkpoint keys; keep state in baseline.json")
 
-    def test_no_shared_p08_schema_copies_are_assumed_in_producer_repositories(self):
+    def test_no_shared_orchestrator_schema_copies_are_assumed_in_producer_repositories(self):
         missing = [repo for repo, rel in self.freeze.VENDORED if not (ROOT.parent / repo / rel).is_dir()]
         if missing:
             self.skipTest(f"sibling checkouts not present: {', '.join(missing)}")

@@ -50,8 +50,8 @@ class InputTests(unittest.TestCase):
         self.assertEqual(summary['market']['merchandising_actions'], ['합성 운영 제안'])
         self.assertNotIn('RAW USER REQUEST', json.dumps(summary, ensure_ascii=False))
 
-    def test_the_p07_consumer_projection_reaches_the_market_summary(self):
-        # P07 main c662d4d sends no fabric unit cost and no price_positioning; nothing stands in for them.
+    def test_the_research_consumer_projection_reaches_the_market_summary(self):
+        # research main c662d4d sends no fabric unit cost and no price_positioning; nothing stands in for them.
         value = envelope()
         value['result']['sources']['sales_market_review']['raw_response'] = json.loads(
             (FIXTURES / 'research-handoff.consumer-projection.response.json').read_text(encoding='utf-8'))
@@ -181,9 +181,9 @@ class DifferentiationTests(unittest.TestCase):
             ps.planning_sheet_png(value, fonts=fonts, swot=record)
             self.assertIn(('재고 팬츠와 달리 자수 디테일을 더한다.',), drawn)
             drawn.clear()
-            draft['differentiation'] = [{'value': 'new-product-agent 차별점', 'kind': 'proposal', 'evidence_ids': []}]
+            draft['differentiation'] = [{'value': 'novelty 차별점', 'kind': 'proposal', 'evidence_ids': []}]
             ps.planning_sheet_png(value, fonts=fonts, swot=record)
-            self.assertIn(('new-product-agent 차별점',), drawn)
+            self.assertIn(('novelty 차별점',), drawn)
             self.assertNotIn(('재고 팬츠와 달리 자수 디테일을 더한다.',), drawn)
         finally:
             ps._bullets = original

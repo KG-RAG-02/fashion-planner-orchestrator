@@ -1,6 +1,6 @@
-# P08 runtime configuration
+# orchestrator runtime configuration
 
-This folder holds non-secret settings for P08 query structuring, LLM calls, and local HTTP development. Secrets belong in the process environment or an ignored local `.env` file; do not store or commit secret values here.
+This folder holds non-secret settings for orchestrator query structuring, LLM calls, and local HTTP development. Secrets belong in the process environment or an ignored local `.env` file; do not store or commit secret values here.
 
 ## Query structuring
 
@@ -28,12 +28,12 @@ The sequential API reads these environment variables:
 | `ORCHESTRATOR_WORKFLOW_CONNECT_TIMEOUT_SECONDS` | Connect timeout; default 3 seconds |
 | `ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS` | General read timeout; default 75 seconds |
 | `ORCHESTRATOR_WORKFLOW_INVENTORY_READ_TIMEOUT_SECONDS` | Stock-specific read timeout; otherwise uses the general read timeout |
-| `ORCHESTRATOR_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS` | P06 Draft read timeout; Compose sets 600 seconds for visual generation |
+| `ORCHESTRATOR_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS` | novelty Draft read timeout; Compose sets 600 seconds for visual generation |
 | `ORCHESTRATOR_WORKFLOW_DRAFT_MODE` | `draft_with_visuals` or `draft_only` |
 | `ORCHESTRATOR_WORKFLOW_STORE_DIR` | Private artifact and checkpoint store; default `.local/workflow` |
-| `ORCHESTRATOR_PEER_ARTIFACT_ROOT` | Read-only root for verified P06/P07 artifacts |
+| `ORCHESTRATOR_PEER_ARTIFACT_ROOT` | Read-only root for verified novelty/research artifacts |
 | `ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED` | Enables local Planning Sheet composition |
-| `ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER` | `planning_sheet` or deterministic `fixture`; neither calls an image model from P08 |
+| `ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER` | `planning_sheet` or deterministic `fixture`; neither calls an image model from orchestrator |
 | `ORCHESTRATOR_TREND_PHOTOS_ENABLED` | `0` turns off the Trend article photos on the Planning Sheet; any other value or blank keeps them on |
 | `ORCHESTRATOR_SWOT_ENABLED` | `0` turns off the LLM SWOT and promotion draft on the Planning Sheet; otherwise it is written when `LLM_MODEL` and `LLM_API_KEY` are configured (the same settings as query structuring) |
 | `ORCHESTRATOR_TREND_PHOTO_HOSTS` | Comma list of hosts the Planning Sheet may download Trend photos from (each also admits its subdomains); blank means `vogue.co.kr` |

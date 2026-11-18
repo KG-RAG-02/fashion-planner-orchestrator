@@ -449,7 +449,7 @@ body[data-run="running"] .btn-cta::before { opacity: 1; transform: scaleX(var(--
 .feature-copy > p { margin: 0; font-size: 15px; }
 .feature-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
-/* Lookbook: P06's two visuals turn toward the 기획서, which stays flat and whole. */
+/* Lookbook: novelty's two visuals turn toward the 기획서, which stays flat and whole. */
 .lookbook {
   display: grid; grid-template-columns: minmax(0, 0.72fr) minmax(0, 2.3fr) minmax(0, 0.72fr);
   align-items: center; gap: clamp(12px, 2.2vw, 32px);
@@ -486,7 +486,7 @@ body[data-run="running"] .btn-cta::before { opacity: 1; transform: scaleX(var(--
 .state-waiting .look-empty { border-style: solid; border-color: rgba(229, 0, 16, 0.35); }
 .lookbook-note { margin: -8px 0 0; text-align: center; }
 
-/* P06 Draft stage: concise product definition and generated concept visuals. */
+/* novelty Draft stage: concise product definition and generated concept visuals. */
 .draft-stage-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr); align-items: center; gap: clamp(22px, 4vw, 56px); }
 .draft-stage-copy { min-width: 0; }
 .draft-stage-name { margin: 0; font-family: var(--serif); font-size: clamp(28px, 4vw, 48px); line-height: 1.12; }
@@ -561,7 +561,7 @@ body[data-run="running"] .btn-cta::before { opacity: 1; transform: scaleX(var(--
 .product-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .no-match { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: var(--radius-sm); border: 1px dashed var(--slate); color: var(--slate); font-size: 13px; }
 
-/* P07 sales and market values are shown from the producer response without inferred fallbacks. */
+/* research sales and market values are shown from the producer response without inferred fallbacks. */
 .market-note { margin: -6px 0 0; }
 .market-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .market-value { min-width: 0; padding: 16px 18px; border: 1px solid var(--hair); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.58); }
@@ -736,7 +736,7 @@ pre.json, .ev-raw pre {
   .has-motion .sheet.is-revealed::after { animation: glint 1.4s var(--ease) 0.25s 1 both; }
   .has-motion .sheet.is-revealed .section-n > span { animation: rise var(--t-slow) var(--ease) both; }
 
-  /* The P06 visuals swing toward the 기획서 as the lookbook scrolls into view. */
+  /* The novelty visuals swing toward the 기획서 as the lookbook scrolls into view. */
   @supports (animation-timeline: view()) {
     .look-left { animation: swing-left linear both; animation-timeline: view(); animation-range: entry 5% cover 42%; }
     .look-right { animation: swing-right linear both; animation-timeline: view(); animation-range: entry 5% cover 42%; }
