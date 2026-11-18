@@ -14,8 +14,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN groupadd --system --gid 10001 vogue \
- && useradd --system --uid 10001 --gid 10001 --home-dir /tmp --no-create-home --shell /usr/sbin/nologin vogue
+RUN groupadd --system --gid 10001 app \
+ && useradd --system --uid 10001 --gid 10001 --home-dir /tmp --no-create-home --shell /usr/sbin/nologin app
 
 # Korean glyphs for the 기획서 PNG (src/fashion_planner_orchestrator/planning_sheet.py): NanumBarunGothic from
 # fonts-nanum (SIL OFL 1.1). Latin display text uses the self-hosted Jost in web/fonts.

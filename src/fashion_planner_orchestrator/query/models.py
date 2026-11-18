@@ -283,7 +283,7 @@ class OutOfScopeItem(_Contract):
 
 class StructuredQuery(_Contract):
     """StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard
-    vocabulary. Definition: contracts/agents/orchestrator/output/structured-query.md (owner: vogue-orchestrator).
+    vocabulary. Definition: contracts/agents/orchestrator/output/structured-query.md (owner: fashion-planner-orchestrator).
 
     `items` are in the order the user named them (decision IT-4: the pipeline takes one item today, so
     only `items[0]` is forwarded to trend). Season and trend names are query-wide (`trend_terms`,

@@ -1,4 +1,4 @@
-// Pure view-model helpers for the VOGUE Atelier workspace.
+// Pure view-model helpers for the Fashion Planner Atelier workspace.
 // No DOM access here, so every rule (null is not zero, producer status is never
 // rewritten, links are http(s) only) is unit-tested with `node --test web/tests`.
 
@@ -475,7 +475,7 @@ export function planningSheetLink(summary, { inFlight = false } = {}) {
   if (inFlight || typeof id !== 'string' || !RUN_ID.test(id) || !TERMINAL.has(summary?.status)) return null;
   return {
     href: `/api/workflow/runs/${encodeURIComponent(id)}/planning-sheet.png`,
-    filename: `vogue-planning-sheet-${id}.png`,
+    filename: `planning-sheet-${id}.png`,
   };
 }
 

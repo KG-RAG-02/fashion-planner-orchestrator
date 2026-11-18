@@ -240,8 +240,8 @@ class PngRenderingTests(FontMixin, unittest.TestCase):
         with Image.open(io.BytesIO(first)) as image:
             self.assertEqual(image.width, 3200)
             self.assertGreater(image.height, 1500)
-            self.assertEqual(image.info['vogue:request_id'], envelope['result']['request_id'])
-            self.assertEqual(image.info['vogue:format'], 'evidence-linked-planning-board/png-1')
+            self.assertEqual(image.info['fashion-planner:request_id'], envelope['result']['request_id'])
+            self.assertEqual(image.info['fashion-planner:format'], 'planning-sheet')
 
     def test_the_verified_final_image_is_embedded(self):
         fonts = self.fonts()
@@ -374,7 +374,7 @@ class PlanningSheetRouteTests(FontMixin, LiveServerMixin, unittest.TestCase):
         status, body, response = self.call('GET', '/api/workflow/runs/run-1/planning-sheet.png')
         self.assertEqual(status, 200)
         self.assertEqual(response.getheader('Content-Type'), 'image/png')
-        self.assertEqual(response.getheader('Content-Disposition'), 'attachment; filename="vogue-planning-sheet-run-1.png"')
+        self.assertEqual(response.getheader('Content-Disposition'), 'attachment; filename="planning-sheet-run-1.png"')
         self.assertEqual(response.getheader('Cache-Control'), 'no-store')
         self.assertTrue(body.startswith(PNG_SIGNATURE))
         self.assertEqual(self.rows(), before)

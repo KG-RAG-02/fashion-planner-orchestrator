@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start, stop, restart, and check the local VOGUE agent stack."""
+"""Start, stop, restart, and check the local Fashion Planner service stack (host mode)."""
 
 from __future__ import annotations
 

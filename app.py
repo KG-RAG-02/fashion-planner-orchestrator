@@ -1,4 +1,4 @@
-"""Start the VOGUE synthetic pipeline UI."""
+"""Start the Fashion Planner orchestrator and its web UI."""
 
 from fashion_planner_orchestrator.server import serve
 

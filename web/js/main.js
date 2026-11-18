@@ -1,10 +1,10 @@
-// VOGUE Atelier — MD workspace controller.
+// Fashion Planner Atelier — MD workspace controller.
 import * as api from './api.js';
 import * as model from './model.js';
 import * as view from './render.js';
 
 const $ = (selector) => document.querySelector(selector);
-const LAST_RUN_KEY = 'vogue-atelier:last-request-id';
+const LAST_RUN_KEY = 'fashion-planner:last-request-id';
 const POLL_MS = 1500;
 const AUTO_SCROLL_PIXELS_PER_SECOND = 42;
 const SYSTEM_REFRESH_MS = 30000;

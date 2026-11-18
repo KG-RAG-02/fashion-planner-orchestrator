@@ -8,15 +8,15 @@
     "source_files": [
       {
         "path": "src/fashion_planner_orchestrator/workflow_http.py",
-        "sha256": "877f354c11f355d1d795de4a478f4a1b5da5d9992436da780cad2f708d7999ab"
+        "sha256": "a6b963dcafb743107efa869fede01fe07a053d8eda2ade4b9a9be9b9394d7463"
       },
       {
         "path": "src/fashion_planner_orchestrator/workflow_store.py",
-        "sha256": "706d8d0f98b6ba50da21db64e872a8526e16270a162efbdf0cde2dfbce178a48"
+        "sha256": "0d9b76ce7395d6645c5f54bf00ad82dfaed0691c93fa1b120c444dbd3cc63e85"
       },
       {
         "path": "src/fashion_planner_orchestrator/workflow_contract.py",
-        "sha256": "32a0cba5f60341da9be2a3c695aca28404977da8699b3ee2e29f8f6f71573e5c"
+        "sha256": "7d98c5461b1cd6086e2e19b5609119bdc337261bf598a1a707408c08d193d7b6"
       }
     ],
     "handoff": {

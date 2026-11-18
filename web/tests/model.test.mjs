@@ -200,10 +200,10 @@ test('P06 status and provenance diagnostics survive the Draft view mapping', () 
 });
 
 test('planningSheetLink is offered only for a finished run with a safe request id', () => {
-  const done = { requestId: 'e2e-live-xxxxxxxxxxxx', status: 'partial' };
+  const done = { requestId: 'run-0001', status: 'partial' };
   assert.deepEqual(m.planningSheetLink(done), {
-    href: '/api/workflow/runs/e2e-live-xxxxxxxxxxxx/planning-sheet.png',
-    filename: 'vogue-planning-sheet-e2e-live-xxxxxxxxxxxx.png',
+    href: '/api/workflow/runs/run-0001/planning-sheet.png',
+    filename: 'planning-sheet-run-0001.png',
   });
   assert.equal(m.planningSheetLink(done, { inFlight: true }), null);
   assert.equal(m.planningSheetLink({ ...done, status: 'running' }), null);

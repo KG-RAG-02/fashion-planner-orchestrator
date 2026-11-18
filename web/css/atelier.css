@@ -1,5 +1,5 @@
-/* VOGUE Atelier — "Glass Atelier" in motion (H&M × VOGUE).
-   Black-and-white editorial type (VOGUE), one red (H&M) used as light and signal, frosted glass in three
+/* Fashion Planner Atelier — "Glass Atelier" in motion.
+   Black-and-white editorial type, one red used as light and signal, frosted glass in three
    weights over the red silk. Motion follows the run: the silk moves while it works, the sidebar's stage bar
    fills, each section clears like frosted glass when its stage reports. Evidence and JSON live only in the
    side panel. Text colours meet WCAG AA (≥4.5:1) on every glass weight; statuses always carry an icon + label.
@@ -23,9 +23,9 @@
 
 :root {
   /* Palette */
-  --ink: #000000;            /* VOGUE black: text, primary actions, "done" */
-  --paper: #FFFFFF;          /* VOGUE white */
-  --red: #E50010;            /* H&M red: silk light, running, errors, where you are */
+  --ink: #000000;            /* black: text, primary actions, "done" */
+  --paper: #FFFFFF;          /* white */
+  --red: #E50010;            /* red: silk light, running, errors, where you are */
   --red-text: #C2000D;       /* red as text on light glass (≥5.6:1) */
   --red-tint: #FFEDEE;
   --fog: #EBEBEA;            /* studio paper behind everything */
@@ -155,9 +155,9 @@ a:hover { color: var(--red-text); }
   box-shadow: var(--glass-light), 0 30px 60px -44px rgba(0, 0, 0, 0.45);
 }
 .spine-top { display: flex; flex-direction: column; gap: 18px; }
-.wordmark { display: inline-flex; align-items: baseline; gap: 10px; text-decoration: none; color: var(--ink); }
+.wordmark { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; text-decoration: none; color: var(--ink); }
 .wordmark:hover { color: var(--ink); }
-.wordmark-strong { font-family: var(--font-display); font-weight: 500; font-size: 28px; line-height: 1; letter-spacing: 0.05em; }
+.wordmark-strong { font-family: var(--font-display); font-weight: 500; font-size: 26px; line-height: 1; letter-spacing: 0.05em; }
 .wordmark-light { font-family: var(--font-label); font-weight: 400; font-size: 14px; letter-spacing: 0.14em; color: var(--graphite); }
 
 .views { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(0, 0, 0, 0.06); }

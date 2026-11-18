@@ -196,7 +196,7 @@ def _request_is_trusted_local(handler: BaseHTTPRequestHandler) -> bool:
 
 
 class OrchestratorHandler(BaseHTTPRequestHandler):
-    server_version = "VOGUEWorkflow/0.1"
+    server_version = "FashionPlannerOrchestrator/1.0.0"
 
     def log_message(self, fmt: str, *args: object) -> None:
         return
@@ -306,10 +306,10 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
     if host not in {"127.0.0.1", "localhost"} and os.environ.get("ORCHESTRATOR_ALLOW_REMOTE_BIND") != "1":
         raise ValueError("Binding outside loopback requires ORCHESTRATOR_ALLOW_REMOTE_BIND=1.")
     server = ThreadingHTTPServer((host, port), OrchestratorHandler)
-    print(f"VOGUE workflow UI: http://{host}:{port}")
+    print(f"Fashion Planner UI: http://{host}:{port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nStopping VOGUE workflow UI.")
+        print("\nStopping Fashion Planner UI.")
     finally:
         server.server_close()

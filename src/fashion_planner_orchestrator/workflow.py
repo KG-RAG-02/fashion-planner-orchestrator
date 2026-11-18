@@ -155,7 +155,7 @@ class Workflow:
             wire = self.adapters[stage](copy.deepcopy(payload))
             require(isinstance(wire, WireResponse), 'WIRE_BYTES_REQUIRED')
             wire_elapsed_ms = wire.elapsed_ms
-            artifact = self.store.put(wire.body, 'application/vnd.vogue.truncated-response' if wire.truncated else wire.media_type)
+            artifact = self.store.put(wire.body, 'application/vnd.fashion-planner.truncated-response' if wire.truncated else wire.media_type)
             if wire.truncated or len(wire.body) > 16777216:
                 raise StageFailure('UPSTREAM_BODY_TOO_LARGE', 502, artifact)
             if not 200 <= wire.status < 300:

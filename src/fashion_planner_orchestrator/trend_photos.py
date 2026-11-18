@@ -66,7 +66,7 @@ def _https_get(url: str, timeout: float) -> tuple[int, Mapping[str, str], bytes]
         path += '?' + parts.query
     try:
         connection.request('GET', path, headers={'Accept': 'image/png, image/jpeg, image/webp',
-                                                 'User-Agent': 'vogue-orchestrator-planning-sheet'})
+                                                 'User-Agent': 'fashion-planner-orchestrator'})
         response = connection.getresponse()
         headers = {key.lower(): value for key, value in response.getheaders()}
         body = response.read(MAX_PHOTO_BYTES + 1) if response.status == 200 else b''

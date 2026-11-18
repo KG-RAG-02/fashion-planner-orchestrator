@@ -147,7 +147,7 @@ def fixture_image(payload):
         colour = tuple(lineage[3 + band * 3:6 + band * 3])
         draw.rectangle((32, 96 + band * 44, 480, 128 + band * 44), fill=colour)
     draw.rectangle((8, 8, 503, 503), outline=(255, 255, 255), width=4)
-    draw.text((32, 32), 'VOGUE FIXTURE IMAGE (synthetic)', fill=(255, 255, 255))
+    draw.text((32, 32), 'FASHION PLANNER FIXTURE IMAGE (synthetic)', fill=(255, 255, 255))
     draw.text((32, 56), 'lineage ' + lineage.hex()[:16], fill=(255, 255, 255))
     buffer = io.BytesIO()
     image.save(buffer, format='PNG')
@@ -577,7 +577,7 @@ def _get_planning_sheet(handler, value):
         problem(handler, exc.http_status, exc.code, request_id=rid)
         return
     handler._send(200, png, 'image/png',
-                  {'Content-Disposition': f'attachment; filename="vogue-planning-sheet-{rid}.png"'})
+                  {'Content-Disposition': f'attachment; filename="planning-sheet-{rid}.png"'})
 
 
 def _system_status(handler):

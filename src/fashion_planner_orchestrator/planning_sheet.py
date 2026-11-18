@@ -61,7 +61,7 @@ def _claim(text: object, kind: str, ids=()) -> BoardClaim:
     evidence_ids = tuple(dict.fromkeys(str(item) for item in ids if isinstance(item, str) and item.strip()))
     return BoardClaim(str(text), kind, evidence_ids)
 
-SHEET_FORMAT = 'evidence-linked-planning-board/png-1'
+SHEET_FORMAT = 'planning-sheet'
 REVIEW_LABEL = 'MD 검토용 초안 · 자동 승인 아님'
 FOOTER_NOTE = '검토용 초안 · 근거 미연결 값은 확정 사실이 아닙니다 · 승인·발주·생산 가능성 확정이 아닙니다.'
 # P08 writes this limitation itself when the deterministic fixture image provider is used.
@@ -1482,7 +1482,7 @@ def _design(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet, imag
             y = _bullets(c, x, y, w, view.differentiation, limit=3)
         elif stand_in:
             y = _bullets(c, x, y, w, stand_in, limit=3)
-            y = _paragraph(c, x, y, w, 'vogue-orchestrator LLM 가설 (new-product-agent 차별화 미제공) · MD 검토 필요',
+            y = _paragraph(c, x, y, w, 'orchestrator LLM 가설 (novelty 차별화 미제공) · MD 검토 필요',
                            size=9.5, lines=1, color='ink3') + 4
         if view.own_products:
             _label(c, x, y + 2, 'OWN PRODUCTS · 자사 상품과의 관계')
@@ -1618,7 +1618,7 @@ def _header(c: _Canvas, sheet: PlanningSheet) -> float:
     board = sheet.board
     k = HEADER_H / 130  # the banner layout below is drawn on a 130-unit grid and scaled to HEADER_H
     c.rect(0, 0, W, HEADER_H, 'header')
-    c.text(MARGIN + 5, 40.5 * k, 'VOGUE', 'display_bold', 34 * k, 'ink')  # vertically centred in the banner
+    c.text(MARGIN + 5, 40.5 * k, 'FASHION PLANNER', 'display_bold', 34 * k, 'ink')  # vertically centred in the banner
     slogan_s = 50 * k
     sub_s = 15.6 * k
     gap = 20 * k
@@ -1663,13 +1663,13 @@ def render_png(sheet: PlanningSheet, *, image_bytes: bytes | None = None, image_
     y = max(bottoms) + 30
     c.rect(MARGIN, y, W - 2 * MARGIN, 1, 'rule_s')
     c.text(MARGIN, y + 12, FOOTER_NOTE, 'regular', 9.5, 'ink3')
-    right = f'VOGUE · {SHEET_FORMAT} · {sheet.request_id}'
+    right = f'Fashion Planner · {SHEET_FORMAT} · {sheet.request_id}'
     c.text(W - MARGIN - c.width(right, 'regular', 9.5), y + 12, right, 'regular', 9.5, 'ink3')
     height = y + 40
     board = sheet.board
-    metadata = {'Title': f'{board.title} — 상품기획서 (검토용)', 'Software': 'vogue-orchestrator planning_sheet',
-                'vogue:format': SHEET_FORMAT, 'vogue:request_id': sheet.request_id,
-                'vogue:contract_version': sheet.contract_version or '', 'vogue:schema_version': sheet.schema_version or ''}
+    metadata = {'Title': f'{board.title} — 상품기획서 (검토용)', 'Software': 'fashion-planner-orchestrator planning_sheet',
+                'fashion-planner:format': SHEET_FORMAT, 'fashion-planner:request_id': sheet.request_id,
+                'fashion-planner:contract_version': sheet.contract_version or '', 'fashion-planner:schema_version': sheet.schema_version or ''}
     return c.render(height, metadata)
 
 
@@ -1742,7 +1742,7 @@ def _read_only_store(store_dir: Path, request_id: str):
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description='Render the planning sheet (기획서) PNG of a stored VOGUE run.')
+    parser = argparse.ArgumentParser(description='Render the planning sheet (기획서) PNG of a stored run.')
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument('--input', type=Path, help='integrated-result envelope JSON (GET /api/workflow/runs/{id} body)')
     source.add_argument('--request-id', help='read the run from a P08 store directory (opened read-only)')
