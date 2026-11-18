@@ -1,6 +1,6 @@
 """Alias-dictionary normalization: a stdlib-only port of trend's AliasMap.
 
-Source of truth (read-only): trend `src/trend_agent/ingestion/normalization/alias_map.py`
+Source of truth (read-only): trend `src/fashion_planner_trend/ingestion/normalization/alias_map.py`
 and `configs/alias_map/*.yaml`. The dictionary data comes from the generated module `alias_data.py`
 (snapshot contracts/agents/trend/vocabulary/alias-map.snapshot.json). The port must behave exactly like the original;
 tests/test_query_lexicon.py compares it with outputs of the original code (alias-map.golden.json).

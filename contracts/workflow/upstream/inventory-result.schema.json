@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contracts.fashion-planner.invalid/inventory/inventory-result.schema.json",
-  "title": "stock-agent producer result payload schema 1.0",
+  "title": "inventory producer result payload schema (schema_version 1.0.0)",
   "description": "Producer-owned inventory result payload (schema_version 1.0.0). It is distinct from the inventory-handoff HTTP envelope. The /runs route wraps this complete object in result without moving or reconstructing producer fields. products[i] ↔ trend_results[i]; evidence is collected once and referenced by trend_results[i].evidence_ids.",
   "type": "object",
   "additionalProperties": false,

@@ -18,7 +18,7 @@ def style(style_id, name, article_id):
 
 def result(draft, trends=None):
     trends = trends or [style('990101-s0', '카우보이 스타일', '990101'), style('990107-s0', '윔지맥싱', '990107')]
-    # An inventory slot names its style by id and name (stock-agent-result-1.0: trend_result.style requires both),
+    # An inventory slot names its style by id and name (the inventory result schema: trend_result.style requires both),
     # so focus_stock's name match runs here as it does on recorded runs.
     stock = {'products': [{'style_id': 'ABCDEFGH'[index]} for index in range(len(trends))],
              'trend_results': [{'style': {'id': trend['style']['id'], 'name': trend['style']['name']},

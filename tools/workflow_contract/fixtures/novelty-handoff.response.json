@@ -1,6 +1,6 @@
 {
   "contract_version": "novelty-handoff",
-  "request_id": "synthetic-p06-001",
+  "request_id": "synthetic-novelty-001",
   "producer": {
     "agent_id": "novelty",
     "schema_version": "1.0.0"
@@ -8,7 +8,7 @@
   "status": "partial",
   "result": {
     "schema_version": "1.0.0",
-    "request_id": "synthetic-p06-001",
+    "request_id": "synthetic-novelty-001",
     "status": "partial",
     "draft": {
       "title": "합성 초안"

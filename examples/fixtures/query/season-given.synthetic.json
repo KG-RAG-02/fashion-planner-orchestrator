@@ -1,6 +1,6 @@
 {
   "case": "season-given",
-  "description": "Season, trend name, major category and colour are all in the query. The expected TrendQuery is the contract snapshot's own example (contracts/agents/trend-analysis-agent/input/trend-query.md section 4) with this fixture's request_id.",
+  "description": "Season, trend name, major category and colour are all in the query. The expected TrendQuery is the contract snapshot's own example (contracts/agents/trend/input/trend-query.md section 4) with this fixture's request_id.",
   "today": "2026-11-09",
   "request_id": "synthetic-query-001",
   "query": "2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하고 싶어",

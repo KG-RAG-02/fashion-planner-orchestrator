@@ -1,22 +1,22 @@
 {
   "contract_version": "novelty-handoff",
-  "request_id": "synthetic-p06-001",
+  "request_id": "synthetic-novelty-001",
   "input": {
     "planning_request": {
       "schema_version": "1.0.0",
-      "request_id": "synthetic-p06-001",
+      "request_id": "synthetic-novelty-001",
       "query": "합성 아우터 기획"
     },
     "trend_result": {
       "schema_version": "1.0.0",
-      "request_id": "synthetic-p06-001",
+      "request_id": "synthetic-novelty-001",
       "status": "partial",
       "trends": [],
       "evidence": []
     },
     "inventory_product_result": {
       "schema_version": "1.0.0",
-      "request_id": "synthetic-p06-001",
+      "request_id": "synthetic-novelty-001",
       "agent_id": "inventory",
       "status": "ok",
       "products": [],

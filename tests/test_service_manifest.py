@@ -1,4 +1,4 @@
-"""Host-mode service manifest: in-repo default, unconfigured when absent, venvs outside iCloud."""
+"""Host-mode service manifest: in-repo default, unconfigured when absent, venvs outside synced folders."""
 import json
 import os
 from pathlib import Path

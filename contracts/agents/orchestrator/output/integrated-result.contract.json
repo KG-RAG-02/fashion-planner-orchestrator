@@ -22,7 +22,7 @@
       },
       {
         "path": "contracts/workflow/upstream/inventory-result.schema.json",
-        "sha256": "f5d74b1f4cadede5b512c21ae55e01ff2fe9dad19752b75a7e865b769cca1c3c"
+        "sha256": "92914dc448794b1fab557650bb4832858f17edd8fc6632b23f3ec1301b196b7f"
       }
     ],
     "handoff": {

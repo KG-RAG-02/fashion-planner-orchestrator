@@ -706,7 +706,7 @@ class WorkflowTests(unittest.TestCase):
                                  contract=self.contract, draft_mode=self.draft_mode,
                                  artifact_reader=self.artifact_reader, **options)
 
-    def capture_p06(self):
+    def capture_novelty(self):
         sent = []
         original = self.workflow.adapters['planning_draft']
 
@@ -720,7 +720,7 @@ class WorkflowTests(unittest.TestCase):
         from fashion_planner_orchestrator.upstream_projection import novelty_inputs
         from fashion_planner_orchestrator.workflow import LOGGER
         trend_raw, stock_raw = self.use_upstream_projection_fixture()
-        sent = self.capture_p06()
+        sent = self.capture_novelty()
         records = []
 
         class Capture(logging.Handler):
@@ -773,7 +773,7 @@ class WorkflowTests(unittest.TestCase):
         # Meaningful only because novelty's view of the same result differs (similar_products, evidence url/title).
         self.assertNotEqual(sent[0]['input'], trend_view(trend_raw))
 
-    def test_a_changed_projection_stops_before_p06(self):
+    def test_a_changed_projection_stops_before_novelty(self):
         from unittest.mock import patch
         from fashion_planner_orchestrator import workflow as workflow_module
         from fashion_planner_orchestrator.upstream_projection import novelty_inputs
@@ -883,7 +883,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.trace.count('planning_draft'), 1)
         self.contract.semantic(retried['envelope'], self.rid, self.store)
 
-    def test_a_run_that_died_between_novelty_and_initial_resumes_without_calling_p06(self):
+    def test_a_run_that_died_between_novelty_and_initial_resumes_without_calling_novelty(self):
         from unittest.mock import patch
         from fashion_planner_orchestrator import workflow as workflow_module
 

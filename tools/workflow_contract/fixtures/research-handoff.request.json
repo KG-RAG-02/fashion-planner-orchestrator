@@ -1,8 +1,8 @@
 {
   "contract_version": "research-handoff",
-  "request_id": "synthetic-p07-001",
+  "request_id": "synthetic-research-001",
   "input": {
-    "request_id": "synthetic-p07-001",
+    "request_id": "synthetic-research-001",
     "product": {
       "category": "Outerwear",
       "product_type": "Jacket",

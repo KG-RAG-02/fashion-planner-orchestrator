@@ -132,7 +132,7 @@ class WorkflowCopyCheckTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = Path(tmp.name)
-        self.workflow = self.tmp / 'p08' / 'contracts' / 'workflow'
+        self.workflow = self.tmp / 'orchestrator' / 'contracts' / 'workflow'
         self.write_tree(self.workflow, self.FILES)
         pins = {rel: sha256(data) for rel, data in self.FILES.items()}
         (self.workflow / 'snapshot.json').write_text(json.dumps({'files': pins}), encoding='utf-8')

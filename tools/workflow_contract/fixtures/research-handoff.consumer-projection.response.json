@@ -1,6 +1,6 @@
 {
   "contract_version": "research-handoff",
-  "request_id": "synthetic-p07-001",
+  "request_id": "synthetic-research-001",
   "producer": {
     "agent_id": "research",
     "schema_version": "1.0.0"
@@ -8,7 +8,7 @@
   "status": "ok",
   "result": {
     "schema_version": "1.0.0",
-    "request_id": "synthetic-p07-001",
+    "request_id": "synthetic-research-001",
     "draft_id": null,
     "producer_id": "research",
     "status": "ok",

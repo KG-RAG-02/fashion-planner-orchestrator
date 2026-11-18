@@ -12,7 +12,7 @@ DEFAULT_MANIFEST = ROOT / 'deploy/service-manifest.json'
 
 
 def venv_root():
-    """Shared venvs live outside iCloud: ${FASHION_PLANNER_VENV_ROOT:-~/.cache/fashion-planner-venvs}/<service>."""
+    """Shared venvs live outside synced folders: ${FASHION_PLANNER_VENV_ROOT:-~/.cache/fashion-planner-venvs}/<service>."""
     return Path((os.environ.get('FASHION_PLANNER_VENV_ROOT') or '').strip() or '~/.cache/fashion-planner-venvs').expanduser()
 
 

@@ -36,7 +36,7 @@
       "schema": "research-review-response.schema.json",
       "expected_schema": true,
       "expected_semantic": true,
-      "note": "P07 main c662d4d (+ d658b65) HTTP handler output for research-handoff.request.json: review builder and _p08_review_projection run offline on fabricated H&M/fabric/FX/LLM inputs (Korean limitations, no fabric unit_cost, compact evidence, target hypothesis without price_positioning)."
+      "note": "research HTTP handler output for research-handoff.request.json, produced offline on fabricated H&M/fabric/FX/LLM inputs (Korean limitations, no fabric unit_cost, compact evidence, target hypothesis without price_positioning)."
     }
   ]
 }

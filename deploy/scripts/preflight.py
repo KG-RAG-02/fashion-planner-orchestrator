@@ -3,7 +3,7 @@
 
   python deploy/scripts/preflight.py --profile stub|rehearsal|live [--env-file PATH]
 
-Checks: Docker engine, env file (mode, required keys per profile), iCloud "dataless" files in
+Checks: Docker engine, env file (mode, required keys per profile), cloud-synced "dataless" files in
 build contexts (they hang Docker builds), free disk, free UI port, `docker compose config --quiet`,
 and for live: OpenAI model availability (GET /v1/models/{id}, free) and Neo4j Aura TCP reachability.
 """
@@ -102,7 +102,7 @@ def main(argv=None) -> int:
     if args.env_file.is_file():
         mode = stat.S_IMODE(args.env_file.stat().st_mode)
         check("env file exists with mode 600", mode == 0o600, f"{args.env_file} mode {oct(mode)}")
-        check("env file is outside the iCloud project folder", WORKSPACE not in args.env_file.resolve().parents, str(args.env_file))
+        check("env file is outside the repositories folder", WORKSPACE not in args.env_file.resolve().parents, str(args.env_file))
         env = parse_env(args.env_file)
     else:
         check("env file exists", False, f"{args.env_file} — run deploy/bin/fashion-planner init-env")
@@ -110,7 +110,7 @@ def main(argv=None) -> int:
     check(f"required keys for {args.profile}", not missing, "missing: " + ", ".join(missing) if missing else f"{len(REQUIRED[args.profile])} set")
 
     dataless = dataless_files()
-    check("no iCloud-evicted (dataless) files in build contexts", not dataless, ", ".join(dataless[:5]))
+    check("no cloud-evicted (dataless) files in build contexts", not dataless, ", ".join(dataless[:5]))
     free_gb = shutil.disk_usage(WORKSPACE).free / 1e9
     check("free disk ≥ 10 GB", free_gb >= 10, f"{free_gb:.1f} GB free")
 

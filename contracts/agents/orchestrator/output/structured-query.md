@@ -164,7 +164,7 @@ trend의 기존 계약 `TrendQuery`(스냅샷: [trend-query.md](../../trend/inpu
 | | 표준 목록 (표준 어휘) | 별칭 사전 |
 |---|---|---|
 | 뜻 | `value`에 들어갈 수 있는 값 전부 | 여러 표현을 표준 값으로 연결하는 표 |
-| 소유 | trend-analysis-agent (K-Fashion 기준) | trend-analysis-agent |
+| 소유 | trend (K-Fashion 기준) | trend |
 | 크기 | 상분류 4, 하분류 21, 색 21, 소재 26, 패턴 19, 디테일 61, 핏 7, 몸판 기장 9, 소매 기장 5, 시즌 2, 성별 3 | 약 500개 항목 |
 | 예 | 팬츠, 블랙, 오버사이즈 | 슬랙스 → 팬츠 (같은 뜻), 슬림 → 타이트 (근사) |
 
