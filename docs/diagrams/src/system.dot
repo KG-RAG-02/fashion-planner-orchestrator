@@ -1,0 +1,60 @@
+// 시스템 전체: 다섯 서비스, 각자의 저장소, 호출하는 외부 시스템.
+// DIAGRAM-STYLE 라이트 팔레트로 쓰고, scripts/render_diagrams.sh가 색을 바꿔 다크 버전을 만든다.
+// 모든 노드와 엣지의 근거(file:line)는 docs/diagrams/CLAIMS.md에 있다.
+digraph system {
+  graph [rankdir=TB, bgcolor="#ffffff", fontname="Pretendard", fontcolor="#1f2328", fontsize=12,
+         nodesep=0.5, ranksep=0.65, pad=0.3, newrank=true];
+  node  [fontname="Pretendard", fontsize=12, fontcolor="#1f2328", color="#1f2328", penwidth=1.4, margin="0.2,0.08"];
+  edge  [fontname="Pretendard", fontsize=10, fontcolor="#1f2328", color="#1f2328", penwidth=1.2, arrowsize=0.7];
+
+  // 서비스
+  node [shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5"];
+  orch  [label="orchestrator  :8765\n워크플로·계약·UI"];
+  trend [label="trend  :8768\n트렌드 분석"];
+  inv   [label="inventory  :8002\n과잉재고 매칭"];
+  nov   [label="novelty  :8767\n신상품 기획안·이미지"];
+  res   [label="research  :8766\n판매·시장 검토"];
+
+  // 클라이언트와 자체 저장소
+  ui     [label="브라우저 UI\n정적 web/ 앱", shape=box, style="rounded", fillcolor="", color="#1f2328"];
+  store  [label="실행 기록 저장소\nSQLite 체크포인트,\n내용 주소 blob", shape=cylinder, style="", color="#1f2328"];
+  duck   [label="DuckDB 캐시\n+ CLIP 인덱스", shape=cylinder, style="", color="#1f2328"];
+  ledger [label="초안 원장\nSQLite + 이미지 파일", shape=cylinder, style="", color="#1f2328"];
+
+  // 외부 시스템(점선): 계정과 데이터는 직접 준비한다
+  node [style="dashed", color="#6b7280", fillcolor=""];
+  neo4j  [label="Neo4j\nAura 또는 로컬 stub", shape=cylinder];
+  r2     [label="Cloudflare R2\n직접 만든 버킷", shape=cylinder];
+  fx     [label="Frankfurter\n환율", shape=box, style="rounded,dashed"];
+  openai [label="OpenAI API\nlive 프로필에서만", shape=box, style="rounded,dashed"];
+  photo  [label="기사 사진 호스트\nvogue.co.kr (허용 목록)", shape=box, style="rounded,dashed"];
+
+  // 층(위→아래)과 층 안의 순서
+  { rank=same; ui; photo; }
+  { rank=same; store; orch; openai; }
+  { rank=same; trend; inv; nov; res; }
+  { rank=same; neo4j; duck; r2; ledger; fx; }
+  edge [style=invis];
+  ui -> photo; store -> orch -> openai; trend -> inv -> nov -> res; neo4j -> duck -> r2 -> ledger -> fx;
+  edge [style=solid];
+
+  ui -> orch [label=" 실행, 진행 조회,\n 산출물, 기획서"];
+  orch -> store [label="응답 원문, 체크포인트,\n기획서 PNG", constraint=false];
+  photo -> orch [label="6단계 기사 사진\n최대 3장(선택)", style=dashed, dir=back];
+
+  orch -> trend [label="1 /v1/agents/trend/runs"];
+  orch -> inv   [label="2 /v1/agents/inventory/runs"];
+  orch -> nov   [label="3 /v1/agents/novelty/runs"];
+  orch -> res   [label="4 /v1/agents/research/reviews"];
+
+  trend -> neo4j;
+  inv   -> duck;
+  inv   -> r2     [label="상품 사진,\n캐시 구성"];
+  nov   -> ledger;
+  nov   -> openai [label="컨셉 텍스트,\n이미지", style=dashed];
+  res   -> openai [label="타깃\n가설", style=dashed];
+  res   -> fx;
+  res   -> r2     [label="H&M 집계\n스냅샷"];
+  ledger -> store [label="이미지: 읽기 전용 볼륨,\nsha256 확인", style=dashed, constraint=false];
+  orch  -> openai [label="질의 구조화,\nSWOT 초안", style=dashed, constraint=false];
+}

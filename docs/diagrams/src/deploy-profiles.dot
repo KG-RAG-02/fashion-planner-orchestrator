@@ -1,0 +1,51 @@
+// 배포 프로필: 프로필마다 더하는 파일, 읽는 데이터, 직접 준비할 것.
+// 근거: deploy/compose.yaml, compose.stub.yaml, compose.data.yaml, compose.paid.yaml, deploy/bin/fashion-planner.
+// 모든 항목의 근거(file:line)는 docs/diagrams/CLAIMS.md에 있다.
+digraph profiles {
+  graph [rankdir=LR, bgcolor="#ffffff", fontname="Pretendard", fontcolor="#1f2328", nodesep=0.4, ranksep=0.6, pad=0.3];
+  node  [fontname="Pretendard", fontsize=11, fontcolor="#1f2328", color="#1f2328", shape=plain];
+  edge  [fontname="Pretendard", fontsize=10, color="#1f2328", fontcolor="#1f2328", penwidth=1.2, arrowsize=0.7];
+
+  base [label=<<table border="1" cellborder="0" cellspacing="0" cellpadding="6" color="#4f46e5" bgcolor="#eef2ff">
+    <tr><td align="left"><b>compose.yaml (기본)</b>  </td></tr>
+    <tr><td align="left">서비스 5개, 읽기 전용 컨테이너, uid 10001  </td></tr>
+    <tr><td align="left">orchestrator 포트만 127.0.0.1에 공개  </td></tr>
+    <tr><td align="left">env 파일의 공용 bearer 토큰  </td></tr>
+  </table>>];
+
+  stub [label=<<table border="1" cellborder="0" cellspacing="0" cellpadding="6" color="#1f2328">
+    <tr><td align="left"><b>stub</b>   + compose.stub.yaml  </td></tr>
+    <tr><td align="left">Neo4j: 로컬 컨테이너, 합성 그래프  </td></tr>
+    <tr><td align="left">inventory: 합성 DuckDB 픽스처  </td></tr>
+    <tr><td align="left">novelty: 합성 이미지(synthetic), 규칙 기반 초안  </td></tr>
+    <tr><td align="left">research: 합성 리뷰 소스  </td></tr>
+    <tr><td align="left">질의 구조화: 합성 픽스처  </td></tr>
+    <tr><td align="left">유료 호출 없음, 실행 중 네트워크 불필요  </td></tr>
+    <tr><td align="left">UI: http://127.0.0.1:18765  </td></tr>
+    <tr><td align="left"><font color="#6b7280">준비: Docker와 레포 5개  </font></td></tr>
+  </table>>];
+
+  rehearsal [label=<<table border="1" cellborder="0" cellspacing="0" cellpadding="6" color="#1f2328">
+    <tr><td align="left"><b>rehearsal</b>   + compose.data.yaml  </td></tr>
+    <tr><td align="left">Neo4j: 직접 만든 Aura(트렌드 그래프)  </td></tr>
+    <tr><td align="left">inventory, research: 직접 만든 R2 버킷  </td></tr>
+    <tr><td align="left">novelty: 합성 이미지(synthetic)  </td></tr>
+    <tr><td align="left">H&amp;M 연구 자료: 동의 설정을 1로 켤 때만  </td></tr>
+    <tr><td align="left">유료 호출 없음  </td></tr>
+    <tr><td align="left">UI: http://127.0.0.1:8765  </td></tr>
+    <tr><td align="left"><font color="#6b7280">준비: Aura, R2, 직접 만든 데이터(docs/data.md)  </font></td></tr>
+  </table>>];
+
+  live [label=<<table border="1" cellborder="0" cellspacing="0" cellpadding="6" color="#1f2328">
+    <tr><td align="left"><b>live</b>   + compose.paid.yaml  </td></tr>
+    <tr><td align="left">rehearsal 전부 + OpenAI 호출:  </td></tr>
+    <tr><td align="left">질의 구조화, novelty 텍스트·이미지 2장,  </td></tr>
+    <tr><td align="left">research 타깃 가설(동의 설정 1일 때), SWOT 초안  </td></tr>
+    <tr><td align="left">보호 장치: live 실행은 1회(가드 파일)  </td></tr>
+    <tr><td align="left"><font color="#6b7280">준비: 본인 OpenAI 키(비용 발생)  </font></td></tr>
+  </table>>];
+
+  base -> stub;
+  base -> rehearsal;
+  rehearsal -> live;
+}

@@ -1,0 +1,62 @@
+// 계약 지도: 호출마다 전송 이름, 요청·응답 스키마, 소유자. 이름에는 버전을 쓰지 않는다(버전은 schema_version).
+// 모든 노드와 엣지의 근거(file:line)는 docs/diagrams/CLAIMS.md에 있다.
+digraph contracts {
+  graph [rankdir=LR, bgcolor="#ffffff", fontname="Pretendard", fontcolor="#1f2328", nodesep=0.3, ranksep=0.5, pad=0.3];
+  node  [fontname="Pretendard", fontsize=11, fontcolor="#1f2328", color="#1f2328", penwidth=1.3];
+  edge  [fontname="Pretendard", fontsize=10, color="#1f2328", fontcolor="#1f2328", penwidth=1.2, arrowsize=0.7];
+
+  ui   [label="브라우저 UI 또는\n외부 호출자", shape=box, style="rounded"];
+  orch [label="orchestrator", shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5"];
+
+  node [shape=plain];
+  c_ui [label=<<table border="1" cellborder="0" cellspacing="0" cellpadding="6" color="#1f2328">
+    <tr><td align="left"><b>fashion-planner-workflow</b>  </td></tr>
+    <tr><td align="left">POST /api/workflow/run, /v1/orchestrations  </td></tr>
+    <tr><td align="left">응답: integrated-result  </td></tr>
+    <tr><td align="left">POST …/md-decision: md-decision-request  </td></tr>
+    <tr><td align="left"><font color="#6b7280">소유: orchestrator (contracts/workflow/)  </font></td></tr>
+  </table>>];
+
+  c_trend [label=<<table border="1" cellborder="0" cellspacing="0" cellpadding="6" color="#1f2328">
+    <tr><td align="left"><b>1  trend-handoff</b>  </td></tr>
+    <tr><td align="left">요청: TrendQuery  </td></tr>
+    <tr><td align="left">응답: TrendAnalysisResult  </td></tr>
+    <tr><td align="left"><font color="#6b7280">소유: trend (사본: contracts/agents/trend/)  </font></td></tr>
+  </table>>];
+
+  c_inv [label=<<table border="1" cellborder="0" cellspacing="0" cellpadding="6" color="#1f2328">
+    <tr><td align="left"><b>2  inventory-handoff</b>  </td></tr>
+    <tr><td align="left">요청: trend 결과를 바꾸지 않고 그대로  </td></tr>
+    <tr><td align="left">응답: inventory 결과  </td></tr>
+    <tr><td align="left"><font color="#6b7280">소유: inventory (사본: contracts/agents/inventory/)  </font></td></tr>
+  </table>>];
+
+  c_nov [label=<<table border="1" cellborder="0" cellspacing="0" cellpadding="6" color="#1f2328">
+    <tr><td align="left"><b>3  novelty-handoff</b>  </td></tr>
+    <tr><td align="left">요청: 기획 요청 + trend·inventory 결과의  </td></tr>
+    <tr><td align="left">투영(novelty-input-projection)  </td></tr>
+    <tr><td align="left">응답: 기획 초안 + 이미지 산출물  </td></tr>
+    <tr><td align="left"><font color="#6b7280">소유: novelty, 호출 쪽 스키마는 contracts/workflow/  </font></td></tr>
+  </table>>];
+
+  c_res [label=<<table border="1" cellborder="0" cellspacing="0" cellpadding="6" color="#1f2328">
+    <tr><td align="left"><b>4  research-handoff</b>  </td></tr>
+    <tr><td align="left">요청: 허용된 상품 필드  </td></tr>
+    <tr><td align="left">+ 초안에서 가져온 필드별 출처  </td></tr>
+    <tr><td align="left">응답: 판매·시장 검토 결과  </td></tr>
+    <tr><td align="left"><font color="#6b7280">소유: research, 호출 쪽 스키마는 contracts/workflow/  </font></td></tr>
+  </table>>];
+
+  node [shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4f46e5", fontsize=12];
+  trend [label="trend"]; inv [label="inventory"]; nov [label="novelty"]; res [label="research"];
+
+  ui -> c_ui [arrowhead=none]; c_ui -> orch;
+  orch -> c_trend [arrowhead=none]; c_trend -> trend;
+  orch -> c_inv   [arrowhead=none]; c_inv -> inv;
+  orch -> c_nov   [arrowhead=none]; c_nov -> nov;
+  orch -> c_res   [arrowhead=none]; c_res -> res;
+
+  rules [shape=note, style="", color="#6b7280", fontsize=10, label="모든 요청: {contract_version, request_id, input}\l모든 성공 응답: {contract_version, request_id, producer{agent_id, schema_version}, status, result}\l저장하는 응답은 python-json-sort 규칙(키 정렬, 공백 없는 JSON)의 sha256으로 식별한다\lcontracts/workflow/baseline.json이 frozen일 때만 워크플로를 실행한다\l"];
+  { rank=same; orch; rules; }
+  orch -> rules [style=invis];
+}
