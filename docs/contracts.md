@@ -26,6 +26,11 @@
 
 ## 2. 공통 형식
 
+아래는 orchestrator 자신의 API(`fashion-planner-workflow`)와 orchestrator가 서비스에 보내는 요청의 형식이다. 서비스의 실패
+본문, 버전 거절 코드, 모르는 키 처리는 서비스마다 다르다(예: trend는 실패 본문이 `{"error": {"code", "message"}}`이고, 모르는
+`contract_version`을 `400`으로 거절하며, 모르는 필드는 무시한다). 그래서 orchestrator는 서비스 실패를 HTTP 상태로 분류하고
+본문은 실행 기록에 보관만 한다. 오류 본문을 검사해 코드를 가져오는 것은 research뿐이다(§6).
+
 ```text
 요청: {"contract_version": "<이름>", "request_id": "<ID>", "input": {...}}
 성공: {"contract_version", "request_id", "producer": {"agent_id", "schema_version"}, "status", "result": {...}}
@@ -119,7 +124,7 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 | 연결 거부·끊김, 서비스가 보낸 503 | 503 `UPSTREAM_UNAVAILABLE` |
 | 서비스가 보낸 504 | 504 `UPSTREAM_TIMEOUT` |
 | 서비스의 401·403 | `UPSTREAM_AUTH` |
-| 그 밖의 2xx가 아닌 응답 | 502 |
+| 그 밖의 2xx가 아닌 응답(예: trend의 400 검증 오류, 500 `invalid_search_result`) | 502 `UPSTREAM_HTTP_ERROR` |
 | 계약·파싱 실패 | 502 `CONTRACT_VIOLATION` |
 
 결합 검사 실패 코드는 서비스 이름을 접두로 쓴다(예: `NOVELTY_CALL_ENVELOPE_INVALID`, `RESEARCH_PRODUCT_PROJECTION_MISMATCH`).

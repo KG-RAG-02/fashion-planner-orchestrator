@@ -15,7 +15,7 @@
 | 실행 기록 저장소: SQLite 체크포인트, 내용 주소 blob | `src/fashion_planner_orchestrator/workflow_store.py:167-178` | 파일 읽기 |
 | 6단계 기사 사진: HTTPS, 허용 목록 `vogue.co.kr`, 최대 3장 | `src/fashion_planner_orchestrator/trend_photos.py:8,26-27` | `tests/test_trend_photos.py` |
 | orchestrator → OpenAI: 질의 구조화, SWOT 초안(live에서만) | `src/fashion_planner_orchestrator/llm_provider.py:9,77`, `src/fashion_planner_orchestrator/swot.py:225-238`, `deploy/compose.paid.yaml:10-11` | 파일 읽기 |
-| trend → Neo4j(Aura 또는 로컬 stub) | `fashion-planner-trend/src/fashion_planner_trend/config.py:94`, `deploy/compose.stub.yaml:13,56`, `deploy/compose.data.yaml:18` | 파일 읽기 |
+| trend → Neo4j(Aura 또는 로컬 stub) | `fashion-planner-trend/src/fashion_planner_trend/config.py:79`(`neo4j_settings`), `:93-121`(`neo4j_driver_args`, `neo4j_driver`), `deploy/compose.stub.yaml:13,56`, `deploy/compose.data.yaml:18` | 파일 읽기 |
 | inventory → DuckDB 캐시 + CLIP 인덱스 | `fashion-planner-inventory/fashion_planner_inventory/api.py:101`(DB 읽기 전용), `:137-165`(`clip_index_path`, `warm_up_clip`) | 파일 읽기 |
 | inventory → R2: 요청 중 상품·착샷 사진, DB·CLIP 인덱스 캐시는 `--prepare-cache`가 미리 받음 | `fashion-planner-inventory/fashion_planner_inventory/storage.py:70-79`(R2 설정), `:207-271`(사진·착샷 읽기), `:319-333`(`allow_download`), `deploy/compose.data.yaml:6,34-35` | 파일 읽기 |
 | inventory → 무신사 이미지 CDN: CLIP 기준 이미지(https, `msscdn.net`, 리다이렉트 없음, 10 MB 상한, 메모리에서 임베딩만). CLIP 인덱스가 있는 rehearsal·live에서만 | `fashion-planner-inventory/fashion_planner_inventory/clip_matcher.py:135-166` | 파일 읽기 |
