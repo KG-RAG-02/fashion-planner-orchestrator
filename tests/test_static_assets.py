@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from _http_support import LiveServerMixin, environment, real_tempdir
-from vogue_orchestrator import server as server_module
+from fashion_planner_orchestrator import server as server_module
 
 
 class StaticAssetTests(LiveServerMixin, unittest.TestCase):

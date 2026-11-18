@@ -6,9 +6,9 @@ style (poster, stock card, trend photos, SWOT input) follows the same choice.
 """
 import unittest
 
-from vogue_orchestrator.planning_sheet import (build_sheet, draft_trend_basis_id, draft_trend_citations, focus_stock,
+from fashion_planner_orchestrator.planning_sheet import (build_sheet, draft_trend_basis_id, draft_trend_citations, focus_stock,
                                                focus_trend, trend_image_urls)
-from vogue_orchestrator.swot import swot_input
+from fashion_planner_orchestrator.swot import swot_input
 
 
 def style(style_id, name, article_id):

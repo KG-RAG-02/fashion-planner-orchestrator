@@ -1,6 +1,6 @@
 # StructuredQuery 1.0 — 구조화된 질의 계약
 
-> 상태: **1.0 확정 (2026-11-11, 결정 SQ-F).** 이 문서와 JSON Schema [structured-query-1.0.schema.json](structured-query-1.0.schema.json)이 받는 쪽에 넘기는 계약이다. 모델 원본은 `src/vogue_orchestrator/query/models.py`이며 JSON Schema는 코드에서 생성한다. 현재 화면 경로는 `server.py` → `query.structured.structure_query` → `query.to_trend.to_trend_query` → 계약 기반 순차 workflow이다. Trend에는 `StructuredQuery` 자체가 아니라 첫 품목·첫 시즌을 변환한 `TrendQuery`를 전달한다. 현재 실행과 서비스 간 전달은 [P08 현재 기준](../../../../docs/current-state.md) 및 [workflow 계약](../../../workflow/workflow-contract.md)을 따른다. 소유: **이 저장소(vogue-orchestrator)**. 결정 이력은 [query-structuring.md](../../../../docs/query-structuring.md)에 있다.
+> 상태: **1.0 확정 (2026-11-11, 결정 SQ-F).** 이 문서와 JSON Schema [structured-query-1.0.schema.json](structured-query-1.0.schema.json)이 받는 쪽에 넘기는 계약이다. 모델 원본은 `src/fashion_planner_orchestrator/query/models.py`이며 JSON Schema는 코드에서 생성한다. 현재 화면 경로는 `server.py` → `query.structured.structure_query` → `query.to_trend.to_trend_query` → 계약 기반 순차 workflow이다. Trend에는 `StructuredQuery` 자체가 아니라 첫 품목·첫 시즌을 변환한 `TrendQuery`를 전달한다. 현재 실행과 서비스 간 전달은 [P08 현재 기준](../../../../docs/current-state.md) 및 [workflow 계약](../../../workflow/workflow-contract.md)을 따른다. 소유: **이 저장소(vogue-orchestrator)**. 결정 이력은 [query-structuring.md](../../../../docs/query-structuring.md)에 있다.
 > 이 문서는 **받는 쪽**(trend-analysis-agent, 이후 재고 등 다른 Agent)이 각 필드의 뜻과 쓰는 법을 판단할 수 있게 쓴 정의서다. 받는 쪽이 어떤 필드를 어떻게 쓸지는 **받는 쪽이 정한다.** 이 문서의 "활용 예"는 권장이지 강제가 아니다.
 
 ## 0. 받는 Agent를 위한 인수인계 (2026-11-11, 1.0 확정)
@@ -11,10 +11,10 @@
 |---|---|---|
 | 뜻 (이 문서) | `contracts/agents/vogue-orchestrator/output/structured-query.md` | 필드 §3, 값의 출처 `match` §4, 제외 §5, **조건을 합치는 규칙 §5.1**, 예시 §6 |
 | 검증용 JSON Schema | `contracts/agents/vogue-orchestrator/output/structured-query-1.0.schema.json` | 모델에서 생성(`scripts/export_structured_query_schema.py`). 모든 필드 `required`, 모르는 필드 거부 |
-| 모델 원본 (생산자) | `src/vogue_orchestrator/query/models.py` `StructuredQuery` | Pydantic 2. 스키마가 표현하지 못하는 규칙(§2 마지막 항목)도 검사 |
+| 모델 원본 (생산자) | `src/fashion_planner_orchestrator/query/models.py` `StructuredQuery` | Pydantic 2. 스키마가 표현하지 못하는 규칙(§2 마지막 항목)도 검사 |
 | 검증된 예시 | §6 예 1~7 | `tests/test_query_structured_models.py`가 그대로 검증, 예 4~7은 코드가 똑같이 만드는지 `tests/test_query_structured_path.py`가 확인 |
 
-**0.1.1 클래스(코드) 위치** — 모두 `src/vogue_orchestrator/query/`
+**0.1.1 클래스(코드) 위치** — 모두 `src/fashion_planner_orchestrator/query/`
 | 클래스 | 파일 | 계약에서의 자리 |
 |---|---|---|
 | `StructuredQuery` | `models.py` | 문서 전체 (§2) |
@@ -48,7 +48,7 @@
 | 품목별 시즌, 범위 밖 품목 조건의 구조화, `missing_fields`의 뜻 | 시즌은 질의 전체, `conditions_raw`는 원문, `missing_fields`는 항상 `[]` | — |
 
 **0.4 생산 상태 및 전달 경계**
-- 생산 함수: `vogue_orchestrator.query.structured.structure_query(query, request_id=..., draft_provider=...)` → `result.structured_query`(이 계약), `result.warnings`. LLM 호출은 `vogue_orchestrator.llm_provider.build_draft_provider()`(키는 `.env`). LLM은 해석만 하고 값과 `match`는 코드가 정한다(§4.1).
+- 생산 함수: `fashion_planner_orchestrator.query.structured.structure_query(query, request_id=..., draft_provider=...)` → `result.structured_query`(이 계약), `result.warnings`. LLM 호출은 `fashion_planner_orchestrator.llm_provider.build_draft_provider()`(키는 `.env`). LLM은 해석만 하고 값과 `match`는 코드가 정한다(§4.1).
 - 프롬프트 v6, gpt-4o-mini, temperature 0. 예상 질의 30개(dev)에서 **완전 일치 21/30, 형식 오류 0, 조건을 다른 품목에 붙인 경우 0**. 틀린 것은 주로 **조건을 빠뜨린 것**(품목 바로 앞 꾸밈말, 품목 이름 속 기장)이고, 그다음이 일반어를 품목으로 읽음·포함/제외 뒤집힘이다. 따라서 받는 쪽은 "잘못 들어간 조건"보다 "빠진 조건"을 더 자주 만난다. 별도 holdout 20개 측정은 아직이다([query-structuring.md §15.7·§15.8](../../../../docs/query-structuring.md)).
 - 개선은 LLM 모델·프롬프트 버전 올리기로 한다. **계약(이 문서·스키마)은 바뀌지 않는다.**
 질의 구조화는 독립적인 Agent 호출이 아니라 P08 workflow의 입력 변환 단계다. 현재 전달은 다음과 같다.

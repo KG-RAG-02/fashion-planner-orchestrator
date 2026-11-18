@@ -13,9 +13,9 @@ from _query_support import HAS_PYDANTIC, SKIP_REASON
 class ToTrendQueryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.models = importlib.import_module("vogue_orchestrator.query.models")
-        cls.convert = importlib.import_module("vogue_orchestrator.query.to_trend")
-        cls.trend = importlib.import_module("vogue_orchestrator.query.trend_query")
+        cls.models = importlib.import_module("fashion_planner_orchestrator.query.models")
+        cls.convert = importlib.import_module("fashion_planner_orchestrator.query.to_trend")
+        cls.trend = importlib.import_module("fashion_planner_orchestrator.query.trend_query")
         cls.examples = importlib.import_module("test_query_structured_models")
 
     def run_example(self, document):

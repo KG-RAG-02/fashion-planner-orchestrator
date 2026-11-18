@@ -6,7 +6,7 @@ Writes (in this repository):
   contracts/agents/trend/vocabulary/alias-map.golden.json    outputs of the ORIGINAL trend code (AliasMap.normalize,
                                           normalize_tokens, normalize_color, split_tokens, norm_key and
                                           TextMatcher text matching) used to verify the port
-  src/vogue_orchestrator/query/alias_data.py  regenerated from the snapshot (scripts/generate_alias_data.py)
+  src/fashion_planner_orchestrator/query/alias_data.py  regenerated from the snapshot (scripts/generate_alias_data.py)
 
 This is the only step that needs the trend repository, its code and pyyaml. Run it with the trend
 virtual environment, from the root of this repository:

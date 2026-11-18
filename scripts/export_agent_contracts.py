@@ -86,7 +86,7 @@ class Entry:
     envelope: Envelope | None = None  # route the contract travels on; None: the agent's /runs (ENVELOPES)
 
 
-WORKFLOW_CONTRACT_PY = "src/vogue_orchestrator/workflow_contract.py"
+WORKFLOW_CONTRACT_PY = "src/fashion_planner_orchestrator/workflow_contract.py"
 
 ENVELOPES = {
     "trend": Envelope("/v1/agents/trend/runs", "src/trend_agent/api/server.py",
@@ -167,7 +167,7 @@ ENTRIES = (
                    "1.0.0", "contracts/workflow", RUN_ENVELOPE),
     Entry(SELF, "input", "md-decision-request.contract.json",
           "orchestrator MD decision request (POST /api/workflow/runs/{rid}/md-decision)", "fashion-planner-workflow", "authored",
-          ("src/vogue_orchestrator/workflow_http.py", "src/vogue_orchestrator/workflow_store.py",
+          ("src/fashion_planner_orchestrator/workflow_http.py", "src/fashion_planner_orchestrator/workflow_store.py",
            WORKFLOW_CONTRACT_PY),
           envelope=MD_DECISION_ENVELOPE),
 )

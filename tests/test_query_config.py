@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 
 from _query_support import ROOT
-from vogue_orchestrator.query import config as query_config
-from vogue_orchestrator.query.vocabulary import GENDERS
+from fashion_planner_orchestrator.query import config as query_config
+from fashion_planner_orchestrator.query.vocabulary import GENDERS
 
 CONFIG_FILE = ROOT / "configs" / "query_structuring.json"
 
@@ -65,7 +65,7 @@ class ConfigIsUsedByCodeTests(unittest.TestCase):
     """The values must come from the config, not from leftover literals in the code."""
 
     def test_no_moved_literal_remains_in_the_query_package(self):
-        package = ROOT / "src" / "vogue_orchestrator" / "query"
+        package = ROOT / "src" / "fashion_planner_orchestrator" / "query"
         config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
         moved_texts = [*config["unsupported"]["reasons"].values(), config["unsupported"]["generic_reason"]]
         for path in package.glob("*.py"):

@@ -35,7 +35,7 @@ class IsolationTests(unittest.TestCase):
                 with self.subTest(file=path.name, module=module, level=level):
                     self.assertLessEqual(level, 1, "only same-package relative imports are allowed")
                     parts = module.split(".")
-                    if level == 0 and parts[0] == "vogue_orchestrator":
+                    if level == 0 and parts[0] == "fashion_planner_orchestrator":
                         # An absolute import may only point back into the query package itself.
                         self.assertEqual(parts[1:2], ["query"], f"must not import {module}")
 
@@ -54,7 +54,7 @@ class IsolationTests(unittest.TestCase):
                 with self.subTest(file=path.name, module=module):
                     parts = module.split(".")
                     self.assertFalse(
-                        (level >= 1 and parts[0] == "query") or (level == 0 and parts[:2] == ["vogue_orchestrator", "query"]),
+                        (level >= 1 and parts[0] == "query") or (level == 0 and parts[:2] == ["fashion_planner_orchestrator", "query"]),
                         "only the HTTP entry point may depend on query structuring",
                     )
 

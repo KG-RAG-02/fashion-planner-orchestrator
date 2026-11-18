@@ -2,7 +2,7 @@
 """Record the current workflow contract baseline: contracts/workflow/baseline.json.
 
 This script is the only writer of baseline.json. The runtime gate in
-vogue_orchestrator.workflow_http reads it; "frozen" is never hand-edited.
+fashion_planner_orchestrator.workflow_http reads it; "frozen" is never hand-edited.
 
   --check                 verify baseline.json against snapshot.json and the schema bytes; exit 1 on drift
   --init                  write a `proposed` baseline for the current snapshot (claims no validation)

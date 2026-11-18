@@ -6,8 +6,8 @@ the code; where this file says "dictionary", the result comes from `lexicon.py`,
 
 import unittest
 
-from vogue_orchestrator.query import resolve as r
-from vogue_orchestrator.query.resolve import Condition, ResolvedValue, include_exclude_conflicts
+from fashion_planner_orchestrator.query import resolve as r
+from fashion_planner_orchestrator.query.resolve import Condition, ResolvedValue, include_exclude_conflicts
 
 
 def one(raw, kind, polarity="include", suggestion=None, **kwargs):

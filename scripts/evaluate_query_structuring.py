@@ -21,7 +21,7 @@ Providers:
            (resolver + assembly); should be 100 % unless code and labels disagree. Labels are grouped
            drafts; they are written in the model's flat shape first (draft.flatten_draft), so the
            grouping code is measured too.
-  llm      the real model from .env (LLM_MODEL / LLM_API_KEY, src/vogue_orchestrator/llm_provider.py).
+  llm      the real model from .env (LLM_MODEL / LLM_API_KEY, src/fashion_planner_orchestrator/llm_provider.py).
            Sends every query to the external provider (paid): run it only on purpose.
   replay   the model outputs saved in an earlier report (--replay <report.json>) are fed in again, so a
            CODE change can be measured on the same LLM answers without any external call.
@@ -126,7 +126,7 @@ def compare(expected: dict[tuple, str | None], produced: dict[tuple, str | None]
 
 def _provider(name: str, item: dict[str, Any], replayed: dict[str, Any] | None = None):
     if name == "fixture":
-        from vogue_orchestrator.query.draft import flatten_draft
+        from fashion_planner_orchestrator.query.draft import flatten_draft
 
         return lambda bundle: flatten_draft(item["expected_draft"])
     if name == "replay":
@@ -140,14 +140,14 @@ def _provider(name: str, item: dict[str, Any], replayed: dict[str, Any] | None =
 
 def run(data: dict[str, Any], provider_name: str, ids: Iterable[str] | None,
         replay: dict[str, Any] | None = None) -> dict[str, Any]:
-    from vogue_orchestrator.query.errors import QueryStructuringError
-    from vogue_orchestrator.query.prompt import PROMPT_ID, PROMPT_SHA256
-    from vogue_orchestrator.query.structured import structure_query
+    from fashion_planner_orchestrator.query.errors import QueryStructuringError
+    from fashion_planner_orchestrator.query.prompt import PROMPT_ID, PROMPT_SHA256
+    from fashion_planner_orchestrator.query.structured import structure_query
 
     today = date.fromisoformat(data["reference_today"])
     llm = None
     if provider_name == "llm":
-        from vogue_orchestrator.llm_provider import build_draft_provider, llm_status
+        from fashion_planner_orchestrator.llm_provider import build_draft_provider, llm_status
 
         llm = build_draft_provider()
         status = llm_status()

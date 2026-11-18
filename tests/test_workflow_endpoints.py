@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from _http_support import LiveServerMixin, environment
-from vogue_orchestrator.workflow_store import WorkflowStore, digest
+from fashion_planner_orchestrator.workflow_store import WorkflowStore, digest
 
 TOKEN = 'dummy-status-token'
 
@@ -235,7 +235,7 @@ class SystemStatusTests(EndpointTestBase, unittest.TestCase):
         env = dict(VOGUE_WORKFLOW_STORE_DIR=str(self.store_dir), VOGUE_TREND_AGENT_URL='http://trend:8768',
                    VOGUE_STOCK_AGENT_URL='http://127.0.0.1:%d' % silent.getsockname()[1], VOGUE_AGENT_HTTP_DEV_MODE='1',
                    VOGUE_ORCHESTRATOR_RUNTIME='container')
-        with environment(**env), patch('vogue_orchestrator.system_status.PROBE_TIMEOUT_SECONDS', 0.3):
+        with environment(**env), patch('fashion_planner_orchestrator.system_status.PROBE_TIMEOUT_SECONDS', 0.3):
             status, body, _ = self.request('GET', '/api/system/status')
         self.assertEqual(status, 200)
         errors = {a['id']: a['error'] for a in body['agents']}

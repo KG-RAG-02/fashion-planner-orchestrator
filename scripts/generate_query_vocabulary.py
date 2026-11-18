@@ -1,4 +1,4 @@
-"""Regenerate src/vogue_orchestrator/query/vocabulary.py from the TrendQuery contract snapshot.
+"""Regenerate src/fashion_planner_orchestrator/query/vocabulary.py from the TrendQuery contract snapshot.
 
 The snapshot (contracts/agents/trend/input/trend-query.contract.json) is a read-only copy of the contract
 owned by trend-analysis-agent. This script turns it into plain Python constants so the query
@@ -21,7 +21,7 @@ from typing import Any, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "contracts" / "agents" / "trend" / "input" / "trend-query.contract.json"
-TARGET_PATH = ROOT / "src" / "vogue_orchestrator" / "query" / "vocabulary.py"
+TARGET_PATH = ROOT / "src" / "fashion_planner_orchestrator" / "query" / "vocabulary.py"
 
 HEADER = '''"""GENERATED FILE - do not edit by hand.
 

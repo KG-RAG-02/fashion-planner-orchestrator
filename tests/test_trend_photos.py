@@ -7,10 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from vogue_orchestrator.planning_sheet import trend_image_urls
-from vogue_orchestrator.trend_photos import (PhotoRejected, TrendPhotos, allowed_hosts, checkpoint_key, enabled,
+from fashion_planner_orchestrator.planning_sheet import trend_image_urls
+from fashion_planner_orchestrator.trend_photos import (PhotoRejected, TrendPhotos, allowed_hosts, checkpoint_key, enabled,
                                              fetch_photo, host_allowed, load_trend_photos)
-from vogue_orchestrator.workflow_store import WorkflowStore
+from fashion_planner_orchestrator.workflow_store import WorkflowStore
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'tools' / 'workflow_contract' / 'fixtures'
 HOSTS = ('vogue.co.kr',)

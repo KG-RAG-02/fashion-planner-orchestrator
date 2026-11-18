@@ -76,9 +76,9 @@ class ContainerImageTests(unittest.TestCase):
                      '.local/workflow/blobs/x', 'tests/test_workflow.py', 'tools/workflow_contract/support.py',
                      'deploy/service-manifest.json', 'docs/workflow-integration-conventions.md', 'data/query-structuring-eval/dev.json',
                      'scripts/local_servers.py', 'compose.yaml', 'README.md',
-                     'src/vogue_orchestrator/server 2.py', 'web/app 2.js', 'contracts/workflow/baseline 3.json',
+                     'src/fashion_planner_orchestrator/server 2.py', 'web/app 2.js', 'contracts/workflow/baseline 3.json',
                      'prompts/query_structuring/examples 2.json',
-                     'src/vogue_orchestrator/__pycache__/server.cpython-312.pyc'):
+                     'src/fashion_planner_orchestrator/__pycache__/server.cpython-312.pyc'):
             with self.subTest(path=path):
                 self.assertTrue(excluded(self.rules, path))
 

@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from vogue_orchestrator.workflow_contract import (CONTRACT_ROOT, baseline_problems, contract_gate_status,
+from fashion_planner_orchestrator.workflow_contract import (CONTRACT_ROOT, baseline_problems, contract_gate_status,
                                                   snapshot_state)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,7 +59,7 @@ class ContractGateTests(unittest.TestCase):
         self.assertEqual(status['contract_version'], 'workflow-contract')
 
     def test_allow_proposed_opens_a_development_run_with_the_exact_limitation(self):
-        from vogue_orchestrator.workflow_http import ensure_live_contract
+        from fashion_planner_orchestrator.workflow_http import ensure_live_contract
         for value in ('1', 'true', 'YES', 'on'):
             with self.subTest(value=value):
                 self.assertEqual(contract_gate_status({'VOGUE_WORKFLOW_ALLOW_PROPOSED': value})['gate'], 'development')
@@ -69,13 +69,13 @@ class ContractGateTests(unittest.TestCase):
                 self.assertEqual(contract_gate_status({'VOGUE_WORKFLOW_ALLOW_PROPOSED': value})['gate'], 'closed')
 
     def test_closed_gate_raises_contract_not_frozen_409(self):
-        from vogue_orchestrator.workflow_http import WorkflowUnavailable, ensure_live_contract
+        from fashion_planner_orchestrator.workflow_http import WorkflowUnavailable, ensure_live_contract
         with self.assertRaises(WorkflowUnavailable) as raised:
             ensure_live_contract(env={})
         self.assertEqual((raised.exception.code, raised.exception.http_status), ('CONTRACT_NOT_FROZEN', 409))
 
     def test_frozen_validated_matching_baseline_runs_without_limitation(self):
-        from vogue_orchestrator.workflow_http import ensure_live_contract
+        from fashion_planner_orchestrator.workflow_http import ensure_live_contract
         env = {'VOGUE_WORKFLOW_CONTRACT_BASELINE': self.write(frozen(self.baseline))}
         status = contract_gate_status(env)
         self.assertEqual((status['gate'], status['source'], status['problems']),
@@ -128,7 +128,7 @@ class ContractGateTests(unittest.TestCase):
                     self.assertEqual((ours, theirs), ([], []))
 
     def test_readiness_reports_the_in_repo_baseline_state(self):
-        from vogue_orchestrator.workflow_http import readiness
+        from fashion_planner_orchestrator.workflow_http import readiness
         with patch.dict(os.environ):
             for key in GATE_KEYS:
                 os.environ.pop(key, None)
@@ -137,8 +137,8 @@ class ContractGateTests(unittest.TestCase):
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
     def test_build_workflow_carries_the_development_limitation(self):
-        from vogue_orchestrator import workflow_http
-        from vogue_orchestrator.workflow_store import WorkflowStore
+        from fashion_planner_orchestrator import workflow_http
+        from fashion_planner_orchestrator.workflow_store import WorkflowStore
         env = {'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_AGENT_HTTP_DEV_MODE': '1',
                'VOGUE_AGENT_SERVICE_BEARER_TOKEN': 'synthetic-test-token',
                'VOGUE_TREND_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_STOCK_AGENT_URL': 'http://127.0.0.1:9',
@@ -151,8 +151,8 @@ class ContractGateTests(unittest.TestCase):
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
     def test_build_workflow_requires_p07_bearer_even_in_loopback_development_mode(self):
-        from vogue_orchestrator import workflow_http
-        from vogue_orchestrator.connectors import ConnectorConfigurationError
+        from fashion_planner_orchestrator import workflow_http
+        from fashion_planner_orchestrator.connectors import ConnectorConfigurationError
         env = {'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_AGENT_HTTP_DEV_MODE': '1',
                'VOGUE_TREND_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_STOCK_AGENT_URL': 'http://127.0.0.1:9',
                'VOGUE_NEW_PRODUCT_AGENT_URL': 'http://127.0.0.1:9', 'VOGUE_SALES_MARKET_AGENT_URL': 'http://127.0.0.1:9'}

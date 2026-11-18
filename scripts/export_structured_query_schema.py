@@ -1,6 +1,6 @@
 """Export the StructuredQuery 1.0 JSON Schema to contracts/agents/orchestrator/output/structured-query.schema.json.
 
-The schema is generated from the pydantic models in src/vogue_orchestrator/query/models.py
+The schema is generated from the pydantic models in src/fashion_planner_orchestrator/query/models.py
 (this repository owns the contract, decision Y1) and is the file handed to receivers.
 Serialization mode: it describes the JSON this repository emits, so every field is required.
 
@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGET_PATH = ROOT / "contracts" / "agents" / "orchestrator" / "output" / "structured-query.schema.json"
 sys.path.insert(0, str(ROOT / "src"))
 
-from vogue_orchestrator.query.models import export_json_schema  # noqa: E402
+from fashion_planner_orchestrator.query.models import export_json_schema  # noqa: E402
 
 
 def render() -> str:

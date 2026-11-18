@@ -7,8 +7,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from vogue_orchestrator import service_manifest
-from vogue_orchestrator.service_manifest import DEFAULT_MANIFEST, _python, services
+from fashion_planner_orchestrator import service_manifest
+from fashion_planner_orchestrator.service_manifest import DEFAULT_MANIFEST, _python, services
 
 ROOT = Path(__file__).resolve().parents[1]
 

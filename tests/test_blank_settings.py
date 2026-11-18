@@ -7,8 +7,8 @@ import unittest
 from unittest.mock import patch
 
 from _http_support import environment, real_tempdir
-from vogue_orchestrator import service_manifest, workflow_http
-from vogue_orchestrator.connectors import ConnectorConfigurationError, timeout_seconds
+from fashion_planner_orchestrator import service_manifest, workflow_http
+from fashion_planner_orchestrator.connectors import ConnectorConfigurationError, timeout_seconds
 
 BLANKS = ('', '   ', '\t')
 AGENTS = {k: 'http://127.0.0.1:9' for k in ('VOGUE_TREND_AGENT_URL', 'VOGUE_STOCK_AGENT_URL',
@@ -81,9 +81,9 @@ class BlankSettingTests(unittest.TestCase):
         fake = Mock()
         fake.serve_forever.side_effect = KeyboardInterrupt
         with environment(VOGUE_ORCHESTRATOR_HOST=' ', VOGUE_ORCHESTRATOR_PORT=''), \
-                patch('vogue_orchestrator.server.ThreadingHTTPServer', return_value=fake) as factory, \
+                patch('fashion_planner_orchestrator.server.ThreadingHTTPServer', return_value=fake) as factory, \
                 contextlib.redirect_stdout(io.StringIO()):
-            from vogue_orchestrator.server import serve
+            from fashion_planner_orchestrator.server import serve
             serve()
         self.assertEqual(factory.call_args.args[0], ('127.0.0.1', 8765))
 

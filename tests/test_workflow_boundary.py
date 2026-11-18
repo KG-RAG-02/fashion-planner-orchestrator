@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from vogue_orchestrator.server import OrchestratorHandler
-from vogue_orchestrator.workflow_http import dispatch, routes
+from fashion_planner_orchestrator.server import OrchestratorHandler
+from fashion_planner_orchestrator.workflow_http import dispatch, routes
 
 
 class BoundaryTests(unittest.TestCase):
@@ -33,7 +33,7 @@ class BoundaryTests(unittest.TestCase):
         request = {'contract_version': 'fashion-planner-workflow', 'request_id': 'test-gate',
                    'input': {'user_input': {'text': 'test', 'images': []}}}
         handler = self.handler(request)
-        with patch.dict(os.environ), patch('vogue_orchestrator.server.structure_query_for_ui') as structurer:
+        with patch.dict(os.environ), patch('fashion_planner_orchestrator.server.structure_query_for_ui') as structurer:
             for key in ('VOGUE_WORKFLOW_ALLOW_PROPOSED', 'VOGUE_WORKFLOW_CONTRACT_BASELINE'):
                 os.environ.pop(key, None)
             dispatch(handler, request)
@@ -48,7 +48,7 @@ class BoundaryTests(unittest.TestCase):
         fake.run.return_value = response
         request = {'contract_version': 'fashion-planner-workflow', 'request_id': 'test',
                    'input': {'user_input': {'text': 'test', 'images': []}, 'trend_query': {'request_id': 'test'}}}
-        with patch('vogue_orchestrator.workflow_http.build_workflow', return_value=fake):
+        with patch('fashion_planner_orchestrator.workflow_http.build_workflow', return_value=fake):
             dispatch(handler, request)
         handler._json.assert_called_once_with(502, response['envelope'])
 
@@ -62,7 +62,7 @@ class BoundaryTests(unittest.TestCase):
                        'input': {'user_input': {'text': 'test', 'images': []}, 'trend_query': trend}}
             fake = Mock()
             fake.run.return_value = {'http_status': 200, 'envelope': {}}
-            with patch('vogue_orchestrator.workflow_http.build_workflow', return_value=fake):
+            with patch('fashion_planner_orchestrator.workflow_http.build_workflow', return_value=fake):
                 dispatch(self.handler(request), request)
             return fake.run.call_args.kwargs['planning_request']
 
@@ -83,7 +83,7 @@ class BoundaryTests(unittest.TestCase):
         self.assertEqual(handler._json.call_args.args[0], 403)
 
     def test_service_manifest_is_deployment_configuration(self):
-        from vogue_orchestrator.service_manifest import DEFAULT_MANIFEST, services
+        from fashion_planner_orchestrator.service_manifest import DEFAULT_MANIFEST, services
         root = Path(__file__).resolve().parents[1]
         self.assertEqual(DEFAULT_MANIFEST, root / 'deploy' / 'service-manifest.json')
         declared = json.loads(DEFAULT_MANIFEST.read_text(encoding='utf-8'))['services']

@@ -17,7 +17,7 @@ WORKDIR /app
 RUN groupadd --system --gid 10001 vogue \
  && useradd --system --uid 10001 --gid 10001 --home-dir /tmp --no-create-home --shell /usr/sbin/nologin vogue
 
-# Korean glyphs for the 기획서 PNG (src/vogue_orchestrator/planning_sheet.py): NanumBarunGothic from
+# Korean glyphs for the 기획서 PNG (src/fashion_planner_orchestrator/planning_sheet.py): NanumBarunGothic from
 # fonts-nanum (SIL OFL 1.1). Latin display text uses the self-hosted Jost in web/fonts.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends fonts-nanum \
@@ -30,7 +30,7 @@ RUN python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb'))['p
  && rm /tmp/requirements.txt
 
 COPY app.py ./app.py
-COPY src/vogue_orchestrator ./src/vogue_orchestrator
+COPY src/fashion_planner_orchestrator ./src/fashion_planner_orchestrator
 COPY web ./web
 COPY configs ./configs
 COPY prompts ./prompts

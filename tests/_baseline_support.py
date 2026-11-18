@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from vogue_orchestrator import workflow_contract
+from fashion_planner_orchestrator import workflow_contract
 
 
 def pin_proposed_baseline(testcase):

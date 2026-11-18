@@ -8,8 +8,8 @@ import uuid
 import importlib.util
 
 from _http_support import LiveServerMixin, environment, real_tempdir
-from vogue_orchestrator import workflow_http
-from vogue_orchestrator.workflow_store import (ArtifactError, PeerArtifactReader, WorkflowStore, artifact_path,
+from fashion_planner_orchestrator import workflow_http
+from fashion_planner_orchestrator.workflow_store import (ArtifactError, PeerArtifactReader, WorkflowStore, artifact_path,
                                                canonical)
 
 try:

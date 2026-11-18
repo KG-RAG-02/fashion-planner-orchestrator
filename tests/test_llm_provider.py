@@ -1,4 +1,4 @@
-"""The real LLM call (src/vogue_orchestrator/llm_provider.py) with fake SDK clients. No network, no .env.
+"""The real LLM call (src/fashion_planner_orchestrator/llm_provider.py) with fake SDK clients. No network, no .env.
 
 Every test passes its own environment and a non-existent .env path, so the repository's real .env
 (which holds the user's key) is never read.
@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from vogue_orchestrator import llm_provider as llm
+from fashion_planner_orchestrator import llm_provider as llm
 
 NO_ENV_FILE = Path(tempfile.gettempdir()) / "vogue-no-such-dir" / ".env"
 BUNDLE = SimpleNamespace(system="SYSTEM PROMPT", user="USER MESSAGE")

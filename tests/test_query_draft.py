@@ -22,9 +22,9 @@ def grouped(items=(), common=(), common_unsupported=()):
 class QueryDraftTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.draft = importlib.import_module("vogue_orchestrator.query.draft")
-        cls.vocab = importlib.import_module("vogue_orchestrator.query.vocabulary")
-        cls.config = importlib.import_module("vogue_orchestrator.query.config")
+        cls.draft = importlib.import_module("fashion_planner_orchestrator.query.draft")
+        cls.vocab = importlib.import_module("fashion_planner_orchestrator.query.vocabulary")
+        cls.config = importlib.import_module("fashion_planner_orchestrator.query.config")
         cls.ValidationError = importlib.import_module("pydantic").ValidationError
 
     def validate(self, payload):
@@ -169,7 +169,7 @@ class QueryDraftTests(unittest.TestCase):
 class GroupedQueryDraftTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.draft = importlib.import_module("vogue_orchestrator.query.draft")
+        cls.draft = importlib.import_module("fashion_planner_orchestrator.query.draft")
         cls.ValidationError = importlib.import_module("pydantic").ValidationError
 
     def validate(self, payload):
@@ -221,7 +221,7 @@ class LabelRepairTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.draft = importlib.import_module("vogue_orchestrator.query.draft")
+        cls.draft = importlib.import_module("fashion_planner_orchestrator.query.draft")
 
     def repair(self, conditions=(), unsupported=()):
         payload = {"seasons": [], "style_names": [], "product_model_names": [], "items": [{"raw": "점퍼"}],

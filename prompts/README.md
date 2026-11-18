@@ -3,7 +3,7 @@
 ## 질의 구조화 (`query_structuring/`)
 
 상품 기획 요청 문장을 trend 서비스가 받는 질의로 구조화할 때 모델에 보내는 프롬프트입니다.
-`src/vogue_orchestrator/query/structured.py`가 쓰고, 폴더 이름은 `configs/query_structuring.json`의 `prompt.name`입니다.
+`src/fashion_planner_orchestrator/query/structured.py`가 쓰고, 폴더 이름은 `configs/query_structuring.json`의 `prompt.name`입니다.
 
 | 파일 | 내용 |
 |---|---|
@@ -19,7 +19,7 @@ sha256(`prompt_sha256`)으로 식별하므로, 프롬프트를 고치면 해시�
 ## 기획서 SWOT (`swot/`)
 
 `swot/system.md`는 기획서의 SWOT·프로모션·차별화 포인트 초안을 만드는 시스템 프롬프트입니다
-(`src/vogue_orchestrator/swot.py`). 사용자 메시지는 `swot.swot_input()`이 만든 실행 기록 요약 JSON이고,
+(`src/fashion_planner_orchestrator/swot.py`). 사용자 메시지는 `swot.swot_input()`이 만든 실행 기록 요약 JSON이고,
 답은 `swot.parse_swot()`이 검증합니다. 차별화 포인트는 novelty 초안의 `draft.differentiation`이 비어 있을 때만
 씁니다. 저장 레코드는 프롬프트를 `prompt_sha256`(`system.md`의 sha256)으로 식별합니다. `meta.json`은 입력과
 출력 형식을 설명합니다.

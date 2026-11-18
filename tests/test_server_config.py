@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from vogue_orchestrator.server import serve
+from fashion_planner_orchestrator.server import serve
 
 
 class ServerConfigurationTests(unittest.TestCase):
@@ -24,7 +24,7 @@ class ServerConfigurationTests(unittest.TestCase):
             "VOGUE_ORCHESTRATOR_PORT": "9876",
             "VOGUE_ORCHESTRATOR_ALLOW_REMOTE_BIND": "1",
         }, clear=True):
-            with patch("vogue_orchestrator.server.ThreadingHTTPServer", return_value=fake_server) as server_factory:
+            with patch("fashion_planner_orchestrator.server.ThreadingHTTPServer", return_value=fake_server) as server_factory:
                 with contextlib.redirect_stdout(io.StringIO()):
                     serve()
 

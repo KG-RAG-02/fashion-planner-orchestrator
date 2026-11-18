@@ -7,22 +7,22 @@
     "source_repo": "KG-RAG-02/fashion-planner-orchestrator",
     "source_files": [
       {
-        "path": "src/vogue_orchestrator/workflow_http.py",
-        "sha256": "e60473e32f8ee10e61d92576534115f765a26db6aa457109b911bdefe2de89e8"
+        "path": "src/fashion_planner_orchestrator/workflow_http.py",
+        "sha256": "877f354c11f355d1d795de4a478f4a1b5da5d9992436da780cad2f708d7999ab"
       },
       {
-        "path": "src/vogue_orchestrator/workflow_store.py",
+        "path": "src/fashion_planner_orchestrator/workflow_store.py",
         "sha256": "706d8d0f98b6ba50da21db64e872a8526e16270a162efbdf0cde2dfbce178a48"
       },
       {
-        "path": "src/vogue_orchestrator/workflow_contract.py",
-        "sha256": "7506ee4e6760d098f6c64589e281a76d5e98745c3496a6f0d1db9e98f1311d03"
+        "path": "src/fashion_planner_orchestrator/workflow_contract.py",
+        "sha256": "32a0cba5f60341da9be2a3c695aca28404977da8699b3ee2e29f8f6f71573e5c"
       }
     ],
     "handoff": {
       "route": "/api/workflow/runs/{rid}/md-decision",
       "contract_version": "fashion-planner-workflow",
-      "detected_from": "src/vogue_orchestrator/workflow_contract.py:VERSION"
+      "detected_from": "src/fashion_planner_orchestrator/workflow_contract.py:VERSION"
     },
     "generated_by": "scripts/export_agent_contracts.py",
     "note": "소유 레포에 JSON Schema가 없어 코드를 읽고 이 저장소에서 작성했다. 스크립트가 다시 쓰지 않는다. source_files의 sha256이 달라지면 코드를 다시 읽고 손으로 갱신한다."

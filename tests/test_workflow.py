@@ -7,9 +7,9 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from vogue_orchestrator.workflow import Workflow, WireResponse
-from vogue_orchestrator.workflow_contract import WorkflowContract
-from vogue_orchestrator.workflow_store import WorkflowStore, canonical, digest
+from fashion_planner_orchestrator.workflow import Workflow, WireResponse
+from fashion_planner_orchestrator.workflow_contract import WorkflowContract
+from fashion_planner_orchestrator.workflow_store import WorkflowStore, canonical, digest
 
 FIXTURES = Path(__file__).parent / 'fixtures/workflow'
 CONTRACT_FIXTURES = Path(__file__).resolve().parents[1] / 'tools/workflow_contract/fixtures'
@@ -225,7 +225,7 @@ class WorkflowTests(unittest.TestCase):
         self.contract.semantic(result, self.rid, self.store)
 
     def test_p07_receives_the_proposed_material_with_its_proposal_kind(self):
-        from vogue_orchestrator.workflow_contract import p07_review_input
+        from fashion_planner_orchestrator.workflow_contract import p07_review_input
         profile = {'category':{'value':'가디건','kind':'user_requested','evidence_ids':[]},
                    'material':{'value':'울 혼방 니트','kind':'proposal','evidence_ids':[]},
                    'season':{'value':'2026FW','kind':'proposal','evidence_ids':[]},
@@ -244,7 +244,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_p06_trend_basis_and_the_p07_consumer_projection_pass_every_check(self):
         """A Draft with draft.trend_basis (P06 rule, 2026-11-17) and P07 main c662d4d's response run end to end."""
-        from vogue_orchestrator.planning_sheet import build_sheet, draft_trend_citations, focus_stock, focus_trend
+        from fashion_planner_orchestrator.planning_sheet import build_sheet, draft_trend_citations, focus_stock, focus_trend
         # Two Trend styles and a Draft that cites neither: without trend_basis the focus would be the first style,
         # so the focus below is the basis's doing.
         first = self.sample['input']['trend_response']['raw_response']['result']['trends'][0]['style']['id']
@@ -347,7 +347,7 @@ class WorkflowTests(unittest.TestCase):
             self.contract.semantic(downgraded, self.rid, self.store)
 
     def test_partial_agent_error_is_preserved_and_timing_logs_are_safe(self):
-        from vogue_orchestrator.workflow import LOGGER
+        from fashion_planner_orchestrator.workflow import LOGGER
 
         def mutate(stage, value):
             if stage == 'sales_market_review':
@@ -534,7 +534,7 @@ class WorkflowTests(unittest.TestCase):
     def test_fixture_image_provider_runs_offline_and_counts_one_call(self):
         import os
         from unittest.mock import patch
-        from vogue_orchestrator.workflow_http import fixture_image
+        from fashion_planner_orchestrator.workflow_http import fixture_image
         self.workflow.image = fixture_image
         with patch.dict(os.environ, {'VOGUE_WORKFLOW_IMAGES_ENABLED': '1'}), \
                 patch('socket.socket.connect', side_effect=AssertionError('no network')):
@@ -671,7 +671,7 @@ class WorkflowTests(unittest.TestCase):
         self.contract.schema(result['envelope'], 'integrated-result.schema.json')
 
     def test_strict_json_and_symlink_store_rejection(self):
-        from vogue_orchestrator.workflow_store import strict_json
+        from fashion_planner_orchestrator.workflow_store import strict_json
         for raw in [b'{"a":1,"a":2}',b'{"a":NaN}',b'{"a":Infinity}']:
             with self.assertRaises(ValueError): strict_json(raw)
         with self.assertRaises(ValueError): canonical({1:'bad'})
@@ -717,8 +717,8 @@ class WorkflowTests(unittest.TestCase):
         return sent
 
     def test_p06_receives_the_projection_and_the_run_keeps_the_raw(self):
-        from vogue_orchestrator.upstream_projection import novelty_inputs
-        from vogue_orchestrator.workflow import LOGGER
+        from fashion_planner_orchestrator.upstream_projection import novelty_inputs
+        from fashion_planner_orchestrator.workflow import LOGGER
         trend_raw, stock_raw = self.use_upstream_projection_fixture()
         sent = self.capture_p06()
         records = []
@@ -757,7 +757,7 @@ class WorkflowTests(unittest.TestCase):
     def test_stock_still_receives_the_raw_trend_result(self):
         # Decision B4: only P06 gets the projection. The stock trace and integrated() hash the stored raw result
         # rather than the bytes sent, so a regression here would pass both; pin what stock actually receives.
-        from vogue_orchestrator.upstream_projection import trend_view
+        from fashion_planner_orchestrator.upstream_projection import trend_view
         trend_raw, stock_raw = self.use_upstream_projection_fixture()
         sent = []
         original = self.workflow.adapters['stock']
@@ -775,9 +775,9 @@ class WorkflowTests(unittest.TestCase):
 
     def test_a_changed_projection_stops_before_p06(self):
         from unittest.mock import patch
-        from vogue_orchestrator import workflow as workflow_module
-        from vogue_orchestrator.upstream_projection import novelty_inputs
-        from vogue_orchestrator.workflow_contract import ContractViolation, require_novelty_inputs
+        from fashion_planner_orchestrator import workflow as workflow_module
+        from fashion_planner_orchestrator.upstream_projection import novelty_inputs
+        from fashion_planner_orchestrator.workflow_contract import ContractViolation, require_novelty_inputs
 
         def drop_quotes(trend, stock):  # not the projection the check recomputes
             for row in trend['evidence']:
@@ -818,8 +818,8 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(sorted(json.loads(value)['stage'] for (value,) in rows), ['stock', 'trend'])
 
     def test_p06_binding_accepts_the_projection_only(self):
-        from vogue_orchestrator.upstream_projection import novelty_inputs
-        from vogue_orchestrator.workflow_contract import ContractViolation
+        from fashion_planner_orchestrator.upstream_projection import novelty_inputs
+        from fashion_planner_orchestrator.workflow_contract import ContractViolation
         trend_raw, stock_raw = self.use_upstream_projection_fixture()
         envelope = self.run_flow()['envelope']
         self.assertEqual(envelope['status'], 'ok', envelope['result']['errors'])
@@ -885,7 +885,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_a_run_that_died_between_p06_and_initial_resumes_without_calling_p06(self):
         from unittest.mock import patch
-        from vogue_orchestrator import workflow as workflow_module
+        from fashion_planner_orchestrator import workflow as workflow_module
 
         class Crash(BaseException):  # stands in for the process dying; run() only catches Exception
             pass
@@ -987,7 +987,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
 
     def run_flow(self, reader=True, trend_photos=None, image=None, swot=None):
         from unittest.mock import patch
-        from vogue_orchestrator.workflow_http import planning_sheet_image
+        from fashion_planner_orchestrator.workflow_http import planning_sheet_image
         workflow = Workflow(trend=lambda p: self.call('trend', p), stock=lambda p: self.call('stock', p),
                             draft=lambda p: self.call('planning_draft', p), review=lambda p: self.call('sales_market_review', p),
                             image=image or planning_sheet_image, store=self.store, contract=self.contract,
@@ -1000,7 +1000,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
     def test_p06_visuals_are_imported_and_stage_06_is_the_composed_sheet(self):
         from PIL import Image
         import io
-        from vogue_orchestrator.planning_sheet import build_sheet
+        from fashion_planner_orchestrator.planning_sheet import build_sheet
         result = self.run_flow()
         envelope = result['envelope']
         body = envelope['result']
@@ -1026,7 +1026,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
         self.assertEqual(body['stages'][2]['status'], 'partial')
 
     def test_stage_06_hands_the_stored_trend_photos_to_the_sheet(self):
-        from vogue_orchestrator.workflow_http import planning_sheet_image
+        from fashion_planner_orchestrator.workflow_http import planning_sheet_image
         seen, hook_calls = [], []
 
         def photos(rid, envelope):
@@ -1043,7 +1043,7 @@ class DraftVisualsWorkflowTests(unittest.TestCase):
         self.assertEqual(seen, [[(b'photo-bytes', 'https://img.vogue.co.kr/a.jpg')]])
 
     def test_stage_06_hands_the_swot_draft_to_the_sheet(self):
-        from vogue_orchestrator.workflow_http import planning_sheet_image
+        from fashion_planner_orchestrator.workflow_http import planning_sheet_image
         seen = []
 
         def image(payload):

@@ -1,21 +1,42 @@
-[project]
-name = "vogue-orchestrator"
-version = "0.1.0"
-description = "Contract-based workflow orchestrator for the VOGUE planning pipeline"
-requires-python = ">=3.11"
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
 
-# The orchestration core stays stdlib-only. Only the query-structuring module
-# (src/vogue_orchestrator/query) needs pydantic; install it with `pip install -e ".[query]"`.
+[project]
+name = "fashion-planner-orchestrator"
+version = "1.0.0"
+description = "Fashion Planner의 다섯 서비스를 계약에 따라 순서대로 부르고 기획서를 만드는 오케스트레이터와 웹 UI"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "The Fashion Planner Contributors" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Natural Language :: Korean",
+    "Private :: Do Not Upload",
+]
+# 오케스트레이션 핵심은 표준 라이브러리만 쓴다. 아래 extra는 기능별로 필요할 때만 설치한다.
+dependencies = []
+
 [project.optional-dependencies]
+# 질의 구조화(src/fashion_planner_orchestrator/query)
 query = ["pydantic>=2.0"]
+# 계약 검증과 기획서 PNG
 workflow = ["jsonschema>=4.18", "Pillow>=10"]
-# Real LLM call for query structuring (src/vogue_orchestrator/llm_provider.py); install the one
-# matching LLM_MODEL in .env (a model name starting with "claude" uses Anthropic, others OpenAI).
+# 질의 구조화·SWOT의 실제 LLM 호출(src/fashion_planner_orchestrator/llm_provider.py). LLM_MODEL에 맞는 것 하나를
+# 설치한다("claude"로 시작하면 Anthropic, 그 밖에는 OpenAI).
 llm-openai = ["openai"]
 llm-anthropic = ["anthropic"]
 
+[project.urls]
+Repository = "https://github.com/KG-RAG-02/fashion-planner-orchestrator"
+
 [project.scripts]
-vogue-orchestrator-ui = "vogue_orchestrator.server:serve"
+fashion-planner-orchestrator = "fashion_planner_orchestrator.server:serve"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

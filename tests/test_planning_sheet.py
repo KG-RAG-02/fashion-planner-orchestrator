@@ -13,8 +13,8 @@ import unittest
 from pathlib import Path
 
 from _http_support import LiveServerMixin, environment
-from vogue_orchestrator.planning_sheet import (Fonts, PlanningSheetError, build_sheet, planning_sheet_png)
-from vogue_orchestrator.workflow_store import WorkflowStore, digest
+from fashion_planner_orchestrator.planning_sheet import (Fonts, PlanningSheetError, build_sheet, planning_sheet_png)
+from fashion_planner_orchestrator.workflow_store import WorkflowStore, digest
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'tools' / 'workflow_contract' / 'fixtures'
 INTEGRATED = ('integrated-ok', 'integrated-image-failed', 'integrated-review-no-results', 'integrated-review-error',
@@ -60,7 +60,7 @@ class BoardMappingTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'jsonschema not installed (install the `workflow` extra)')
     def test_every_fixture_is_a_current_integrated_result(self):
         # The sheet fixtures are stored envelopes; they follow the current schema, not an older record format.
-        from vogue_orchestrator.workflow_contract import WorkflowContract
+        from fashion_planner_orchestrator.workflow_contract import WorkflowContract
         contract = WorkflowContract()
         for name in INTEGRATED:
             with self.subTest(fixture=name):

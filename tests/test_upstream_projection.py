@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 import unittest
 
-from vogue_orchestrator.upstream_projection import PROJECTION_ID, inventory_view, novelty_inputs, trend_view
-from vogue_orchestrator.workflow_store import canonical, digest
+from fashion_planner_orchestrator.upstream_projection import PROJECTION_ID, inventory_view, novelty_inputs, trend_view
+from fashion_planner_orchestrator.workflow_store import canonical, digest
 
 FIXTURES = Path(__file__).parent / 'fixtures/workflow'
 HAVE_JSONSCHEMA = bool(importlib.util.find_spec('jsonschema'))
@@ -124,7 +124,7 @@ class PurityTests(unittest.TestCase):
 
     @unittest.skipUnless(HAVE_JSONSCHEMA, 'jsonschema not installed (install the `workflow` extra)')
     def test_the_output_still_matches_the_upstream_schemas(self):
-        from vogue_orchestrator.workflow_contract import WorkflowContract
+        from fashion_planner_orchestrator.workflow_contract import WorkflowContract
         contract = WorkflowContract()
         trend_schema = contract.validators['upstream/trend-result.schema.json']
         inventory_schema = contract.validators['upstream/inventory-result.schema.json']

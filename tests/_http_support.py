@@ -39,7 +39,7 @@ def real_tempdir(test):
 
 class LiveServerMixin:
     def start_server(self):
-        from vogue_orchestrator.server import OrchestratorHandler
+        from fashion_planner_orchestrator.server import OrchestratorHandler
         self.state = real_tempdir(self)
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), OrchestratorHandler)
         self.port = self.server.server_port

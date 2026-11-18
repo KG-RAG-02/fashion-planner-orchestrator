@@ -42,10 +42,10 @@ def draft(items=(), common=(), common_unsupported=(), seasons=()):
 class StructuredPathTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.structured = importlib.import_module("vogue_orchestrator.query.structured")
-        cls.errors = importlib.import_module("vogue_orchestrator.query.errors")
-        cls.config = importlib.import_module("vogue_orchestrator.query.config")
-        cls.draft = importlib.import_module("vogue_orchestrator.query.draft")
+        cls.structured = importlib.import_module("fashion_planner_orchestrator.query.structured")
+        cls.errors = importlib.import_module("fashion_planner_orchestrator.query.errors")
+        cls.config = importlib.import_module("fashion_planner_orchestrator.query.config")
+        cls.draft = importlib.import_module("fashion_planner_orchestrator.query.draft")
 
     def run_path(self, produced, query, as_written=False, **kwargs):
         if not as_written and isinstance(produced, dict) and "common" in produced:
@@ -58,7 +58,7 @@ class StructuredPathTests(unittest.TestCase):
 
     def test_the_result_names_the_prompt_by_id_and_template_hash(self):
         result = self.run_path(draft(items=[item("점퍼", "점퍼")]), "점퍼")
-        prompt = importlib.import_module("vogue_orchestrator.query.prompt")
+        prompt = importlib.import_module("fashion_planner_orchestrator.query.prompt")
         self.assertEqual((result.prompt_id, result.prompt_sha256), (prompt.PROMPT_ID, prompt.PROMPT_SHA256))
         self.assertRegex(result.prompt_sha256, r"^[0-9a-f]{64}$")
 
@@ -304,8 +304,8 @@ class ContractExamplesAreProducedByTheCodeTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.structured = importlib.import_module("vogue_orchestrator.query.structured")
-        cls.draft = importlib.import_module("vogue_orchestrator.query.draft")
+        cls.structured = importlib.import_module("fashion_planner_orchestrator.query.structured")
+        cls.draft = importlib.import_module("fashion_planner_orchestrator.query.draft")
         cls.examples = importlib.import_module("test_query_structured_models")
 
     def assemble(self, produced, query, request_id):
@@ -339,7 +339,7 @@ class DatasetTests(unittest.TestCase):
         cls.data = json.loads(DATA_PATH.read_text(encoding="utf-8"))
         cls.holdout = json.loads(HOLDOUT_PATH.read_text(encoding="utf-8"))
         cls.evaluator = _load_script("evaluate_query_structuring")
-        cls.prompt = importlib.import_module("vogue_orchestrator.query.prompt")
+        cls.prompt = importlib.import_module("fashion_planner_orchestrator.query.prompt")
 
     def test_sets_are_unique_and_kept_apart_from_the_prompt_examples(self):
         dev = [i["query"] for i in self.data["items"]]

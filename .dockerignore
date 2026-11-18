@@ -2,7 +2,7 @@
 *
 !app.py
 !pyproject.toml
-!src/vogue_orchestrator
+!src/fashion_planner_orchestrator
 !web
 !configs
 !prompts

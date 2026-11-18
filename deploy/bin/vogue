@@ -122,7 +122,7 @@ case "$cmd" in
     mkdir -p "$EVIDENCE_DIR"
     out="$EVIDENCE_DIR/${profile}-${rid}-planning-sheet.png"
     docker run --rm --network none --read-only -v "vogue_${LABEL}_p08_state:/state:ro" vogue/orchestrator:dev \
-      python -m vogue_orchestrator.planning_sheet --request-id "$rid" --store-dir /state/workflow --output - > "$out.tmp"
+      python -m fashion_planner_orchestrator.planning_sheet --request-id "$rid" --store-dir /state/workflow --output - > "$out.tmp"
     mv "$out.tmp" "$out"
     echo "planning sheet: $out" ;;
   image-retry)

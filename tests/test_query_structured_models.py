@@ -12,8 +12,8 @@ import unittest
 from datetime import date
 
 from _query_support import HAS_PYDANTIC, ROOT, SKIP_REASON, SNAPSHOT_PATH, load_snapshot
-from vogue_orchestrator.query import contract_vocabulary as cvocab
-from vogue_orchestrator.query import vocabulary as vocab
+from fashion_planner_orchestrator.query import contract_vocabulary as cvocab
+from fashion_planner_orchestrator.query import vocabulary as vocab
 
 SCHEMA_PATH = ROOT / "contracts" / "agents" / "orchestrator" / "output" / "structured-query.schema.json"
 HAS_JSONSCHEMA = importlib.util.find_spec("jsonschema") is not None
@@ -220,7 +220,7 @@ def _load_exporter():
 class StructuredQueryExamplesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.models = importlib.import_module("vogue_orchestrator.query.models")
+        cls.models = importlib.import_module("fashion_planner_orchestrator.query.models")
 
     def test_contract_examples_validate_and_round_trip(self):
         for name, document in CONTRACT_EXAMPLES.items():
@@ -238,17 +238,17 @@ class StructuredQueryExamplesTests(unittest.TestCase):
         self.assertEqual(query.schema_version, self.models.SCHEMA_VERSION)
 
     def test_package_exports_the_contract(self):
-        package = importlib.import_module("vogue_orchestrator.query")
+        package = importlib.import_module("fashion_planner_orchestrator.query")
         self.assertIs(package.StructuredQuery, self.models.StructuredQuery)
         self.assertEqual(package.SCHEMA_VERSION, "1.0.0")
-        self.assertIs(package.TrendQuery, importlib.import_module("vogue_orchestrator.query.trend_query").TrendQuery)
+        self.assertIs(package.TrendQuery, importlib.import_module("fashion_planner_orchestrator.query.trend_query").TrendQuery)
 
 
 @unittest.skipUnless(HAS_PYDANTIC, SKIP_REASON)
 class StructuredQueryValidationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.models = importlib.import_module("vogue_orchestrator.query.models")
+        cls.models = importlib.import_module("fashion_planner_orchestrator.query.models")
         cls.ValidationError = importlib.import_module("pydantic").ValidationError
 
     def assert_invalid(self, document):
@@ -529,7 +529,7 @@ class StructuredQueryValidationTests(unittest.TestCase):
 class StructuredQuerySchemaTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.models = importlib.import_module("vogue_orchestrator.query.models")
+        cls.models = importlib.import_module("fashion_planner_orchestrator.query.models")
         cls.exporter = _load_exporter()
         cls.schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 

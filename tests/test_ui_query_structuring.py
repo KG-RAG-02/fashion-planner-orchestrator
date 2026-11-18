@@ -5,8 +5,8 @@ import unittest
 
 from _query_support import HAS_PYDANTIC, SKIP_REASON
 
-from vogue_orchestrator import server
-from vogue_orchestrator.llm_provider import LLMConfigurationError
+from fashion_planner_orchestrator import server
+from fashion_planner_orchestrator.llm_provider import LLMConfigurationError
 
 SECRET = "synthetic-private-query-marker"
 

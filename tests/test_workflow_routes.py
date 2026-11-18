@@ -4,8 +4,8 @@ import unittest
 from unittest.mock import patch
 
 from _http_support import LiveServerMixin, environment
-from vogue_orchestrator import workflow_http
-from vogue_orchestrator.workflow_store import WorkflowStore
+from fashion_planner_orchestrator import workflow_http
+from fashion_planner_orchestrator.workflow_store import WorkflowStore
 
 
 class WorkflowRouteTableTests(LiveServerMixin, unittest.TestCase):
@@ -72,7 +72,7 @@ class WorkflowRouteTableTests(LiveServerMixin, unittest.TestCase):
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
     def test_problem_bodies_match_the_common_schema(self):
-        from vogue_orchestrator.workflow_contract import WorkflowContract
+        from fashion_planner_orchestrator.workflow_contract import WorkflowContract
         validator = WorkflowContract().validators['common.schema.json'].evolve(
             schema={'$ref': 'https://contracts.fashion-planner.invalid/orchestrator/common.schema.json#/$defs/problem'})
         with environment():

@@ -5,8 +5,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 from _http_support import LiveServerMixin, environment, real_tempdir
-from vogue_orchestrator import workflow_http
-from vogue_orchestrator.workflow_store import checked_image
+from fashion_planner_orchestrator import workflow_http
+from fashion_planner_orchestrator.workflow_store import checked_image
 
 HAVE_WORKFLOW_EXTRA = bool(importlib.util.find_spec('jsonschema') and importlib.util.find_spec('PIL'))
 LINEAGE = dict(draft_identity={'draft_id': 'd', 'revision': 1, 'content_sha256': 'a' * 64}, draft_response_sha256='b' * 64,

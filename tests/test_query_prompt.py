@@ -21,11 +21,11 @@ TODAY = date(2026, 11, 9)
 class PromptTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.prompt = importlib.import_module("vogue_orchestrator.query.prompt")
-        cls.vocab = importlib.import_module("vogue_orchestrator.query.vocabulary")
-        cls.cvocab = importlib.import_module("vogue_orchestrator.query.contract_vocabulary")
-        cls.draft = importlib.import_module("vogue_orchestrator.query.draft")
-        cls.config = importlib.import_module("vogue_orchestrator.query.config")
+        cls.prompt = importlib.import_module("fashion_planner_orchestrator.query.prompt")
+        cls.vocab = importlib.import_module("fashion_planner_orchestrator.query.vocabulary")
+        cls.cvocab = importlib.import_module("fashion_planner_orchestrator.query.contract_vocabulary")
+        cls.draft = importlib.import_module("fashion_planner_orchestrator.query.draft")
+        cls.config = importlib.import_module("fashion_planner_orchestrator.query.config")
         cls.folder = cls.config.prompt_dir(cls.config.CONFIG.prompt_name)
         cls.template = cls.prompt.load_prompt()
 

@@ -5,8 +5,8 @@ import unittest
 from datetime import date
 
 from _query_support import ROOT, SNAPSHOT_PATH, load_snapshot
-from vogue_orchestrator.query import vocabulary as vocab
-from vogue_orchestrator.query.season import next_fashion_season, resolve_season_year
+from fashion_planner_orchestrator.query import vocabulary as vocab
+from fashion_planner_orchestrator.query.season import next_fashion_season, resolve_season_year
 
 
 def _load_generator():

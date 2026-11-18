@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from vogue_orchestrator.server import OrchestratorHandler, _request_is_trusted_local, runtime_mode, serve
+from fashion_planner_orchestrator.server import OrchestratorHandler, _request_is_trusted_local, runtime_mode, serve
 
 TRUST_KEYS = ('VOGUE_ORCHESTRATOR_RUNTIME', 'VOGUE_ORCHESTRATOR_TRUSTED_PEER_CIDRS', 'VOGUE_ORCHESTRATOR_ALLOWED_HOSTS')
 

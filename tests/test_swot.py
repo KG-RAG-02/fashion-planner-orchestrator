@@ -7,9 +7,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from vogue_orchestrator.swot import (SwotRejected, SwotWriter, checkpoint_key, enabled, load_swot, parse_swot, prompt_sha256,
+from fashion_planner_orchestrator.swot import (SwotRejected, SwotWriter, checkpoint_key, enabled, load_swot, parse_swot, prompt_sha256,
                                      swot_input, system_prompt)
-from vogue_orchestrator.workflow_store import WorkflowStore
+from fashion_planner_orchestrator.workflow_store import WorkflowStore
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'tools' / 'workflow_contract' / 'fixtures'
 VALID = {'strengths': [{'text': '재고를 착장에 바로 쓸 수 있다 (가상 재고 기준).', 'basis': ['stock']}],
@@ -160,7 +160,7 @@ class WriterTests(unittest.TestCase):
 
 class DifferentiationTests(unittest.TestCase):
     def test_the_stand_in_is_drawn_only_while_new_product_agent_has_none(self):
-        from vogue_orchestrator import planning_sheet as ps
+        from fashion_planner_orchestrator import planning_sheet as ps
         drawn = []
         original = ps._bullets
 
@@ -191,7 +191,7 @@ class DifferentiationTests(unittest.TestCase):
 
 class PosterTests(unittest.TestCase):
     def test_the_swot_grid_is_drawn_under_the_stock_product(self):
-        from vogue_orchestrator.planning_sheet import Fonts, PlanningSheetError, planning_sheet_png
+        from fashion_planner_orchestrator.planning_sheet import Fonts, PlanningSheetError, planning_sheet_png
         try:
             fonts = Fonts()
         except (PlanningSheetError, ImportError):

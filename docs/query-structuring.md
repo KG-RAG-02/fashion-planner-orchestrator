@@ -17,10 +17,10 @@ If structuring fails or yields no searchable item, the workflow returns an input
 
 | Path | Responsibility |
 |---|---|
-| `src/vogue_orchestrator/query/structured.py` | Parse and assemble `StructuredQuery` using the v6 prompt |
-| `src/vogue_orchestrator/query/models.py` | Pydantic model and schema for `StructuredQuery` 1.0 |
-| `src/vogue_orchestrator/query/resolve.py`, `lexicon.py` | Resolve requested terms using the generated vocabulary and alias snapshot |
-| `src/vogue_orchestrator/query/to_trend.py` | Convert only the first item and season into `TrendQuery` |
+| `src/fashion_planner_orchestrator/query/structured.py` | Parse and assemble `StructuredQuery` using the v6 prompt |
+| `src/fashion_planner_orchestrator/query/models.py` | Pydantic model and schema for `StructuredQuery` 1.0 |
+| `src/fashion_planner_orchestrator/query/resolve.py`, `lexicon.py` | Resolve requested terms using the generated vocabulary and alias snapshot |
+| `src/fashion_planner_orchestrator/query/to_trend.py` | Convert only the first item and season into `TrendQuery` |
 | `prompts/query_structuring/v6/` | Active system/user prompt and examples |
 | `configs/query_structuring.json` | Query length, aliases and fixed unsupported-condition reasons |
 | `data/` | Synthetic labeled and holdout sets plus historical evaluation records |

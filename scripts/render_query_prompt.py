@@ -17,8 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from vogue_orchestrator.query.config import CONFIG, prompt_dir  # noqa: E402
-from vogue_orchestrator.query.prompt import load_prompt  # noqa: E402
+from fashion_planner_orchestrator.query.config import CONFIG, prompt_dir  # noqa: E402
+from fashion_planner_orchestrator.query.prompt import load_prompt  # noqa: E402
 
 RENDERED_NAME = "rendered_system.md"
 

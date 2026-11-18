@@ -28,7 +28,7 @@
     "handoff": {
       "route": "/api/workflow/run, /v1/orchestrations",
       "contract_version": "fashion-planner-workflow",
-      "detected_from": "src/vogue_orchestrator/workflow_contract.py:VERSION"
+      "detected_from": "src/fashion_planner_orchestrator/workflow_contract.py:VERSION"
     },
     "generated_by": "scripts/export_agent_contracts.py",
     "note": "생성물이다. 직접 고치지 않는다. 기준은 소유 레포이고 이 파일은 복사본이다."

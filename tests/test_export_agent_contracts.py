@@ -88,7 +88,7 @@ class ReadConstantTests(unittest.TestCase):
 
     def test_agent_route_with_a_single_quoted_constant(self):
         envelope = eac.Envelope('/v1/agents/research/reviews', 'src/reviews.py', 'VERSION',
-                                'src/vogue_orchestrator/workflow_contract.py:VERSION')
+                                'src/fashion_planner_orchestrator/workflow_contract.py:VERSION')
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / 'src' / 'reviews.py'
             source.parent.mkdir()
@@ -103,22 +103,22 @@ class OrchestratorValueTests(unittest.TestCase):
     """The orchestrator side of each comparison reads the real constants of this repository."""
 
     def test_each_runs_route_uses_its_own_handoff_version(self):
-        from vogue_orchestrator import workflow_contract as wc
+        from fashion_planner_orchestrator import workflow_contract as wc
         expected = {'trend': ('TREND_HANDOFF_VERSION', wc.TREND_HANDOFF_VERSION),
                     'inventory': ('INVENTORY_HANDOFF_VERSION', wc.INVENTORY_HANDOFF_VERSION),
                     'novelty': ('NOVELTY_HANDOFF_VERSION', wc.NOVELTY_HANDOFF_VERSION)}
         for agent_id, (constant, value) in expected.items():
             with self.subTest(agent_id=agent_id):
                 self.assertEqual(eac.orchestrator_contract_version(agent_id), value)
-                self.assertEqual(eac.expected_from(agent_id), f'src/vogue_orchestrator/workflow_contract.py:{constant}')
+                self.assertEqual(eac.expected_from(agent_id), f'src/fashion_planner_orchestrator/workflow_contract.py:{constant}')
 
     def test_an_envelope_names_the_file_and_constant_it_is_compared_with(self):
-        from vogue_orchestrator.workflow_contract import VERSION  # single-quoted in the source
+        from fashion_planner_orchestrator.workflow_contract import VERSION  # single-quoted in the source
         for agent_id, envelope in eac.WORKFLOW_ENVELOPES.items():
             with self.subTest(agent_id=agent_id):
-                expected = ('src/vogue_orchestrator/workflow_contract.py:RESEARCH_HANDOFF_VERSION'
+                expected = ('src/fashion_planner_orchestrator/workflow_contract.py:RESEARCH_HANDOFF_VERSION'
                             if agent_id == 'research' else
-                            'src/vogue_orchestrator/workflow_contract.py:VERSION')
+                            'src/fashion_planner_orchestrator/workflow_contract.py:VERSION')
                 self.assertEqual(eac.expected_from(agent_id, envelope), expected)
                 self.assertEqual(eac.orchestrator_contract_version(agent_id, envelope),
                                  'research-handoff' if agent_id == 'research' else VERSION)
@@ -255,7 +255,7 @@ class MdDecisionContractTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from vogue_orchestrator import workflow_http
+        from fashion_planner_orchestrator import workflow_http
         cls.http = workflow_http
         path = eac.CONTRACTS / 'orchestrator' / 'input' / 'md-decision-request.contract.json'
         schema = json.loads(path.read_text(encoding='utf-8'))['json_schema']

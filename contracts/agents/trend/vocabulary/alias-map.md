@@ -15,8 +15,8 @@
 |---|---|
 | `alias-map.snapshot.json` | `attributes.<속성>`: YAML의 모든 절(`aliases`, `approx`, `null_values`, `route`, `hint`, 색의 `modifiers`) + 표준 값 `standard`(trend `vocabulary.py`의 Enum 순서). `text_guard.guards`: 자유 텍스트 오탐 가드. `code_constants.compound_values`: 나누지 않는 슬래시 복합 값(`alias_map.COMPOUND_VALUES`) |
 | `alias-map.golden.json` | trend **원본 코드**의 출력: `normalize`(속성별, 그 속성의 모든 키 + 표기 변형(대소문자·공백·`-`·`_`) + 다른 속성의 키 + 모르는 단어), `normalize_tokens`(복수 값·블렌드/혼방), `normalize_color`(수식어·끝의 기본색·`Ncolor`·멜란지), `split_tokens`, `norm_key`, `text_match`(30개 질의 + 추가 문장의 `TextMatcher` 결과. 원래 문장 전체 스캐너(V1 계획 S3)용이었으나 V1은 γ로 대체되어 지금은 쓰지 않는다. 나중에 "띄어쓰기 단위 정확 일치" 보조 기능을 만들 때 기대값으로 쓸 수 있게 남겨 둠) |
-| `src/vogue_orchestrator/query/alias_data.py` | 스냅샷에서 생성한 상수 모듈. 실행 코드는 이 모듈만 읽는다 (`docs/`·pyyaml 불필요) |
-| `src/vogue_orchestrator/query/lexicon.py` | `AliasMap` 변환의 표준 라이브러리 이식 (`norm_key`, `normalize`, `split_tokens`, `normalize_tokens`, `normalize_color`) |
+| `src/fashion_planner_orchestrator/query/alias_data.py` | 스냅샷에서 생성한 상수 모듈. 실행 코드는 이 모듈만 읽는다 (`docs/`·pyyaml 불필요) |
+| `src/fashion_planner_orchestrator/query/lexicon.py` | `AliasMap` 변환의 표준 라이브러리 이식 (`norm_key`, `normalize`, `split_tokens`, `normalize_tokens`, `normalize_color`) |
 
 **절 안의 항목 순서는 YAML 순서를 그대로 둔다** (절 이름과 속성 이름만 정렬). 원본 코드는 같은 표기가 두 값에 걸리면 먼저 나온 것을 쓰므로(`setdefault`) 순서가 결과에 영향을 줄 수 있다. 현재 사전에는 이런 충돌이 없다(같은 값을 가리키는 중복 표기만 있음).
 

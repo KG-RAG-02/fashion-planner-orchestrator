@@ -9,8 +9,8 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from vogue_orchestrator.connectors import (ConnectorConfigurationError, _service_url, private_http_hosts, timeout_seconds)
-from vogue_orchestrator.workflow import StageFailure, stage_failure
+from fashion_planner_orchestrator.connectors import (ConnectorConfigurationError, _service_url, private_http_hosts, timeout_seconds)
+from fashion_planner_orchestrator.workflow import StageFailure, stage_failure
 
 TOKEN = 'dummy-test-token'
 PRIVATE = {'VOGUE_AGENT_HTTP_PRIVATE_HOSTS': 'trend,stock,new-product,sales-market',
@@ -65,8 +65,8 @@ class TimeoutConfigurationTests(unittest.TestCase):
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
     def test_build_workflow_uses_private_hosts_and_configured_timeouts(self):
-        from vogue_orchestrator import workflow_http
-        from vogue_orchestrator.workflow_store import WorkflowStore
+        from fashion_planner_orchestrator import workflow_http
+        from fashion_planner_orchestrator.workflow_store import WorkflowStore
         env = {**PRIVATE, 'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_TREND_AGENT_URL': 'http://trend:8768',
                'VOGUE_STOCK_AGENT_URL': 'http://stock:8002', 'VOGUE_NEW_PRODUCT_AGENT_URL': 'http://new-product:8767',
                'VOGUE_SALES_MARKET_AGENT_URL': 'http://sales-market:8766',
@@ -84,8 +84,8 @@ class TimeoutConfigurationTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
     def test_invalid_timeout_is_a_409_configuration_problem(self):
         from unittest.mock import Mock
-        from vogue_orchestrator.server import OrchestratorHandler
-        from vogue_orchestrator.workflow_http import dispatch
+        from fashion_planner_orchestrator.server import OrchestratorHandler
+        from fashion_planner_orchestrator.workflow_http import dispatch
         handler = object.__new__(OrchestratorHandler)
         handler._json = Mock()
         env = {**PRIVATE, 'VOGUE_WORKFLOW_ALLOW_PROPOSED': '1', 'VOGUE_TREND_AGENT_URL': 'http://trend:8768',
@@ -104,13 +104,13 @@ class WireTransportTests(unittest.TestCase):
 
     def test_post_wire_reports_transport_elapsed_time(self):
         from types import SimpleNamespace
-        from vogue_orchestrator.workflow_http import post_wire
+        from fashion_planner_orchestrator.workflow_http import post_wire
         response = SimpleNamespace(status=200, read=lambda limit: b'{}',
                                    getheader=lambda name, default: 'application/json')
         connection = SimpleNamespace(sock=SimpleNamespace(settimeout=lambda value: None),
                                      connect=lambda: None, request=lambda *args, **kwargs: None,
                                      getresponse=lambda: response, close=lambda: None)
-        with patch('vogue_orchestrator.workflow_http.http.client.HTTPConnection', return_value=connection):
+        with patch('fashion_planner_orchestrator.workflow_http.http.client.HTTPConnection', return_value=connection):
             wire = post_wire('http://127.0.0.1:8768/v1/test', {'safe': True}, connect_timeout=1, read_timeout=2)
         self.assertEqual((wire.body, wire.status, wire.media_type, wire.truncated),
                          (b'{}', 200, 'application/json', False))
@@ -125,7 +125,7 @@ class WireTransportTests(unittest.TestCase):
         return server
 
     def test_read_timeout_is_504_upstream_timeout(self):
-        from vogue_orchestrator.workflow_http import post_wire
+        from fashion_planner_orchestrator.workflow_http import post_wire
         server = self.listener()  # the kernel completes the handshake; nobody ever answers
         with self.assertRaises(StageFailure) as raised:
             post_wire('http://127.0.0.1:%d/v1/x' % server.getsockname()[1], {'a': 1}, TOKEN,
@@ -133,7 +133,7 @@ class WireTransportTests(unittest.TestCase):
         self.assertEqual((raised.exception.code, raised.exception.http_status), ('UPSTREAM_TIMEOUT', 504))
 
     def test_refused_and_reset_connections_are_503_upstream_unavailable(self):
-        from vogue_orchestrator.workflow_http import post_wire
+        from fashion_planner_orchestrator.workflow_http import post_wire
         released = socket.socket()
         released.bind(('127.0.0.1', 0))
         refused_port = released.getsockname()[1]

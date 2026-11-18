@@ -16,15 +16,15 @@ Project 08 (P08) is the coordinator and UI for the VOGUE product-planning workfl
 
 ## 구성
 
-- `src/vogue_orchestrator/server.py`: 정적 UI와 HTTP 진입점
-- `src/vogue_orchestrator/workflow_http.py`: 요청 검증, 에이전트 URL 설정, workflow API
-- `src/vogue_orchestrator/workflow.py`: 순차 실행 상태 머신과 단계별 실패 처리
-- `src/vogue_orchestrator/workflow_store.py`: 요청·응답 아티팩트, 해시, SQLite 체크포인트와 실행 기록
-- `src/vogue_orchestrator/workflow_contract.py`, `contracts/workflow/`: 요청·응답 계약 검증과 P08이 소유한 schema snapshot
-- `src/vogue_orchestrator/query/`, `prompts/query_structuring/`: 사용자 질의를 구조화해 Trend 검색 입력으로 변환
-- `src/vogue_orchestrator/planning_sheet.py`: 검증된 결과와 P06 시각 자료를 신제품 1개 기획안 포스터(Planning Sheet PNG)로 구성
-- `src/vogue_orchestrator/trend_photos.py`: 포스터에 넣을 Trend 기사 사진을 6단계에서 허용 호스트로부터 받아 저장
-- `src/vogue_orchestrator/swot.py`, `prompts/swot/`: 포스터에 넣을 SWOT 초안과 프로모션 아이디어를 6단계에서 LLM으로 만들고 검증해 저장
+- `src/fashion_planner_orchestrator/server.py`: 정적 UI와 HTTP 진입점
+- `src/fashion_planner_orchestrator/workflow_http.py`: 요청 검증, 에이전트 URL 설정, workflow API
+- `src/fashion_planner_orchestrator/workflow.py`: 순차 실행 상태 머신과 단계별 실패 처리
+- `src/fashion_planner_orchestrator/workflow_store.py`: 요청·응답 아티팩트, 해시, SQLite 체크포인트와 실행 기록
+- `src/fashion_planner_orchestrator/workflow_contract.py`, `contracts/workflow/`: 요청·응답 계약 검증과 P08이 소유한 schema snapshot
+- `src/fashion_planner_orchestrator/query/`, `prompts/query_structuring/`: 사용자 질의를 구조화해 Trend 검색 입력으로 변환
+- `src/fashion_planner_orchestrator/planning_sheet.py`: 검증된 결과와 P06 시각 자료를 신제품 1개 기획안 포스터(Planning Sheet PNG)로 구성
+- `src/fashion_planner_orchestrator/trend_photos.py`: 포스터에 넣을 Trend 기사 사진을 6단계에서 허용 호스트로부터 받아 저장
+- `src/fashion_planner_orchestrator/swot.py`, `prompts/swot/`: 포스터에 넣을 SWOT 초안과 프로모션 아이디어를 6단계에서 LLM으로 만들고 검증해 저장
 - `web/`: 단일 workflow API를 사용하는 UI
 - `deploy/`: Compose 배포, stub 기반 E2E, 사전 점검과 런처
 

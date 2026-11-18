@@ -11,8 +11,8 @@ import json
 import unittest
 
 from _query_support import ROOT
-from vogue_orchestrator.query import alias_data, lexicon
-from vogue_orchestrator.query.lexicon import Lexicon, Normalized, norm_key
+from fashion_planner_orchestrator.query import alias_data, lexicon
+from fashion_planner_orchestrator.query.lexicon import Lexicon, Normalized, norm_key
 
 ALIAS_SNAPSHOT_PATH = ROOT / "contracts" / "agents" / "trend" / "vocabulary" / "alias-map.snapshot.json"
 ALIAS_GOLDEN_PATH = ROOT / "contracts" / "agents" / "trend" / "vocabulary" / "alias-map.golden.json"
@@ -69,7 +69,7 @@ class AliasDataMatchesSnapshotTests(unittest.TestCase):
             self.assertNotIn(name, self.snapshot["attributes"])
 
     def test_standard_values_agree_with_the_contract_vocabulary(self):
-        from vogue_orchestrator.query import vocabulary as vocab
+        from fashion_planner_orchestrator.query import vocabulary as vocab
 
         std = alias_data.STANDARD_VALUES
         self.assertEqual(std["category"], vocab.CATEGORY_MINOR)

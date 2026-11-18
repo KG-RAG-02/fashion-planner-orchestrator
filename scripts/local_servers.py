@@ -78,7 +78,7 @@ class Service:
 
 def configured_services() -> list[Service]:
     sys.path.insert(0, str(ROOT / "src"))
-    from vogue_orchestrator.service_manifest import services
+    from fashion_planner_orchestrator.service_manifest import services
     return [Service(entry["name"], entry.get("label", entry["name"]), entry["repo"], entry["port"],
                     entry["health_path"], entry["python"], tuple(entry["args"]), tuple(entry["markers"]),
                     tuple(entry["env"].items())) for entry in services()]

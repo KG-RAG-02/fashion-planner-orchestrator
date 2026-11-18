@@ -1,5 +1,5 @@
 {
-  "_about": "Settings of the query-structuring module (src/vogue_orchestrator/query). Read once at import by config.py. Inventory of every hard-coded value in the repository: configs/README.md.",
+  "_about": "Settings of the query-structuring module (src/fashion_planner_orchestrator/query). Read once at import by config.py. Inventory of every hard-coded value in the repository: configs/README.md.",
   "prompt": {
     "name": "query_structuring"
   },

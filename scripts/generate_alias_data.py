@@ -1,4 +1,4 @@
-"""Regenerate src/vogue_orchestrator/query/alias_data.py from the alias-map snapshot.
+"""Regenerate src/fashion_planner_orchestrator/query/alias_data.py from the alias-map snapshot.
 
 The snapshot (contracts/agents/trend/vocabulary/alias-map.snapshot.json) is a read-only copy of the alias dictionary
 owned by trend-analysis-agent (configs/alias_map/*.yaml). It is produced by
@@ -23,7 +23,7 @@ from typing import Any, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT_PATH = ROOT / "contracts" / "agents" / "trend" / "vocabulary" / "alias-map.snapshot.json"
-TARGET_PATH = ROOT / "src" / "vogue_orchestrator" / "query" / "alias_data.py"
+TARGET_PATH = ROOT / "src" / "fashion_planner_orchestrator" / "query" / "alias_data.py"
 
 # The 11 attributes AliasMap normalizes (trend alias_map.STANDARD), in that order.
 ATTRIBUTES = (
