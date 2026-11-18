@@ -49,7 +49,7 @@ class BlankSettingTests(unittest.TestCase):
             workflow.adapters['sales_market_review']({})
         self.assertIsNone(workflow.artifact_reader)
         self.assertIs(workflow.image, workflow_http.planning_sheet_image)  # the default stage 06 provider
-        self.assertEqual(workflow.trend_photos.hosts, ('vogue.co.kr',))  # blank hosts mean the default allowlist
+        self.assertIsNone(workflow.trend_photos)  # blank hosts mean no article photo download (the default)
         self.assertIsNone(workflow.swot)  # blank LLM settings mean no SWOT draft
         self.assertEqual(workflow.draft_mode, 'draft_with_visuals')
         self.assertEqual(wire.call_args_list[0].args, ('http://127.0.0.1:9/v1/agents/trend/runs', {}, 'test-token'))
@@ -72,6 +72,8 @@ class BlankSettingTests(unittest.TestCase):
             workflow.adapters['trend']({})
         self.assertEqual(wire.call_args_list[0].kwargs, dict(connect_timeout=3.0, read_timeout=210.0))
         self.assertEqual(wire.call_args_list[1].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))
+        with environment(**dict(base, ORCHESTRATOR_TREND_PHOTO_HOSTS='vogue.co.kr')):
+            self.assertEqual(workflow_http.build_workflow().trend_photos.hosts, ('vogue.co.kr',))
         with environment(**dict(base, FASHION_PLANNER_SERVICE_TOKEN=' ')), \
                 self.assertRaisesRegex(ConnectorConfigurationError, 'FASHION_PLANNER_SERVICE_TOKEN is required'):
             workflow_http.build_workflow()  # a blank token is no token

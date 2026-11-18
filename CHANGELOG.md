@@ -9,8 +9,8 @@
 ### 추가
 - 6단계 워크플로(trend → inventory → novelty → research → 통합 → 기획서)와 계약 게이트, SQLite 체크포인트, 내용 주소 실행 기록.
 - 질의 구조화(StructuredQuery, schema_version `1.0.0`)와 TrendQuery 변환, 오프라인 합성 초안 모드.
-- 실행 기록만으로 그리는 기획서 PNG(가로 3200 px), 기사 사진 받기(허용 목록), SWOT·프로모션 초안(선택).
-- 정적 웹 UI(Fashion Planner Atelier): 실행 진행, 단계별 결과, 근거·원문 JSON, 기획서, MD 결정.
+- 실행 기록만으로 그리는 기획서 PNG(가로 3200 px), 기사 사진 받기(선택, 기본 꺼짐), SWOT·프로모션 초안(선택).
+- 정적 웹 UI(Fashion Planner Atelier): 실행 진행, 단계별 결과, 근거·원문 JSON, 기획서, MD 결정. 기사 사진은 링크로만 보여 준다.
 - Docker Compose 배포 프로필 stub·rehearsal·live와 실행기 `deploy/bin/fashion-planner`, 종단 간 검사.
 - research의 배포자 동의 설정 두 개(`RESEARCH_HM_NONCOMMERCIAL_RESEARCH`, `RESEARCH_TARGET_LLM_TRANSFER_AUTHORIZED`)를 데이터·유료
   프로필에 추가. 기본은 꺼짐.

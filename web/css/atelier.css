@@ -514,7 +514,7 @@ body[data-run="running"] .btn-cta::before { opacity: 1; transform: scaleX(var(--
 .numeral { font-family: var(--font-display); font-size: 44px; line-height: 0.9; }
 
 /* Cited items: one strip per style card, scrolling sideways inside the card when it overflows.
-   Photos keep the Vogue portrait ratio (2:3); a name sits under each item's photos. */
+   Each item is its name and links to its article photos (the page never loads them). */
 .item-block { position: relative; display: flex; flex-direction: column; gap: 8px; margin-top: 2px; min-width: 0; }
 .item-count { margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-family: var(--font-label); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--graphite); }
 .item-hint { display: none; letter-spacing: 0; text-transform: none; font-family: var(--font-sans); }
@@ -527,19 +527,9 @@ body[data-run="running"] .btn-cta::before { opacity: 1; transform: scaleX(var(--
 .item-block.is-overflowing:not(.at-end) .item-strip { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); }
 .item-strip:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 .item-tile { flex: 0 0 auto; width: min-content; display: flex; flex-direction: column; gap: 7px; scroll-snap-align: start; }
-.item-photos { display: flex; gap: 6px; }
-.item-photo {
-  position: relative; display: block; flex: 0 0 auto; width: 100px; aspect-ratio: 2 / 3; overflow: hidden;
-  border-radius: 14px; background: #F1F1F0; border: 1px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 22px 30px -26px rgba(0, 0, 0, 0.6); color: inherit; text-decoration: none;
-}
-.item-photo img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform var(--t-mid) var(--ease); }
-.item-photo:hover img { transform: scale(1.045); }
-.item-photo:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.item-photo.is-missing {
-  display: flex; align-items: flex-end; padding: 10px; background: rgba(255, 255, 255, 0.5);
-  border: 1px dashed rgba(0, 0, 0, 0.28); box-shadow: none; font-size: 11.5px; line-height: 1.4; color: var(--graphite);
-}
+.item-tile:not(.is-photoless) { width: 120px; }
+.item-links { gap: 6px; }
+.item-links .link { min-height: 28px; padding: 0 10px; font-size: 12px; white-space: nowrap; }
 .item-name { font-size: 12.5px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .item-tile.is-photoless { width: 100px; gap: 3px; }
 .item-none { font-size: 11.5px; line-height: 1.4; color: var(--graphite); }

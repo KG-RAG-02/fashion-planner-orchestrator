@@ -30,6 +30,8 @@ LAYOUT = (
     ("# --- every profile -------------------------------------------------------", None, None),
     ("FASHION_PLANNER_SERVICE_TOKEN", "generate", None),
     ("NEO4J_STUB_PASSWORD", "generate", None),
+    ("# --- trend article photos: off while blank; naming hosts is your responsibility (see deploy/.env.example) ---", None, None),
+    ("FASHION_PLANNER_TREND_PHOTO_HOSTS", "blank", None),
     ("# --- data profile (rehearsal, live): Cloudflare R2, copied from the service .env files ---", None, None),
     ("R2_ACCOUNT_ID", "copy:R2_ACCOUNT_ID", None),
     ("R2_BUCKET", "copy:R2_BUCKET", None),

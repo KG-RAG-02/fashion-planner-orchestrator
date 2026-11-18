@@ -256,21 +256,14 @@ export function renderConcept(section, envelope, { retryEnabled = false, onRetry
 }
 
 // --- Trend -----------------------------------------------------------------
-// Cards carry the style and every item it cites, each with its Vogue article photos in a strip that scrolls
+// Cards carry the style and every item it cites, each with links to its article photos in a strip that scrolls
 // sideways inside the card; quotes, articles and the style's example-image links open in the side panel.
-// The browser loads the photos from img.vogue.co.kr directly (CSP img-src) without sending a Referer.
+// The photos are only linked: the page never loads them (no <img>, and the CSP admits no outside image host).
 
-function photoMissing(frame, text) {
-  frame.classList.add('is-missing');
-  fill(frame, h('span', {}, text));
-}
-
-function itemPhoto(name, url, index, total) {
-  const frame = h('a', { class: 'item-photo', href: url, target: '_blank', rel: 'noopener noreferrer', title: '원본 사진 새 탭에서 열기' });
-  const img = h('img', { src: url, alt: `${name} — Vogue 기사 사진${total > 1 ? ` ${index + 1}` : ''}`, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
-  img.addEventListener('error', () => photoMissing(frame, '사진을 불러오지 못했습니다'), { once: true });
-  frame.append(img);
-  return frame;
+function itemPhotoLink(name, url, index, total) {
+  const label = `사진${total > 1 ? ` ${index + 1}` : ''} ↗`;
+  return h('a', { class: 'link', href: url, target: '_blank', rel: 'noopener noreferrer', referrerpolicy: 'no-referrer',
+    title: '원문 사진을 새 탭에서 열기', 'aria-label': `${name} — 기사 사진${total > 1 ? ` ${index + 1}` : ''} 원문 열기` }, label);
 }
 
 // Marks a strip that overflows its card (shows the hint and the right-edge fade) and whether it is scrolled to the end.
@@ -290,8 +283,8 @@ function itemStrip(tiles) {
     // An item without a photo is its name and a note, with no empty frame.
     h('ul', { class: 'item-list' }, tiles.map((tile) => tile.photos.length
       ? h('li', { class: 'item-tile' },
-          h('div', { class: 'item-photos' }, tile.photos.map((url, index) => itemPhoto(tile.name, url, index, tile.photos.length))),
-          h('span', { class: 'item-name' }, tile.name))
+          h('span', { class: 'item-name' }, tile.name),
+          h('p', { class: 'link-row item-links' }, tile.photos.map((url, index) => itemPhotoLink(tile.name, url, index, tile.photos.length))))
       : h('li', { class: 'item-tile is-photoless' },
           h('span', { class: 'item-name' }, tile.name),
           h('span', { class: 'item-none' }, '관련 사진 없음')))));

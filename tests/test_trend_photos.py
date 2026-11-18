@@ -41,8 +41,9 @@ class FakeGet:
 
 
 class SettingsTests(unittest.TestCase):
-    def test_hosts_default_to_vogue_and_admit_subdomains(self):
-        self.assertEqual(allowed_hosts({}), ('vogue.co.kr',))
+    def test_hosts_default_to_none_and_admit_subdomains(self):
+        self.assertEqual(allowed_hosts({}), ())
+        self.assertEqual(allowed_hosts({'ORCHESTRATOR_TREND_PHOTO_HOSTS': ' , '}), ())
         self.assertEqual(allowed_hosts({'ORCHESTRATOR_TREND_PHOTO_HOSTS': ' Img.Example.com , cdn.test. '}), ('img.example.com', 'cdn.test'))
         self.assertTrue(host_allowed('img.vogue.co.kr', HOSTS))
         self.assertTrue(host_allowed('vogue.co.kr', HOSTS))
@@ -50,10 +51,14 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(host_allowed('vogue.co.kr.evil.com', HOSTS))
         self.assertFalse(host_allowed(None, HOSTS))
 
-    def test_enabled_unless_set_to_zero(self):
-        self.assertTrue(enabled({}))
-        self.assertTrue(enabled({'ORCHESTRATOR_TREND_PHOTOS_ENABLED': '1'}))
-        self.assertFalse(enabled({'ORCHESTRATOR_TREND_PHOTOS_ENABLED': '0'}))
+    def test_off_unless_hosts_are_named(self):
+        # Article photos are linked, not downloaded, unless the deployer names the hosts (G1-19).
+        self.assertFalse(enabled({}))
+        self.assertFalse(enabled({'ORCHESTRATOR_TREND_PHOTOS_ENABLED': '1'}))
+        named = {'ORCHESTRATOR_TREND_PHOTO_HOSTS': 'vogue.co.kr'}
+        self.assertTrue(enabled(named))
+        self.assertTrue(enabled(dict(named, ORCHESTRATOR_TREND_PHOTOS_ENABLED='1')))
+        self.assertFalse(enabled(dict(named, ORCHESTRATOR_TREND_PHOTOS_ENABLED='0')))
 
     def test_urls_come_from_the_first_style_then_its_items(self):
         envelope = envelope_with_photos(['https://img.vogue.co.kr/a.jpg', 'https://img.vogue.co.kr/a.jpg'],

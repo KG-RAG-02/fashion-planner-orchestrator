@@ -39,7 +39,7 @@ MD가 "2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/system-dark.svg">
-  <img alt="시스템 전체: 브라우저 UI가 orchestrator를 부르고, orchestrator가 trend, inventory, novelty, research를 차례로 부른다. 서비스별 저장소와 외부 시스템(Neo4j, Cloudflare R2, OpenAI, 환율 API, 기사 사진 호스트, 무신사 이미지 CDN, 모델 가중치 호스트)이 함께 보인다" src="docs/diagrams/system.svg" width="900">
+  <img alt="시스템 전체: 브라우저 UI가 orchestrator를 부르고, orchestrator가 trend, inventory, novelty, research를 차례로 부른다. 서비스별 저장소와 외부 시스템(Neo4j, Cloudflare R2, OpenAI, 환율 API, 기사 사진 호스트(기본 꺼짐), 무신사 이미지 CDN, 모델 가중치 호스트)이 함께 보인다" src="docs/diagrams/system.svg" width="900">
 </picture>
 
 <picture>
@@ -59,7 +59,7 @@ MD가 "2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하
 - **추적 가능한 실행 기록.** 응답 원문은 SHA-256 내용 주소 blob, 단계 상태는 SQLite 체크포인트로 남긴다. 같은 요청은
   저장된 결과로 답하고, 결과를 모르는 유료 호출은 다시 보내지 않는다.
 - **질의 구조화.** LLM은 원문을 쪼개고 표준 값을 제안만 하고, 값 확정(trend 어휘·별칭 사전)과 조립은 코드가 한다.
-- **기획서 PNG.** 초점 트렌드와 기사 사진, 매칭된 재고, 신상품 콘셉트와 이미지, 판매·시장 값, 선택적인 SWOT 초안을 담은
+- **기획서 PNG.** 초점 트렌드(기사 사진은 배포자가 켤 때만), 매칭된 재고, 신상품 콘셉트와 이미지, 판매·시장 값, 선택적인 SWOT 초안을 담은
   가로 3200 px 포스터. 실행 기록만으로 결정적으로 그리고 이미지 모델은 부르지 않는다.
 - **네트워크 경계.** orchestrator만 127.0.0.1에 공개하고, 서비스 호출은 공용 bearer 토큰과 HTTPS(또는 명시한 내부 호스트의
   평문 HTTP)만 쓴다.
@@ -110,7 +110,7 @@ UI, 질의 구조화(합성 초안), 저장된 실행 조회는 혼자 동작한
 | `ORCHESTRATOR_QUERY_STRUCTURING_MODE` | LLM | `synthetic_fixture`면 오프라인 합성 초안 |
 | `LLM_MODEL`, `LLM_API_KEY` | 없음 | 질의 구조화와 SWOT 초안의 LLM |
 | `ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED` | 꺼짐 | `1`이면 6단계 기획서를 그린다 |
-| `ORCHESTRATOR_TREND_PHOTOS_ENABLED` | 켜짐 | `0`이면 기획서에 넣을 기사 사진을 받지 않는다([고지](#고지)) |
+| `ORCHESTRATOR_TREND_PHOTO_HOSTS` | 비어 있음(받지 않음) | 기획서에 넣을 기사 사진을 받을 호스트. 적을 때만 받는다([고지](#고지)) |
 
 ## 데이터
 
@@ -206,10 +206,11 @@ python scripts/freeze_workflow_contract.py --check
 
 - 이 프로젝트는 학습·교육 목적의 비상업 프로젝트입니다. Condé Nast, Vogue Korea(두산매거진), 무신사, H&M과 관련이 없으며 이들의 승인이나 후원을 받지 않았습니다. 'Vogue'는 해당 권리자의 상표입니다.
 - 이 레포에는 제3자 데이터(기사 원문, 이미지, 상품·거래 데이터)가 들어 있지 않습니다. 데이터를 직접 받아 쓰는 경우 각 출처의 이용약관을 따라야 합니다. 자세한 내용은 `docs/data.md`를 보세요.
-- 기본 설정에서 6단계는 초점 트렌드의 기사 사진을 허용 목록의 호스트(기본 `vogue.co.kr`)에서 최대 3장 받아 로컬 실행
-  기록에 저장하고 기획서에 넣으며, UI의 트렌드 카드도 같은 호스트의 사진을 브라우저에서 직접 불러옵니다. 이 사진의
-  권리는 권리자에게 있습니다. 사진이 들어간 기획서 PNG와 실행 기록은 공유하거나 공개하지 마세요.
-  `ORCHESTRATOR_TREND_PHOTOS_ENABLED=0`으로 사진 받기를 끌 수 있습니다.
+- 기사 사진은 링크로만 씁니다. UI의 트렌드 카드는 사진을 불러오지 않고 원문 링크만 보여 주고, 기본 설정의 기획서에는
+  기사 사진 대신 '트렌드 기사 이미지 없음'이 들어갑니다. 배포자가 `ORCHESTRATOR_TREND_PHOTO_HOSTS`(Compose에서는 env 파일의
+  `FASHION_PLANNER_TREND_PHOTO_HOSTS`)에 호스트를 적으면 6단계가 그 호스트에서 사진을 최대 3장 받아 실행 기록에 저장하고
+  기획서에 넣습니다. 이렇게 켜는 것은 배포자의 책임이고, 사진의 권리는 권리자에게 있습니다. 사진이 들어간 기획서 PNG와
+  실행 기록은 다시 배포하지 마세요.
 
 ## 라이선스
 

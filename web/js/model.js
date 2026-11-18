@@ -87,7 +87,8 @@ export function rail(result, { inFlight = false } = {}) {
 
 // --- Trend -----------------------------------------------------------------
 
-// The only photo origin the page's CSP admits (img-src); other URLs would be blocked, so they are not photos.
+// Trend article photos come from this origin. The page only links to them (it never loads them), and other URLs
+// in a photo field are not article photos, so they are dropped.
 export const TREND_PHOTO_ORIGIN = 'https://img.vogue.co.kr';
 
 export function trendPhotoUrl(value) {
@@ -95,7 +96,7 @@ export function trendPhotoUrl(value) {
   return url && new URL(url).origin === TREND_PHOTO_ORIGIN ? url : null;
 }
 
-// Every item a style cites, in order, with its own article photos (items[].image_urls). Items with the same
+// Every item a style cites, in order, with links to its own article photos (items[].image_urls). Items with the same
 // name are one tile; a tile without a usable photo is kept, so no cited item is dropped.
 export function itemTiles(items) {
   const tiles = new Map();

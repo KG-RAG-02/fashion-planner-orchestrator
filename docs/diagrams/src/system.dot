@@ -27,7 +27,7 @@ digraph system {
   r2     [label="Cloudflare R2\n직접 만든 버킷", shape=cylinder];
   fx     [label="Frankfurter\n환율", shape=box, style="rounded,dashed"];
   openai [label="OpenAI API\nlive 프로필에서만", shape=box, style="rounded,dashed"];
-  photo  [label="기사 사진 호스트\nvogue.co.kr (허용 목록)", shape=box, style="rounded,dashed"];
+  photo  [label="기사 사진 호스트\n기본 꺼짐(선택)", shape=box, style="rounded,dashed"];
   cdn    [label="무신사 이미지 CDN\nmsscdn.net (허용 목록)", shape=box, style="rounded,dashed"];
   hf     [label="모델 가중치 호스트\nOpenCLIP (HF Hub 등)", shape=box, style="rounded,dashed"];
 
@@ -42,7 +42,7 @@ digraph system {
 
   ui -> orch [label=" 실행, 진행 조회,\n 산출물, 기획서"];
   orch -> store [label="응답 원문, 체크포인트,\n기획서 PNG", constraint=false];
-  photo -> orch [label="6단계 기사 사진\n최대 3장(선택)", style=dashed, dir=back];
+  photo -> orch [label="6단계 기사 사진 최대 3장\n(설정한 호스트만)", style=dashed, dir=back];
 
   orch -> trend [label="1 /v1/agents/trend/runs"];
   orch -> inv   [label="2 /v1/agents/inventory/runs"];

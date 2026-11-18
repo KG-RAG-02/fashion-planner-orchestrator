@@ -61,8 +61,8 @@
 | `ORCHESTRATOR_WORKFLOW_IMAGES_ENABLED` | 없음 | `1`이어야 6단계를 실행한다 |
 | `ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER` | `planning_sheet` | `planning_sheet`(실행 기록으로 기획서 합성) 또는 `fixture`(결정적 테스트 이미지). 둘 다 이미지 모델을 부르지 않는다 |
 | `ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED` | `0` | `1`이면 `POST /v1/orchestrations/image-retries`를 받는다 |
-| `ORCHESTRATOR_TREND_PHOTOS_ENABLED` | 켜짐 | `0`이면 기사 사진을 받지 않는다 |
-| `ORCHESTRATOR_TREND_PHOTO_HOSTS` | `vogue.co.kr` | 기사 사진을 받을 호스트(하위 도메인 포함, 쉼표 목록) |
+| `ORCHESTRATOR_TREND_PHOTO_HOSTS` | 비어 있음 | 기획서에 넣을 기사 사진을 받을 호스트(하위 도메인 포함, 쉼표 목록). 비어 있으면 받지 않는다. 켜는 것은 배포자 책임이고, 사진이 들어간 기획서는 다시 배포하지 않는다([docs/data.md](../docs/data.md#3-기사-사진)) |
+| `ORCHESTRATOR_TREND_PHOTOS_ENABLED` | `1` | `0`이면 호스트가 있어도 기사 사진을 받지 않는다 |
 | `ORCHESTRATOR_SWOT_ENABLED` | 켜짐 | `0`이면 SWOT·프로모션 초안을 만들지 않는다. 켜져 있어도 LLM 설정이 있어야 만든다 |
 | `ORCHESTRATOR_PLANNING_SHEET_FONT`, `ORCHESTRATOR_PLANNING_SHEET_FONT_BOLD` | 자동 탐색 | 기획서 한글 글꼴 파일 경로 |
 

@@ -62,6 +62,19 @@ deploy/bin/fashion-planner live "상품 기획 요청"
 - `live`는 실행할 때 가드 파일(`~/.config/fashion-planner/live-run.done`)을 만들고, 그 파일이 있으면 다시 실행하지 않는다.
   유료 키는 `compose.paid.yaml` 한 파일만 참조한다. 실행 전에 `ps`로 지금 떠 있는 프로필을 확인한다.
 
+## 기사 사진(선택, 기본 꺼짐)
+
+trend 결과의 Vogue Korea 기사 사진은 링크로만 쓴다. UI의 trend 카드는 사진을 불러오지 않고 원문 링크만 보여 주고,
+기획서에는 '트렌드 기사 이미지 없음'이 들어간다. 사진을 쓸 권리가 있을 때만 env 파일에 호스트를 적어 켠다.
+
+```bash
+FASHION_PLANNER_TREND_PHOTO_HOSTS=vogue.co.kr   # 하위 도메인 포함, 쉼표 목록. 비우면 꺼짐
+```
+
+켜면 6단계가 초점 트렌드의 사진을 최대 3장 받아 실행 기록에 저장하고 기획서에 넣는다. 켜는 것은 사용자 책임이고, 사진이
+들어간 기획서 PNG와 실행 기록은 다시 배포하지 않는다. stub 프로필의 합성 사진 URL(`example.invalid`)은 받지 않는다.
+자세한 내용은 [docs/data.md](../docs/data.md#3-기사-사진)에 있다.
+
 ## 관찰과 종료
 
 ```bash
@@ -85,6 +98,7 @@ deploy/bin/fashion-planner down stub
 | `FASHION_PLANNER_EDGE_SUBNET` | `172.30.231.0/28` | orchestrator 공개 네트워크 대역(다른 스택과 겹치면 바꾼다) |
 | `FASHION_PLANNER_WAIT_SECONDS`, `FASHION_PLANNER_LOG_TAIL` | 900, 200 | 기동 대기 시간, 로그 줄 수 |
 | `FASHION_PLANNER_OPENAI_API_KEY`, `FASHION_PLANNER_ORCHESTRATOR_LLM_MODEL`, `FASHION_PLANNER_RESEARCH_LLM_MODEL`, `FASHION_PLANNER_NOVELTY_IMAGE_MODEL` | - | live 프로필의 키와 모델(env 파일) |
+| `FASHION_PLANNER_TREND_PHOTO_HOSTS` | 비어 있음(꺼짐) | 기획서에 넣을 기사 사진을 받을 호스트(env 파일). 위 [기사 사진](#기사-사진선택-기본-꺼짐) 참고 |
 | `FASHION_PLANNER_REHEARSAL_TREND_QUERY` | `deploy/e2e/queries/rehearsal-trend-query.json` | rehearsal 검사에 쓰는 TrendQuery |
 
 orchestrator 자체 설정은 [configs/README.md](../configs/README.md)에 있다.

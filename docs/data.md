@@ -41,18 +41,22 @@ orchestrator 자체는 데이터 소스를 읽지 않는다. 각 서비스가 �
 
 ## 3. 기사 사진
 
-6단계 기획서와 UI의 trend 카드는 trend 결과에 들어 있는 Vogue Korea 기사 사진 URL을 쓴다.
+trend 결과에는 Vogue Korea 기사 사진 URL이 들어 있다. orchestrator는 trend와 같은 원칙으로 이 사진을 링크로만 쓴다.
+임베드, 핫링크, 다운로드는 기본으로 하지 않는다.
 
-- 기획서: orchestrator가 실행할 때 초점 트렌드의 사진을 최대 3장 받아 실행 기록에 저장하고 기획서에 넣는다. 허용 호스트는
-  `ORCHESTRATOR_TREND_PHOTO_HOSTS`(기본 `vogue.co.kr`과 하위 도메인)이고, `ORCHESTRATOR_TREND_PHOTOS_ENABLED=0`이면 받지 않는다.
-- UI: 브라우저가 `img.vogue.co.kr`에서 직접 불러온다(Referer 없이).
-- 이 사진들의 권리는 해당 권리자에게 있다. 레포에는 사진 파일이 없고, 사진이 들어간 기획서 PNG를 다시 배포하려면 권리를
-  확인해야 한다. stub 프로필의 합성 trend 결과는 사진 URL이 `example.invalid`라 허용 목록에 걸려 받지 않고, 기획서에 사진이 들어가지 않는다.
+- UI: trend 카드는 사진을 불러오지 않고 원문 사진 링크만 보여 준다. CSP도 바깥 이미지 호스트를 허용하지 않는다.
+- 기획서: 기본으로 사진을 받지 않고, 분석 열에 '트렌드 기사 이미지 없음'을 그린다.
+- 켜는 방법(선택): `ORCHESTRATOR_TREND_PHOTO_HOSTS`(Compose에서는 env 파일의 `FASHION_PLANNER_TREND_PHOTO_HOSTS`)에 호스트를
+  적으면(예: `vogue.co.kr`, 하위 도메인 포함) 6단계가 그 호스트에서 초점 트렌드의 사진을 최대 3장 받아 실행 기록에 저장하고
+  기획서에 넣는다. 켜는 것은 배포자의 책임이고, 사진이 들어간 기획서 PNG와 실행 기록은 다시 배포하지 않는다.
+  `ORCHESTRATOR_TREND_PHOTOS_ENABLED=0`이면 호스트가 있어도 받지 않는다.
+- 이 사진들의 권리는 해당 권리자에게 있다. 레포에는 사진 파일이 없다. stub 프로필의 합성 trend 결과는 사진 URL이
+  `example.invalid`라서, 호스트를 적어도 받지 않는다.
 
 ## 4. 실행 기록
 
-워크플로를 돌리면 `.local/workflow/`(컨테이너는 볼륨)에 서비스 응답 원문, 호출 요청, 기획서 PNG, 받은 기사 사진,
-SWOT 초안, MD 결정이 쌓인다. 이 폴더는 git에서 제외되어 있다. 실제 데이터로 돌린 실행 기록을 공유할 때는 위 데이터의
+워크플로를 돌리면 `.local/workflow/`(컨테이너는 볼륨)에 서비스 응답 원문, 호출 요청, 기획서 PNG, SWOT 초안,
+MD 결정(사진을 켰다면 받은 기사 사진도)이 쌓인다. 이 폴더는 git에서 제외되어 있다. 실제 데이터로 돌린 실행 기록을 공유할 때는 위 데이터의
 이용 조건을 따른다.
 
 ## 5. 라이선스

@@ -193,6 +193,9 @@ services:
       ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER: planning_sheet
       # Off by default; `fashion-planner image-retry <profile> <request_id>` turns it on for one re-composition.
       ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED: ${ORCHESTRATOR_WORKFLOW_IMAGE_RETRY_ENABLED:-0}
+      # Trend article photos are linked, not downloaded (blank = off). Naming hosts in the env file is the deployer's
+      # responsibility; planning sheets with those photos are not to be redistributed.
+      ORCHESTRATOR_TREND_PHOTO_HOSTS: ${FASHION_PLANNER_TREND_PHOTO_HOSTS:-}
       ORCHESTRATOR_QUERY_STRUCTURING_MODE: synthetic_fixture
     ports:
       - "127.0.0.1:${FASHION_PLANNER_UI_PORT:-8765}:8765"

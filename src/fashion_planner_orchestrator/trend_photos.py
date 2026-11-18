@@ -5,8 +5,12 @@ from the URLs in the stored Trend result (``style.example_images``, then the ite
 them like any other image, and keeps them in the run's store; the planning-sheet route later renders from
 those stored bytes without network access.
 
-Rules: HTTPS only, hosts on an allowlist (``ORCHESTRATOR_TREND_PHOTO_HOSTS``, default ``vogue.co.kr`` and its
-subdomains), at most two redirects that must stay on the allowlist, a byte cap, a pixel cap, and the same decode
+Off by default: trend article photos are linked, not downloaded. A deployer who has the rights to use them turns
+this on by naming the hosts in ``ORCHESTRATOR_TREND_PHOTO_HOSTS`` (empty by default; the deployer is responsible
+for that use, and sheets with such photos are not to be redistributed). ``ORCHESTRATOR_TREND_PHOTOS_ENABLED=0``
+turns it off even with hosts set.
+
+Rules: HTTPS only, hosts on the allowlist and their subdomains, at most two redirects that must stay on the allowlist, a byte cap, a pixel cap, and the same decode
 checks as uploaded images. A photo that fails, including one with a malformed URL, is skipped; it never fails
 the run. Nothing about the photos is added to
 the integrated envelope (its contract is unchanged); the store records them under ``trend-photos:<request_id>``.
@@ -23,7 +27,7 @@ from urllib.parse import urljoin, urlsplit
 from .planning_sheet import trend_image_urls
 from .workflow_store import checked_image
 
-DEFAULT_HOSTS = ('vogue.co.kr',)
+DEFAULT_HOSTS: tuple[str, ...] = ()  # no host: stage 06 downloads nothing unless the deployer names hosts
 MAX_PHOTOS = 3
 CANDIDATES = 6
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
@@ -42,11 +46,13 @@ class PhotoRejected(Exception):
 
 
 def enabled(env: Mapping[str, str] | None = None) -> bool:
-    return str((os.environ if env is None else env).get('ORCHESTRATOR_TREND_PHOTOS_ENABLED') or '1').strip() != '0'
+    """True only when hosts are named (ORCHESTRATOR_TREND_PHOTO_HOSTS) and ORCHESTRATOR_TREND_PHOTOS_ENABLED is not 0."""
+    switch = str((os.environ if env is None else env).get('ORCHESTRATOR_TREND_PHOTOS_ENABLED') or '1').strip() != '0'
+    return switch and bool(allowed_hosts(env))
 
 
 def allowed_hosts(env: Mapping[str, str] | None = None) -> tuple[str, ...]:
-    """ORCHESTRATOR_TREND_PHOTO_HOSTS: comma list of host names; each also admits its subdomains. Blank → vogue.co.kr."""
+    """ORCHESTRATOR_TREND_PHOTO_HOSTS: comma list of host names; each also admits its subdomains. Blank → none."""
     value = str((os.environ if env is None else env).get('ORCHESTRATOR_TREND_PHOTO_HOSTS') or '').strip().lower()
     hosts = tuple(host.strip().strip('.') for host in value.split(',') if host.strip().strip('.'))
     return hosts or DEFAULT_HOSTS

@@ -238,24 +238,24 @@
 <!-- ui -->
 <g id="node6" class="node">
 <title>ui</title>
-<path fill="none" stroke="#1f2328" stroke-width="1.4" d="M613.55,-451.09C613.55,-451.09 545,-451.09 545,-451.09 539,-451.09 533,-445.09 533,-439.09 533,-439.09 533,-421.57 533,-421.57 533,-415.57 539,-409.57 545,-409.57 545,-409.57 613.55,-409.57 613.55,-409.57 619.55,-409.57 625.55,-415.57 625.55,-421.57 625.55,-421.57 625.55,-439.09 625.55,-439.09 625.55,-445.09 619.55,-451.09 613.55,-451.09"/>
-<text xml:space="preserve" text-anchor="middle" x="579.27" y="-433.93" font-family="Pretendard" font-size="12.00" fill="#1f2328">브라우저 UI</text>
-<text xml:space="preserve" text-anchor="middle" x="579.27" y="-418.93" font-family="Pretendard" font-size="12.00" fill="#1f2328">정적 web/ 앱</text>
+<path fill="none" stroke="#1f2328" stroke-width="1.4" d="M625.55,-451.09C625.55,-451.09 557,-451.09 557,-451.09 551,-451.09 545,-445.09 545,-439.09 545,-439.09 545,-421.57 545,-421.57 545,-415.57 551,-409.57 557,-409.57 557,-409.57 625.55,-409.57 625.55,-409.57 631.55,-409.57 637.55,-415.57 637.55,-421.57 637.55,-421.57 637.55,-439.09 637.55,-439.09 637.55,-445.09 631.55,-451.09 625.55,-451.09"/>
+<text xml:space="preserve" text-anchor="middle" x="591.27" y="-433.93" font-family="Pretendard" font-size="12.00" fill="#1f2328">브라우저 UI</text>
+<text xml:space="preserve" text-anchor="middle" x="591.27" y="-418.93" font-family="Pretendard" font-size="12.00" fill="#1f2328">정적 web/ 앱</text>
 </g>
 <!-- ui&#45;&gt;orch -->
 <g id="edge13" class="edge">
 <title>ui&#45;&gt;orch</title>
-<path fill="none" stroke="#1f2328" stroke-width="1.2" d="M595.61,-409.14C613.76,-386.68 643.17,-350.3 663.33,-325.36"/>
-<polygon fill="#1f2328" stroke="#1f2328" stroke-width="1.2" points="665.11,-327.05 667.61,-320.07 661.3,-323.97 665.11,-327.05"/>
-<text xml:space="preserve" text-anchor="middle" x="664.9" y="-376.07" font-family="Pretendard" font-size="10.00" fill="#1f2328"> 실행, 진행 조회,</text>
-<text xml:space="preserve" text-anchor="middle" x="664.9" y="-363.32" font-family="Pretendard" font-size="10.00" fill="#1f2328"> 산출물, 기획서</text>
+<path fill="none" stroke="#1f2328" stroke-width="1.2" d="M605.76,-409.14C621.79,-386.77 647.72,-350.61 665.58,-325.68"/>
+<polygon fill="#1f2328" stroke="#1f2328" stroke-width="1.2" points="667.48,-327.25 669.56,-320.13 663.49,-324.39 667.48,-327.25"/>
+<text xml:space="preserve" text-anchor="middle" x="670.9" y="-376.07" font-family="Pretendard" font-size="10.00" fill="#1f2328"> 실행, 진행 조회,</text>
+<text xml:space="preserve" text-anchor="middle" x="670.9" y="-363.32" font-family="Pretendard" font-size="10.00" fill="#1f2328"> 산출물, 기획서</text>
 </g>
 <!-- photo -->
 <g id="node14" class="node">
 <title>photo</title>
-<path fill="none" stroke="#6b7280" stroke-width="1.4" stroke-dasharray="5,2" d="M831.55,-451.09C831.55,-451.09 709,-451.09 709,-451.09 703,-451.09 697,-445.09 697,-439.09 697,-439.09 697,-421.57 697,-421.57 697,-415.57 703,-409.57 709,-409.57 709,-409.57 831.55,-409.57 831.55,-409.57 837.55,-409.57 843.55,-415.57 843.55,-421.57 843.55,-421.57 843.55,-439.09 843.55,-439.09 843.55,-445.09 837.55,-451.09 831.55,-451.09"/>
-<text xml:space="preserve" text-anchor="middle" x="770.27" y="-433.93" font-family="Pretendard" font-size="12.00" fill="#1f2328">기사 사진 호스트</text>
-<text xml:space="preserve" text-anchor="middle" x="770.27" y="-418.93" font-family="Pretendard" font-size="12.00" fill="#1f2328">vogue.co.kr (허용 목록)</text>
+<path fill="none" stroke="#6b7280" stroke-width="1.4" stroke-dasharray="5,2" d="M805.42,-451.09C805.42,-451.09 721.12,-451.09 721.12,-451.09 715.12,-451.09 709.12,-445.09 709.12,-439.09 709.12,-439.09 709.12,-421.57 709.12,-421.57 709.12,-415.57 715.12,-409.57 721.12,-409.57 721.12,-409.57 805.42,-409.57 805.42,-409.57 811.42,-409.57 817.42,-415.57 817.42,-421.57 817.42,-421.57 817.42,-439.09 817.42,-439.09 817.42,-445.09 811.42,-451.09 805.42,-451.09"/>
+<text xml:space="preserve" text-anchor="middle" x="763.27" y="-433.93" font-family="Pretendard" font-size="12.00" fill="#1f2328">기사 사진 호스트</text>
+<text xml:space="preserve" text-anchor="middle" x="763.27" y="-418.93" font-family="Pretendard" font-size="12.00" fill="#1f2328">기본 꺼짐(선택)</text>
 </g>
 <!-- ui&#45;&gt;photo -->
 <!-- store&#45;&gt;orch -->
@@ -274,10 +274,10 @@
 <!-- photo&#45;&gt;orch -->
 <g id="edge15" class="edge">
 <title>photo&#45;&gt;orch</title>
-<path fill="none" stroke="#1f2328" stroke-width="1.2" stroke-dasharray="5,2" d="M752.43,-401.81C736.34,-376.98 713.02,-341.02 698.52,-318.66"/>
-<polygon fill="#1f2328" stroke="#1f2328" stroke-width="1.2" points="750.33,-403.07 756.19,-407.61 754.44,-400.4 750.33,-403.07"/>
-<text xml:space="preserve" text-anchor="middle" x="772.61" y="-376.07" font-family="Pretendard" font-size="10.00" fill="#1f2328">6단계 기사 사진</text>
-<text xml:space="preserve" text-anchor="middle" x="772.61" y="-363.32" font-family="Pretendard" font-size="10.00" fill="#1f2328">최대 3장(선택)</text>
+<path fill="none" stroke="#1f2328" stroke-width="1.2" stroke-dasharray="5,2" d="M746.9,-401.81C732.13,-376.98 710.74,-341.02 697.43,-318.66"/>
+<polygon fill="#1f2328" stroke="#1f2328" stroke-width="1.2" points="744.65,-402.81 750.33,-407.57 748.86,-400.31 744.65,-402.81"/>
+<text xml:space="preserve" text-anchor="middle" x="786.82" y="-376.07" font-family="Pretendard" font-size="10.00" fill="#1f2328">6단계 기사 사진 최대 3장</text>
+<text xml:space="preserve" text-anchor="middle" x="786.82" y="-363.32" font-family="Pretendard" font-size="10.00" fill="#1f2328">(설정한 호스트만)</text>
 </g>
 <!-- cdn&#45;&gt;hf -->
 <!-- hf&#45;&gt;duck -->

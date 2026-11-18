@@ -46,7 +46,7 @@ class StaticAssetTests(LiveServerMixin, unittest.TestCase):
                     directives = dict(item.strip().split(' ', 1) for item in policy.split(';'))
                     self.assertEqual(directives, {
                         'default-src': "'self'", 'script-src': "'self'", 'style-src': "'self'", 'font-src': "'self'",
-                        'img-src': "'self' data: blob: https://img.vogue.co.kr", 'connect-src': "'self'", 'object-src': "'none'",
+                        'img-src': "'self' data: blob:", 'connect-src': "'self'", 'object-src': "'none'",
                         'base-uri': "'none'", 'frame-ancestors': "'none'", 'form-action': "'self'"})
 
 
