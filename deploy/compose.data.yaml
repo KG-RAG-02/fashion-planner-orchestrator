@@ -55,30 +55,6 @@ services:
     depends_on:
       stock-cache-init: { condition: service_completed_successfully }
 
-  p07-cache-init:
-    image: vogue/sales-market:dev
-    read_only: true
-    user: "10001:10001"
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
-    tmpfs: ["/tmp:rw,nosuid,nodev,size=64m,mode=1777"]
-    environment:
-      <<: *r2
-      HOME: /tmp
-      VOGUE_R2_HM_DB_CACHE_DIR: /data/hm-cache
-      VOGUE_PROJECT07_DISABLE_DOTENV: "1"
-    entrypoint: ["python", "/init/p07_cache_init.py"]
-    volumes:
-      - ./init/p07_cache_init.py:/init/p07_cache_init.py:ro
-      - type: volume
-        source: p07_state
-        target: /data/hm-cache
-        volume: { subpath: hm-cache }
-    networks: [egress]
-    restart: "no"
-    depends_on:
-      volume-init: { condition: service_completed_successfully }
-
   sales-market:
     environment:
       <<: *r2
@@ -96,8 +72,6 @@ services:
         target: /data/hm-cache
         volume: { subpath: hm-cache }
     networks: [backend, egress]
-    depends_on:
-      p07-cache-init: { condition: service_completed_successfully }
 
 volumes:
   stock_cache:
