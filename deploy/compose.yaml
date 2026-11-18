@@ -60,7 +60,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
-        mkdir -p /v/orchestrator/workflow/blobs /v/research/reviews /v/research/hm-cache /v/research/duckdb-tmp
+        mkdir -p /v/orchestrator/workflow/blobs /v/research/hm-cache /v/research/duckdb-tmp
         /v/novelty/novelty-artifacts/images &&
         chown -R 10001:10001 /v/orchestrator /v/research /v/novelty &&
         chmod 0750 /v/orchestrator /v/research /v/novelty && echo volume-init-ok
@@ -144,10 +144,6 @@ services:
       # compose.data.yaml mounts the cache; without R2 settings, as in stub, the query does not run).
       RESEARCH_AGE_DUCKDB_MEMORY_LIMIT: "2GB"
     volumes:
-      - type: volume
-        source: research_state
-        target: /data/reviews
-        volume: { subpath: reviews }
       # DuckDB spills to "<cwd>/.tmp" (= /app/.tmp) when an R2 aggregate exceeds its memory limit; the
       # read-only root filesystem refuses that directory (IOException), so give it a writable disk path.
       - type: volume
@@ -200,11 +196,6 @@ services:
       - "127.0.0.1:${FASHION_PLANNER_UI_PORT:-8765}:8765"
     volumes:
       - orchestrator_state:/app/.local
-      - type: volume
-        source: research_state
-        target: /peer/research/reviews
-        read_only: true
-        volume: { subpath: reviews }
       # novelty draft visuals: artifact://novelty/images/<sha256>.<ext>, verified by size + sha256 on import.
       - type: volume
         source: novelty_data

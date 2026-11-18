@@ -106,9 +106,6 @@ services:
   orchestrator:
     environment:
       ORCHESTRATOR_QUERY_STRUCTURING_MODE: synthetic_fixture
-      # Stub is the integration-test profile: until the baseline is frozen the gate runs in
-      # development mode and every result carries the 'not frozen; development run' limitation.
-      ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED: "1"
 
 volumes:
   inventory_fixture:
