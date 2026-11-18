@@ -1,7 +1,7 @@
 """StructuredQuery 1.0 model: contract examples, validation rules, JSON Schema export, and the
 intended differences from trend's TrendQuery snapshot (contracts/agents/orchestrator/output/structured-query.md).
 
-Since 2026-11-11 the conditions are grouped per item (decisions IT-1..IT-7): `items[]` with category,
+The conditions are grouped per item: `items[]` with category,
 excluded categories, gender, attributes and unsupported conditions, plus `out_of_scope_items`."""
 
 import copy
@@ -109,7 +109,7 @@ EXAMPLE_3 = {
     "missing_fields": [],
 }
 
-# Example 4: "가방이랑 신발은 빼고, 자라 말고" - no item named (IT-6): one item over every category
+# Example 4: "가방이랑 신발은 빼고, 자라 말고" - no item named: one item over every category
 EXAMPLE_4 = full_query("req-ex4", "가방이랑 신발은 빼고, 자라 말고", items=[query_item(unsupported=[
     {"type": "category", "raw": "가방", "reason": CATEGORY_REASON, "polarity": "exclude"},
     {"type": "category", "raw": "신발", "reason": CATEGORY_REASON, "polarity": "exclude"},
@@ -125,12 +125,12 @@ EXAMPLE_5 = full_query("req-ex5", "남성 제외하고 숏패딩이랑 반팔 �
                include={"material": [ref("니트", "니트", "exact")], "sleeve_length": [ref("반팔", "반팔", "exact")]}),
 ])
 
-# Example 6: "블랙 부츠랑 셔츠 보여줘" - 부츠 is out of scope and keeps its own 블랙 (IT-7)
+# Example 6: "블랙 부츠랑 셔츠 보여줘" - 부츠 is out of scope and keeps its own 블랙
 EXAMPLE_6 = full_query("req-ex6", "블랙 부츠랑 셔츠 보여줘",
                        items=[query_item(cat("셔츠", "상의", "셔츠", "exact"))],
                        out_of_scope=[{"raw": "부츠", "reason": CATEGORY_REASON, "conditions_raw": ["블랙"]}])
 
-# Example 7: "아우터는 빼고 블랙으로" - no item named (IT-6): category null = 상의·하의·원피스 중 블랙
+# Example 7: "아우터는 빼고 블랙으로" - no item named: category null = 상의·하의·원피스 중 블랙
 EXAMPLE_7 = full_query("req-ex7", "아우터는 빼고 블랙으로", items=[
     query_item(None, excluded=[cat("아우터", "아우터", None, "exact")], include={"color": [ref("블랙", "블랙", "exact")]}),
 ])
@@ -158,16 +158,16 @@ POLICY_KEYS = {"additionalProperties", "required", "default", "minLength", "$sch
 _TERM_VALUE = "properties.trend_terms.properties.style_names.items.properties.value"
 INTENDED_DIFFERENCES = {
     ("added", "properties.schema_version"): "section 7: version",
-    ("removed", "properties.requested"): "section 7: conditions grouped per item (IT-1, IT-3)",
-    ("removed", "properties.unsupported"): "section 7: unsupported conditions inside each item (IT-5′)",
-    ("added", "properties.items"): "section 7: conditions grouped per item (IT-1, IT-3)",
-    ("added", "properties.out_of_scope_items"): "section 7: items outside the standard categories (IT-7)",
+    ("removed", "properties.requested"): "section 7: conditions grouped per item",
+    ("removed", "properties.unsupported"): "section 7: unsupported conditions inside each item",
+    ("added", "properties.items"): "section 7: conditions grouped per item",
+    ("added", "properties.out_of_scope_items"): "section 7: items outside the standard categories",
     ("removed", _TERM_VALUE + ".anyOf"): "tightening: no vocabulary for trend names yet, so value is always null",
     ("added", _TERM_VALUE + ".type"): "tightening: no vocabulary for trend names yet, so value is always null",
-    ("removed", "properties.trend_terms.properties.season"): "section 7: several seasons (SQ-2)",
-    ("added", "properties.trend_terms.properties.seasons"): "section 7: several seasons (SQ-2)",
-    ("removed", "properties.trend_terms.properties.item_terms"): "section 7: item_terms renamed (SQ-1)",
-    ("added", "properties.trend_terms.properties.product_model_names"): "section 7: item_terms renamed (SQ-1)",
+    ("removed", "properties.trend_terms.properties.season"): "section 7: several seasons",
+    ("added", "properties.trend_terms.properties.seasons"): "section 7: several seasons",
+    ("removed", "properties.trend_terms.properties.item_terms"): "section 7: item_terms renamed",
+    ("added", "properties.trend_terms.properties.product_model_names"): "section 7: item_terms renamed",
 }
 
 
@@ -260,7 +260,7 @@ class StructuredQueryValidationTests(unittest.TestCase):
         document["items"][0]["attributes"][side][kind] = [value_ref]
         return document
 
-    # --- items (IT-1..IT-7) -----------------------------------------------------------------------
+    # --- items -----------------------------------------------------------------------------------
 
     def test_conditions_belong_to_an_item(self):
         # the flat shape of 2026-11-10 is gone: no top-level `requested` / `unsupported`
@@ -273,7 +273,7 @@ class StructuredQueryValidationTests(unittest.TestCase):
                          ("item_id", "category", "excluded_categories", "gender", "attributes", "unsupported"))
 
     def test_item_ids_follow_the_item_order(self):
-        # IT-8: "i1", "i2", ... so a per-item result can be joined back
+        # "i1", "i2", ... so a per-item result can be joined back
         self.assertEqual([i["item_id"] for i in EXAMPLE_5["items"]], ["i1", "i2"])
         for ids in (["i2", "i1"], ["i1", "i1"], ["i0", "i1"], ["1", "2"], ["i1", None]):
             with self.subTest(ids=ids):
@@ -286,13 +286,13 @@ class StructuredQueryValidationTests(unittest.TestCase):
         self.assert_invalid(missing)
 
     def test_an_item_without_a_category_means_every_category(self):
-        # IT-6: category null + excluded categories, never rewritten into the remaining categories
+        # category null + excluded categories, never rewritten into the remaining categories
         parsed = self.models.StructuredQuery.model_validate(EXAMPLE_7)
         self.assertIsNone(parsed.items[0].category)
         self.assertEqual([c.major for c in parsed.items[0].excluded_categories], ["아우터"])
 
     def test_out_of_scope_items_keep_their_own_conditions_as_text(self):
-        # IT-7
+        # an out-of-scope item
         self.assertEqual(tuple(self.models.OutOfScopeItem.model_fields), ("raw", "reason", "conditions_raw"))
         for bad in ({"raw": "부츠", "conditions_raw": []}, {"raw": "", "reason": "x", "conditions_raw": []},
                     {"raw": "부츠", "reason": "x", "conditions_raw": [""]},
@@ -324,7 +324,7 @@ class StructuredQueryValidationTests(unittest.TestCase):
                 self.assertEqual(tuple(ref_type.model_fields), ("raw", "value", "match"))
 
     def test_length_values_are_trends_own(self):
-        # decision OQ-9′: trend docs/schemas/vocabulary.md §6 (BodyLength 9, SleeveLength 5), no new values
+        # trend docs/schemas/vocabulary.md §6 (BodyLength 9, SleeveLength 5), no new values
         self.assertEqual(cvocab.ATTRIBUTE_VALUES["body_length"],
                          ("크롭", "노멀", "하프", "롱", "미니", "니렝스", "미디", "발목", "맥시"))
         self.assertEqual(cvocab.ATTRIBUTE_VALUES["sleeve_length"], ("민소매", "반팔", "캡", "7부소매", "긴팔"))
@@ -333,7 +333,7 @@ class StructuredQueryValidationTests(unittest.TestCase):
         self.assert_invalid(self.with_attribute("include", "body_length", ref("반팔", "반팔", "exact")))
 
     def test_gender_is_include_exclude_lists(self):
-        # decision G-3: "남성 말고" = exclude [남]; both lists always present, never null (now per item, IT-3)
+        # "남성 말고" = exclude [남]; both lists always present, never null (per item)
         document = copy.deepcopy(EXAMPLE_3)
         document["items"][0]["gender"] = {"include": [], "exclude": [ref("남성", "남", "alias")]}
         parsed = self.models.StructuredQuery.model_validate(document)
@@ -345,7 +345,6 @@ class StructuredQueryValidationTests(unittest.TestCase):
                 self.assert_invalid(document)
 
     def test_unsupported_type_is_one_of_nine(self):
-        # decision OQ-3′
         self.assertEqual(cvocab.UNSUPPORTED_TYPES,
                          ("brand", "category", "attribute", "abstract", "price", "market", "channel", "age", "other"))
         for type_ in ("gender", "브랜드", "brand_name", ""):
@@ -487,7 +486,7 @@ class StructuredQueryValidationTests(unittest.TestCase):
         self.assert_invalid(document)
 
     def test_seasons_are_a_non_empty_list(self):
-        # decision SQ-2: several seasons; a query naming none still carries the default_next one
+        # several seasons; a query naming none still carries the default_next one
         two = copy.deepcopy(EXAMPLE_3)
         two["trend_terms"]["seasons"] = [{"year": 2027, "season": "SS", "raw": "올봄", "origin": "user_requested"},
                                           {"year": 2027, "season": "FW", "raw": "가을", "origin": "user_requested"}]
@@ -498,7 +497,7 @@ class StructuredQueryValidationTests(unittest.TestCase):
                 document["trend_terms"]["seasons"] = bad
                 self.assert_invalid(document)
         old = copy.deepcopy(EXAMPLE_3)
-        old["trend_terms"]["item_terms"] = []  # renamed to product_model_names (SQ-1)
+        old["trend_terms"]["item_terms"] = []  # renamed to product_model_names
         self.assert_invalid(old)
 
     def test_season_raw_follows_its_origin(self):

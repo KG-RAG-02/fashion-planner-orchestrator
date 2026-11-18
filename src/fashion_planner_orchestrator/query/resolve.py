@@ -1,7 +1,7 @@
-"""Value resolver (decision Q3 = gamma): turn LLM-extracted conditions into standard values. Stdlib only.
+"""Value resolver: turn LLM-extracted conditions into standard values. Stdlib only.
 
 Input: one `Condition` per expression the LLM extracted from the query ({raw, kind, polarity,
-suggestion}, draft v2). The LLM never sees the alias dictionary and never sets `match`.
+suggestion}). The LLM never sees the alias dictionary and never sets `match`.
 Output: `ResolvedValue`s (with `match`), `UnsupportedItem`s and `ResolutionWarning`s. This module is
 independent of the pydantic models; the assembler maps the output into StructuredQuery.
 
@@ -13,22 +13,22 @@ Rules (docs/query-structuring.md, contracts/agents/orchestrator/output/structure
      otherwise value None -> `none` (with `suggestion_not_in_vocabulary` if one was given).
   3. Lookup targets: detail -> dictionary detail, then neckline, then collar (the contract's detail
      holds all three); color -> `normalize_color`; body_length / sleeve_length -> the dictionary length
-     tables (decision OQ-9′); category -> the dictionary category (= minor) table first, then the 4
+     tables; category -> the dictionary category (= minor) table first, then the 4
      major names (`exact`; the dictionary only has hints for 상의·하의·아우터, and it maps 원피스 to
-     the minor 드레스, so "원피스" is 드레스 `alias`, decision OQ-5′);
-     gender -> the fixed table in configs/query_structuring.json (decision G-1).
+     the minor 드레스, so "원피스" is 드레스 `alias`);
+     gender -> the fixed table in configs/query_structuring.json.
   4. Within-span fallback: if the whole `raw` gives nothing, retry with its whitespace tokens. The
      query sentence itself is never scanned (that caused "겨울" -> 울). Each distinct value found in
      one span becomes its own output with the same `raw`.
-  5. Routes are followed (H5): the expression is re-resolved in the target attribute (e.g. detail
+  5. Routes are followed: the expression is re-resolved in the target attribute (e.g. detail
      민소매 -> sleeve_length); a target that is not in the contract (shape) -> unsupported type
      `attribute`. Hints are never used.
-  6. Categories (decision G-2): a minor the dictionary resolves is kept and never widened to its
+  6. Categories: a minor the dictionary resolves is kept and never widened to its
      major. Without a dictionary answer only a *minor* suggestion is accepted (`llm`); a major
      suggestion is rejected (a major name in `raw` was already matched in step 3). Out-of-scope
      items (dictionary null value, e.g. 가방) and unresolved categories -> unsupported type `category`.
   7. A dictionary "null value" (no standard value on purpose) is a dictionary answer: no LLM fallback.
-  8. Gender (decision G-3, `resolve_conditions` only): when the included genders contain both 남 and 여,
+  8. Gender (`resolve_conditions` only): when the included genders contain both 남 and 여,
      those entries become one 공용 entry (raw = the raws joined by ", ", match = the least certain one)
      with warning `gender_merged_to_unisex`. Exclusions are never merged or complemented.
 """
@@ -282,7 +282,7 @@ _MATCH_CERTAINTY = {MATCH_EXACT: 0, MATCH_ALIAS: 1, MATCH_APPROX: 2, MATCH_LLM: 
 
 
 def merge_genders(values: Iterable[ResolvedValue]) -> tuple[list[ResolvedValue], tuple[ResolutionWarning, ...]]:
-    """Decision G-3 / OQ-7: included 남 and 여 together mean 공용 ("남성·여성 모두 셔츠").
+    """Included 남 and 여 together mean 공용 ("남성·여성 모두 셔츠").
 
     The 남/여 include entries are replaced, at the position of the first one, by a single 공용 entry
     (raw = their raws joined by ", ", match = the least certain of them); when a 공용 include entry
@@ -310,7 +310,7 @@ def merge_genders(values: Iterable[ResolvedValue]) -> tuple[list[ResolvedValue],
     return out, (ResolutionWarning(WARN_GENDER_MERGED_TO_UNISEX, detail=str(len(merged))),)
 
 
-# ---------------------------------------------------------------------------- gender (G-1)
+# ---------------------------------------------------------------------------- gender
 def _gender_table(aliases: Optional[Mapping[str, Sequence[str]]]) -> dict[str, str]:
     if aliases is None:
         from .config import CONFIG  # read at import of config; imported lazily to keep this module light
@@ -409,8 +409,8 @@ class _Resolver:
             elif outcome is not None:
                 return [outcome]
         if kind == "category":
-            # Dictionary first: it maps 원피스 -> 드레스 (decision OQ-5′). For 상의·하의·아우터 it only
-            # returns a hint (never used, H5), so the major name itself is compared here.
+            # Dictionary first: it maps 원피스 -> 드레스. For 상의·하의·아우터 it only
+            # returns a hint (never used), so the major name itself is compared here.
             major = _major_name(text)
             if major is not None:
                 return [_Hit("category", major, "standard", text, SOURCE_CATEGORY_MAJOR, major=major)]
@@ -433,7 +433,7 @@ class _Resolver:
             return self._follow_route(attribute, n, text, hops=hops)
         if n.matched_by == "null_value":
             return _NULL
-        return None  # none, or a hint (hints are never applied, H5)
+        return None  # none, or a hint (hints are never applied)
 
     def _hit(self, attribute: str, value: str, matched_by: str, text: str,
              routed_from: Optional[str] = None) -> _Hit:
@@ -504,7 +504,7 @@ class _Resolver:
                 return
             if s in vocab.CATEGORY_MAJOR:
                 # a major name in raw was already matched (exact), so a major suggestion here would
-                # widen a subtype to its major: rejected (decision G-2)
+                # widen a subtype to its major: rejected
                 self._warn(WARN_CATEGORY_MAJOR_SUGGESTION_REJECTED)
             elif s is not None:
                 self._warn(WARN_SUGGESTION_NOT_IN_VOCABULARY, kind)

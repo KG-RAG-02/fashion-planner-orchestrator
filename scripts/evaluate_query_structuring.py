@@ -88,12 +88,12 @@ def facts(sq: dict[str, Any]) -> dict[tuple, str | None]:
     return out
 
 
-UNCHECKED_UNSUPPORTED_TYPES = ("brand",)  # decision BR-1 (2026-11-11): documented, not scored
+UNCHECKED_UNSUPPORTED_TYPES = ("brand",)  # documented, not scored
 
 
 def checked(expected: dict[tuple, str | None], produced: dict[tuple, str | None]
             ) -> tuple[dict[tuple, str | None], dict[tuple, str | None]]:
-    """Decision BR-1: brands are not scored. Labels keep them (W-11); here every unsupported fact of an
+    """Brands are not scored. Labels keep them; here every unsupported fact of an
     unchecked type is dropped from both sides, and so is any produced raw-text fact (style, model name,
     unsupported, out-of-scope) that contains a labelled brand ("<브랜드> 스타일" written as a style name)."""
     def unchecked(fact: tuple) -> bool:

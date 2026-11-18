@@ -4,7 +4,7 @@ Source of truth (read-only): trend `src/trend_agent/ingestion/normalization/alia
 and `configs/alias_map/*.yaml`. The dictionary data comes from the generated module `alias_data.py`
 (snapshot contracts/agents/trend/vocabulary/alias-map.snapshot.json). The port must behave exactly like the original;
 tests/test_query_lexicon.py compares it with outputs of the original code (alias-map.golden.json).
-Original behaviour that looks questionable is ported as is (decision H1: follow the dictionary).
+Original behaviour that looks questionable is ported as is (follow the dictionary).
 
 Conversion order of `normalize` (same as the original):
   normalization key -> standard value -> alias -> approx -> route -> hint -> null value -> none
@@ -12,7 +12,7 @@ Conversion order of `normalize` (same as the original):
 This module only reports what the dictionary says. Policy lives in the caller:
 - approx results are passed on tagged as match "approx"; whether to filter on them is the
   receiver's choice (see docs/query-structuring.md),
-- hints are reported but never applied (decision H5).
+- hints are reported but never applied.
 
 Standard library only; no pyyaml, no file access at run time.
 """

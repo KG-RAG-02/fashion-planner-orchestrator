@@ -1,4 +1,4 @@
-"""Value resolver (query/resolve.py, decision Q3 = gamma, G-1, G-2). Stdlib only.
+"""Value resolver (query/resolve.py). Stdlib only.
 
 Expected values were checked against the real alias dictionary (alias_data.py snapshot) by running
 the code; where this file says "dictionary", the result comes from `lexicon.py`, not from the LLM.
@@ -78,7 +78,7 @@ class DictionaryFirstTests(unittest.TestCase):
         self.assertEqual([(v.value, v.match) for v in result.values], [(None, "none")])
 
     def test_hints_are_never_applied(self):
-        # dictionary: material "다운" -> hint category_minor 패딩 only (H5)
+        # dictionary: material "다운" -> hint category_minor 패딩 only
         result = one("다운", "material")
         self.assertEqual([(v.kind, v.value, v.match) for v in result.values], [("material", None, "none")])
 
@@ -136,7 +136,7 @@ class DetailAndRouteTests(unittest.TestCase):
                 self.assertEqual(codes(result), [r.WARN_ATTRIBUTE_ROUTED, r.WARN_LLM_SUGGESTION_OVERRIDDEN])
 
     def test_route_into_a_length_kind_is_inside_the_contract(self):
-        # dictionary: detail 민소매 -> sleeve_length (decision OQ-9': lengths are contract kinds now)
+        # dictionary: detail 민소매 -> sleeve_length (lengths are contract kinds now)
         result = one("민소매", "detail", "exclude")
         self.assertEqual([(v.kind, v.polarity, v.value, v.match) for v in result.values],
                          [("sleeve_length", "exclude", "민소매", "exact")])
@@ -152,7 +152,7 @@ class DetailAndRouteTests(unittest.TestCase):
 
 
 class CategoryG2Tests(unittest.TestCase):
-    """contracts/agents/orchestrator/output/structured-query.md §4.3 G-2."""
+    """contracts/agents/orchestrator/output/structured-query.md §4.3."""
 
     def check(self, raw, suggestion, expected, polarity="include"):
         result = one(raw, "category", polarity, suggestion)
@@ -177,14 +177,14 @@ class CategoryG2Tests(unittest.TestCase):
                 self.assertEqual(result.values[0].value, major)
 
     def test_onepiece_is_the_dress_alias(self):
-        # decision OQ-5': the dictionary maps 원피스 -> 드레스 (alias) and the dictionary goes first
+        # the dictionary maps 원피스 -> 드레스 (alias) and the dictionary goes first
         result = self.check("원피스", "드레스", [("원피스", "드레스", "alias")])
         self.assertEqual(result.warnings, ())
         result = self.check("원피스", "원피스", [("원피스", "드레스", "alias")])
         self.assertEqual(codes(result), [r.WARN_LLM_SUGGESTION_OVERRIDDEN])
 
     def test_spaced_category_words_are_each_a_category(self):
-        # decision OQ-10': "셔츠 원피스" = 셔츠 and 원피스(드레스); joined "셔츠원피스" is one dress (llm)
+        # "셔츠 원피스" = 셔츠 and 원피스(드레스); joined "셔츠원피스" is one dress (llm)
         self.check("셔츠 원피스", None, [("상의", "셔츠", "exact"), ("원피스", "드레스", "alias")], polarity="exclude")
         self.check("셔츠원피스", "드레스", [("원피스", "드레스", "llm")], polarity="exclude")
         self.check("니트 원피스", None, [("원피스", "드레스", "alias")])  # 니트 is not a category word
@@ -215,7 +215,7 @@ class CategoryG2Tests(unittest.TestCase):
 
 
 class LengthTests(unittest.TestCase):
-    """Decision OQ-9' (body_length, sleeve_length) and OQ-8' (숏패딩)."""
+    """The two length kinds (body_length, sleeve_length) and 숏패딩."""
 
     def test_length_values_from_the_dictionary(self):
         cases = {("미니", "body_length"): ("미니", "exact"), ("긴", "body_length"): ("롱", "alias"),
@@ -273,7 +273,7 @@ class GenderG1Tests(unittest.TestCase):
 
 
 class GenderG3Tests(unittest.TestCase):
-    """Decision G-3: gender include/exclude; included 남 + 여 = 공용 (OQ-7)."""
+    """Gender include/exclude; included 남 + 여 = 공용."""
 
     @staticmethod
     def run_all(*conditions):

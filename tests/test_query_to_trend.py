@@ -1,6 +1,6 @@
-"""StructuredQuery -> TrendQuery (query/to_trend.py, decision FW-1): only the first item and the first season
-go to trend; everything else is reported (IT-4, SQ-2, X4). Uses the contract examples (contracts/
-structured-query.md §6), so no evaluation query is involved (W-10). No model call."""
+"""StructuredQuery -> TrendQuery (query/to_trend.py): only the first item and the first season
+go to trend; everything else is reported. Uses the contract examples (contracts/
+structured-query.md §6), so no evaluation query is involved. No model call."""
 
 import copy
 import importlib
@@ -57,7 +57,7 @@ class ToTrendQueryTests(unittest.TestCase):
         self.assertEqual(result.warnings, ("conditions_not_forwarded",))  # the excluded color has no field
 
     def test_no_category_means_all_and_exclusions_are_kept(self):
-        # example 7 (IT-6): category null -> include [] (= all four majors) minus the excluded 아우터
+        # example 7: category null -> include [] (= all four majors) minus the excluded 아우터
         tq = self.run_example(self.examples.EXAMPLE_7).to_dict()
         self.assertEqual(tq["requested"]["categories"]["include"], [])
         self.assertEqual([c["major"] for c in tq["requested"]["categories"]["exclude"]], ["아우터"])
@@ -68,7 +68,7 @@ class ToTrendQueryTests(unittest.TestCase):
         self.assertTrue(brand["reason"].endswith("(제외 요청)"))
 
     def test_out_of_scope_items_are_reported_to_trend_as_unsupported_categories(self):
-        # IT-7′ (2026-11-12): searched over every category, the out-of-scope item is reported as not applied
+        # searched over every category, the out-of-scope item is reported as not applied
         document = copy.deepcopy(self.examples.EXAMPLE_6)
         document["out_of_scope_items"] = [{"raw": "부츠", "reason": "표준 카테고리(상분류 4·하분류 21)에 없음",
                                            "conditions_raw": ["블랙"]}]

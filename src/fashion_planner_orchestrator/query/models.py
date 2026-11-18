@@ -6,19 +6,19 @@ contracts/agents/orchestrator/output/structured-query.schema.json, is generated 
 scripts/export_structured_query_schema.py (drift check: tests/test_query_structured_models.py).
 
 Values come from the K-Fashion standard vocabulary owned by trend (vocabulary.py,
-plus the two length kinds in contract_vocabulary.py, decision OQ-9′). Each attribute kind has its own
+plus the two length kinds in contract_vocabulary.py). Each attribute kind has its own
 reference type (ColorRef, ...) so the allowed values are part of the JSON Schema, not only of this
-code (decision X2).
+code.
 
 Rules enforced here (the producer side, so every model forbids unknown fields):
-  - The conditions are grouped per item (decisions IT-1..IT-9, 2026-11-11): `items[]`, each with its own
+  - The conditions are grouped per item: `items[]`, each with its own
     category, excluded categories, gender, attributes and unsupported conditions.
   - Empty is `[]`, never null. The seven attribute keys are always present on both sides, and so are
-    the gender lists (decision G-3: gender is include/exclude like categories and attributes).
-  - `unsupported.type` is one of the nine closed types (decision OQ-3′).
+    the gender lists (gender is include/exclude like categories and attributes).
+  - `unsupported.type` is one of the nine closed types.
   - `match == "none"` if and only if `value is None` (AttributeRef, GenderRef).
   - A CategoryRef always names a standard category: an unresolved category is an out-of-scope item
-    (`out_of_scope_items`, decision IT-7) when the user asks for it, and an `unsupported` entry (type
+    (`out_of_scope_items`) when the user asks for it, and an `unsupported` entry (type
     "category") when the user excludes it, so `match` is never "none" here. A major-only reference
     is used only when the user named the major category itself, so its `match` is "exact".
   - When `minor` is given, `major` is derived from it; a contradicting `major` is rejected.
@@ -105,11 +105,11 @@ class TermRef(_Contract):
 
 
 class TrendTerms(_Contract):
-    """Query-wide terms (decision IT-5″).
+    """Query-wide terms.
 
-    `seasons` (decision SQ-2, 2026-11-11): every season the user named, in query order, never empty - a query
+    `seasons`: every season the user named, in query order, never empty - a query
     naming no season gets the one `default_next` season. Duplicates (same year and season) are removed.
-    `product_model_names` (decision SQ-1, renamed from `item_terms`): specific product / model names that no
+    `product_model_names`: specific product / model names that no
     standard category or attribute can express (e.g. a model name); items the user asks for are in `items`."""
 
     seasons: list[SeasonRequest] = Field(min_length=1)
@@ -192,13 +192,13 @@ class FitRef(AttributeRef):
 
 
 class BodyLengthRef(AttributeRef):
-    """Body length (기장), trend's BodyLength values (decision OQ-9′)."""
+    """Body length (기장), trend's BodyLength values."""
 
     value: Optional[BodyLength]
 
 
 class SleeveLengthRef(AttributeRef):
-    """Sleeve length (소매 기장), trend's SleeveLength values (decision OQ-9′)."""
+    """Sleeve length (소매 기장), trend's SleeveLength values."""
 
     value: Optional[SleeveLength]
 
@@ -233,7 +233,7 @@ class AttributeFilter(_Contract):
 
 
 class GenderFilter(_Contract):
-    """Decision G-3. Genders to select = the include values when there are any (minus excluded ones),
+    """Genders to select = the include values when there are any (minus excluded ones),
     otherwise all three standard genders minus the excluded ones; both empty = no gender filter.
     Entries with value null (match none) take no part in that. Code never rewrites an exclusion into the
     complement ("남성 말고" stays exclude [남]; it means 여·공용 by this definition)."""
@@ -252,15 +252,15 @@ class UnsupportedCondition(_Contract):
 
 
 class QueryItem(_Contract):
-    """One item to look for, with every condition that applies to it (decisions IT-1, IT-3).
+    """One item to look for, with every condition that applies to it.
 
     An item is complete on its own, so the same process can run once per item: conditions that the user
     gave for the whole query are copied into every item. `category` null = the user named no item to look
-    for (IT-6): every category minus `excluded_categories` ("아우터는 빼고 블랙" = 상의·하의·원피스 중 블랙).
-    `excluded_categories` keeps the exclusion form (like gender, G-3); code never rewrites it into the
+    for: every category minus `excluded_categories` ("아우터는 빼고 블랙" = 상의·하의·원피스 중 블랙).
+    `excluded_categories` keeps the exclusion form (like gender); code never rewrites it into the
     remaining categories.
 
-    `item_id` (decision IT-8, 2026-11-11): "i1", "i2", ... in `items` order, so a result produced for one
+    `item_id`: "i1", "i2", ... in `items` order, so a result produced for one
     item (for example by a per-item Agent) can be joined back to it after the items are sent apart."""
 
     item_id: Annotated[str, Field(pattern=r"^i[1-9][0-9]*$")]
@@ -272,7 +272,7 @@ class QueryItem(_Contract):
 
 
 class OutOfScopeItem(_Contract):
-    """An item the user asked for that is not a standard category ("블랙 부츠" -> 부츠), decision IT-7.
+    """An item the user asked for that is not a standard category ("블랙 부츠" -> 부츠).
     It is not turned into an item (that would widen the search to every category); its own conditions are
     kept as raw text in `conditions_raw` (the 블랙 of "블랙 부츠랑 셔츠" belongs to 부츠, not to 셔츠)."""
 
@@ -285,10 +285,10 @@ class StructuredQuery(_Contract):
     """StructuredQuery 1.0: one natural-language query structured with the K-Fashion standard
     vocabulary. Definition: contracts/agents/orchestrator/output/structured-query.md (owner: fashion-planner-orchestrator).
 
-    `items` are in the order the user named them (decision IT-4: the pipeline takes one item today, so
-    only `items[0]` is forwarded to trend). Season and trend names are query-wide (`trend_terms`,
-    decision IT-5″). The assembler always writes at least one item: with no named item, or only
-    out-of-scope ones, one item with `category: null` (IT-6, IT-7′). The model still accepts `[]`."""
+    `items` are in the order the user named them (the pipeline takes one item today, so
+    only `items[0]` is forwarded to trend). Season and trend names are query-wide (`trend_terms`).
+    The assembler always writes at least one item: with no named item, or only
+    out-of-scope ones, one item with `category: null`. The model still accepts `[]`."""
 
     schema_version: Literal["1.0.0"] = SCHEMA_VERSION
     request_id: NonEmptyStr
@@ -300,7 +300,7 @@ class StructuredQuery(_Contract):
 
     @model_validator(mode="after")
     def _item_ids_follow_the_order(self) -> "StructuredQuery":
-        # IT-8: item_id = "i" + position (1-based), so ids are unique and items[0] is always "i1"
+        # item_id = "i" + position (1-based), so ids are unique and items[0] is always "i1"
         expected = [f"i{n}" for n in range(1, len(self.items) + 1)]
         if [item.item_id for item in self.items] != expected:
             raise ValueError(f"item_id must be {expected} in items order")

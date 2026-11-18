@@ -1,5 +1,5 @@
 {
-  "_about": "Settings of the real LLM call used for query structuring (src/fashion_planner_orchestrator/llm_provider.py). Model, key and provider come from the environment or .env (LLM_MODEL, LLM_API_KEY, optional LLM_PROVIDER), never from this file. temperature: 0 = the same query gives the same draft as far as the provider allows (decision OQ-14, 2026-11-10); null = provider default. See configs/README.md.",
+  "_about": "Settings of the real LLM call used for query structuring (src/fashion_planner_orchestrator/llm_provider.py). Model, key and provider come from the environment or .env (LLM_MODEL, LLM_API_KEY, optional LLM_PROVIDER), never from this file. temperature: 0 = the same query gives the same draft as far as the provider allows; null = provider default. See configs/README.md.",
   "timeout_seconds": 60,
   "max_tokens": 16000,
   "max_retries": 2,

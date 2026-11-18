@@ -20,7 +20,7 @@
     "generic_reason": "현재 검색에서 지원하지 않는 조건"
   },
   "gender": {
-    "_about": "Decision G-1: gender is not in the trend alias dictionary, so query/resolve.py uses this fixed table (match = alias). Keys are standard GENDERS values; spellings are compared like the dictionary does (lower case, no spaces, '-' or '_'). Delete when the trend dictionary gets a gender attribute.",
+    "_about": "Gender is not in the trend alias dictionary, so query/resolve.py uses this fixed table (match = alias). Keys are standard GENDERS values; spellings are compared like the dictionary does (lower case, no spaces, '-' or '_'). Delete when the trend dictionary gets a gender attribute.",
     "aliases": {
       "여": [
         "여성",

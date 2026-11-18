@@ -11,7 +11,7 @@ draft and records warning codes without copying user text into diagnostics:
 * Item words resolve first as categories, then as exact/alias attribute values. Unresolved
   items remain in ``out_of_scope_items`` with their original conditions.
 * Item and out-of-scope ordering follows the text position, with draft order breaking ties.
-  Leading gender is shared only under the IT-9 rule in :func:`_share_leading_gender`.
+  Leading gender is shared only under the rule in :func:`_share_leading_gender`.
 * Resolved values and unsupported conditions are deduplicated before model construction.
 
 The higher-level prompt/provider flow is in :mod:`query.structured`.
@@ -38,13 +38,13 @@ from .season import resolve_season_year
 
 WARN_UNSUPPORTED_CATEGORY_RESOLVED = "unsupported_category_resolved"
 WARN_CATEGORY_CONDITION_MOVED_TO_ITEM = "category_condition_moved_to_item"
-# IT-7′ (2026-11-12): no named item is a standard category -> one item over every category (common conditions only)
+# no named item is a standard category -> one item over every category (common conditions only)
 WARN_ONLY_OUT_OF_SCOPE_ITEMS = "only_out_of_scope_items"
-WARN_ITEM_WORD_IS_CONDITION = "item_word_used_as_condition"  # IT-10: an item word that is an attribute value
-# IT-10: an item word resolving to several attribute kinds -> exact before alias, then this order
+WARN_ITEM_WORD_IS_CONDITION = "item_word_used_as_condition"  # an item word that is an attribute value
+# an item word resolving to several attribute kinds -> exact before alias, then this order
 ITEM_WORD_ATTRIBUTE_PRIORITY = ("sleeve_length", "body_length", "color", "material", "pattern", "fit", "detail")
 WARN_STRAY_CATEGORY_VALUE = "stray_category_value"  # an included category produced inside an item's conditions
-WARN_LEADING_GENDER_SHARED = "leading_gender_shared"  # IT-9: gender before the first item moved to every item
+WARN_LEADING_GENDER_SHARED = "leading_gender_shared"  # gender before the first item moved to every item
 
 
 @dataclass(frozen=True)
@@ -61,7 +61,7 @@ class _ItemSpec:
     suggestion: Optional[str]
     conditions: list[Condition] = field(default_factory=list)
     unsupported: list[DraftUnsupported] = field(default_factory=list)
-    from_unsupported: bool = False  # came from `unsupported` (type category): dictionary only (OQ-13′)
+    from_unsupported: bool = False  # came from `unsupported` (type category): dictionary only
 
 
 def assemble_structured_query(
@@ -79,7 +79,7 @@ def assemble_structured_query(
         if code not in warnings:
             warnings.append(code)
 
-    # seasons (SQ-2): every season the user named, in query order, the A-1 year rule for each; none named ->
+    # seasons: every season the user named, in query order, the A-1 year rule for each; none named ->
     # the next fashion season computed from `today` (same as the initial season rule). Same (year, season) twice -> kept once.
     seasons: list[SeasonRequest] = []
     for named in draft.seasons:
@@ -111,7 +111,7 @@ def assemble_structured_query(
             elif u.polarity == "include":
                 moved.append(_ItemSpec(u.raw, None, from_unsupported=True))
             else:
-                # OQ-13′: dictionary only (suggestion None), so only a dictionary answer rescues it
+                # dictionary only (suggestion None), so only a dictionary answer rescues it
                 recheck = resolve_condition(Condition(u.raw, "category", "exclude", None), lexicon=lexicon)
                 if recheck.values:
                     kept.append(Condition(u.raw, "category", "exclude", None))
@@ -129,7 +129,7 @@ def assemble_structured_query(
         warn(WARN_LEADING_GENDER_SHARED)
 
     # look every item expression up; keep (position, order, payload) so the result follows the query order.
-    # category None = an item word that is an attribute value (IT-10): an item over every category.
+    # category None = an item word that is an attribute value: an item over every category.
     found: list[tuple[int, int, Optional[ResolvedValue], list[ResolvedValue], _ItemSpec]] = []
     out_of_scope: list[tuple[int, int, OutOfScopeItem]] = []
     category_reason = UNSUPPORTED_REASONS.get("category", GENERIC_UNSUPPORTED_REASON)
@@ -157,8 +157,8 @@ def assemble_structured_query(
 
     items: list[QueryItem] = []
     if not found:
-        # IT-6: no item named -> one item over every category, holding the common conditions.
-        # IT-7′: every named item out of scope -> the same item, so the season still reaches trend; the
+        # no item named -> one item over every category, holding the common conditions.
+        # every named item out of scope -> the same item, so the season still reaches trend; the
         # out-of-scope items' own conditions stay in out_of_scope_items (never widen this item).
         if out_of_scope:
             warn(WARN_ONLY_OUT_OF_SCOPE_ITEMS)
@@ -226,7 +226,7 @@ def _build_item(item_id: str, category: Optional[ResolvedValue], extra_values: S
         unsupported.append(UnsupportedCondition(type=type_, raw=raw, reason=reason, polarity=polarity))
 
     return QueryItem(
-        item_id=item_id,  # IT-8: position in query order, 1-based
+        item_id=item_id,  # position in query order, 1-based
         category=None if category is None else CategoryRef(
             raw=category.raw, major=category.major, minor=category.minor, match=category.match),
         excluded_categories=excluded,
@@ -238,11 +238,11 @@ def _build_item(item_id: str, category: Optional[ResolvedValue], extra_values: S
 
 
 def _share_leading_gender(specs: list[_ItemSpec], common: list[Condition], query: str) -> bool:
-    """Decision IT-9 (2026-11-11): a gender word written BEFORE the first item of a query with several items
+    """A gender word written BEFORE the first item of a query with several items
     is meant for every item ("여성 셔츠랑 스커트" = 여성 셔츠 + 여성 스커트), unless another item or the common
     block names a gender of its own ("여성 셔츠랑 남성 바지" stays as it is). The model may put such a word on
-    the first item only (IT-2); it is moved to `common` here, so it is copied into every item (IT-1).
-    Rule on kind and position only, no word list (W-10). Returns True when something was moved."""
+    the first item only; it is moved to `common` here, so it is copied into every item.
+    Rule on kind and position only, no word list. Returns True when something was moved."""
     if len(specs) < 2 or any(c.kind == "gender" for c in common):
         return False
     first = min(specs, key=lambda spec: _position(query, spec.raw))  # ties: the first written
@@ -258,7 +258,7 @@ def _share_leading_gender(specs: list[_ItemSpec], common: list[Condition], query
 
 
 def _item_word_as_attribute(raw: str, lexicon: Optional[Lexicon]) -> Optional[ResolvedValue]:
-    """Decision IT-10 (2026-11-12): an item word that is not a category but a dictionary attribute value
+    """An item word that is not a category but a dictionary attribute value
     ("반팔" -> sleeve_length 반팔) is that attribute, not an out-of-scope item. Dictionary only (no model
     suggestion), `exact`/`alias` only: an `approx` answer ("벨트" -> detail 띠) would turn a request for a
     belt into a search for a detail, so it stays out of scope. Several kinds -> exact before alias, then
@@ -273,7 +273,7 @@ def _item_word_as_attribute(raw: str, lexicon: Optional[Lexicon]) -> Optional[Re
 
 
 def _position(query: str, raw: str) -> int:
-    """Where an item's words first appear in the query (items follow the query order, IT-4). A raw that is
+    """Where an item's words first appear in the query (items follow the query order). A raw that is
     not in the query (warning raw_not_in_query) goes last; ties keep the draft order."""
     index = query.find(raw)
     return index if index >= 0 else len(query)

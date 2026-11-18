@@ -90,7 +90,7 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(swot['threats'], [])
         self.assertEqual(swot['promotions'][0]['title'], '착장 묶음 제안')
         self.assertEqual(swot['differentiation'][0]['basis'], ['product', 'stock'])
-        legacy = {key: value for key, value in VALID.items() if key not in ('promotions', 'differentiation')}  # prompt v1
+        legacy = {key: value for key, value in VALID.items() if key not in ('promotions', 'differentiation')}  # stored without them
         self.assertEqual((parse_swot(json.dumps(legacy, ensure_ascii=False))['promotions'],
                           parse_swot(json.dumps(legacy, ensure_ascii=False))['differentiation']), ([], []))
 

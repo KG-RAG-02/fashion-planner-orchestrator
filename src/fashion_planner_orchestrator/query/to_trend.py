@@ -1,14 +1,14 @@
-"""StructuredQuery 1.0 -> TrendQuery (the input trend knows today). Decisions IT-4, SQ-2, X4, FW-1.
+"""StructuredQuery 1.0 -> TrendQuery (the input trend knows today).
 
 The pipeline takes ONE item and ONE season today, so only `items[0]` (the item named first) and
 `seasons[0]` (the season named first) are converted. Everything else stays in the StructuredQuery and
-is reported, never dropped silently (X4 safety condition):
+is reported, never dropped silently:
 
   - more items      -> warning `items_not_forwarded`
   - more seasons    -> warning `seasons_not_forwarded`
   - no item at all (`items == []`) -> no TrendQuery (None), warning `no_item_to_forward`; the caller does
-    not call trend. Since IT-7′ (2026-11-12) the assembler always writes at least one item, so this is a guard.
-  - `out_of_scope_items` (IT-7′) -> `TrendQuery.unsupported` with type `category` and the item's reason, so
+    not call trend. The assembler always writes at least one item, so this is a guard.
+  - `out_of_scope_items` -> `TrendQuery.unsupported` with type `category` and the item's reason, so
     trend reports them as not applied; warning `conditions_not_forwarded`. Their own conditions are not sent.
   - conditions of items[0] that TrendQuery has no field for (excluded attributes, body/sleeve length,
     an excluded or several genders, gender without a standard value) -> written to
@@ -113,7 +113,7 @@ def to_trend_query(sq: StructuredQuery) -> TrendConversion:
         reason = entry.reason + (" (제외 요청)" if entry.polarity == "exclude" else "")
         unsupported.append(UnsupportedCondition(type=entry.type, raw=entry.raw, reason=reason))
 
-    for entry in sq.out_of_scope_items:  # IT-7′: searched over every category, reported as not applied
+    for entry in sq.out_of_scope_items:  # searched over every category, reported as not applied
         unsupported.append(UnsupportedCondition(type="category", raw=entry.raw, reason=entry.reason))
         warn(WARN_CONDITIONS_NOT_FORWARDED)
 

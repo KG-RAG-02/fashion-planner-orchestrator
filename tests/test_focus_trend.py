@@ -1,7 +1,7 @@
 """The planning sheet's focus Trend style.
 
 novelty's Draft names the style its plan is built on (draft.trend_basis.source_style_id); without that
-id the focus follows the Draft's trend citations (trend R-4: no order). Every reader of the focus
+id the focus follows the Draft's trend citations (trend does not order its styles). Every reader of the focus
 style (poster, stock card, trend photos, SWOT input) follows the same choice.
 """
 import unittest

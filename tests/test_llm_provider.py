@@ -87,7 +87,7 @@ class SettingsTests(unittest.TestCase):
     def test_config_file_values_are_validated(self):
         loaded = self.load({"LLM_MODEL": "m", "LLM_API_KEY": "k"})
         self.assertEqual((loaded.timeout_seconds, loaded.max_tokens, loaded.max_retries), (60, 16000, 2))
-        self.assertEqual(loaded.temperature, 0)  # decision OQ-14
+        self.assertEqual(loaded.temperature, 0)  # extraction: the output should not vary between runs
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "llm.json"
             path.write_text('{"timeout_seconds": "60", "max_tokens": 1, "max_retries": 0}', encoding="utf-8")
@@ -97,7 +97,7 @@ class SettingsTests(unittest.TestCase):
 
 class CallTests(unittest.TestCase):
     def test_temperature_is_sent_only_when_configured(self):
-        # decision OQ-14: configs/llm.json temperature 0; null omits the parameter (provider default)
+        # configs/llm.json temperature 0; null omits the parameter (provider default)
         for provider, fake in (("anthropic", FakeAnthropic), ("openai", FakeOpenAI)):
             with self.subTest(provider=provider):
                 client = fake()

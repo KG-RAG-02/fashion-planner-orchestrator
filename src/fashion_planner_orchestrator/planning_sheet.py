@@ -522,7 +522,7 @@ def focus_trend(result: Mapping[str, Any]) -> Mapping[str, Any]:
     novelty selects one primary trend by its rule and records it in the Draft as
     ``draft.trend_basis.source_style_id`` (user decision 2026-11-17); the focus is the Trend style with that id.
     A Draft without that id (runs recorded before it), or whose id matches no style of the stored Trend result,
-    keeps the earlier rule: the Trend result has no defined order (trend R-4), so the focus is the
+    keeps the earlier rule: the Trend result has no defined order (trend does not order its styles), so the focus is the
     style whose article the Draft cites most; the first style when the Draft cites none (or on a tie).
     """
     raw = _raw(result, 'trend')
@@ -1472,7 +1472,7 @@ def _design(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet, imag
         c.text(x, y + 2, f'외 {len(rows) - 10:,}개 — 전체는 실행 기록(JSON)에 있습니다', 'regular', 9.5, 'ink3')
         y += 18
     y += 10
-    # novelty's differentiation first; while it is empty, the stage-06 LLM stand-in (swot.py, prompt v3).
+    # novelty's differentiation first; while it is empty, the stage-06 LLM stand-in (swot.py).
     stand_in = () if view and view.differentiation else tuple(
         text for text in (_mapping(item).get('text') for item in _list(_mapping(_mapping(swot).get('swot')).get('differentiation')))
         if isinstance(text, str) and text.strip())

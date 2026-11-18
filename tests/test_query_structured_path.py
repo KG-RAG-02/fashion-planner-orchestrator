@@ -63,7 +63,7 @@ class StructuredPathTests(unittest.TestCase):
         self.assertRegex(result.prompt_sha256, r"^[0-9a-f]{64}$")
 
     def test_conditions_stay_with_their_item_and_common_ones_are_copied(self):
-        # IT-1, IT-2, IT-3: "니트" belongs to the vest only; the gender exclusion is copied into both items
+        # "니트" belongs to the vest only; the gender exclusion is copied into both items
         query = "남성 말고 니트 베스트랑 와이드 조거팬츠"
         result = self.run_path(draft(items=[
             item("베스트", "베스트", [c("니트", "material", "니트")]),
@@ -79,7 +79,7 @@ class StructuredPathTests(unittest.TestCase):
         self.assertEqual(result.warnings, ())
 
     def test_gender_before_the_first_item_goes_to_every_item(self):
-        # IT-9: "위민즈 점퍼랑 레깅스" = 위민즈 점퍼 + 위민즈 레깅스, even when the model put it on the first item only
+        # "위민즈 점퍼랑 레깅스" = 위민즈 점퍼 + 위민즈 레깅스, even when the model put it on the first item only
         gender = lambda items: [[r["value"] for r in i["gender"]["include"]] for i in items]
         result = self.run_path(draft(items=[item("점퍼", "점퍼", [c("위민즈", "gender", "여")]), item("레깅스", "레깅스")]),
                                "위민즈 점퍼랑 레깅스")
@@ -90,7 +90,7 @@ class StructuredPathTests(unittest.TestCase):
                                             item("레깅스", "레깅스", [c("위민즈", "gender", "여")])]), "맨즈 점퍼랑 위민즈 레깅스")
         self.assertEqual(gender(self.items_of(result)), [["남"], ["여"]])
         self.assertNotIn("leading_gender_shared", result.warnings)
-        # a gender before a LATER item stays with that item (IT-2)
+        # a gender before a LATER item stays with that item
         result = self.run_path(draft(items=[item("점퍼", "점퍼"), item("레깅스", "레깅스", [c("맨즈", "gender", "남")])]),
                                "점퍼랑 맨즈 레깅스")
         self.assertEqual(gender(self.items_of(result)), [[], ["남"]])
@@ -100,14 +100,14 @@ class StructuredPathTests(unittest.TestCase):
         self.assertEqual([[r["value"] for r in i["gender"]["exclude"]] for i in self.items_of(result)], [["남"], ["남"]])
 
     def test_items_follow_the_query_order(self):
-        # IT-4: items[0] is the item named first, whatever order the model wrote them in
+        # items[0] is the item named first, whatever order the model wrote them in
         query = "점퍼랑 레깅스 보여줘"
         items = self.items_of(self.run_path(draft(items=[item("레깅스", "레깅스"), item("점퍼", "점퍼")]), query))
         self.assertEqual([i["category"]["minor"] for i in items], ["점퍼", "레깅스"])
-        self.assertEqual([i["item_id"] for i in items], ["i1", "i2"])  # IT-8
+        self.assertEqual([i["item_id"] for i in items], ["i1", "i2"])  # item ids follow the items order
 
     def test_no_item_named_gives_one_item_over_every_category(self):
-        # IT-6: "상의는 빼고 그린" = 하의·아우터·원피스 중 그린; the exclusion is not rewritten
+        # "상의는 빼고 그린" = 하의·아우터·원피스 중 그린; the exclusion is not rewritten
         items = self.items_of(self.run_path(draft(common=[
             c("상의", "category", "상의", "exclude"), c("그린", "color", "그린")]), "상의는 빼고 그린"))
         self.assertEqual(len(items), 1)
@@ -116,7 +116,7 @@ class StructuredPathTests(unittest.TestCase):
         self.assertEqual(items[0]["attributes"]["include"]["color"], [{"raw": "그린", "value": "그린", "match": "exact"}])
 
     def test_out_of_scope_items_keep_their_conditions_and_never_widen_the_search(self):
-        # IT-7: 가방 is not an item; its own "레더" stays with it; the common condition is copied to it too
+        # 가방 is not an item; its own "레더" stays with it; the common condition is copied to it too
         query = "레더 가방이랑 블라우스, 둘 다 브라운으로"
         result = self.run_path(draft(items=[
             item("가방", None, [c("레더", "material", "가죽")]), item("블라우스", "블라우스")],
@@ -128,8 +128,8 @@ class StructuredPathTests(unittest.TestCase):
         self.assertEqual([(o["raw"], o["conditions_raw"]) for o in sq["out_of_scope_items"]], [("가방", ["레더", "브라운"])])
 
     def test_only_out_of_scope_items_still_give_one_item_over_every_category(self):
-        # IT-7′ (2026-11-12): the season must still reach trend; 벨트 is only an approx detail ("띠") in the
-        # dictionary, so IT-10 does not turn it into a condition. Its own "블랙" never widens the item.
+        # the season must still reach trend; 벨트 is only an approx detail ("띠") in the
+        # dictionary, so it does not become a condition. Its own "블랙" never widens the item.
         result = self.run_path(draft(items=[item("벨트", None, [c("블랙", "color", "블랙")])],
                                      seasons=[{"year": 2027, "season": "SS", "raw": "2027SS"}]), "2027SS 블랙 벨트 보여줘")
         sq = result.structured_query.model_dump(mode="json")
@@ -142,7 +142,7 @@ class StructuredPathTests(unittest.TestCase):
         self.assertNotIn("item_word_used_as_condition", result.warnings)
 
     def test_an_item_word_that_is_an_attribute_value_becomes_an_item_over_every_category(self):
-        # IT-10 (2026-11-12): "반팔" alone is a sleeve length, not a category -> category null + sleeve_length
+        # "반팔" alone is a sleeve length, not a category -> category null + sleeve_length
         result = self.run_path(draft(items=[item("반팔", "반팔")], common=[c("여성", "gender", "여")],
                                      seasons=[{"year": 2027, "season": "SS", "raw": "2027SS"}]),
                                "2027SS 여성 반팔 제작하고 싶어")
@@ -156,14 +156,14 @@ class StructuredPathTests(unittest.TestCase):
         self.assertNotIn("only_out_of_scope_items", result.warnings)
 
     def test_an_attribute_item_word_keeps_its_own_item_next_to_a_real_one(self):
-        # IT-10: "반팔이랑 스커트" -> the sleeve length stays on its own item; the skirt gets no sleeve condition
+        # "반팔이랑 스커트" -> the sleeve length stays on its own item; the skirt gets no sleeve condition
         items = self.items_of(self.run_path(draft(items=[item("반팔", None), item("스커트", "스커트")]), "반팔이랑 스커트"))
         self.assertEqual([i["category"] and i["category"]["minor"] for i in items], [None, "스커트"])
         self.assertEqual([v["value"] for v in items[0]["attributes"]["include"]["sleeve_length"]], ["반팔"])
         self.assertEqual(items[1]["attributes"]["include"]["sleeve_length"], [])
 
     def test_an_item_word_with_several_attribute_kinds_follows_the_priority(self):
-        # IT-10: exact before alias, then sleeve_length > body_length > ... > detail
+        # exact before alias, then sleeve_length > body_length > ... > detail
         cases = {"민소매": ("sleeve_length", "민소매"), "체크": ("pattern", "체크"), "롱": ("body_length", "롱")}
         for word, (kind, value) in cases.items():
             with self.subTest(word=word):
@@ -172,7 +172,7 @@ class StructuredPathTests(unittest.TestCase):
                 self.assertEqual(found, {kind: [value]})
 
     def test_one_expression_with_two_categories_gives_two_items(self):
-        # OQ-10′ on items: the spaced "셔츠 원피스" names 셔츠 and 드레스 -> two items with the same conditions
+        # On items: the spaced "셔츠 원피스" names 셔츠 and 드레스 -> two items with the same conditions
         items = self.items_of(self.run_path(draft(items=[item("셔츠 원피스", "드레스", [c("네이비", "color", "네이비")])]),
                                             "네이비 셔츠 원피스"))
         self.assertEqual([i["category"]["minor"] for i in items], ["셔츠", "드레스"])
@@ -193,10 +193,10 @@ class StructuredPathTests(unittest.TestCase):
             self.run_path("not json", "셔츠")
         self.assertEqual(ctx.exception.code, self.errors.DRAFT_NOT_JSON)
         for bad in (
-            # a structural error (unknown key) is never repaired; a wrong label would be (OQ-12′)
+            # a structural error (unknown key) is never repaired; a wrong label would be
             draft(items=[item("셔츠", "셔츠", [{"raw": "x", "kind": "color", "polarity": "include", "match": "exact"}])]),
-            {"items": [{"raw": "셔츠", "suggestion": "셔츠", "conditions": [], "unsupported": []}]},  # nested v3 item
-            {"season": None, "conditions": []},  # the flat draft v2 shape is not draft v4
+            {"items": [{"raw": "셔츠", "suggestion": "셔츠", "conditions": [], "unsupported": []}]},  # an item in the grouped shape
+            {"season": None, "conditions": []},  # a flat draft without `item` fields
         ):
             with self.subTest(draft=bad):
                 with self.assertRaises(self.errors.QueryStructuringError) as ctx:
@@ -204,7 +204,7 @@ class StructuredPathTests(unittest.TestCase):
                 self.assertEqual(ctx.exception.code, self.errors.DRAFT_INVALID)
 
     def test_wrong_labels_are_repaired_in_every_block(self):
-        # decision OQ-12′ (words not from the dataset)
+        # words not from the dataset
         query = "고급스러운 셔츠, 우아한 느낌"
         result = self.run_path(draft(
             items=[item("셔츠", "셔츠", [c("고급스러운", "abstract", None)])],
@@ -216,8 +216,8 @@ class StructuredPathTests(unittest.TestCase):
         self.assertIn("draft_unknown_kind", result.warnings)
 
     def test_misplaced_categories_become_items_or_exclusions(self):
-        # label level (W-10): an included category written as a condition is an item; an included category in
-        # `unsupported` is looked up with the dictionary only (OQ-13′); an excluded one becomes an exclusion
+        # label level: an included category written as a condition is an item; an included category in
+        # `unsupported` is looked up with the dictionary only; an excluded one becomes an exclusion
         query = "베스트 점퍼, 하의 말고 와이드팬츠"
         result = self.run_path(draft(
             items=[item("베스트", "베스트")],
@@ -233,7 +233,7 @@ class StructuredPathTests(unittest.TestCase):
         self.assertIn("unsupported_category_resolved", result.warnings)
 
     def test_several_seasons_are_kept_in_query_order(self):
-        # SQ-2: year rule A-1 for each, the same season twice kept once; none named -> default_next
+        # year rule A-1 for each, the same season twice kept once; none named -> default_next
         result = self.run_path(draft(items=[item("점퍼", "점퍼")], seasons=[
             {"year": None, "season": "FW", "raw": "이번 겨울"}, {"year": 2027, "season": "SS", "raw": "2027 봄"},
             {"year": 2027, "season": "SS", "raw": "27년 여름"}]), "이번 겨울이랑 2027 봄, 27년 여름 점퍼")
@@ -371,7 +371,7 @@ class DatasetTests(unittest.TestCase):
         self.assertFalse(result["exact"])
 
     def test_brands_are_not_scored(self):
-        # BR-1: a brand label stays in the data but is not compared; a brand written as a style name is not extra
+        # a brand label stays in the data but is not compared; a brand written as a style name is not extra
         expected = {("category", 0, "item", "아우터", "점퍼"): "exact",
                     ("unsupported", 0, "brand", "include", "몽클레르"): None}
         produced = {("category", 0, "item", "아우터", "점퍼"): "exact",

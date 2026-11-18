@@ -11,7 +11,7 @@ Settings
     printed or put in an error message.
   - Without `LLM_PROVIDER`, a model name starting with "claude" uses Anthropic, anything else OpenAI.
   - Timeout, output limit, retries and temperature: `configs/llm.json` (temperature 0 since 2026-11-10,
-    decision OQ-14: structuring is extraction, so the output should not vary between runs; null = omit
+    structuring is extraction, so the output should not vary between runs; null = omit
     the parameter and use the provider default).
 
 SDKs are imported only when a call is made (`pip install anthropic` or `pip install openai`), so the

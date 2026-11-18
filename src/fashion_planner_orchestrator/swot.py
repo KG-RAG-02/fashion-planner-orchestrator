@@ -180,7 +180,7 @@ def parse_swot(text: str) -> dict[str, list[dict[str, Any]]]:
         out[quadrant] = items
     if not any(out.values()):
         raise SwotRejected('SWOT_EMPTY')
-    # Promotion ideas (prompt v2). A draft kept by prompt v1 has none.
+    # Promotion ideas; a stored draft without them shows none.
     entries = value.get('promotions', [])
     if not isinstance(entries, list) or len(entries) > MAX_PROMOTIONS:
         raise SwotRejected('PROMOTION_SHAPE_INVALID')
@@ -196,7 +196,7 @@ def parse_swot(text: str) -> dict[str, list[dict[str, Any]]]:
             raise SwotRejected('PROMOTION_BASIS_INVALID')
         promotions.append({'title': title.strip(), 'text': text_value.strip(), 'basis': list(dict.fromkeys(basis))})
     out['promotions'] = promotions
-    # Differentiation stand-in (prompt v3) while novelty leaves draft.differentiation empty.
+    # Differentiation stand-in while novelty leaves draft.differentiation empty.
     entries = value.get('differentiation', [])
     if not isinstance(entries, list) or len(entries) > MAX_DIFFERENTIATION:
         raise SwotRejected('DIFFERENTIATION_SHAPE_INVALID')

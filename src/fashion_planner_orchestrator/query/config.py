@@ -37,7 +37,7 @@ class QueryConfig:
     draft_year_max: int
     unsupported_reasons: Mapping[str, str]  # placeholders {major_count}/{minor_count} still unformatted
     generic_unsupported_reason: str
-    gender_aliases: Mapping[str, tuple[str, ...]]  # standard gender -> spellings (decision G-1)
+    gender_aliases: Mapping[str, tuple[str, ...]]  # standard gender -> spellings
     source: Path
 
 

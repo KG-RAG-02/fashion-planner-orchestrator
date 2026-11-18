@@ -2,11 +2,11 @@
 
 vocabulary.py is generated from the TrendQuery snapshot and stays as it is (the v1 path and
 TrendQuery use it). StructuredQuery adds:
-  - two length kinds (decision OQ-9′, 2026-11-10): `body_length` and `sleeve_length`. Their standard
+  - two length kinds: `body_length` and `sleeve_length`. Their standard
     values are trend's own (`BodyLength`, `SleeveLength`, trend docs/schemas/
     vocabulary.md §6) and are taken from the alias dictionary snapshot (alias_data.py), so no new
-    standard value is created here (D-29). tests/test_query_structured_models.py pins them.
-  - the closed list of `unsupported.type` (decision OQ-3′), shared by the LLM draft (draft.py) and
+    standard value is created here. tests/test_query_structured_models.py pins them.
+  - the closed list of `unsupported.type`, shared by the LLM draft (draft.py) and
     the contract (models.py).
 """
 
@@ -27,7 +27,7 @@ ATTRIBUTE_VALUES: dict[str, tuple[str, ...]] = {
 
 # Conditions the contract can not express as a standard value. The first four have fixed reason texts in
 # configs/query_structuring.json (unsupported.reasons); the rest get unsupported.generic_reason.
-# Gender never goes here (decision G-3: gender has its own include/exclude lists).
+# Gender never goes here (gender has its own include/exclude lists).
 UNSUPPORTED_TYPES: tuple[str, ...] = (
     "brand", "category", "attribute", "abstract", "price", "market", "channel", "age", "other",
 )

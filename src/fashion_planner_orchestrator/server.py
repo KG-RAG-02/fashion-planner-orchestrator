@@ -17,7 +17,7 @@ for _mime, _suffix in (("text/javascript", ".js"), ("text/javascript", ".mjs"), 
                        ("font/woff2", ".woff2"), ("font/woff", ".woff"), ("image/svg+xml", ".svg")):
     mimetypes.add_type(_mime, _suffix)
 # img-src also admits img.vogue.co.kr: the trend cards show the items' Vogue article photos, loaded by the browser
-# without a Referer (user decision 2026-11-17, a UI exception to the trend rule G-10 "links only").
+# without a Referer (a deliberate UI exception: elsewhere trend articles are only linked).
 CONTENT_SECURITY_POLICY = ("default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; "
                            "img-src 'self' data: blob: https://img.vogue.co.kr; connect-src 'self'; object-src 'none'; "
                            "base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
@@ -59,11 +59,11 @@ def structure_query_for_ui(
     query: str, request_id: str, *, enabled: bool, provider_factory: ProviderFactory | None = None,
 ) -> dict[str, Any]:
     """Run the query-structuring module in-process for the UI: the StructuredQuery path
-    (`query.structured.structure_query`, its current prompt - v6 since 2026-11-11, decision FW-1).
+    (`query.structured.structure_query`, its current prompt).
 
     Output: `structured_query` (StructuredQuery 1.0, every item and season), `draft` (what the model
     wrote), `warnings` (codes), and `trend_query` = what the trend stage receives: only the FIRST item and
-    the FIRST season (`query.to_trend.to_trend_query`, IT-4 / SQ-2 / FW-1; null when no item can be
+    the FIRST season (`query.to_trend.to_trend_query`; null when no item can be
     forwarded). The caller decides whether the structured result is a preview or an orchestration input
     (`trend_input_preview.sent`; the HTTP v0.1 run sends `trend_query` to Trend). Failures never echo the
     query, the model output or exception text: only safe codes and messages (and an exception class name).
@@ -102,7 +102,7 @@ def structure_query_for_ui(
 
     try:
         result = structure_query(query, request_id=request_id, draft_provider=guarded)
-        conversion = to_trend_query(result.structured_query)  # first item + first season only (FW-1)
+        conversion = to_trend_query(result.structured_query)  # first item + first season only
     except QueryStructuringError as exc:
         return fail(exc.code, str(exc), seen.get("provider_error"))
     except QueryConfigError:
