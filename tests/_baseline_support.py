@@ -19,7 +19,7 @@ def pin_proposed_baseline(testcase):
     live = json.loads((workflow_contract.CONTRACT_ROOT / 'baseline.json').read_text(encoding='utf-8'))
     proposed = copy.deepcopy(live)
     proposed.update(state='proposed', producer_consumer_validated=False, evidence={}, sources={})
-    directory = Path(tempfile.mkdtemp(prefix='vogue-baseline-'))
+    directory = Path(tempfile.mkdtemp(prefix='baseline-'))
     path = directory / 'baseline.json'
     path.write_text(json.dumps(proposed, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     real = workflow_contract.baseline_path

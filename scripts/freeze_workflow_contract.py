@@ -10,7 +10,9 @@ fashion_planner_orchestrator.workflow_http reads it; "frozen" is never hand-edit
                           cleanliness check and every --suite command; write `frozen` only if all pass
                           (nothing is written on failure)
 
-No network access. Sibling repos are read from the parent directory of this repo.
+No network access. Sibling repos are read from the parent directory of this repo. Each source is recorded by
+its checkout cleanliness and the SHA-256 of its exact non-ignored contents, not by branch or commit: commit
+SHAs change when a history is rewritten, the contents do not.
 """
 from __future__ import annotations
 
@@ -110,10 +112,6 @@ def vendored_check(snapshot):
     return report, problems
 
 
-def git(repo: Path, *args):
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()
-
-
 def _worktree_fingerprint(repo: Path, exclude=()):
     """Hash exact non-ignored tracked and untracked checkout contents without exposing them."""
     excluded = {Path(item).as_posix() for item in exclude}
@@ -169,8 +167,6 @@ def sources(allow_dirty=False):
         clean = status == b""
         report[name] = {
             "path": str(repo.relative_to(ROOT.parent)) if repo != ROOT else ".",
-            "branch": git(repo, "rev-parse", "--abbrev-ref", "HEAD"),
-            "head": git(repo, "rev-parse", "HEAD"),
             "clean": clean,
             "worktree_sha256": worktree_sha,
             "status_sha256": hashlib.sha256(status).hexdigest(),
