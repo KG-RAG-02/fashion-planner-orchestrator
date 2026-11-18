@@ -55,9 +55,11 @@
   `material`)와 필드별 출처(`kind`, `source_ref` = `novelty.draft.product_profile.<필드>`, `evidence_ids`)를 보낸다.
   초안에 쓸 수 있는 값이 없으면 결정적인 자리값을 `kind: proposal`로 보낸다. research는 이 값을 확정 사실이 아닌
   제안으로 다룬다.
-  - research는 문자열을 120자까지 받는다. novelty가 이 다섯 값을 120자 이하로 보장하고, orchestrator는 호출 전에
-    요청을 `research-review-request.schema.json`으로 검증해 넘는 값이 있으면 research를 부르지 않고
-    `CONTRACT_VIOLATION`으로 멈춘다.
+  - research는 문자열을 120자까지 받는다. novelty가 이 다섯 값을 120자 이하로 보장한다. `product_type`, `gender`,
+    `material`이 길면 novelty가 규칙 값이나 제안값으로 바꾼다. `category`와 `season`은 novelty가 기획 요청의 값을 그대로
+    쓰므로 대신할 값이 없어, 120자를 넘는 요청은 novelty가 `422 INVALID_INPUT`으로 거절하고 3단계가 502로 멈춘다.
+    orchestrator는 research를 부르기 전에도 요청을 `research-review-request.schema.json`으로 검증해, 넘는 값이 있으면
+    research를 부르지 않고 `CONTRACT_VIOLATION`으로 멈춘다.
   - research 응답은 초안 전체나 초안 응답 해시를 증명하지 않는다. 그래서 통합 결과도 research 검토를 초안 전체의
     검증으로 표현하지 않는다.
 

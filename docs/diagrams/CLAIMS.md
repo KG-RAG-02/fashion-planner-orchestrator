@@ -54,7 +54,7 @@
 |---|---|---|
 | 요청과 계약 게이트, 질의 구조화 | `src/fashion_planner_orchestrator/workflow_http.py:315`, `src/fashion_planner_orchestrator/server.py:58` | `tests/test_workflow_gate.py`, `tests/test_ui_query_structuring.py` |
 | 1~4단계 호출 순서와 경로 | `src/fashion_planner_orchestrator/workflow_contract.py:21`(`STAGES`), `src/fashion_planner_orchestrator/workflow_http.py:182-185` | `tests/test_workflow.py` |
-| novelty 이미지: `artifact://novelty/images/<sha256>`, 읽기 전용 볼륨, sha256 확인 | `src/fashion_planner_orchestrator/workflow.py:242,255`, `deploy/compose.yaml:199-204` | `tests/test_workflow_artifacts.py` |
+| novelty 이미지: `artifact://novelty/images/<sha256>.<확장자>`(지금은 `.png`), 읽기 전용 볼륨, sha256 확인 | `src/fashion_planner_orchestrator/workflow.py:242,255`, `deploy/compose.yaml:199-204` | `tests/test_workflow_artifacts.py` |
 | 멈춤 규칙: error면 멈춤, trend·novelty no_results면 no_results, research no_results면 partial로 멈추고 통합·기획서 없음 | `src/fashion_planner_orchestrator/workflow.py:493-503,407-411` | `tests/test_workflow.py` |
 | 5단계 통합, 6단계 기사 사진·SWOT·기획서 PNG(3200 px, 이미지 모델 호출 없음) | `src/fashion_planner_orchestrator/workflow.py:405-416`, `src/fashion_planner_orchestrator/trend_photos.py:26-27`, `src/fashion_planner_orchestrator/swot.py:225`, `src/fashion_planner_orchestrator/planning_sheet.py:908-909`, `src/fashion_planner_orchestrator/workflow_http.py:100,121` | `tests/test_planning_sheet.py` |
 | 이후: md-decision(adopt, revise, hold; 추가만) | `src/fashion_planner_orchestrator/workflow_store.py:30`, `src/fashion_planner_orchestrator/workflow_http.py:323` | `tests/test_workflow_routes.py` |

@@ -199,7 +199,7 @@
       "from": "nov",
       "to": "orch",
       "lines": [
-        "200 기획 초안 + artifact://novelty/images/<sha256>",
+        "200 기획 초안 + artifact://novelty/images/<sha256>.png",
         "읽기 전용 볼륨에서 이미지를 가져와 sha256 확인"
       ]
     },

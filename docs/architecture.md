@@ -22,7 +22,7 @@ orchestrator는 기획 요청 하나를 받아 다른 네 서비스를 정해진
 | 질의 구조화 | 자연어 기획 요청을 StructuredQuery로 바꾸고, 첫 품목·첫 시즌을 trend가 받는 TrendQuery로 만든다([query-structuring.md](query-structuring.md)) | 구조화 실패 |
 | 1 trend | `POST /v1/agents/trend/runs`, 입력은 TrendQuery | `error`, `no_results` |
 | 2 inventory | `POST /v1/agents/inventory/runs`, 입력은 받은 trend 결과를 바꾸지 않은 그대로 | `error` |
-| 3 novelty | `POST /v1/agents/novelty/runs`, 입력은 기획 요청과 trend·inventory 결과의 투영(`novelty-input-projection`) | `error`, `no_results` |
+| 3 novelty | `POST /v1/agents/novelty/runs`, 입력은 기획 요청과 trend·inventory 결과의 투영(`novelty-input-projection`) | `error`, `no_results`(novelty는 200 응답에서 `ok`·`partial`만 내고, 실패는 HTTP 4xx·5xx로 온다) |
 | 4 research | `POST /v1/agents/research/reviews`, 입력은 초안 `product_profile`의 허용 필드와 필드별 출처 | `error`, `no_results`(통합·기획서 없이 `partial`) |
 | 5 통합 | 초안과 검토를 묶어 주장·근거·한계를 정리한다 | - |
 | 6 기획서 | 실행 기록만으로 기획서 PNG(가로 3200 px)를 그린다. 이미지 모델은 부르지 않는다 | 실패해도 실행은 유지(`final_image.status`) |
@@ -94,7 +94,8 @@ orchestrator는 기획 요청 하나를 받아 다른 네 서비스를 정해진
 - 모든 서비스 호출에 공용 bearer 토큰(`FASHION_PLANNER_SERVICE_TOKEN`)을 붙인다.
 - 타임아웃: 연결 3초, 읽기 75초(`ORCHESTRATOR_WORKFLOW_CONNECT_TIMEOUT_SECONDS`, `ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS`).
   inventory와 novelty는 처리 시간이 길어 따로 정한다(`..._INVENTORY_READ_TIMEOUT_SECONDS`, `..._DRAFT_READ_TIMEOUT_SECONDS`).
-  호출받는 쪽의 마감보다 길게 잡아야 상대가 보낸 시간 초과 응답을 받을 수 있다. 예를 들어 Compose에서 inventory 마감은
+  호출받는 쪽의 마감보다 길게 잡아야 상대가 보낸 시간 초과 응답을 받을 수 있다. novelty 읽기 타임아웃(Compose 600초)은
+  novelty 기본 시간 제한의 최악 경우(텍스트와 이미지 두 장)보다 길게 잡았으므로, novelty의 시간 제한을 늘리면 함께 늘린다. 예를 들어 Compose에서 inventory 마감은
   180초(`INVENTORY_HANDOFF_TIMEOUT_SECONDS`), orchestrator의 inventory 읽기 타임아웃은 210초라서, inventory가 먼저
   `504 TIMEOUT`을 보내고 orchestrator는 이를 `504 UPSTREAM_TIMEOUT`으로 기록한다.
 - 자동 재시도는 없다. 실패 매핑은 [contracts.md](contracts.md#6-오류)에 있다.
