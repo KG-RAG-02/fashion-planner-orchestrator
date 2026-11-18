@@ -8,4 +8,4 @@ A prompt change should use a new version directory, update the active version co
 
 ## SWOT
 
-`swot/v3/system.md` is the active system prompt of the Planning Sheet SWOT, promotion and differentiation draft (`src/vogue_orchestrator/swot.py`, `PROMPT_VERSION`); `swot/v1` (SWOT only) and `swot/v2` (SWOT and promotions) are kept unchanged. The differentiation points stand in while new-product-agent leaves `draft.differentiation` empty. The user message is the JSON run summary from `swot.swot_input()`; the answer is validated by `swot.parse_swot()`. A prompt change uses a new version directory and updates `PROMPT_VERSION`.
+`swot/v3/system.md` is the active system prompt of the Planning Sheet SWOT, promotion and differentiation draft (`src/vogue_orchestrator/swot.py`, `PROMPT_VERSION`). The differentiation points stand in while new-product-agent leaves `draft.differentiation` empty. The user message is the JSON run summary from `swot.swot_input()`; the answer is validated by `swot.parse_swot()`. A prompt change uses a new version directory and updates `PROMPT_VERSION`.
