@@ -9,8 +9,8 @@ protected by the trusted-local policy, not by the inter-service token).
       --trend-query deploy/e2e/queries/stub-trend-query.json --out .local/e2e/stub.json
 
 Profiles (novelty makes the product and worn images, stage 06 composes the planning sheet):
-  stub       explicit TrendQuery, novelty fixture visuals; expects all six stages ok and the composed sheet
-  rehearsal  explicit TrendQuery against real Aura/R2 data, novelty fixture visuals; zero paid calls
+  stub       explicit TrendQuery, novelty synthetic visuals; expects all six stages ok and the composed sheet
+  rehearsal  explicit TrendQuery against real Aura/R2 data, novelty synthetic visuals; zero paid calls
   live       free-text query structured by the LLM, novelty OpenAI visuals (2 image calls); a single run, no retries
 """
 from __future__ import annotations
@@ -191,7 +191,8 @@ def main(argv=None):
           names == STAGE_ORDER and all(s.get("status") in valid_statuses for s in stages)
           and result.get("status") in valid_statuses,
           [f"{s.get('stage')}={s.get('status')}" for s in stages])
-    # 0.2.0: novelty returns the trend-reflecting product image and the worn (outfit) image with the Draft.
+    # novelty returns the trend-reflecting product image and the worn (outfit) image with the Draft (generated in
+    # every profile; stub and rehearsal use novelty's synthetic provider).
     check("novelty made the product and outfit visuals", [visuals.get(k, {}).get("status") for k in ("product", "outfit")] == ["generated", "generated"],
           {k: (v or {}).get("status") for k, v in visuals.items()} or "no draft.visuals")
     for key in ("product", "outfit"):
@@ -222,8 +223,9 @@ def main(argv=None):
     check("orchestrator calls no image model (stage 06 provider)", ((system or {}).get("image") or {}).get("provider") == "planning_sheet",
           ((system or {}).get("image") or {}).get("provider"))
     if args.profile in ("stub", "rehearsal"):
-        check("no paid image call outside live (novelty fixture visuals)", all((v or {}).get("model") in (None, "fixture") for v in visuals.values()),
-              [(v or {}).get("model") for v in visuals.values()])
+        check("no paid image call outside live (novelty synthetic visuals)",
+              all((v or {}).get("model") == "synthetic" and (v or {}).get("provider_calls") == 0 for v in visuals.values()),
+              [((v or {}).get("model"), (v or {}).get("provider_calls")) for v in visuals.values()])
     validator = schema_validator()
     if validator is None:
         check("integrated-result schema validation (jsonschema missing — skipped)", True, "skipped: install jsonschema to enable")

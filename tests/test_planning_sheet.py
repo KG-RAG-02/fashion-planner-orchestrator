@@ -123,6 +123,14 @@ class BoardMappingTests(unittest.TestCase):
                          [('product', 'generated', 'fixture'), ('outfit', 'generated', 'fixture')])
         self.assertEqual(build_sheet(fixture('integrated-ok')).visual.draft_visuals, ())  # no visuals: one placeholder panel
 
+    def test_visuals_from_novelty_synthetic_provider_are_labelled_synthetic(self):
+        envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
+        self.assertFalse(build_sheet(envelope).visual.draft_synthetic)  # model 'fixture' is not the synthetic provider
+        visuals = envelope['result']['sources']['planning_draft']['raw_response']['result']['draft']['visuals']
+        for item in visuals.values():
+            item['model'] = 'synthetic'
+        self.assertTrue(build_sheet(envelope).visual.draft_synthetic)
+
     def test_research_price_cost_margin_and_target_are_read_as_reported(self):
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
         research = json.loads((FIXTURES / 'research-handoff.response.json').read_text(encoding='utf-8'))

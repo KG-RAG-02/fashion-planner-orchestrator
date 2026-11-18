@@ -113,8 +113,8 @@ services:
       NOVELTY_HOST: 0.0.0.0
       NOVELTY_PORT: "8767"
       # novelty makes the product and worn-outfit images inside the draft call (draft_with_visuals).
-      # fixture = deterministic offline PNGs (no key, no cost); compose.paid.yaml switches to openai.
-      NOVELTY_DRAFT_IMAGE_PROVIDER: fixture
+      # synthetic = deterministic offline PNGs marked SYNTHETIC (no key, no cost); compose.paid.yaml switches to openai.
+      NOVELTY_DRAFT_IMAGE_PROVIDER: synthetic
       NOVELTY_DRAFT_ARTIFACT_DIR: /app/data/local/novelty-artifacts
     volumes:
       - novelty_data:/app/data/local

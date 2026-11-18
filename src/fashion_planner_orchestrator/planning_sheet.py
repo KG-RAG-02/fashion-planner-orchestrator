@@ -66,8 +66,8 @@ REVIEW_LABEL = 'MD 검토용 초안 · 자동 승인 아님'
 FOOTER_NOTE = '검토용 초안 · 근거 미연결 값은 확정 사실이 아닙니다 · 승인·발주·생산 가능성 확정이 아닙니다.'
 # orchestrator writes this limitation itself when the deterministic fixture image provider is used.
 FIXTURE_IMAGE_MARKER = 'ORCHESTRATOR_WORKFLOW_IMAGE_PROVIDER=fixture'
-# novelty writes this limitation into the Draft when its visuals come from the offline fixture provider.
-DRAFT_FIXTURE_MARKER = 'NOVELTY_DRAFT_IMAGE_PROVIDER=fixture'
+# novelty reports this model for visuals made by its offline synthetic provider (no model call).
+SYNTHETIC_VISUAL_MODEL = 'synthetic'
 # The two novelty visuals of a Draft (draft.visuals), in display order.
 DRAFT_VISUALS = (('product', '신상품 · Product'), ('outfit', '착장 · Outfit'))
 MAX_EMBEDDED_IMAGE_BYTES = 10 * 1024 * 1024
@@ -408,7 +408,7 @@ class SheetVisual:
     # The novelty visuals shown in the visual panel; empty when the draft carries none (then one image panel
     # shows the final image, or a placeholder saying why there is none).
     draft_visuals: tuple[DraftVisual, ...] = ()
-    draft_fixture: bool = False
+    draft_synthetic: bool = False
 
 
 @dataclass(frozen=True)
@@ -819,7 +819,7 @@ def build_sheet(envelope: Mapping[str, Any]) -> PlanningSheet:
         status=text_of(image.get('status')),
         artifact=image.get('artifact') if isinstance(image.get('artifact'), Mapping) else None,
         draft_visuals=draft_visuals,
-        draft_fixture=any(DRAFT_FIXTURE_MARKER in text for text in _strings(draft.get('limitations'))))
+        draft_synthetic=any(item.model == SYNTHETIC_VISUAL_MODEL for item in draft_visuals))
     traced = [stage for stage in _list(result.get('stages')) if isinstance(stage, Mapping)]
     started = min((s['started_at'] for s in traced if isinstance(s.get('started_at'), str)), default=None)
     board = PlanningBoard(title=title.strip(), season=season, category=category, review_label=REVIEW_LABEL,
@@ -1438,7 +1438,7 @@ def _design(c: _Canvas, x: float, y: float, w: float, sheet: PlanningSheet, imag
         y += 8
         models = list(dict.fromkeys(item.model for item in visual.draft_visuals if item.model))
         note = 'novelty 생성 시안' + (f' · {", ".join(models)}' if models else '') + \
-            (' · 로컬 fixture 이미지 — 생성된 컨셉 아님' if visual.draft_fixture else '')
+            (' · 합성 이미지 — 생성된 컨셉 아님' if visual.draft_synthetic else '')
         c.text(x, y, note, 'regular', 9.5, 'red' if any(i.status == 'failed' for i in visual.draft_visuals) else 'ink3')
         y += 24
     else:  # a draft without visuals: the final image or a placeholder

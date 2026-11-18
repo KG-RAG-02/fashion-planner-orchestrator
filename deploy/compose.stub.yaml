@@ -3,7 +3,7 @@
 #
 # * neo4j-stub   — throwaway Neo4j on tmpfs, seeded with the synthetic trend fixture graph
 # * inventory    — synthetic fixture DuckDB built by the inventory image
-# * novelty      — fixture images (compose.yaml default), no model call
+# * novelty      — synthetic images (compose.yaml default), no model call
 # * research     — bundled synthetic review source (labelled synthetic)
 # * orchestrator — offline query structuring
 # Stub query that exercises the whole chain:

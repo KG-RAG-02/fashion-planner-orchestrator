@@ -1,5 +1,5 @@
 # Real-data layer: Neo4j Aura (trend graph) + Cloudflare R2 (inventory and H&M DuckDB caches).
-#   deploy/bin/fashion-planner rehearsal   (this layer alone: zero paid model calls, fixture images)
+#   deploy/bin/fashion-planner rehearsal   (this layer alone: zero paid model calls, synthetic images)
 #   deploy/bin/fashion-planner live        (plus compose.paid.yaml)
 # Cache volumes are fixed-name so a ~0.8 GB download happens once and survives restarts.
 
