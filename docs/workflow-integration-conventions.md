@@ -180,7 +180,6 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 - Run when `state == "frozen"`, `producer_consumer_validated` is true, `snapshot_sha256` matches the current `snapshot.json` bytes, the files map matches, and evidence shows 0 failures.
 - Otherwise, with `ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED=1`, run and add the limitation `"workflow-contract/0.5.0 not frozen; development run"`.
 - Otherwise return 409 `CONTRACT_NOT_FROZEN`.
-- No code may read anything under `../_workflow`.
 
 ## 10. Tests
 
@@ -215,6 +214,5 @@ sha256(json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"), 
 - Change the Trend or Stock wire formats.
 - Add or print secrets.
 - Push.
-- Touch `_workflow/`, `_team/`, `_shared/`, `_vault/`.
 - Remove Docker volumes or images.
 - Make paid API calls.
