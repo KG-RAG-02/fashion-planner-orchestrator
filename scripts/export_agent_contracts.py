@@ -376,8 +376,20 @@ def render_sources() -> str:
         "| 서비스 | 경로 | 서비스가 받는 contract_version | 읽은 위치 | 오케스트레이터 값 | 읽은 위치 (이 저장소) | 비교 |",
         "|---|---|---|---|---|---|---|",
     ]
+    # A sibling checkout that is not present keeps its row from the current file, so the check gives the same
+    # answer with or without the siblings (as in CI).
+    previous = {}
+    current = CONTRACTS / "SOURCES.md"
+    if current.exists():
+        for line in current.read_text(encoding="utf-8").splitlines():
+            cells = [cell.strip() for cell in line.split("|")]
+            if len(cells) > 3 and cells[2].startswith("`/"):
+                previous[(cells[1], cells[2])] = line
     for agent_id, envelope in transports():
         if not repo_root(agent_id).exists():
+            kept = previous.get((agent_id, f"`{envelope.route}`"))
+            if kept:
+                lines.append(kept)
             continue
         found = envelope_version(agent_id, envelope)
         expected = orchestrator_contract_version(agent_id, envelope)
