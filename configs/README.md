@@ -41,6 +41,7 @@
 | `ORCHESTRATOR_WORKFLOW_CONNECT_TIMEOUT_SECONDS` | 3 | 연결 타임아웃 |
 | `ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS` | 75 | 읽기 타임아웃 |
 | `ORCHESTRATOR_WORKFLOW_INVENTORY_READ_TIMEOUT_SECONDS` | 일반 값 | inventory 호출 읽기 타임아웃(Compose 210초) |
+| `ORCHESTRATOR_WORKFLOW_RESEARCH_READ_TIMEOUT_SECONDS` | 일반 값 | research 호출 읽기 타임아웃(Compose 210초, research 안의 R2·환율·LLM 호출 포함) |
 | `ORCHESTRATOR_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS` | 일반 값 | novelty 호출 읽기 타임아웃(Compose 600초, 이미지 생성 포함) |
 | `ORCHESTRATOR_WORKFLOW_DRAFT_MODE` | `draft_with_visuals` | `draft_with_visuals` 또는 `draft_only` |
 

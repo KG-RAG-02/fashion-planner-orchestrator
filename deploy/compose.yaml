@@ -183,6 +183,8 @@ services:
       ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS: "75"
       # Above the inventory deadline (180 s) so its TIMEOUT envelope arrives before the orchestrator gives up.
       ORCHESTRATOR_WORKFLOW_INVENTORY_READ_TIMEOUT_SECONDS: "210"
+      # research reads R2, the FX rate and (with transfer consent) a 120 s LLM call in one review (worst case about 198 s).
+      ORCHESTRATOR_WORKFLOW_RESEARCH_READ_TIMEOUT_SECONDS: "210"
       # novelty generates two images inside the draft call; only that read waits longer.
       ORCHESTRATOR_WORKFLOW_DRAFT_MODE: draft_with_visuals
       ORCHESTRATOR_WORKFLOW_DRAFT_READ_TIMEOUT_SECONDS: "600"

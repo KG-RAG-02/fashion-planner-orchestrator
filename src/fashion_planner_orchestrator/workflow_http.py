@@ -194,7 +194,10 @@ def build_workflow(*, artifact_reader=_FROM_ENV):
     # Stock works through the trends one after another (about 10 s each with its LLM agent). Keep this read
     # above the stock agent's own deadline (INVENTORY_HANDOFF_TIMEOUT_SECONDS) so its TIMEOUT envelope arrives first.
     stock_timeout = timeout_seconds(env, 'ORCHESTRATOR_WORKFLOW_INVENTORY_READ_TIMEOUT_SECONDS', read_timeout)
-    stage_timeouts = {'draft': draft_timeout, 'stock': stock_timeout}
+    # research reads R2, then the FX rate, then (with transfer consent) a 120 s LLM call, all inside one review.
+    # Keep this read above that chain so a paid call is not abandoned and retried.
+    review_timeout = timeout_seconds(env, 'ORCHESTRATOR_WORKFLOW_RESEARCH_READ_TIMEOUT_SECONDS', read_timeout)
+    stage_timeouts = {'draft': draft_timeout, 'stock': stock_timeout, 'review': review_timeout}
     adapters = {}
     for key, variable, route in specs:
         if not env.get(variable):

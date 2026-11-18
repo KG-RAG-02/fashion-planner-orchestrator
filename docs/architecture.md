@@ -93,11 +93,14 @@ orchestrator는 기획 요청 하나를 받아 다른 네 서비스를 정해진
   loopback, 또는 `ORCHESTRATOR_HTTP_PRIVATE_HOSTS`에 적은 한 단어 호스트 이름(컨테이너 네트워크의 `trend` 등)이면서 토큰이 있을 때.
 - 모든 서비스 호출에 공용 bearer 토큰(`FASHION_PLANNER_SERVICE_TOKEN`)을 붙인다.
 - 타임아웃: 연결 3초, 읽기 75초(`ORCHESTRATOR_WORKFLOW_CONNECT_TIMEOUT_SECONDS`, `ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS`).
-  inventory와 novelty는 처리 시간이 길어 따로 정한다(`..._INVENTORY_READ_TIMEOUT_SECONDS`, `..._DRAFT_READ_TIMEOUT_SECONDS`).
-  호출받는 쪽의 마감보다 길게 잡아야 상대가 보낸 시간 초과 응답을 받을 수 있다. novelty 읽기 타임아웃(Compose 600초)은
-  novelty 기본 시간 제한의 최악 경우(텍스트와 이미지 두 장)보다 길게 잡았으므로, novelty의 시간 제한을 늘리면 함께 늘린다. 예를 들어 Compose에서 inventory 마감은
-  180초(`INVENTORY_HANDOFF_TIMEOUT_SECONDS`), orchestrator의 inventory 읽기 타임아웃은 210초라서, inventory가 먼저
-  `504 TIMEOUT`을 보내고 orchestrator는 이를 `504 UPSTREAM_TIMEOUT`으로 기록한다.
+  inventory, novelty, research는 처리 시간이 길어 따로 정한다(`..._INVENTORY_READ_TIMEOUT_SECONDS`,
+  `..._DRAFT_READ_TIMEOUT_SECONDS`, `..._RESEARCH_READ_TIMEOUT_SECONDS`).
+  읽기 타임아웃은 호출받는 쪽이 한 요청 안에서 쓰는 최대 시간보다 길게 잡는다. 그래야 상대가 보낸 시간 초과 응답을 받고,
+  상대가 끝까지 마친 유료 호출의 결과를 버리지 않는다. Compose 값은 다음과 같다.
+  - inventory 210초: inventory 마감 180초(`INVENTORY_HANDOFF_TIMEOUT_SECONDS`)보다 길다. inventory가 먼저 `504 TIMEOUT`을
+    보내고 orchestrator는 이를 `504 UPSTREAM_TIMEOUT`으로 기록한다.
+  - novelty 600초: novelty 기본 시간 제한의 최악 경우(텍스트와 이미지 두 장)보다 길다. novelty의 시간 제한을 늘리면 함께 늘린다.
+  - research 210초: research는 R2, 환율, (전송 동의 시) LLM 120초를 차례로 부른다. 최악 약 198초로 추정한다.
 - 자동 재시도는 없다. 실패 매핑은 [contracts.md](contracts.md#6-오류)에 있다.
 - 로그에는 호출마다 JSON 이벤트 하나(요청 ID, 단계, 상태, 걸린 시간, 보낸 바이트 수)만 남기고, 페이로드·응답 원문·프롬프트·
   비밀값은 남기지 않는다.

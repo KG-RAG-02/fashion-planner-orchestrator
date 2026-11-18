@@ -46,6 +46,7 @@ class BlankSettingTests(unittest.TestCase):
             workflow.adapters['trend']({})
             workflow.adapters['planning_draft']({})
             workflow.adapters['stock']({})
+            workflow.adapters['sales_market_review']({})
         self.assertIsNone(workflow.artifact_reader)
         self.assertIs(workflow.image, workflow_http.planning_sheet_image)  # the default stage 06 provider
         self.assertEqual(workflow.trend_photos.hosts, ('vogue.co.kr',))  # blank hosts mean the default allowlist
@@ -57,10 +58,20 @@ class BlankSettingTests(unittest.TestCase):
         self.assertEqual(wire.call_args_list[1].kwargs, dict(connect_timeout=3.0, read_timeout=600.0))
         # A blank stock read timeout means the general read timeout.
         self.assertEqual(wire.call_args_list[2].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))
+        # A blank research read timeout means the general read timeout too.
+        self.assertEqual(wire.call_args_list[3].args[0], 'http://127.0.0.1:9/v1/agents/research/reviews')
+        self.assertEqual(wire.call_args_list[3].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))
         with environment(**dict(base, ORCHESTRATOR_WORKFLOW_INVENTORY_READ_TIMEOUT_SECONDS='120')), \
                 patch.object(workflow_http, 'post_wire', return_value='sent') as wire:
             workflow_http.build_workflow().adapters['stock']({})
         self.assertEqual(wire.call_args.kwargs, dict(connect_timeout=3.0, read_timeout=120.0))
+        with environment(**dict(base, ORCHESTRATOR_WORKFLOW_RESEARCH_READ_TIMEOUT_SECONDS='210')), \
+                patch.object(workflow_http, 'post_wire', return_value='sent') as wire:
+            workflow = workflow_http.build_workflow()
+            workflow.adapters['sales_market_review']({})
+            workflow.adapters['trend']({})
+        self.assertEqual(wire.call_args_list[0].kwargs, dict(connect_timeout=3.0, read_timeout=210.0))
+        self.assertEqual(wire.call_args_list[1].kwargs, dict(connect_timeout=3.0, read_timeout=75.0))
         with environment(**dict(base, FASHION_PLANNER_SERVICE_TOKEN=' ')), \
                 self.assertRaisesRegex(ConnectorConfigurationError, 'FASHION_PLANNER_SERVICE_TOKEN is required'):
             workflow_http.build_workflow()  # a blank token is no token
