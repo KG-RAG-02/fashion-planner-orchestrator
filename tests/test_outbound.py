@@ -13,7 +13,7 @@ from fashion_planner_orchestrator.connectors import (ConnectorConfigurationError
 from fashion_planner_orchestrator.workflow import StageFailure, stage_failure
 
 TOKEN = 'dummy-test-token'
-PRIVATE = {'ORCHESTRATOR_HTTP_PRIVATE_HOSTS': 'trend,stock,new-product,sales-market',
+PRIVATE = {'ORCHESTRATOR_HTTP_PRIVATE_HOSTS': 'trend,inventory,novelty,research',
            'FASHION_PLANNER_SERVICE_TOKEN': TOKEN}
 
 
@@ -24,7 +24,7 @@ def url(value, **env):
 class PrivateHostAllowlistTests(unittest.TestCase):
     def test_plain_http_to_an_allowlisted_host_needs_a_bearer_token(self):
         self.assertEqual(url('http://trend:8768', **PRIVATE), 'http://trend:8768/v1/agents/x')
-        self.assertEqual(url('http://new-product:8767/', **PRIVATE), 'http://new-product:8767/v1/agents/x')
+        self.assertEqual(url('http://novelty:8767/', **PRIVATE), 'http://novelty:8767/v1/agents/x')
         for token in ('', '   '):
             with self.subTest(token=repr(token)), self.assertRaisesRegex(ConnectorConfigurationError, 'TOKEN'):
                 url('http://trend:8768', **dict(PRIVATE, FASHION_PLANNER_SERVICE_TOKEN=token))
@@ -32,16 +32,16 @@ class PrivateHostAllowlistTests(unittest.TestCase):
     def test_allowlist_is_exact_and_independent_of_dev_mode(self):
         with self.assertRaises(ConnectorConfigurationError):
             url('http://trend:8768', FASHION_PLANNER_HTTP_DEV_MODE='1', FASHION_PLANNER_SERVICE_TOKEN=TOKEN)
-        self.assertEqual(url('http://stock:8002', FASHION_PLANNER_HTTP_DEV_MODE='1', **PRIVATE),
-                         'http://stock:8002/v1/agents/x')
+        self.assertEqual(url('http://inventory:8002', FASHION_PLANNER_HTTP_DEV_MODE='1', **PRIVATE),
+                         'http://inventory:8002/v1/agents/x')
         for target in ('http://trends:8768', 'http://trend.internal:8768', 'http://172.30.231.2:8768',
                        'http://evil:80'):
             with self.subTest(target=target), self.assertRaises(ConnectorConfigurationError):
                 url(target, **PRIVATE)
 
     def test_allowlist_entries_must_be_single_label_lowercase_hostnames(self):
-        self.assertEqual(private_http_hosts({'ORCHESTRATOR_HTTP_PRIVATE_HOSTS': ' a , new-product,,' + 'b' * 63}),
-                         frozenset({'a', 'new-product', 'b' * 63}))
+        self.assertEqual(private_http_hosts({'ORCHESTRATOR_HTTP_PRIVATE_HOSTS': ' a , novelty-api,,' + 'b' * 63}),
+                         frozenset({'a', 'novelty-api', 'b' * 63}))
         for bad in ('Trend', 'trend.local', '10.0.0.1', '-x', '1abc', 'b' * 64, 'tr_end', 'trend:8768'):
             with self.subTest(bad=bad), self.assertRaises(ConnectorConfigurationError):
                 private_http_hosts({'ORCHESTRATOR_HTTP_PRIVATE_HOSTS': bad})
@@ -68,8 +68,8 @@ class TimeoutConfigurationTests(unittest.TestCase):
         from fashion_planner_orchestrator import workflow_http
         from fashion_planner_orchestrator.workflow_store import WorkflowStore
         env = {**PRIVATE, 'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': '1', 'ORCHESTRATOR_TREND_URL': 'http://trend:8768',
-               'ORCHESTRATOR_INVENTORY_URL': 'http://stock:8002', 'ORCHESTRATOR_NOVELTY_URL': 'http://new-product:8767',
-               'ORCHESTRATOR_RESEARCH_URL': 'http://sales-market:8766',
+               'ORCHESTRATOR_INVENTORY_URL': 'http://inventory:8002', 'ORCHESTRATOR_NOVELTY_URL': 'http://novelty:8767',
+               'ORCHESTRATOR_RESEARCH_URL': 'http://research:8766',
                'ORCHESTRATOR_WORKFLOW_CONNECT_TIMEOUT_SECONDS': '1.5', 'ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS': '9'}
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env), \
                 patch.object(workflow_http, 'store', return_value=WorkflowStore(Path(os.path.realpath(tmp)) / 's')), \
@@ -78,7 +78,7 @@ class TimeoutConfigurationTests(unittest.TestCase):
             os.environ.pop('ORCHESTRATOR_WORKFLOW_CONTRACT_BASELINE', None)
             workflow = workflow_http.build_workflow()
             self.assertEqual(workflow.adapters['stock']({'p': 1}), 'sent')
-        wire.assert_called_once_with('http://stock:8002/v1/agents/inventory/runs', {'p': 1}, TOKEN,
+        wire.assert_called_once_with('http://inventory:8002/v1/agents/inventory/runs', {'p': 1}, TOKEN,
                                      connect_timeout=1.5, read_timeout=9.0)
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'workflow extra (jsonschema) required')
@@ -89,8 +89,8 @@ class TimeoutConfigurationTests(unittest.TestCase):
         handler = object.__new__(OrchestratorHandler)
         handler._json = Mock()
         env = {**PRIVATE, 'ORCHESTRATOR_WORKFLOW_ALLOW_PROPOSED': '1', 'ORCHESTRATOR_TREND_URL': 'http://trend:8768',
-               'ORCHESTRATOR_INVENTORY_URL': 'http://stock:8002', 'ORCHESTRATOR_NOVELTY_URL': 'http://new-product:8767',
-               'ORCHESTRATOR_RESEARCH_URL': 'http://sales-market:8766', 'ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS': 'never'}
+               'ORCHESTRATOR_INVENTORY_URL': 'http://inventory:8002', 'ORCHESTRATOR_NOVELTY_URL': 'http://novelty:8767',
+               'ORCHESTRATOR_RESEARCH_URL': 'http://research:8766', 'ORCHESTRATOR_WORKFLOW_READ_TIMEOUT_SECONDS': 'never'}
         request = dict(contract_version='fashion-planner-workflow', request_id='r-1',
                        input=dict(user_input=dict(text='t', images=[])))
         with patch.dict(os.environ, env):

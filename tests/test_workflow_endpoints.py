@@ -213,8 +213,8 @@ class SystemStatusTests(EndpointTestBase, unittest.TestCase):
         self.assertEqual(status, 200)
         agents = {a['id']: a for a in body['agents']}
         self.assertEqual({k: (a['reachable'], a['healthy'], a['http_status'], a['error']) for k, a in agents.items()},
-                         {'trend': (True, True, 200, None), 'stock': (True, False, 503, None),
-                          'new-product': (True, True, 200, None), 'sales-market': (False, False, None, 'CONNECTION_REFUSED')})
+                         {'trend': (True, True, 200, None), 'inventory': (True, False, 503, None),
+                          'novelty': (True, True, 200, None), 'research': (False, False, None, 'CONNECTION_REFUSED')})
         self.assertEqual([a['health_path'] for a in body['agents']], ['/health', '/health/live', '/api/health', '/api/health'])
         self.assertTrue(all(isinstance(a['latency_ms'], int) for a in body['agents']))
         sent = {port: auth for port, _, auth in FakeAgent.seen}
@@ -239,8 +239,8 @@ class SystemStatusTests(EndpointTestBase, unittest.TestCase):
             status, body, _ = self.request('GET', '/api/system/status')
         self.assertEqual(status, 200)
         errors = {a['id']: a['error'] for a in body['agents']}
-        self.assertEqual(errors, {'trend': 'URL_POLICY_REJECTED', 'stock': 'TIMEOUT', 'new-product': 'NOT_CONFIGURED',
-                                  'sales-market': 'NOT_CONFIGURED'})
+        self.assertEqual(errors, {'trend': 'URL_POLICY_REJECTED', 'inventory': 'TIMEOUT', 'novelty': 'NOT_CONFIGURED',
+                                  'research': 'NOT_CONFIGURED'})
         self.assertEqual((body['runtime'], body['contract']['gate'], body['image']['provider'], body['draft']['mode']),
                          ('container', 'closed', 'planning_sheet', 'draft_with_visuals'))
 

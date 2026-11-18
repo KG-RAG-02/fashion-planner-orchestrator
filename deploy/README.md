@@ -24,21 +24,21 @@ Agent 간 요청은 P08이 순차 전달합니다. P07 요청은 P08이 P06 Draf
 ## 시작
 
 ```bash
-deploy/bin/vogue init-env
-deploy/bin/vogue preflight stub
-deploy/bin/vogue build
-deploy/bin/vogue stub
+deploy/bin/fashion-planner init-env
+deploy/bin/fashion-planner preflight stub
+deploy/bin/fashion-planner build
+deploy/bin/fashion-planner stub
 ```
 
-실행 wrapper는 `~/.config/vogue/vogue.env`를 사용합니다. `init-env`는 새 bearer token을 만들고 환경변수 존재 여부를 검사합니다. 실제 값은 채팅·로그·커밋에 붙여넣지 마세요. 다섯 저장소의 checkout 경로가 다르면 각 Compose build context를 현재 로컬 구조에 맞춰야 합니다.
+실행 wrapper는 `~/.config/fashion-planner/fashion-planner.env`를 사용합니다. `init-env`는 새 bearer token을 만들고 환경변수 존재 여부를 검사합니다. 실제 값은 채팅·로그·커밋에 붙여넣지 마세요. 다섯 저장소의 checkout 경로가 다르면 각 Compose build context를 현재 로컬 구조에 맞춰야 합니다.
 
 P07 서비스가 준비된 뒤 rehearsal/live 실행 전 점검:
 
 ```bash
-deploy/bin/vogue preflight rehearsal
-deploy/bin/vogue rehearsal
-deploy/bin/vogue preflight live
-deploy/bin/vogue live "상품 기획 요청"
+deploy/bin/fashion-planner preflight rehearsal
+deploy/bin/fashion-planner rehearsal
+deploy/bin/fashion-planner preflight live
+deploy/bin/fashion-planner live "상품 기획 요청"
 ```
 
 `live`는 단일 실행용 보호 장치가 있습니다. 다시 실행하려면 먼저 저장된 기록과 guard 정책을 확인하세요.
@@ -46,10 +46,10 @@ deploy/bin/vogue live "상품 기획 요청"
 ## 관찰·종료
 
 ```bash
-deploy/bin/vogue ps stub
-deploy/bin/vogue logs stub sales-market
-deploy/bin/vogue logs stub orchestrator
-deploy/bin/vogue down stub
+deploy/bin/fashion-planner ps stub
+deploy/bin/fashion-planner logs stub research
+deploy/bin/fashion-planner logs stub orchestrator
+deploy/bin/fashion-planner down stub
 ```
 
 `down`은 컨테이너만 내리고 데이터 volume은 보존합니다. 기록이나 캐시를 보존해야 하면 `docker compose down -v`를 사용하지 마세요. P08은 실행 기록·checkpoint·content-addressed artifact를 보관하고, P06/P07 데이터는 각 Agent가 소유합니다.

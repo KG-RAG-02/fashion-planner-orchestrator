@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""End-to-end check of a running VOGUE stack through the orchestrator's published port.
+"""End-to-end check of a running Fashion Planner stack through the orchestrator's published port.
 
 Stdlib only (jsonschema is used for the integrated-result schema when importable).
 Never prints secrets; the bearer token is not needed (the browser-facing API is
 protected by the trusted-local policy, not by the inter-service token).
 
   python deploy/e2e/run_e2e.py --base http://127.0.0.1:18765 --profile stub \
-      --trend-query deploy/e2e/queries/stub-trend-query.json --out ~/VOGUE-archive/e2e/stub.json
+      --trend-query deploy/e2e/queries/stub-trend-query.json --out .local/e2e/stub.json
 
 Profiles (workflow-contract 0.2.0: P06 makes the product and worn images, stage 06 composes the planning sheet):
   stub       explicit TrendQuery, P06 fixture visuals; expects all six stages ok and the composed sheet

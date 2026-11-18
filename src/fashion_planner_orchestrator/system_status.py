@@ -21,9 +21,9 @@ MAX_PROBE_BODY_BYTES = 4096
 # (id, base URL variable, liveness path, bearer required): conventions section 2.
 AGENTS = (
     ('trend', 'ORCHESTRATOR_TREND_URL', '/health', False),
-    ('stock', 'ORCHESTRATOR_INVENTORY_URL', '/health/live', False),
-    ('new-product', 'ORCHESTRATOR_NOVELTY_URL', '/api/health', True),
-    ('sales-market', 'ORCHESTRATOR_RESEARCH_URL', '/api/health', False),
+    ('inventory', 'ORCHESTRATOR_INVENTORY_URL', '/health/live', False),
+    ('novelty', 'ORCHESTRATOR_NOVELTY_URL', '/api/health', True),
+    ('research', 'ORCHESTRATOR_RESEARCH_URL', '/api/health', False),
 )
 
 

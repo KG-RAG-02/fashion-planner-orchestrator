@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pre-deployment checks for deploy/bin/vogue. Prints names and statuses, never secret values.
+"""Pre-deployment checks for deploy/bin/fashion-planner. Prints names and statuses, never secret values.
 
   python deploy/scripts/preflight.py --profile stub|rehearsal|live [--env-file PATH]
 
@@ -25,7 +25,8 @@ from urllib.parse import urlsplit
 
 DEPLOY = Path(__file__).resolve().parents[1]
 WORKSPACE = DEPLOY.parents[1]
-REPOS = ("trend-analysis-agent", "stock-agent", "new-product-agent", "sales-market-agent", "vogue-orchestrator")
+REPOS = ("fashion-planner-trend", "fashion-planner-inventory", "fashion-planner-novelty", "fashion-planner-research",
+         "fashion-planner-orchestrator")
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "data", "__pycache__", ".pytest_cache", ".local", "build"}
 SF_DATALESS = 0x40000000
 REQUIRED = {
@@ -40,7 +41,7 @@ FILES = {
     "rehearsal": ("compose.yaml", "compose.data.yaml"),
     "live": ("compose.yaml", "compose.data.yaml", "compose.paid.yaml"),
 }
-PROJECT = {"stub": "vogue-stub", "rehearsal": "vogue", "live": "vogue"}
+PROJECT = {"stub": "fashion-planner-stub", "rehearsal": "fashion-planner", "live": "fashion-planner"}
 PORT = {"stub": 18765, "rehearsal": 8765, "live": 8765}
 
 
@@ -72,9 +73,9 @@ def dataless_files(limit=20):
 
 
 def default_image_model():
-    """DEFAULT_IMAGE_MODEL from the new-product-agent source (P06 makes the images since workflow-contract 0.2.0),
+    """DEFAULT_IMAGE_MODEL from the novelty source (novelty makes the draft images),
     or None if unreadable."""
-    source = WORKSPACE / "new-product-agent" / "src" / "vogue_npp" / "workflows" / "image_generation.py"
+    source = WORKSPACE / "fashion-planner-novelty" / "src" / "fashion_planner_novelty" / "workflows" / "image_generation.py"
     try:
         match = re.search(r'^DEFAULT_IMAGE_MODEL = "([A-Za-z0-9._:-]+)"$', source.read_text(encoding="utf-8"), re.M)
     except OSError:
@@ -85,7 +86,7 @@ def default_image_model():
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--profile", choices=sorted(FILES), required=True)
-    parser.add_argument("--env-file", type=Path, default=Path(os.environ.get("FASHION_PLANNER_ENV_FILE", Path.home() / ".config/vogue/vogue.env")))
+    parser.add_argument("--env-file", type=Path, default=Path(os.environ.get("FASHION_PLANNER_ENV_FILE", Path.home() / ".config/fashion-planner/fashion-planner.env")))
     parser.add_argument("--skip-network", action="store_true", help="skip OpenAI/Aura reachability checks")
     args = parser.parse_args(argv)
     results = []
@@ -104,7 +105,7 @@ def main(argv=None) -> int:
         check("env file is outside the iCloud project folder", WORKSPACE not in args.env_file.resolve().parents, str(args.env_file))
         env = parse_env(args.env_file)
     else:
-        check("env file exists", False, f"{args.env_file} — run deploy/bin/vogue init-env")
+        check("env file exists", False, f"{args.env_file} — run deploy/bin/fashion-planner init-env")
     missing = [key for key in REQUIRED[args.profile] if not env.get(key)]
     check(f"required keys for {args.profile}", not missing, "missing: " + ", ".join(missing) if missing else f"{len(REQUIRED[args.profile])} set")
 

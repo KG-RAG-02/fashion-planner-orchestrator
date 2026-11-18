@@ -1,6 +1,6 @@
-# Real-data layer: Neo4j Aura (trend graph) + Cloudflare R2 (stock and H&M DuckDB caches).
-#   deploy/bin/vogue rehearsal   (this layer alone: zero paid model calls — PolicyLLM + fixture image)
-#   deploy/bin/vogue live        (plus compose.paid.yaml)
+# Real-data layer: Neo4j Aura (trend graph) + Cloudflare R2 (inventory and H&M DuckDB caches).
+#   deploy/bin/fashion-planner rehearsal   (this layer alone: zero paid model calls, fixture images)
+#   deploy/bin/fashion-planner live        (plus compose.paid.yaml)
 # Cache volumes are fixed-name so a ~0.8 GB download happens once and survives restarts.
 
 x-r2: &r2
@@ -20,8 +20,8 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?fill NEO4J_PASSWORD in the env file}
     networks: [backend, egress]
 
-  stock-cache-init:
-    image: vogue/stock:dev
+  inventory-cache-init:
+    image: fashion-planner/inventory:dev
     read_only: true
     user: "10001:10001"
     cap_drop: [ALL]
@@ -31,48 +31,50 @@ services:
       <<: *r2
       HOME: /tmp
       INVENTORY_CACHE_DIR: /cache
-      # Optional: with R2_CLIP_INDEX_KEY, --prepare-cache also caches the stock CLIP index next to the DB.
+      # Optional: with R2_CLIP_INDEX_KEY, --prepare-cache also caches the inventory CLIP index next to the DB.
       R2_CLIP_INDEX_KEY: ${R2_CLIP_INDEX_KEY:-}
-    command: ["python", "-m", "stock_agent.server", "--prepare-cache"]
+    command: ["python", "-m", "fashion_planner_inventory.server", "--prepare-cache"]
     volumes:
-      - stock_cache:/cache
+      - inventory_cache:/cache
     networks: [egress]
     restart: "no"
 
-  stock:
+  inventory:
     environment:
       <<: *r2
       INVENTORY_CACHE_DIR: /cache
-      # CLIP filter (stock README): the cached index, Musinsa snap photos on R2, and the open_clip weights
+      # CLIP filter (inventory README): the cached index, Musinsa snap photos on R2, and the open_clip weights
       # (HF hub, ~350 MB) kept on a volume because /tmp is a 128 MB tmpfs. Empty keys leave CLIP off.
       R2_CLIP_INDEX_KEY: ${R2_CLIP_INDEX_KEY:-}
       R2_SNAP_IMAGE_PREFIX: ${R2_SNAP_IMAGE_PREFIX:-}
       HF_HOME: /models/hf
     volumes:
-      - stock_cache:/cache:ro
-      - stock_models:/models
+      - inventory_cache:/cache:ro
+      - inventory_models:/models
     networks: [backend, egress]
     depends_on:
-      stock-cache-init: { condition: service_completed_successfully }
+      inventory-cache-init: { condition: service_completed_successfully }
 
-  sales-market:
+  research:
     environment:
       <<: *r2
       RESEARCH_CACHE_DIR: /data/hm-cache
       # research reads its H&M age, price and fabric research from one precomputed aggregate snapshot;
       # the env file supplies its content-addressed R2 key.
-      RESEARCH_AGGREGATE_SNAPSHOT_KEY: ${RESEARCH_AGGREGATE_SNAPSHOT_KEY:?P07 aggregate snapshot key is required for rehearsal/live}
+      RESEARCH_AGGREGATE_SNAPSHOT_KEY: ${RESEARCH_AGGREGATE_SNAPSHOT_KEY:?research aggregate snapshot key is required for rehearsal/live}
+      # Deployer opt-in: H&M Kaggle data is for non-commercial research only (research reads it only when 1).
+      RESEARCH_HM_NONCOMMERCIAL_RESEARCH: ${RESEARCH_HM_NONCOMMERCIAL_RESEARCH:-0}
     volumes:
-      # Writable: it also holds the H&M age query's DuckDB spill directory (P07 image default
-      # RESEARCH_AGE_DUCKDB_TEMP_DIRECTORY=/data/hm-cache/duckdb-age-tmp; memory limit set in compose.yaml).
+      # Writable: it also holds the H&M age query's DuckDB spill directory (research default
+      # RESEARCH_AGE_DUCKDB_TEMP_DIRECTORY=$RESEARCH_CACHE_DIR/duckdb-age-tmp; memory limit set in compose.yaml).
       - type: volume
-        source: p07_state
+        source: research_state
         target: /data/hm-cache
         volume: { subpath: hm-cache }
     networks: [backend, egress]
 
 volumes:
-  stock_cache:
-    name: vogue_stock_cache
-  stock_models:
-    name: vogue_stock_models
+  inventory_cache:
+    name: fashion-planner_inventory_cache
+  inventory_models:
+    name: fashion-planner_inventory_models

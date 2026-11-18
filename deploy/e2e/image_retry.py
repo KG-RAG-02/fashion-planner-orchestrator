@@ -2,8 +2,8 @@
 """Retry ONLY stage 06 of a stored run (POST /v1/orchestrations/image-retries).
 
 Since workflow-contract 0.2.0 stage 06 composes the planning sheet (기획안 사진) locally from the stored run:
-no model, no cost. Run it through `deploy/bin/vogue image-retry <profile> <request_id>`, which enables the
-retry switch for this call only. The P06 visuals are not regenerated (that needs a new run).
+no model, no cost. Run it through `deploy/bin/fashion-planner image-retry <profile> <request_id>`, which enables
+the retry switch for this call only. The novelty visuals are not regenerated (that needs a new run).
 
     python3 deploy/e2e/image_retry.py --base http://127.0.0.1:8765 --request-id <id> --out <evidence.json>
 """

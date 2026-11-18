@@ -1,32 +1,32 @@
 #!/usr/bin/env bash
-# VOGUE deployment wrapper. See deploy/README.md.
+# Fashion Planner deployment wrapper. See deploy/README.md.
 #
-#   vogue init-env [--force]          create/complete ~/.config/vogue/vogue.env (values never printed)
-#   vogue preflight <profile>         stub | rehearsal | live
-#   vogue build                       build all five service images (vogue/<svc>:dev)
-#   vogue stub                        offline stack on 127.0.0.1:18765 + end-to-end check
-#   vogue rehearsal                   Aura + R2 data, no paid model, on 127.0.0.1:8765 + end-to-end check
-#   vogue live "<planning brief>"     the single paid run (guarded: refuses a second run)
-#   vogue probe <profile>             in-stack auth (401/401/4xx) and inbound-gate (403) probes
-#   vogue sheet <profile> <request>   render a stored run's 기획서 PNG offline (read-only volume, no network)
-#   vogue image-retry <profile> <request>  re-compose stage 06 (the planning sheet) of a stored run; free, no model
-#   vogue up|ps|logs|down <profile>   lifecycle helpers (down never removes volumes)
+#   fashion-planner init-env [--force]         create/complete ~/.config/fashion-planner/fashion-planner.env (values never printed)
+#   fashion-planner preflight <profile>        stub | rehearsal | live
+#   fashion-planner build                      build all five service images (fashion-planner/<svc>:dev)
+#   fashion-planner stub                       offline stack on 127.0.0.1:18765 + end-to-end check
+#   fashion-planner rehearsal                  Aura + R2 data, no paid model, on 127.0.0.1:8765 + end-to-end check
+#   fashion-planner live "<planning brief>"    the single paid run (guarded: refuses a second run)
+#   fashion-planner probe <profile>            in-stack auth (401/401/4xx) and inbound-gate (403) probes
+#   fashion-planner sheet <profile> <request>  render a stored run's 기획서 PNG offline (read-only volume, no network)
+#   fashion-planner image-retry <profile> <request>  re-compose stage 06 (the planning sheet) of a stored run; free, no model
+#   fashion-planner up|ps|logs|down <profile>  lifecycle helpers (down never removes volumes)
 set -euo pipefail
 
 DEPLOY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${FASHION_PLANNER_ENV_FILE:-$HOME/.config/vogue/vogue.env}"
+ENV_FILE="${FASHION_PLANNER_ENV_FILE:-$HOME/.config/fashion-planner/fashion-planner.env}"
 PY="${FASHION_PLANNER_PYTHON:-python3}"
-EVIDENCE_DIR="${FASHION_PLANNER_EVIDENCE_DIR:-$HOME/VOGUE-archive/e2e}"
-LIVE_GUARD="${FASHION_PLANNER_LIVE_GUARD:-$HOME/.config/vogue/live-run.done}"
+EVIDENCE_DIR="${FASHION_PLANNER_EVIDENCE_DIR:-$DEPLOY/../.local/e2e}"
+LIVE_GUARD="${FASHION_PLANNER_LIVE_GUARD:-$HOME/.config/fashion-planner/live-run.done}"
 STUB_QUERY="2027년 봄 발레코어에서 유행하는 핑크색 상의를 기획하고 싶어"
 
-die() { echo "vogue: $*" >&2; exit 1; }
+die() { echo "fashion-planner: $*" >&2; exit 1; }
 
 profile_settings() {
   case "$1" in
-    stub) PROJECT=vogue-stub; PORT=18765; LABEL=stub; FILES=(compose.yaml compose.stub.yaml) ;;
-    rehearsal) PROJECT=vogue; PORT=8765; LABEL=default; FILES=(compose.yaml compose.data.yaml) ;;
-    live) PROJECT=vogue; PORT=8765; LABEL=default; FILES=(compose.yaml compose.data.yaml compose.paid.yaml) ;;
+    stub) PROJECT=fashion-planner-stub; PORT=18765; LABEL=stub; FILES=(compose.yaml compose.stub.yaml) ;;
+    rehearsal) PROJECT=fashion-planner; PORT=8765; LABEL=default; FILES=(compose.yaml compose.data.yaml) ;;
+    live) PROJECT=fashion-planner; PORT=8765; LABEL=default; FILES=(compose.yaml compose.data.yaml compose.paid.yaml) ;;
     *) die "unknown profile '$1' (stub | rehearsal | live)" ;;
   esac
 }
@@ -34,7 +34,7 @@ profile_settings() {
 compose() {
   local profile="$1"; shift
   profile_settings "$profile"
-  [ -f "$ENV_FILE" ] || die "env file missing: $ENV_FILE (run: vogue init-env)"
+  [ -f "$ENV_FILE" ] || die "env file missing: $ENV_FILE (run: fashion-planner init-env)"
   local args=(-p "$PROJECT" --project-directory "$DEPLOY" --env-file "$ENV_FILE")
   local file
   for file in "${FILES[@]}"; do args+=(-f "$DEPLOY/$file"); done
@@ -85,7 +85,7 @@ case "$cmd" in
   preflight)
     "$PY" "$DEPLOY/scripts/preflight.py" --profile "${1:?profile}" --env-file "$ENV_FILE" "${@:2}" ;;
   build)
-    compose stub build orchestrator trend stock new-product sales-market "$@" ;;
+    compose stub build orchestrator trend inventory novelty research "$@" ;;
   up)
     profile="${1:?profile}"
     "$PY" "$DEPLOY/scripts/preflight.py" --profile "$profile" --env-file "$ENV_FILE"
@@ -107,7 +107,7 @@ case "$cmd" in
       --trend-query "${FASHION_PLANNER_REHEARSAL_TREND_QUERY:-$DEPLOY/e2e/queries/rehearsal-trend-query.json}" \
       --out "$EVIDENCE_DIR/rehearsal-$(stamp).json" "$@" ;;
   live)
-    query="${1:?usage: vogue live \"<planning brief>\"}"; shift
+    query="${1:?usage: fashion-planner live \"<planning brief>\"}"; shift
     [ -e "$LIVE_GUARD" ] && die "a live run was already recorded ($LIVE_GUARD). Delete it deliberately to allow another paid run."
     "$0" up live
     probe live
@@ -116,19 +116,19 @@ case "$cmd" in
     "$PY" "$DEPLOY/e2e/run_e2e.py" --base "http://127.0.0.1:8765" --profile live --query "$query" \
       --skip-replay --timeout 900 --out "$EVIDENCE_DIR/live-$(stamp).json" "$@" ;;
   sheet)
-    profile="${1:?usage: vogue sheet <stub|rehearsal|live> <request_id>}"; rid="${2:?usage: vogue sheet <profile> <request_id>}"
+    profile="${1:?usage: fashion-planner sheet <stub|rehearsal|live> <request_id>}"; rid="${2:?usage: fashion-planner sheet <profile> <request_id>}"
     profile_settings "$profile"
     [[ "$rid" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$ ]] || die "invalid request id: $rid"
     mkdir -p "$EVIDENCE_DIR"
     out="$EVIDENCE_DIR/${profile}-${rid}-planning-sheet.png"
-    docker run --rm --network none --read-only -v "vogue_${LABEL}_p08_state:/state:ro" vogue/orchestrator:dev \
+    docker run --rm --network none --read-only -v "fashion-planner_${LABEL}_orchestrator_state:/state:ro" fashion-planner/orchestrator:dev \
       python -m fashion_planner_orchestrator.planning_sheet --request-id "$rid" --store-dir /state/workflow --output - > "$out.tmp"
     mv "$out.tmp" "$out"
     echo "planning sheet: $out" ;;
   image-retry)
-    # Stage 06 composes the planning sheet locally (workflow-contract 0.2.0): no model, no cost, so no paid
-    # profile is needed. The P06 visuals are not regenerated (that needs a new run).
-    profile="${1:?usage: vogue image-retry <stub|rehearsal> <request_id>}"; rid="${2:?usage: vogue image-retry <profile> <request_id>}"
+    # Stage 06 composes the planning sheet locally: no model, no cost, so no paid profile is needed.
+    # The novelty visuals are not regenerated (that needs a new run).
+    profile="${1:?usage: fashion-planner image-retry <stub|rehearsal> <request_id>}"; rid="${2:?usage: fashion-planner image-retry <profile> <request_id>}"
     [ "$profile" = live ] && die "image-retry needs no paid profile: use rehearsal (the live run's store is the same volume)."
     [[ "$rid" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$ ]] || die "invalid request id: $rid"
     profile_settings "$profile"
@@ -149,5 +149,5 @@ case "$cmd" in
   help|-h|--help)
     sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
   *)
-    die "unknown command '$cmd' (try: vogue help)" ;;
+    die "unknown command '$cmd' (try: fashion-planner help)" ;;
 esac

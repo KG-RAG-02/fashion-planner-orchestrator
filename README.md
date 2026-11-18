@@ -35,7 +35,7 @@ Project 08 (P08) is the coordinator and UI for the VOGUE product-planning workfl
 Docker 실행 진입점은 아래 명령입니다.
 
 ```bash
-deploy/bin/vogue stub
+deploy/bin/fashion-planner stub
 ```
 
 stub UI 주소는 `http://127.0.0.1:18765`입니다. rehearsal/live는 `http://127.0.0.1:8765`를 사용합니다. 종료 방법과 프로필 차이는 [`deploy/README.md`](deploy/README.md)를 참고하세요. UI는 `POST /api/workflow/run`으로 실행하며 health 경로는 `GET /api/health`입니다.

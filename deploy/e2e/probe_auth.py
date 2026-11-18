@@ -5,7 +5,7 @@
 
 Agents (from the orchestrator container): for each agent's v1 POST route expect
   no token -> 401, wrong token -> 401, valid token + malformed JSON -> 400/415/422 (never 2xx/5xx);
-and liveness probes 200 (new-product's health requires the bearer: 401 without it).
+and liveness probes 200 (novelty's health requires the bearer: 401 without it).
 --peer (from a backend container): the orchestrator's gated routes must refuse a backend peer (403).
 No request reaches inference, a database write or an image provider.
 """
@@ -18,9 +18,9 @@ import urllib.request
 TOKEN = os.environ.get("FASHION_PLANNER_SERVICE_TOKEN", "")
 AGENTS = {
     "trend": (os.environ.get("ORCHESTRATOR_TREND_URL", "http://trend:8768"), "/v1/agents/trend/runs", "/health", False),
-    "stock": (os.environ.get("ORCHESTRATOR_INVENTORY_URL", "http://stock:8002"), "/v1/agents/inventory/runs", "/health/live", False),
-    "new-product": (os.environ.get("ORCHESTRATOR_NOVELTY_URL", "http://new-product:8767"), "/v1/agents/novelty/runs", "/api/health", True),
-    "sales-market": (os.environ.get("ORCHESTRATOR_RESEARCH_URL", "http://sales-market:8766"), "/v1/agents/research/reviews", "/api/health", False),
+    "inventory": (os.environ.get("ORCHESTRATOR_INVENTORY_URL", "http://inventory:8002"), "/v1/agents/inventory/runs", "/health/live", False),
+    "novelty": (os.environ.get("ORCHESTRATOR_NOVELTY_URL", "http://novelty:8767"), "/v1/agents/novelty/runs", "/api/health", True),
+    "research": (os.environ.get("ORCHESTRATOR_RESEARCH_URL", "http://research:8766"), "/v1/agents/research/reviews", "/api/health", False),
 }
 
 

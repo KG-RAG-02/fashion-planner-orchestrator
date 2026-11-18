@@ -1,8 +1,8 @@
 # Paid-model layer — the ONLY file that references the OpenAI key.
-#   deploy/bin/vogue live "<planning brief>"   (refuses a second run; see LIVE_GUARD in bin/vogue)
-# Calls per run: P08 query structuring (1 LLM call + retries on error) and P06's two Draft images
-# (product + worn outfit; workflow-contract 0.2.0). The inventory service makes no model call.
-# P08 makes no image call: stage 06 composes the planning sheet locally.
+#   deploy/bin/fashion-planner live "<planning brief>"   (refuses a second run; see LIVE_GUARD in bin/fashion-planner)
+# Calls per run: the orchestrator's query structuring and SWOT draft, novelty's concept text and two draft
+# images (product + worn outfit), and research's optional target-audience hypothesis. The inventory service
+# makes no model call, and the orchestrator makes no image call: stage 06 composes the planning sheet locally.
 
 services:
   orchestrator:
@@ -11,21 +11,21 @@ services:
       LLM_API_KEY: ${FASHION_PLANNER_OPENAI_API_KEY:?FASHION_PLANNER_OPENAI_API_KEY missing in the env file}
       LLM_MODEL: ${FASHION_PLANNER_ORCHESTRATOR_LLM_MODEL:?FASHION_PLANNER_ORCHESTRATOR_LLM_MODEL missing in the env file}
 
-  new-product:
+  novelty:
     environment:
       NOVELTY_DRAFT_IMAGE_PROVIDER: openai
-      # P06 main (src/vogue_npp/settings.py) reads only LLM_API_KEY, for its two images and,
-      # since 57877db, for its LLM concept text (default model gpt-6-luna).
+      # novelty reads LLM_API_KEY for its two images and its LLM concept text.
       LLM_API_KEY: ${FASHION_PLANNER_OPENAI_API_KEY:?FASHION_PLANNER_OPENAI_API_KEY missing in the env file}
-      # Blank means P06's default image model (gpt-image-2.5-sunburst).
+      # Blank means novelty's default image model.
       NOVELTY_DRAFT_IMAGE_MODEL: ${FASHION_PLANNER_NOVELTY_IMAGE_MODEL:-}
     networks: [backend, egress]
 
-  sales-market:
+  research:
     environment:
-      # P07's optional target-audience hypothesis (llm/responses_api.py needs LLM_API_KEY and LLM_MODEL);
-      # without them it records TARGET_AUDIENCE_LLM_FAILED and sends nothing. One paid call per review.
-      # Model gpt-6-luna, as in P07's own env (P06's default too); user decision 2026-11-17, replacing the
-      # 2026-11-16 "same model as P08". FASHION_PLANNER_RESEARCH_LLM_MODEL in the env file overrides it.
+      # research's optional target-audience hypothesis needs LLM_API_KEY and LLM_MODEL; without them it
+      # records TARGET_AUDIENCE_LLM_FAILED and sends nothing. One paid call per review.
+      # FASHION_PLANNER_RESEARCH_LLM_MODEL in the env file overrides the default model.
       LLM_API_KEY: ${FASHION_PLANNER_OPENAI_API_KEY:?FASHION_PLANNER_OPENAI_API_KEY missing in the env file}
       LLM_MODEL: ${FASHION_PLANNER_RESEARCH_LLM_MODEL:-gpt-6-luna}
+      # Deployer opt-in: research sends the hypothesis inputs to the external LLM only when 1.
+      RESEARCH_TARGET_LLM_TRANSFER_AUTHORIZED: ${RESEARCH_TARGET_LLM_TRANSFER_AUTHORIZED:-0}
