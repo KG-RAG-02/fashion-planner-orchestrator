@@ -786,7 +786,7 @@ class WorkflowTests(unittest.TestCase):
         def drop_slot(trend, stock):
             stock['products'].pop()
 
-        for change, code in ((drop_quotes, 'P06_TREND_RESULT_CHANGED'), (drop_slot, 'P06_STOCK_RESULT_CHANGED')):
+        for change, code in ((drop_quotes, 'NOVELTY_TREND_RESULT_CHANGED'), (drop_slot, 'NOVELTY_STOCK_RESULT_CHANGED')):
             with self.subTest(code=code):
                 self.setUp()
                 self.use_upstream_projection_fixture()
@@ -849,21 +849,21 @@ class WorkflowTests(unittest.TestCase):
             'projection (recomputed)': dict(trend_result=trend_view, inventory_product_result=stock_view),
         }
         rejected = {
-            'raw trend': (dict(trend_result=trend_raw), 'P06_TREND_RESULT_CHANGED'),
-            'trend omitted': (dict(trend_result=None), 'P06_TREND_RESULT_CHANGED'),
-            'stock omitted': (dict(inventory_product_result=None), 'P06_STOCK_RESULT_CHANGED'),
+            'raw trend': (dict(trend_result=trend_raw), 'NOVELTY_TREND_RESULT_CHANGED'),
+            'trend omitted': (dict(trend_result=None), 'NOVELTY_TREND_RESULT_CHANGED'),
+            'stock omitted': (dict(inventory_product_result=None), 'NOVELTY_STOCK_RESULT_CHANGED'),
             'trend tampered': (dict(trend_result=changed(trend_view, lambda t: t['evidence'][0].update(quote='바뀐 문장'))),
-                               'P06_TREND_RESULT_CHANGED'),
+                               'NOVELTY_TREND_RESULT_CHANGED'),
             'stock tampered': (dict(inventory_product_result=changed(stock_view, lambda s: s['products'][0]['inventory'].update(quantity=8))),
-                               'P06_STOCK_RESULT_CHANGED'),
+                               'NOVELTY_STOCK_RESULT_CHANGED'),
             'trend evidence emptied': (dict(trend_result=changed(trend_view, lambda t: t.update(evidence=[]))),
-                                       'P06_TREND_RESULT_CHANGED'),
+                                       'NOVELTY_TREND_RESULT_CHANGED'),
             'trend other projection (quote dropped)': (
                 dict(trend_result=changed(trend_view, lambda t: [row.pop('quote') for row in t['evidence']])),
-                'P06_TREND_RESULT_CHANGED'),
+                'NOVELTY_TREND_RESULT_CHANGED'),
             'stock other projection (image data dropped, image kept)': (
                 dict(inventory_product_result=changed(stock_raw, lambda s: s['products'][0]['image'].pop('data'))),
-                'P06_STOCK_RESULT_CHANGED'),
+                'NOVELTY_STOCK_RESULT_CHANGED'),
         }
         for name, fields in accepted.items():
             with self.subTest(accepted=name):

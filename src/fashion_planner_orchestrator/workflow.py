@@ -201,11 +201,11 @@ class Workflow:
                 retained['call_request_artifact'] = request_artifact
             self.contract.semantic(retained, rid, self.store, known)
             if stage == 'planning_draft':
-                require(raw['result']['request_id'] == rid, 'P06_REQUEST_ID_MISMATCH')
+                require(raw['result']['request_id'] == rid, 'NOVELTY_REQUEST_ID_MISMATCH')
                 if raw['status'] == 'ok':
                     require(payload['input']['inventory_product_result']['status'] == 'ok', 'UPSTREAM_STATUS_HIDDEN')
             if stage == 'sales_market_review':
-                require(raw['result']['request_id'] == rid, 'P07_REQUEST_ID_MISMATCH')
+                require(raw['result']['request_id'] == rid, 'RESEARCH_REQUEST_ID_MISMATCH')
             self.store.checkpoint_write(key, 'done', retained)
             producer_errors = raw['result'].get('errors', [])
             duration_ms = (time.monotonic() - call_started) * 1000

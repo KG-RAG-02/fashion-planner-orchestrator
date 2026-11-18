@@ -54,35 +54,35 @@ def p07_product_projection(draft):
     Category, product type, gender, season, and material are always present. Existing supported claims retain
     their values and provenance. Missing or non-forwardable profile values use deterministic review placeholders
     with kind 'proposal'; P07 receives the provenance and must treat these as proposals, not confirmed facts."""
-    require(isinstance(draft, dict), 'P06_DRAFT_REQUIRED')
+    require(isinstance(draft, dict), 'NOVELTY_DRAFT_REQUIRED')
     draft_body = draft.get('draft') if isinstance(draft.get('draft'), dict) else None
-    require(draft_body is not None, 'P06_DRAFT_REQUIRED')
+    require(draft_body is not None, 'NOVELTY_DRAFT_REQUIRED')
     profile = draft_body.get('product_profile')
-    require(isinstance(profile, dict), 'P06_PRODUCT_PROFILE_REQUIRED')
+    require(isinstance(profile, dict), 'NOVELTY_PRODUCT_PROFILE_REQUIRED')
     draft_evidence_ids = draft.get('evidence_ids', [])
     require(isinstance(draft_evidence_ids, list) and all(isinstance(item, str) for item in draft_evidence_ids),
-            'P06_PRODUCT_EVIDENCE_INVALID')
+            'NOVELTY_PRODUCT_EVIDENCE_INVALID')
 
     def profile_value(field):
         claim = profile.get(field)
         require(isinstance(claim, dict) and set(claim) == {'value', 'kind', 'evidence_ids'},
-                'P06_PRODUCT_CLAIM_INVALID')
+                'NOVELTY_PRODUCT_CLAIM_INVALID')
         value, kind, evidence_ids = claim['value'], claim['kind'], claim['evidence_ids']
         require(kind in {'user_requested', 'evidence_observation', 'proposal', 'hypothesis', 'unknown',
-                         'to_validate', 'interpretation'}, 'P06_PRODUCT_CLAIM_INVALID')
+                         'to_validate', 'interpretation'}, 'NOVELTY_PRODUCT_CLAIM_INVALID')
         require(isinstance(evidence_ids, list) and all(isinstance(item, str) for item in evidence_ids),
-                'P06_PRODUCT_EVIDENCE_INVALID')
-        require(set(evidence_ids).issubset(set(draft_evidence_ids)), 'P06_PRODUCT_EVIDENCE_REFERENCE_INVALID')
+                'NOVELTY_PRODUCT_EVIDENCE_INVALID')
+        require(set(evidence_ids).issubset(set(draft_evidence_ids)), 'NOVELTY_PRODUCT_EVIDENCE_REFERENCE_INVALID')
         if value is None or kind not in FORWARDED_CLAIM_KINDS:
             return None
-        require(isinstance(value, str) and bool(value.strip()), 'P06_PRODUCT_CLAIM_INVALID')
+        require(isinstance(value, str) and bool(value.strip()), 'NOVELTY_PRODUCT_CLAIM_INVALID')
         evidence[field] = {'kind': kind, 'source_ref': f'novelty.draft.product_profile.{field}',
                            'evidence_ids': list(dict.fromkeys(evidence_ids))}
         return value.strip()
 
     evidence = {}
     product = {'category': profile_value('category')}
-    require(product['category'] and product['category'] == draft_body.get('category'), 'P06_PRODUCT_CATEGORY_REQUIRED')
+    require(product['category'] and product['category'] == draft_body.get('category'), 'NOVELTY_PRODUCT_CATEGORY_REQUIRED')
 
     # P07 requires a usable product definition. Preserve sourced/model proposals when present;
     # fill missing fields deterministically and label each fallback as a proposal.
@@ -113,8 +113,8 @@ def require_novelty_inputs(call_input, trend_result, stock_result):
 
     One rule for the check before the novelty call and for integrated(), so an omitted or altered projection
     fails with the same code in both places."""
-    require(call_input.get('trend_result') == trend_view(trend_result), 'P06_TREND_RESULT_CHANGED')
-    require(call_input.get('inventory_product_result') == inventory_view(stock_result), 'P06_STOCK_RESULT_CHANGED')
+    require(call_input.get('trend_result') == trend_view(trend_result), 'NOVELTY_TREND_RESULT_CHANGED')
+    require(call_input.get('inventory_product_result') == inventory_view(stock_result), 'NOVELTY_STOCK_RESULT_CHANGED')
 
 
 def walk(value):
@@ -283,13 +283,13 @@ class WorkflowContract:
             require(validator.is_valid(value), 'SCHEMA_INVALID:' + stage)
         elif stage == 'planning_draft':
             self.schema(value, 'planning-draft-response.schema.json')
-            require(isinstance(body.get('draft'), dict) or (body.get('draft') is None and body.get('status') in {'no_results','error'}), 'P06_DRAFT_REQUIRED')
-            require(isinstance(body.get('input_evidence'), dict), 'P06_EVIDENCE_REQUIRED')
+            require(isinstance(body.get('draft'), dict) or (body.get('draft') is None and body.get('status') in {'no_results','error'}), 'NOVELTY_DRAFT_REQUIRED')
+            require(isinstance(body.get('input_evidence'), dict), 'NOVELTY_EVIDENCE_REQUIRED')
         else:
             self.schema(value, 'sales-market-review-response.schema.json')
             require(body.get('producer_id') == agent, 'BODY_PRODUCER_MISMATCH')
-            require(isinstance(body.get('draft_context'), dict), 'P07_DRAFT_CONTEXT_REQUIRED')
-            require(isinstance(body.get('limitations'), list), 'P07_LIMITATIONS_REQUIRED')
+            require(isinstance(body.get('draft_context'), dict), 'RESEARCH_DRAFT_CONTEXT_REQUIRED')
+            require(isinstance(body.get('limitations'), list), 'RESEARCH_LIMITATIONS_REQUIRED')
         return body
 
     def semantic(self, document, rid, store, known=None):
@@ -418,18 +418,18 @@ class WorkflowContract:
         draft, review = sources['planning_draft'], sources['sales_market_review']
         if draft:
             call = strict_json(store.verify(draft['call_request_artifact']))
-            require(call.get('contract_version') == NOVELTY_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'P06_CALL_ENVELOPE_INVALID')
+            require(call.get('contract_version') == NOVELTY_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'NOVELTY_CALL_ENVELOPE_INVALID')
             inp = call.get('input', {})
-            require(inp.get('planning_request') == body['planning_request'], 'P06_PLANNING_REQUEST_CHANGED')
+            require(inp.get('planning_request') == body['planning_request'], 'NOVELTY_PLANNING_REQUEST_CHANGED')
             # The run keeps the raw results; novelty received their projection.
             require_novelty_inputs(inp, sources['trend']['raw_response']['result'],
                                           sources['stock']['raw_response']['result'])
         if review:
             require(draft is not None, 'REVIEW_WITHOUT_DRAFT')
             call = strict_json(store.verify(review['call_request_artifact']))
-            require(call.get('contract_version') == RESEARCH_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'P07_CALL_ENVELOPE_INVALID')
+            require(call.get('contract_version') == RESEARCH_HANDOFF_VERSION and call.get('request_id') == body['request_id'], 'RESEARCH_CALL_ENVELOPE_INVALID')
             draft_value = draft['raw_response']['result']
-            require(call.get('input') == p07_review_input(draft_value, body['request_id']), 'P07_PRODUCT_PROJECTION_MISMATCH')
+            require(call.get('input') == p07_review_input(draft_value, body['request_id']), 'RESEARCH_PRODUCT_PROJECTION_MISMATCH')
         if sources['trend'] and sources['trend']['raw_response']['status'] == 'no_results':
             require(body['status'] == 'no_results', 'TREND_NO_RESULTS_HIDDEN')
         if draft and draft['raw_response']['status'] == 'no_results':
