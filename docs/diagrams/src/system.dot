@@ -29,7 +29,7 @@ digraph system {
   openai [label="OpenAI API\nlive 프로필에서만", shape=box, style="rounded,dashed"];
   photo  [label="기사 사진 호스트\nvogue.co.kr (허용 목록)", shape=box, style="rounded,dashed"];
   cdn    [label="무신사 이미지 CDN\nmsscdn.net (허용 목록)", shape=box, style="rounded,dashed"];
-  hf     [label="Hugging Face Hub\nOpenCLIP 가중치", shape=box, style="rounded,dashed"];
+  hf     [label="모델 가중치 호스트\nOpenCLIP (HF Hub 등)", shape=box, style="rounded,dashed"];
 
   // 층(위→아래)과 층 안의 순서
   { rank=same; ui; photo; }

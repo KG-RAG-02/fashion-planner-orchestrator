@@ -33,7 +33,8 @@ orchestrator 자체는 데이터 소스를 읽지 않는다. 각 서비스가 �
 - 트렌드 그래프: [fashion-planner-trend](https://github.com/KG-RAG-02/fashion-planner-trend)의 데이터 문서.
 - 재고 상품·이미지: [fashion-planner-inventory](https://github.com/KG-RAG-02/fashion-planner-inventory)의 데이터 문서. CLIP 인덱스가
   있으면(rehearsal·live) inventory가 기준 상품 이미지를 무신사 이미지 CDN(`msscdn.net`)에서 받아 메모리에서 임베딩만 하고,
-  OpenCLIP 가중치는 처음 불러올 때 Hugging Face Hub에서 받는다.
+  OpenCLIP 가중치는 처음 불러올 때 내려받는다. 어디서 받는지는 설치한 open_clip 버전이 정한다(open_clip_torch 4.2.2는
+  Hugging Face Hub).
 - H&M 집계: [fashion-planner-research](https://github.com/KG-RAG-02/fashion-planner-research)의 데이터 문서. H&M Kaggle 자료는
   비상업 연구에만 쓸 수 있다. research는 `RESEARCH_HM_NONCOMMERCIAL_RESEARCH=1`로 배포자가 동의했을 때만 이 자료를 읽는다.
 - research가 타깃 가설을 위해 외부 LLM에 입력을 보내는 것도 `RESEARCH_TARGET_LLM_TRANSFER_AUTHORIZED=1`일 때만이다.

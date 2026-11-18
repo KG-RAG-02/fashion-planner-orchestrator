@@ -5,7 +5,7 @@ orchestrator는 기획 요청 하나를 받아 다른 네 서비스를 정해진
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/system-dark.svg">
-  <img alt="시스템 전체: 브라우저 UI가 orchestrator를 부르고, orchestrator가 trend·inventory·novelty·research를 차례로 부른다. 각 서비스는 자기 저장소와 외부 시스템(Neo4j, Cloudflare R2, OpenAI, 환율 API, 무신사 이미지 CDN, Hugging Face Hub)을 쓴다." src="diagrams/system.svg" width="900">
+  <img alt="시스템 전체: 브라우저 UI가 orchestrator를 부르고, orchestrator가 trend·inventory·novelty·research를 차례로 부른다. 각 서비스는 자기 저장소와 외부 시스템(Neo4j, Cloudflare R2, OpenAI, 환율 API, 무신사 이미지 CDN, 모델 가중치 호스트)을 쓴다." src="diagrams/system.svg" width="900">
 </picture>
 
 그림의 상자와 화살표마다 코드 근거가 [diagrams/CLAIMS.md](diagrams/CLAIMS.md)에 있다.
