@@ -11,7 +11,7 @@
     "sales-market-review-request.schema.json": "780441de65cc11422ae1189c61f2b020165e752418dc3088dc34f9d4ddf6dce7",
     "sales-market-review-response.schema.json": "9d8a05acc9c7eb500d712038065096b4167a7d8a796ceedd8d63bcc52b3c2f4c",
     "source-consumer-matrix.json": "6d6ab1fb7c7eb65fd6090381be1e0c1c2b8dc7597c7892735f05d79e156f6aa4",
-    "upstream/inventory-result.schema.json": "418d9a9c375ffd7806d7289a2c401be9608ec63e5b1494b3002a947a99777c37",
+    "upstream/inventory-result.schema.json": "f5d74b1f4cadede5b512c21ae55e01ff2fe9dad19752b75a7e865b769cca1c3c",
     "upstream/trend-result.schema.json": "c030406865beb1da7a969aad881bd44b7c993dabda230e58401bcdc8f93f97db"
   }
 }

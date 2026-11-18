@@ -2,9 +2,9 @@
   "format": "workflow-baseline",
   "contract_version": "workflow-contract",
   "transport_version": "fashion-planner-workflow",
-  "state": "frozen",
-  "producer_consumer_validated": true,
-  "snapshot_sha256": "0e44032eab7c4e341ce9f5462fbd3ff9b0e6b8515a87af6d83add7f8c112d177",
+  "state": "proposed",
+  "producer_consumer_validated": false,
+  "snapshot_sha256": "27d2b003af37fbe7d21438c6ce16757d512305efc2a7e9d03097ab4bba6aa5c0",
   "files": {
     "common.schema.json": "c8bd26bfa451efecb546617601d7223fbecfcf56c0b36da6dc2742a002cc2fe6",
     "integrated-result.schema.json": "6d2c711b1845166f906932876caaa162598889393df0ec7c327576f862e9500e",
@@ -14,84 +14,13 @@
     "sales-market-review-request.schema.json": "780441de65cc11422ae1189c61f2b020165e752418dc3088dc34f9d4ddf6dce7",
     "sales-market-review-response.schema.json": "9d8a05acc9c7eb500d712038065096b4167a7d8a796ceedd8d63bcc52b3c2f4c",
     "source-consumer-matrix.json": "6d6ab1fb7c7eb65fd6090381be1e0c1c2b8dc7597c7892735f05d79e156f6aa4",
-    "upstream/inventory-result.schema.json": "418d9a9c375ffd7806d7289a2c401be9608ec63e5b1494b3002a947a99777c37",
+    "upstream/inventory-result.schema.json": "f5d74b1f4cadede5b512c21ae55e01ff2fe9dad19752b75a7e865b769cca1c3c",
     "upstream/trend-result.schema.json": "c030406865beb1da7a969aad881bd44b7c993dabda230e58401bcdc8f93f97db"
   },
-  "evidence": {
-    "reference_fixtures": {
-      "cases": 5,
-      "passed": 5,
-      "failed": 0,
-      "failed_cases": []
-    },
-    "mutation_probes": {
-      "cases": 4,
-      "rejected": 4,
-      "accepted": []
-    },
-    "vendored_copies": {},
-    "suites": [
-      {
-        "command": "python -m unittest discover -s tests",
-        "returncode": 0,
-        "output_sha256": "9f2639af4548b2b611525fc4b68bb432f92c7351069d4263a09e37a7c17a9d92",
-        "output_tail": [
-          "Ran 436 tests in 10.218s",
-          "",
-          "OK"
-        ],
-        "started_at": "2026-11-18T04:06:04+00:00"
-      },
-      {
-        "command": "node --test web/tests/model.test.mjs",
-        "returncode": 0,
-        "output_sha256": "0c9aca70cab862a0b4dbd6afe163b40acdc4cd9ee36d72a5ff3723d4bfed7486",
-        "output_tail": [
-          "ℹ skipped 0",
-          "ℹ todo 0",
-          "ℹ duration_ms 77.996042"
-        ],
-        "started_at": "2026-11-18T04:06:14+00:00"
-      }
-    ]
-  },
-  "sources": {
-    "trend": {
-      "path": "fashion-planner-trend",
-      "clean": true,
-      "worktree_sha256": "1fc2db82c4b223b3084580cfadb6618f1d22f205d86f5059ad0bee4450d41310",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    "inventory": {
-      "path": "fashion-planner-inventory",
-      "clean": true,
-      "worktree_sha256": "71ded7ffd4d812cd29f871db7dca65e151ca38c0458e5194a9969fcc3e7dd01f",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    "novelty": {
-      "path": "fashion-planner-novelty",
-      "clean": true,
-      "worktree_sha256": "04df7023d809981b44e92cdd980460d483f14e488881b179baddf4bd49cadf3a",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    "research": {
-      "path": "fashion-planner-research",
-      "clean": true,
-      "worktree_sha256": "900b90cbeb0b73a21dbe16d8d969b52570ba29d2b619e13f46647bc0d20d037e",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    "orchestrator": {
-      "path": ".",
-      "clean": true,
-      "worktree_sha256": "3f9920dfd2ef0975b0ed517228cd20d3ab09dd4eee666f4f7125c572cd220270",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "worktree_fingerprint_excludes": [
-        "contracts/workflow/baseline.json"
-      ]
-    }
-  },
-  "recorded_at": "2026-11-18T04:06:03+00:00",
+  "evidence": {},
+  "sources": {},
+  "recorded_at": "2026-11-18T04:07:23+00:00",
   "notes": [
-    "Frozen = contract evidence only (offline fixtures, owner serializer/parser boundary and in-process TCP suites). Live data, model quality and browser acceptance are recorded separately."
+    "Proposed baseline: no producer/consumer validation claimed. Run --freeze to record evidence."
   ]
 }
