@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from vogue_orchestrator.swot import (SwotRejected, SwotWriter, checkpoint_key, enabled, load_swot, parse_swot,
+from vogue_orchestrator.swot import (SwotRejected, SwotWriter, checkpoint_key, enabled, load_swot, parse_swot, prompt_sha256,
                                      swot_input, system_prompt)
 from vogue_orchestrator.workflow_store import WorkflowStore
 
@@ -136,7 +136,7 @@ class WriterTests(unittest.TestCase):
         writer = SwotWriter(self.store, call, model='m-test')
         first = writer('run-1', envelope())
         self.assertEqual(first['swot']['strengths'], VALID['strengths'])
-        self.assertEqual((first['model'], first['prompt_version']), ('m-test', 'v3'))
+        self.assertEqual((first['model'], first['prompt_sha256']), ('m-test', prompt_sha256()))
         self.assertEqual(writer('run-1', envelope()), first)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], system_prompt())
@@ -204,7 +204,7 @@ class PosterTests(unittest.TestCase):
             return out.getvalue()
 
         value = envelope()
-        record = {'swot': parse_swot(json.dumps(VALID, ensure_ascii=False)), 'model': 'm', 'prompt_version': 'v3'}
+        record = {'swot': parse_swot(json.dumps(VALID, ensure_ascii=False)), 'model': 'm', 'prompt_sha256': prompt_sha256()}
         with_swot = planning_sheet_png(value, load_artifact=grey, fonts=fonts, swot=record)
         without = planning_sheet_png(value, load_artifact=grey, fonts=fonts)
         self.assertNotEqual(with_swot, without)

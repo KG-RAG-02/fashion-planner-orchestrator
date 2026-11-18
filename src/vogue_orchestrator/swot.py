@@ -16,6 +16,7 @@ indicators, not the user's raw request or any image.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -25,8 +26,7 @@ from .planning_sheet import (_concept_view, _draft_parts, _list, _mapping, _raw,
                              focus_stock, focus_trend)
 
 ROOT = Path(__file__).resolve().parents[2]
-PROMPT_VERSION = 'v3'
-PROMPT_DIR = ROOT / 'prompts' / 'swot' / PROMPT_VERSION
+PROMPT_DIR = ROOT / 'prompts' / 'swot'
 QUADRANTS = ('strengths', 'weaknesses', 'opportunities', 'threats')
 BASES = ('trend', 'stock', 'product', 'market')
 MAX_ITEMS = 4
@@ -217,6 +217,11 @@ def system_prompt() -> str:
     return (PROMPT_DIR / 'system.md').read_text(encoding='utf-8')
 
 
+def prompt_sha256() -> str:
+    """Identifies the SWOT prompt in a stored record (sha256 of prompts/swot/system.md)."""
+    return hashlib.sha256((PROMPT_DIR / 'system.md').read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+
+
 class SwotWriter:
     """Stage 06 hook: ask the model once per run and keep the validated SWOT and promotion draft."""
 
@@ -238,7 +243,7 @@ class SwotWriter:
         except Exception as exc:  # provider, network or configuration failure: the slot stays empty
             self.store.checkpoint_write(key, 'failed', dict(reason=type(exc).__name__[:80]))
             return None
-        record = dict(swot=swot, model=self.model, prompt_version=PROMPT_VERSION)
+        record = dict(swot=swot, model=self.model, prompt_sha256=prompt_sha256())
         self.store.checkpoint_write(key, 'done', record)
         return record
 

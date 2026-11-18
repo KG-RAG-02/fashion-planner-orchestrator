@@ -4,7 +4,7 @@ This folder holds non-secret settings for P08 query structuring, LLM calls, and 
 
 ## Query structuring
 
-[`query_structuring.json`](query_structuring.json) selects the current prompt (`query_structuring/v6`) and defines input/year limits, unsupported-condition explanations, and gender aliases. `query/structured.py` validates the model draft and assembles the structured query; the Trend request uses the first requested item and season. Prompt files are under [`../prompts/query_structuring/`](../prompts/query_structuring/).
+[`query_structuring.json`](query_structuring.json) names the prompt folder (`prompts/query_structuring/`) and defines input/year limits, unsupported-condition explanations, and gender aliases. `query/structured.py` validates the model draft and assembles the structured query; the Trend request uses the first requested item and season. Prompt files are under [`../prompts/query_structuring/`](../prompts/query_structuring/).
 
 For a nonstandard checkout or packaged install, `VOGUE_QUERY_CONFIG` and `VOGUE_QUERY_PROMPTS_DIR` can point to alternate config and prompt roots. The module reads and validates these settings at import time.
 

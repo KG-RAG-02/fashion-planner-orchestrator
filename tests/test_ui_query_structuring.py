@@ -51,7 +51,8 @@ class StructuringTests(unittest.TestCase):
         out = server.structure_query_for_ui(self.QUERY, "rid-7", enabled=True, provider_factory=fixed(self.DRAFT))
         self.assertEqual(out["status"], "ok")
         self.assertEqual(out["llm"], {"provider": "fake", "model": "fake-model"})
-        self.assertEqual(out["prompt_version"], "query-structuring-prompt/v6")
+        self.assertEqual(out["prompt_id"], "query-structuring")
+        self.assertRegex(out["prompt_sha256"], r"^[0-9a-f]{64}$")
         sq = out["structured_query"]
         self.assertEqual([i["item_id"] for i in sq["items"]], ["i1", "i2"])
         self.assertEqual(len(sq["trend_terms"]["seasons"]), 2)

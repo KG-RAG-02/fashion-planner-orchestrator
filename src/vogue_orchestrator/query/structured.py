@@ -23,10 +23,8 @@ from .models import StructuredQuery
 from .prompt import build_prompt
 from .shared import MAX_QUERY_CHARS, DraftProvider, as_object
 
-STRUCTURED_PROMPT_VERSION = "v6"  # active prompt in configs/query_structuring.json
 __all__ = [
     "ITEM_WORD_ATTRIBUTE_PRIORITY",
-    "STRUCTURED_PROMPT_VERSION",
     "StructuredAssembly",
     "StructuredQueryResult",
     "WARN_CATEGORY_CONDITION_MOVED_TO_ITEM",
@@ -45,11 +43,13 @@ class StructuredQueryResult:
     structured_query: StructuredQuery
     draft: QueryDraft  # what the model wrote, before grouping
     warnings: tuple[str, ...]
-    prompt_version: str
+    prompt_id: str
+    prompt_sha256: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "prompt_version": self.prompt_version,
+            "prompt_id": self.prompt_id,
+            "prompt_sha256": self.prompt_sha256,
             "structured_query": self.structured_query.model_dump(mode="json"),
             "draft": self.draft.model_dump(mode="json"),
             "warnings": list(self.warnings),
@@ -62,7 +62,6 @@ def structure_query(
     request_id: str,
     draft_provider: DraftProvider,
     today: date | None = None,
-    prompt_version: str = STRUCTURED_PROMPT_VERSION,
 ) -> StructuredQueryResult:
     """Structure one query: validate the input, call the draft provider with the current prompt, repair and
     validate the draft, group its conditions per item and assemble the StructuredQuery. Fixed-message errors."""
@@ -74,7 +73,7 @@ def structure_query(
         raise QueryStructuringError(errors.INPUT_INVALID)
     today = today or date.today()
 
-    bundle = build_prompt(query, prompt_version)
+    bundle = build_prompt(query)
     try:
         produced = draft_provider(bundle)
     except Exception:
@@ -95,5 +94,5 @@ def structure_query(
 
     warnings = tuple(dict.fromkeys((*repairs, *grouping, *assembled.warnings)))
     return StructuredQueryResult(
-        structured_query=assembled.structured_query, draft=written, warnings=warnings, prompt_version=bundle.version,
+        structured_query=assembled.structured_query, draft=written, warnings=warnings, prompt_id=bundle.prompt_id, prompt_sha256=bundle.prompt_sha256,
     )

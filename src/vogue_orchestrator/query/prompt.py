@@ -1,7 +1,6 @@
 """Prompt for the LLM draft step, loaded from text files. No model call, no key, no network.
 
-Source of truth: prompts/<name>/<version>/ at the repository root (version chosen in
-configs/query_structuring.json):
+Source of truth: prompts/<name>/ at the repository root (name in configs/query_structuring.json):
   system_template.md  system text with {{VOCABULARY}} and {{EXAMPLES}} placeholders
   user_template.md    user text with a {{QUERY}} placeholder
   examples.json       few-shot examples [{title, query, draft}], rendered into {{EXAMPLES}}; each draft is a
@@ -9,11 +8,13 @@ configs/query_structuring.json):
   rendered_system.md  GENERATED full system text, for reading only (scripts/render_query_prompt.py)
 
 The standard vocabulary is injected from the generated vocabulary module, so the prompt can not drift
-from the contract snapshot (prompts/README.md).
+from the contract snapshot (prompts/README.md). A result names the prompt by PROMPT_ID and the sha256 of
+the three template files (`prompt_sha256`), so a changed prompt is told apart without version folders.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from functools import lru_cache
@@ -21,22 +22,19 @@ from typing import Any
 
 from . import contract_vocabulary as cvocab
 from . import vocabulary as vocab
-from .config import CONFIG, QueryConfigError, prompt_version_dir
+from .config import CONFIG, QueryConfigError, prompt_dir
 
-PROMPT_ID_PREFIX = "query-structuring-prompt"
+PROMPT_ID = "query-structuring"
+TEMPLATE_FILES = ("system_template.md", "user_template.md", "examples.json")
 PLACEHOLDERS = ("{{VOCABULARY}}", "{{EXAMPLES}}", "{{QUERY}}")
 
 
 @dataclass(frozen=True)
 class PromptTemplate:
-    version: str  # folder name, for example "v6"
+    sha256: str  # sha256 of the template files (TEMPLATE_FILES, in that order)
     system: str  # fully rendered system text
     user_template: str
     examples: tuple[dict[str, Any], ...]
-
-    @property
-    def prompt_id(self) -> str:
-        return f"{PROMPT_ID_PREFIX}/{self.version}"
 
 
 def vocabulary_section() -> str:
@@ -72,11 +70,17 @@ def _read(directory, name: str) -> str:
         raise QueryConfigError(f"prompt file not found: {path}") from exc
 
 
+def template_sha256(directory) -> str:
+    digest = hashlib.sha256()
+    for name in TEMPLATE_FILES:
+        digest.update(name.encode("utf-8") + b"\0" + (directory / name).read_bytes().replace(b"\r\n", b"\n") + b"\0")
+    return digest.hexdigest()
+
+
 @lru_cache(maxsize=None)
-def load_prompt(version: str | None = None) -> PromptTemplate:
-    """Load and render one prompt version (default: the version in the config)."""
-    version = version or CONFIG.prompt_version
-    directory = prompt_version_dir(CONFIG.prompt_name, version)
+def load_prompt() -> PromptTemplate:
+    """Load and render the prompt named in the config."""
+    directory = prompt_dir(CONFIG.prompt_name)
     try:
         examples = tuple(json.loads(_read(directory, "examples.json")))
     except json.JSONDecodeError as exc:
@@ -90,12 +94,12 @@ def load_prompt(version: str | None = None) -> PromptTemplate:
     if any(token in system for token in PLACEHOLDERS) or user_template.count("{{QUERY}}") != 1:
         raise QueryConfigError(f"unresolved or missing placeholders in {directory}")
     return PromptTemplate(
-        version=version, system=system, user_template=user_template, examples=examples,
+        sha256=template_sha256(directory), system=system, user_template=user_template, examples=examples,
     )
 
 
 _ACTIVE = load_prompt()
-PROMPT_VERSION = _ACTIVE.prompt_id
+PROMPT_SHA256 = _ACTIVE.sha256
 SYSTEM_PROMPT = _ACTIVE.system
 EXAMPLES = _ACTIVE.examples
 
@@ -104,7 +108,8 @@ EXAMPLES = _ACTIVE.examples
 class PromptBundle:
     system: str
     user: str
-    version: str
+    prompt_id: str
+    prompt_sha256: str
     query: str  # the original query; a draft provider may need it (test doubles key on it)
 
     @property
@@ -112,13 +117,14 @@ class PromptBundle:
         return [{"role": "system", "content": self.system}, {"role": "user", "content": self.user}]
 
 
-def build_prompt(query: str, version: str | None = None) -> PromptBundle:
-    template = load_prompt(version)
+def build_prompt(query: str) -> PromptBundle:
+    template = load_prompt()
     # The user text is fenced by <질의> tags; neutralise those tags if the query itself contains them.
     fenced = query.replace("<질의>", "＜질의＞").replace("</질의>", "＜/질의＞")
     return PromptBundle(
         system=template.system,
         user=template.user_template.replace("{{QUERY}}", fenced),
-        version=template.prompt_id,
+        prompt_id=PROMPT_ID,
+        prompt_sha256=template.sha256,
         query=query,
     )

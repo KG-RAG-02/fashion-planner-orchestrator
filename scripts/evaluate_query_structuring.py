@@ -138,9 +138,10 @@ def _provider(name: str, item: dict[str, Any], replayed: dict[str, Any] | None =
     raise AssertionError(name)
 
 
-def run(data: dict[str, Any], provider_name: str, ids: Iterable[str] | None, prompt_version: str,
+def run(data: dict[str, Any], provider_name: str, ids: Iterable[str] | None,
         replay: dict[str, Any] | None = None) -> dict[str, Any]:
     from vogue_orchestrator.query.errors import QueryStructuringError
+    from vogue_orchestrator.query.prompt import PROMPT_ID, PROMPT_SHA256
     from vogue_orchestrator.query.structured import structure_query
 
     today = date.fromisoformat(data["reference_today"])
@@ -172,8 +173,7 @@ def run(data: dict[str, Any], provider_name: str, ids: Iterable[str] | None, pro
         started = time.perf_counter()
         row: dict[str, Any] = {"id": item["id"], "query": item["query"], "tags": item["tags"]}
         try:
-            result = structure_query(item["query"], request_id=item["id"], draft_provider=recording, today=today,
-                                        prompt_version=prompt_version)
+            result = structure_query(item["query"], request_id=item["id"], draft_provider=recording, today=today)
         except QueryStructuringError as exc:
             row.update(error=exc.code, raw_output=raw_output.get("text"), exact=False, exact_with_match=False)
         else:
@@ -185,7 +185,7 @@ def run(data: dict[str, Any], provider_name: str, ids: Iterable[str] | None, pro
                 row["raw_output"] = raw_output.get("text")
         row["seconds"] = round(time.perf_counter() - started, 2)
         rows.append(row)
-    return {"model": model, "prompt_version": prompt_version, "today": data["reference_today"],
+    return {"model": model, "prompt_id": PROMPT_ID, "prompt_sha256": PROMPT_SHA256, "today": data["reference_today"],
             "summary": summarize(data, rows), "items": rows}
 
 
@@ -232,7 +232,7 @@ def summarize(data: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any
 
 def print_report(report: dict[str, Any]) -> None:
     s = report["summary"]
-    print(f"model: {report['model']}  prompt: {report['prompt_version']}  today: {report['today']}")
+    print(f"model: {report['model']}  prompt: {report['prompt_id']} {report['prompt_sha256'][:12]}  today: {report['today']}")
     print(f"items {s['items']}  exact {s['exact']}  exact+match {s['exact_with_match']}  errors {s['errors']}  "
           f"match agreement {s['match_agreement']}  mean {s['mean_seconds']}s")
     print(f"{'group':<14}{'expected':>9}{'found':>7}{'missed':>8}{'extra':>7}{'recall':>8}{'precision':>11}")
@@ -257,7 +257,6 @@ def main(argv=None) -> int:
     parser.add_argument("--replay", type=Path, help="report whose saved model outputs --provider replay uses")
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
     parser.add_argument("--ids", nargs="*", help="only these item ids")
-    parser.add_argument("--prompt-version", default="v6", help="prompt folder")
     parser.add_argument("--out", type=Path, help="write the JSON report here")
     args = parser.parse_args(argv)
     data = json.loads(args.data.read_text(encoding="utf-8"))
@@ -266,7 +265,7 @@ def main(argv=None) -> int:
         if not args.replay:
             parser.error("--provider replay needs --replay <report.json>")
         replay = json.loads(args.replay.read_text(encoding="utf-8"))
-    report = run(data, args.provider, args.ids, args.prompt_version, replay)
+    report = run(data, args.provider, args.ids, replay)
     print_report(report)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

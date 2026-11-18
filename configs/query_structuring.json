@@ -1,8 +1,7 @@
 {
   "_about": "Settings of the query-structuring module (src/vogue_orchestrator/query). Read once at import by config.py. Inventory of every hard-coded value in the repository: configs/README.md.",
   "prompt": {
-    "name": "query_structuring",
-    "version": "v6"
+    "name": "query_structuring"
   },
   "input": {
     "max_query_chars": 1000
@@ -23,9 +22,29 @@
   "gender": {
     "_about": "Decision G-1: gender is not in the trend alias dictionary, so query/resolve.py uses this fixed table (match = alias). Keys are standard GENDERS values; spellings are compared like the dictionary does (lower case, no spaces, '-' or '_'). Delete when the trend dictionary gets a gender attribute.",
     "aliases": {
-      "여": ["여성", "여자", "여성용", "우먼", "위민즈", "women", "womens"],
-      "남": ["남성", "남자", "남성용", "맨즈", "men", "mens"],
-      "공용": ["남녀공용", "남녀", "유니섹스", "unisex"]
+      "여": [
+        "여성",
+        "여자",
+        "여성용",
+        "우먼",
+        "위민즈",
+        "women",
+        "womens"
+      ],
+      "남": [
+        "남성",
+        "남자",
+        "남성용",
+        "맨즈",
+        "men",
+        "mens"
+      ],
+      "공용": [
+        "남녀공용",
+        "남녀",
+        "유니섹스",
+        "unisex"
+      ]
     }
   }
 }

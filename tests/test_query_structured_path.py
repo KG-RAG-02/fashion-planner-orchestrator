@@ -56,8 +56,11 @@ class StructuredPathTests(unittest.TestCase):
     def items_of(self, result):
         return result.structured_query.model_dump(mode="json")["items"]
 
-    def test_running_path_uses_the_configured_v6(self):
-        self.assertEqual(self.config.CONFIG.prompt_version, "v6")
+    def test_the_result_names_the_prompt_by_id_and_template_hash(self):
+        result = self.run_path(draft(items=[item("점퍼", "점퍼")]), "점퍼")
+        prompt = importlib.import_module("vogue_orchestrator.query.prompt")
+        self.assertEqual((result.prompt_id, result.prompt_sha256), (prompt.PROMPT_ID, prompt.PROMPT_SHA256))
+        self.assertRegex(result.prompt_sha256, r"^[0-9a-f]{64}$")
 
     def test_conditions_stay_with_their_item_and_common_ones_are_copied(self):
         # IT-1, IT-2, IT-3: "니트" belongs to the vest only; the gender exclusion is copied into both items
@@ -72,7 +75,7 @@ class StructuredPathTests(unittest.TestCase):
         self.assertEqual([[r["value"] for r in i["attributes"]["include"]["fit"]] for i in items], [[], ["와이드"]])
         for i in items:
             self.assertEqual(i["gender"], {"include": [], "exclude": [{"raw": "남성", "value": "남", "match": "alias"}]})
-        self.assertEqual(result.prompt_version, "query-structuring-prompt/v6")
+        self.assertEqual(result.prompt_id, "query-structuring")
         self.assertEqual(result.warnings, ())
 
     def test_gender_before_the_first_item_goes_to_every_item(self):
@@ -240,10 +243,6 @@ class StructuredPathTests(unittest.TestCase):
         none = self.run_path(draft(items=[item("점퍼", "점퍼")]), "점퍼").structured_query.model_dump(mode="json")
         self.assertEqual([s["origin"] for s in none["trend_terms"]["seasons"]], ["default_next"])
 
-    def test_an_unknown_prompt_version_is_refused(self):
-        with self.assertRaises(self.config.QueryConfigError):
-            self.run_path({}, "셔츠", prompt_version="v999")
-
     def test_a_grouped_draft_written_by_the_model_is_rejected(self):
         # The model writes the flat shape; the grouped shape is only what the code builds from it.
         with self.assertRaises(self.errors.QueryStructuringError):
@@ -354,7 +353,7 @@ class DatasetTests(unittest.TestCase):
         # the grouped labels are written flat and go through the grouping code
         for name, data, size in (("dev", self.data, 30), ("holdout", self.holdout, 20)):
             with self.subTest(dataset=name):
-                report = self.evaluator.run(data, "fixture", None, self.prompt.load_prompt().version)
+                report = self.evaluator.run(data, "fixture", None)
                 self.assertEqual(report["summary"]["exact_with_match"], size,
                                  [r for r in report["items"] if not r["exact_with_match"]])
 

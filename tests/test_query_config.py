@@ -15,7 +15,7 @@ CONFIG_FILE = ROOT / "configs" / "query_structuring.json"
 class QueryConfigTests(unittest.TestCase):
     def test_repository_config_loads_with_expected_values(self):
         config = query_config.load_config(CONFIG_FILE)
-        self.assertEqual((config.prompt_name, config.prompt_version), ("query_structuring", "v6"))
+        self.assertEqual(config.prompt_name, "query_structuring")
         self.assertEqual(config.max_query_chars, 1000)
         self.assertEqual((config.draft_year_min, config.draft_year_max), (2000, 2100))
         self.assertEqual(set(config.unsupported_reasons), {"brand", "category", "attribute", "abstract"})
@@ -30,9 +30,10 @@ class QueryConfigTests(unittest.TestCase):
     def test_active_config_is_the_repository_file_by_default(self):
         self.assertEqual(query_config.CONFIG.source.resolve(), CONFIG_FILE.resolve())
 
-    def test_prompt_folder_of_the_configured_version_exists(self):
-        config = query_config.CONFIG
-        self.assertTrue(query_config.prompt_version_dir(config.prompt_name, config.prompt_version).is_dir())
+    def test_the_configured_prompt_folder_exists(self):
+        self.assertTrue(query_config.prompt_dir(query_config.CONFIG.prompt_name).is_dir())
+        with self.assertRaises(query_config.QueryConfigError):
+            query_config.prompt_dir("no-such-prompt")
 
     def test_broken_or_inconsistent_files_fail_loudly(self):
         good = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))

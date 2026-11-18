@@ -32,7 +32,6 @@ class QueryConfigError(RuntimeError):
 @dataclass(frozen=True)
 class QueryConfig:
     prompt_name: str
-    prompt_version: str
     max_query_chars: int
     draft_year_min: int
     draft_year_max: int
@@ -74,7 +73,6 @@ def load_config(path: Path | None = None) -> QueryConfig:
 
     config = QueryConfig(
         prompt_name=_require(prompt, "name", str, "prompt"),
-        prompt_version=_require(prompt, "version", str, "prompt"),
         max_query_chars=_require(limits, "max_query_chars", int, "input"),
         draft_year_min=_require(draft, "year_min", int, "draft"),
         draft_year_max=_require(draft, "year_max", int, "draft"),
@@ -113,10 +111,10 @@ def _gender_aliases(table: Mapping[str, Any]) -> dict[str, tuple[str, ...]]:
     return out
 
 
-def prompt_version_dir(name: str, version: str) -> Path:
-    directory = prompts_dir() / name / version
+def prompt_dir(name: str) -> Path:
+    directory = prompts_dir() / name
     if not directory.is_dir():
-        raise QueryConfigError(f"prompt version folder not found: {directory}")
+        raise QueryConfigError(f"prompt folder not found: {directory}")
     return directory
 
 
