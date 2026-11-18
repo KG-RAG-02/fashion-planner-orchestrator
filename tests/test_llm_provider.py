@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 from fashion_planner_orchestrator import llm_provider as llm
 
-NO_ENV_FILE = Path(tempfile.gettempdir()) / "vogue-no-such-dir" / ".env"
+NO_ENV_FILE = Path(tempfile.gettempdir()) / "fashion-planner-no-such-dir" / ".env"
 BUNDLE = SimpleNamespace(system="SYSTEM PROMPT", user="USER MESSAGE")
 SECRET = "sk-test-secret-value"
 
