@@ -5,6 +5,7 @@ IDs or zeros, says why a section is empty, and that the HTTP route reads the sto
 on macOS); without one they are skipped with that reason.
 """
 import copy
+import importlib.util
 import io
 import json
 import sqlite3
@@ -56,6 +57,15 @@ class FontMixin:
 
 
 class BoardMappingTests(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'jsonschema not installed (install the `workflow` extra)')
+    def test_every_fixture_is_a_current_integrated_result(self):
+        # The sheet fixtures are stored envelopes; they follow the current schema, not an older record format.
+        from vogue_orchestrator.workflow_contract import WorkflowContract
+        contract = WorkflowContract()
+        for name in INTEGRATED:
+            with self.subTest(fixture=name):
+                contract.schema(fixture(name), 'integrated-result.schema.json')
+
     def test_every_fixture_keeps_the_board_sections_in_order(self):
         for name in INTEGRATED:
             with self.subTest(fixture=name):
@@ -111,14 +121,14 @@ class BoardMappingTests(unittest.TestCase):
         self.assertEqual(sheet.concept_line.text, '합성 셔츠 콘셉트 (fixture)')
         self.assertEqual([(v.key, v.status, v.model) for v in sheet.visual.draft_visuals],
                          [('product', 'generated', 'fixture'), ('outfit', 'generated', 'fixture')])
-        self.assertEqual(build_sheet(fixture('integrated-ok')).visual.draft_visuals, ())  # earlier runs: final image panel
+        self.assertEqual(build_sheet(fixture('integrated-ok')).visual.draft_visuals, ())  # no visuals: one placeholder panel
 
     def test_p07_price_cost_margin_and_target_are_read_as_reported(self):
         envelope = copy.deepcopy(fixture('integrated-visuals-ok'))
         p07 = json.loads((FIXTURES / 'research-handoff.response.json').read_text(encoding='utf-8'))
         body = p07['result']
         body['price_analysis'].update(proposed_price=59000, currency='KRW', unit='KRW')
-        # Runs recorded before P07 c662d4d may carry fabric_cost_analysis.unit_cost; their sheets still show it.
+        # research sets fabric_cost_analysis.unit_cost when a fabric listing gives a per-metre reference.
         body['fabric_cost_analysis'].update(unit_cost=12450.0, unit='KRW/m', currency='KRW')
         body['margin_analysis'].update(margin_rate_percent=56.88)
         body['target_audience'] = {

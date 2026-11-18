@@ -3,11 +3,11 @@
   "request_id": "fixture:workflow:001",
   "producer": {
     "agent_id": "orchestrator",
-    "schema_version": "integrated-result/1.0"
+    "schema_version": "1.0.0"
   },
   "status": "ok",
   "result": {
-    "schema_version": "integrated-result/1.0",
+    "schema_version": "1.0.0",
     "agent_id": "orchestrator",
     "request_id": "fixture:workflow:001",
     "status": "ok",
